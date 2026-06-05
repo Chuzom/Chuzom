@@ -1,0 +1,394 @@
+"""Tests for Phase 6: Dynamic Chain Builder (chain_builder.py)."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from tessera.types import ModelCapability, ProviderTier, RoutingProfile, TaskType
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+def _make_cap(model_id: str, provider: str, tier: ProviderTier) -> ModelCapability:
+    return ModelCapability(
+        model_id=model_id,
+        provider=provider,
+        provider_tier=tier,
+        task_types=frozenset({TaskType.CODE, TaskType.QUERY}),
+    )
+
+
+_FAKE_CAPS: dict[str, ModelCapability] = {
+    "ollama/qwen3:32b": _make_cap("ollama/qwen3:32b", "ollama", ProviderTier.LOCAL),
+    "openai/gpt-4o":    _make_cap("openai/gpt-4o",    "openai", ProviderTier.EXPENSIVE),
+}
+
+
+# ── build_chain (static path) ─────────────────────────────────────────────────
+
+class TestBuildChainStatic:
+    @pytest.mark.asyncio
+    async def test_returns_chain_with_fallback_to_static(self):
+        """Test that build_chain always returns a chain (dynamic or static fallback)."""
+        from tessera.chain_builder import build_chain
+        result = await build_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_static_on_exception(self):
+        """Dynamic chain failure must fall back to static, never raise."""
+        from tessera.chain_builder import build_chain
+        mock_error = RuntimeError("boom")
+        with patch("tessera.chain_builder._build_dynamic_chain",
+                   side_effect=mock_error):
+            result = await build_chain(TaskType.CODE, "simple",
+                                       RoutingProfile.BUDGET)
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+
+# ── _build_dynamic_chain — critical dict.values() regression ──────────────────
+
+class TestBuildDynamicChain:
+    """Regression tests for the dict.values() bug (iterating dict yields keys, not caps)."""
+
+    _DISCOVER_PATCH = "tessera.discover.discover_available_models"
+    _SCORE_PATCH = "tessera.scorer.score_all_models"
+
+    @pytest.mark.asyncio
+    async def test_dict_values_not_keys_are_iterated(self):
+        """Regression: capabilities.values() must be used — not capabilities directly.
+
+        Without the fix, iterating over the dict yields string keys, and accessing
+        cap.task_types raises AttributeError: 'str' has no attribute 'task_types'.
+        """
+        from tessera.chain_builder import _build_dynamic_chain
+        from tessera.types import ScoredModel
+
+        fake_scored = [
+            ScoredModel(
+                model_id="ollama/qwen3:32b",
+                score=0.85,
+                quality_score=0.70,
+                budget_score=1.0,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=_FAKE_CAPS["ollama/qwen3:32b"],
+            ),
+        ]
+
+        with (
+            patch("tessera.discover.discover_available_models",
+                  new_callable=AsyncMock, return_value=_FAKE_CAPS),
+            patch("tessera.scorer.score_all_models",
+                  new_callable=AsyncMock, return_value=fake_scored),
+        ):
+            # This should NOT raise AttributeError: 'str' has no attribute 'task_types'
+            result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
+
+        assert isinstance(result, list)
+        assert "ollama/qwen3:32b" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_discovery_falls_back_to_static(self):
+        from tessera.chain_builder import _build_dynamic_chain
+        with patch("tessera.discover.discover_available_models",
+                   new_callable=AsyncMock, return_value={}):
+            result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    @pytest.mark.asyncio
+    async def test_local_models_precede_paid_in_chain(self):
+        """Free-first invariant: LOCAL tier models must appear before paid-API models."""
+        from tessera.chain_builder import _build_dynamic_chain
+        from tessera.types import ScoredModel
+
+        # Paid model scores higher but local should still come first
+        fake_scored = [
+            ScoredModel(
+                model_id="openai/gpt-4o",
+                score=0.95,
+                quality_score=0.90,
+                budget_score=0.60,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=_FAKE_CAPS["openai/gpt-4o"],
+            ),
+            ScoredModel(
+                model_id="ollama/qwen3:32b",
+                score=0.82,
+                quality_score=0.70,
+                budget_score=1.0,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=_FAKE_CAPS["ollama/qwen3:32b"],
+            ),
+        ]
+
+        with (
+            patch("tessera.discover.discover_available_models",
+                  new_callable=AsyncMock, return_value=_FAKE_CAPS),
+            patch("tessera.scorer.score_all_models",
+                  new_callable=AsyncMock, return_value=fake_scored),
+        ):
+            result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
+
+        assert result[0] == "ollama/qwen3:32b", "local model must be first (free-first invariant)"
+
+    @pytest.mark.asyncio
+    async def test_fallback_caps_are_list_not_dict(self):
+        """Regression: when no task_caps match, fallback must be list[ModelCapability] not dict."""
+        from tessera.chain_builder import _build_dynamic_chain
+        from tessera.types import ScoredModel
+
+        # Caps with task type that doesn't match requested task
+        no_match_caps = {
+            "ollama/qwen3:32b": ModelCapability(
+                model_id="ollama/qwen3:32b",
+                provider="ollama",
+                provider_tier=ProviderTier.LOCAL,
+                task_types=frozenset({TaskType.IMAGE}),  # won't match CODE — triggers fallback
+            ),
+        }
+
+        fake_scored = [
+            ScoredModel(
+                model_id="ollama/qwen3:32b",
+                score=0.85,
+                quality_score=0.70,
+                budget_score=1.0,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=no_match_caps["ollama/qwen3:32b"],
+            ),
+        ]
+
+        with (
+            patch("tessera.discover.discover_available_models",
+                  new_callable=AsyncMock, return_value=no_match_caps),
+            patch("tessera.scorer.score_all_models",
+                  new_callable=AsyncMock, return_value=fake_scored),
+        ):
+            # Without the fix, task_caps fallback would be a dict and scorer would
+            # iterate over string keys, producing wrong model IDs or crashing.
+            result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
+
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_deduplicates_dynamic_and_static_models(self):
+        """Merged chains should keep first occurrence only, preserving order."""
+        from tessera.chain_builder import _build_dynamic_chain
+        from tessera.types import ScoredModel
+
+        fake_scored = [
+            ScoredModel(
+                model_id="ollama/qwen3:32b",
+                score=0.90,
+                quality_score=0.80,
+                budget_score=1.0,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=_FAKE_CAPS["ollama/qwen3:32b"],
+            ),
+            ScoredModel(
+                model_id="openai/gpt-4o",
+                score=0.85,
+                quality_score=0.90,
+                budget_score=0.70,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=_FAKE_CAPS["openai/gpt-4o"],
+            ),
+        ]
+
+        with (
+            patch("tessera.discover.discover_available_models",
+                  new_callable=AsyncMock, return_value=_FAKE_CAPS),
+            patch("tessera.scorer.score_all_models",
+                  new_callable=AsyncMock, return_value=fake_scored),
+            patch("tessera.chain_builder._static_chain",
+                  return_value=["ollama/qwen3:32b", "openai/gpt-4o", "gemini/gemini-2.5-flash"]),
+        ):
+            result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
+
+        assert result == [
+            "ollama/qwen3:32b",
+            "openai/gpt-4o",
+            "gemini/gemini-2.5-flash",
+        ]
+
+
+# ── Cache corruption regression (discover.py) ─────────────────────────────────
+
+class TestDiscoverCacheCorruption:
+    """Regression tests for corrupted discovery.json not crashing the router."""
+
+    def test_unknown_provider_tier_returns_none(self, tmp_path):
+        """ValueError from ProviderTier(unknown_value) must be caught, not propagate."""
+        import json
+        import time
+        from tessera.discover import _load_cache
+
+        cache_file = tmp_path / "discovery.json"
+        cache_file.write_text(json.dumps({
+            "cached_at": time.time(),
+            "models": {
+                "ollama/qwen3:32b": {
+                    "model_id": "ollama/qwen3:32b",
+                    "provider": "ollama",
+                    "provider_tier": "future_tier_unknown",  # invalid enum value
+                    "task_types": ["code"],
+                    "cost_per_1k": 0.0,
+                    "latency_p50_ms": 400.0,
+                    "context_window": 128000,
+                    "available": True,
+                }
+            },
+        }))
+
+        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+            result = _load_cache(ttl=3600)
+
+        assert result is None, "corrupted cache should return None, not raise ValueError"
+
+    def test_missing_required_field_returns_none(self, tmp_path):
+        """KeyError from missing model_id must be caught, not propagate."""
+        import json
+        import time
+        from tessera.discover import _load_cache
+
+        cache_file = tmp_path / "discovery.json"
+        cache_file.write_text(json.dumps({
+            "cached_at": time.time(),
+            "models": {
+                "ollama/qwen3:32b": {
+                    # model_id intentionally omitted
+                    "provider": "ollama",
+                    "provider_tier": "local",
+                    "task_types": ["code"],
+                }
+            },
+        }))
+
+        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+            result = _load_cache(ttl=3600)
+
+        assert result is None
+
+    def test_unknown_task_type_returns_none(self, tmp_path):
+        """ValueError from TaskType(unknown_value) must be caught."""
+        import json
+        import time
+        from tessera.discover import _load_cache
+
+        cache_file = tmp_path / "discovery.json"
+        cache_file.write_text(json.dumps({
+            "cached_at": time.time(),
+            "models": {
+                "ollama/qwen3:32b": {
+                    "model_id": "ollama/qwen3:32b",
+                    "provider": "ollama",
+                    "provider_tier": "local",
+                    "task_types": ["future_task_not_in_enum"],  # invalid TaskType
+                    "cost_per_1k": 0.0,
+                    "latency_p50_ms": 400.0,
+                    "context_window": 128000,
+                    "available": True,
+                }
+            },
+        }))
+
+        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+            result = _load_cache(ttl=3600)
+
+        assert result is None
+
+    def test_valid_cache_loads_correctly(self, tmp_path):
+        """Sanity check: a well-formed cache should load without errors."""
+        import json
+        import time
+        from tessera.discover import _load_cache
+
+        cache_file = tmp_path / "discovery.json"
+        cache_file.write_text(json.dumps({
+            "cached_at": time.time(),
+            "models": {
+                "ollama/qwen3:32b": {
+                    "model_id": "ollama/qwen3:32b",
+                    "provider": "ollama",
+                    "provider_tier": "local",
+                    "task_types": ["code", "query"],
+                    "cost_per_1k": 0.0,
+                    "latency_p50_ms": 400.0,
+                    "context_window": 128000,
+                    "available": True,
+                }
+            },
+        }))
+
+        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+            result = _load_cache(ttl=3600)
+
+        assert result is not None
+        assert "ollama/qwen3:32b" in result
+
+
+# ── End-to-end: dynamic routing through build_chain ───────────────────────────
+
+class TestEndToEndDynamicRouting:
+    """Verify the full dynamic routing path: build_chain → discover → score → chain."""
+
+    @pytest.mark.asyncio
+    async def test_dynamic_enabled_uses_scored_chain(self):
+        """When TESSERA_DYNAMIC=true, build_chain returns scored model IDs."""
+        from tessera.chain_builder import build_chain
+        from tessera.types import ScoredModel
+
+        fake_scored = [
+            ScoredModel(
+                model_id="ollama/qwen3:32b",
+                score=0.88,
+                quality_score=0.70,
+                budget_score=1.0,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=_FAKE_CAPS["ollama/qwen3:32b"],
+            ),
+            ScoredModel(
+                model_id="openai/gpt-4o",
+                score=0.75,
+                quality_score=0.90,
+                budget_score=0.50,
+                latency_score=0.80,
+                acceptance_score=1.0,
+                capability=_FAKE_CAPS["openai/gpt-4o"],
+            ),
+        ]
+
+        with (
+            patch("tessera.discover.discover_available_models",
+                  new_callable=AsyncMock, return_value=_FAKE_CAPS),
+            patch("tessera.scorer.score_all_models",
+                  new_callable=AsyncMock, return_value=fake_scored),
+        ):
+            result = await build_chain(TaskType.CODE, "moderate", RoutingProfile.BALANCED)
+
+        assert "ollama/qwen3:32b" in result
+        assert result[0] == "ollama/qwen3:32b", "local model must lead chain"
+
+    @pytest.mark.asyncio
+    async def test_dynamic_chain_never_empty(self):
+        """Even with zero discovered models, build_chain returns a non-empty static fallback."""
+        from tessera.chain_builder import build_chain
+
+        with patch("tessera.discover.discover_available_models",
+                   new_callable=AsyncMock, return_value={}):
+            result = await build_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
+
+        assert isinstance(result, list)
+        assert len(result) > 0, "static fallback must always return models"

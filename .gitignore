@@ -1,0 +1,51 @@
+# Secrets
+.env
+.env.backup.*
+.env.bak.*
+
+# Python build/cache
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+.venv/
+.coverage*
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tessera local state (per-user)
+.tessera_cache/
+.tessera_lineage/
+*.tessera.sqlite*
+.serena/
+.lore/
+
+# Editor / IDE caches
+.claude/tasks/
+.claude/task-list.md
+.tasks.json
+.playwright-mcp/
+.playwright-cli/
+
+# Local-only architecture & internal design notes — NEVER commit
+# (User explicitly requested Docs/ stay local-only)
+Docs/
+INTERNAL.md
+STRATEGY.md
+MONETIZATION.md
+ROADMAP.md
+PRICING.md
+CLAUDE.md
+
+# Test artifacts
+.router-test-results/
+test_results/
+*.bak
+*.bak.*
