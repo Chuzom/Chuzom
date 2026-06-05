@@ -49,6 +49,10 @@ def test_all_tools_registered():
         "llm_budget", "llm_quota_status", "llm_share_profile", "llm_import_profile",
         "llm_model_eval", "llm_model_usage", "llm_model_export", "llm_savings_dashboard",
         "agoragentic_task", "agoragentic_browse", "agoragentic_wallet", "agoragentic_status",
+        # v0.0.2 agent-session MCP tools — registered by tools/agents.py
+        "tessera_agent_list", "tessera_agent_start_session",
+        "tessera_agent_check_budget", "tessera_agent_route",
+        "tessera_agent_complete_session", "tessera_agent_lineage",
     }
     
     # With slim=routing (default), only routing-tier tools are registered.
