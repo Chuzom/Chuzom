@@ -8,17 +8,13 @@ No real API calls. These tests pin the contract:
 """
 from __future__ import annotations
 
-import asyncio
-import shutil
 from dataclasses import dataclass
-from pathlib import Path
 
 import pytest
 
 from bench.judge import grade_objective
 from bench.router_api import RouterResult
 from bench.runner import (
-    CACHE_DIR,
     pareto_frontier,
     run_one,
     scorecards,

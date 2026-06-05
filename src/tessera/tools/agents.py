@@ -16,11 +16,8 @@ from __future__ import annotations
 
 import hashlib
 import os
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any
 
-from tessera.agents.budget import BudgetExceeded
 from tessera.agents.registry import AgentNotFound, AgentRegistry
 from tessera.agents.session import (
     SessionNotFound,

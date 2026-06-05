@@ -9,7 +9,6 @@ import pytest
 from tessera.agents import (
     AgentProfile,
     AgentRegistry,
-    AgentSession,
     BudgetEnvelope,
     BudgetExceeded,
     SessionState,
