@@ -153,9 +153,14 @@ def tier_for_model(model_id: str) -> Tier:
     m = model_id.lower()
     if any(k in m for k in ("ollama", "qwen3.5", "gemma", "llama3", "phi-3")):
         return Tier.LOCAL
-    if any(k in m for k in ("haiku", "gemini-2.5-flash", "gemini-3.1-flash", "gpt-4o-mini", "groq")):
+    if any(k in m for k in (
+        "haiku", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.1-flash",
+        "gpt-4o-mini", "gpt-5-nano", "groq",
+    )):
         return Tier.CHEAP
-    if any(k in m for k in ("sonnet", "gpt-4o", "gemini-2.5-pro", "gemini-3.1-pro")):
+    if any(k in m for k in (
+        "sonnet", "gpt-4o", "gemini-1.5-pro", "gemini-2.5-pro", "gemini-3.1-pro",
+    )):
         return Tier.MID
     if any(k in m for k in ("opus", "o3", "gpt-5", "claude-4")):
         return Tier.PREMIUM
