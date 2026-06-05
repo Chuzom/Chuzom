@@ -162,7 +162,9 @@ def tier_for_model(model_id: str) -> Tier:
     return Tier.UNKNOWN
 
 
-_SCHEMA = """
+# Base schema — runs first. Indexes here reference only columns that
+# exist since v0.0.1, so they never fail on a pre-v0.0.2 DB.
+_BASE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS lineage (
     id TEXT PRIMARY KEY,
     timestamp REAL NOT NULL,
@@ -181,7 +183,10 @@ CREATE TABLE IF NOT EXISTS lineage (
     latency_ms INTEGER NOT NULL,
     cost_usd REAL NOT NULL,
     notes TEXT NOT NULL DEFAULT '',
-    -- v0.0.2: agent-session attribution (nullable for backward compat)
+    -- v0.0.2: agent-session attribution (nullable for backward compat).
+    -- On a fresh DB these are created here; on a pre-v0.0.2 DB the
+    -- CREATE TABLE IF NOT EXISTS is a no-op and _MIGRATIONS below
+    -- adds the columns instead.
     agent_id TEXT,
     session_id TEXT,
     step_index INTEGER,
@@ -191,12 +196,11 @@ CREATE TABLE IF NOT EXISTS lineage (
 CREATE INDEX IF NOT EXISTS idx_lineage_timestamp ON lineage(timestamp);
 CREATE INDEX IF NOT EXISTS idx_lineage_inversion ON lineage(inversion);
 CREATE INDEX IF NOT EXISTS idx_lineage_model ON lineage(model_chosen);
-CREATE INDEX IF NOT EXISTS idx_lineage_session ON lineage(session_id);
-CREATE INDEX IF NOT EXISTS idx_lineage_agent ON lineage(agent_id);
 """
 
 # Idempotent migrations for DBs created before v0.0.2 — each fails harmlessly
-# if the column already exists.
+# if the column already exists. Must run BEFORE _POST_MIGRATION_INDEXES so
+# the v0.0.2 indexes can reference the newly-added columns.
 _MIGRATIONS = (
     "ALTER TABLE lineage ADD COLUMN agent_id TEXT",
     "ALTER TABLE lineage ADD COLUMN session_id TEXT",
@@ -204,6 +208,12 @@ _MIGRATIONS = (
     "ALTER TABLE lineage ADD COLUMN parent_session_id TEXT",
     "ALTER TABLE lineage ADD COLUMN framework TEXT",
 )
+
+# Indexes that depend on v0.0.2 columns — created only after migrations run.
+_POST_MIGRATION_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_lineage_session ON lineage(session_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_agent ON lineage(agent_id);
+"""
 
 _INSERT = """
 INSERT INTO lineage (
@@ -229,16 +239,21 @@ class LineageStore:
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path))
-        self._conn.executescript(_SCHEMA)
-        # Apply idempotent migrations for v0.0.2 columns. Pre-v0.0.2 DBs
-        # need ALTER TABLE; newly-created DBs already have these columns
-        # from _SCHEMA and skip via the duplicate-column guard.
+        # 1. Base schema — safe on any DB version (CREATE IF NOT EXISTS
+        #    on table + pre-v0.0.2 indexes).
+        self._conn.executescript(_BASE_SCHEMA)
+        # 2. Apply idempotent migrations for v0.0.2 columns. Pre-v0.0.2
+        #    DBs need ALTER TABLE; newly-created DBs already have these
+        #    columns from _BASE_SCHEMA and skip via duplicate-column guard.
         for stmt in _MIGRATIONS:
             try:
                 self._conn.execute(stmt)
             except sqlite3.OperationalError as err:
                 if "duplicate column" not in str(err):
                     raise
+        # 3. v0.0.2 indexes — must run AFTER migrations so the referenced
+        #    columns exist on a pre-v0.0.2 DB.
+        self._conn.executescript(_POST_MIGRATION_INDEXES)
         self._conn.commit()
 
     def record(self, entry: LineageRecord) -> None:

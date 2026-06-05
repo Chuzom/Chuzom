@@ -129,6 +129,7 @@ markers = [
     "integration: marks tests as integration tests (slow external calls)",
     "requires_ollama: marks tests that require local Ollama instance (skip in CI)",
     "requires_api_keys: marks tests that require mocked API keys (skip in CI)",
+    "performance: marks tests as performance benchmarks with explicit budgets",
 ]
 addopts = "-m 'not slow and not requires_ollama and not requires_api_keys' -q --tb=short"
 
