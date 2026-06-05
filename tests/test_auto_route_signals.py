@@ -102,22 +102,20 @@ class TestPreviouslyMisfiredPrompts:
             f"Long substantive prompt still scoring coordination: {scores}"
         )
 
-    @pytest.mark.xfail(
-        reason=(
-            "Inherited from llm-router. The regex scorer has no 'fix' keyword, "
-            "so a substantive fix prompt loses to the coordination signals "
-            "('continue' + 'branch'). Tessera v0.0.3 replaces this with the "
-            "signal-engine layer where 'fix' boosts the code signal; this test "
-            "should flip to passing once the engine is wired in."
-        )
-    )
     def test_tessera_fix_request_does_not_win_coordination(self, auto_route):
+        """Fixed in v0.0.2 by expanding the 'fix' verb pattern in code
+        intent to match generic noun phrases with a required determiner.
+        See `(?:fix|patch|repair|resolve)\\s+(?:the\\s+|...)\\w+` in
+        SIGNALS['code']['intent']."""
         text = "I want to continue with the fix for the tessera and its branch"
         scores = auto_route.score_categories(text)
         winner = max(scores, key=lambda k: scores[k])
         assert winner != "coordination", (
             f"Substantive fix request still winning coordination: {scores}"
         )
+        # Specifically: code must win because "fix for the tessera" is an
+        # implementation request, not a coordination ack.
+        assert winner == "code", f"Expected code, got {winner}: {scores}"
 
     def test_long_prompt_with_continue_and_test_does_not_score_coordination(
         self, auto_route

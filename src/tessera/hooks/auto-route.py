@@ -695,6 +695,16 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"endpoint|script|program|test|hook|component|service)|"
             r"build (?:a |the )?(?:app|service|tool|cli|library|package|component|feature)|"
             r"scaffold|boilerplate|port .+ to|migrate|"
+            # "fix the X" / "fix for the X" / "patch the X" — broad enough
+            # to catch implementation prompts like "fix the auto-route
+            # classifier" or "continue with the fix for the branch"
+            # without requiring a trailing bug/error/issue noun. The
+            # required determiner (the/this/a/for the/...) filters out
+            # bare-noun usage like "the fix was hard" (no determiner
+            # follows "fix").
+            r"(?:fix|patch|repair|resolve)\s+"
+            r"(?:the\s+|this\s+|a\s+|an\s+|for\s+the\s+|for\s+a\s+|for\s+an\s+|"
+            r"my\s+|our\s+|these\s+|those\s+)\w+|"
             r"fix (?:the |this |a )?(?:\w+ )*(?:bug|error|issue|crash|failing test|exception)|"
             r"add (?:a |the )?(?:\w+ )*(?:feature|method|test|endpoint|route|handler|"
             r"middleware|support|integration|login)|"
@@ -711,7 +721,13 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"module|package|library|dependency|"
             r"endpoint|route|handler|middleware|controller|resolver|client|api client|"
             r"database|schema|migration|orm|"
-            r"test|spec|coverage|assertion|mock|fixture|"
+            # Testing vocabulary — when a prompt is "build tests for X",
+            # this is implementation work, not analysis work. The 5 QA
+            # pillars and the bench harness corpus both trigger here.
+            r"tests?|spec|coverage|assertion|mock|fixture|"
+            r"qa|quality assurance|test suite|regression test|"
+            r"unit test|integration test|functional test|e2e test|"
+            r"non[- ]functional|integrity|usability|"
             r"algorithm|data structure|linked list|hash map|binary tree|"
             r"authentication|authorization|jwt|oauth|login|dashboard|"
             r"cache|queue|worker|cron|webhook|retry|rate limit|429|response(?:s)?|"
