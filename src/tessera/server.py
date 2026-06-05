@@ -32,7 +32,7 @@ from tessera.config import get_config
 from tessera.health import get_tracker
 from tessera.logging import configure_logging, get_logger
 from tessera.state import _check_tier, get_active_profile  # noqa: F401  (backward compat)
-from tessera.tools import admin, agoragentic, codex, dashboard, fs, gemini_cli, media, pipeline, routing, setup, subscription, text
+from tessera.tools import admin, agents, agoragentic, codex, dashboard, fs, gemini_cli, media, pipeline, routing, setup, subscription, text
 from tessera.tools.admin import llm_health, llm_set_profile, llm_usage  # noqa: F401
 from tessera.tools.pipeline import llm_orchestrate  # noqa: F401
 from tessera.tools.routing import llm_route  # noqa: F401
@@ -114,6 +114,7 @@ setup.register(mcp, _gate)
 dashboard.register(mcp, _gate)
 fs.register(mcp, _gate)
 agoragentic.register(mcp)
+agents.register(mcp)  # v0.0.2 — 6 agent-session MCP tools
 
 # ── Resources ────────────────────────────────────────────────────────────────
 

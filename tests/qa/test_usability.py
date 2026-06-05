@@ -7,11 +7,8 @@ documented UX guarantee.
 """
 from __future__ import annotations
 
-import inspect
-import json
 from pathlib import Path
 
-import pytest
 
 from tessera.agents import BudgetExceeded, SessionStore
 from tessera.agents.budget import BudgetEnvelope

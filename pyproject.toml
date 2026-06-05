@@ -130,6 +130,7 @@ markers = [
     "requires_ollama: marks tests that require local Ollama instance (skip in CI)",
     "requires_api_keys: marks tests that require mocked API keys (skip in CI)",
     "performance: marks tests as performance benchmarks with explicit budgets",
+    "mcp_handshake: marks tests that spawn the MCP server as a subprocess",
 ]
 addopts = "-m 'not slow and not requires_ollama and not requires_api_keys' -q --tb=short"
 

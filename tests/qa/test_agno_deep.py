@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -166,7 +166,6 @@ def test_agno_module_import_is_cheap():
     """Importing the module fresh should take less than 100ms even on cold cache."""
     import importlib
     import time
-    import sys
 
     # Force fresh import
     for mod_name in list(sys.modules):

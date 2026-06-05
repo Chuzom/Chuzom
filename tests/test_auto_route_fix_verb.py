@@ -82,14 +82,11 @@ def test_fix_noun_usage_does_not_classify_as_code(auto_route, prompt: str):
     code score should be 0 — the required determiner in the pattern
     filters these out."""
     scores = auto_route.score_categories(prompt)
-    # code score should be 0; we just check it's not the dominant winner
-    if any(scores.values()):
-        winner = max(scores, key=lambda k: scores[k])
-        if scores["code"] > 0:
-            # If code somehow fires, it must not be from intent — only
-            # from topic (e.g. "fix" + "code" matching topic words). The
-            # important invariant: code intent should be 0 for these.
-            assert "the fix" not in prompt.lower() or scores["code"] <= 2
+    # The important invariant: noun-usage prompts should not score code
+    # via intent. Topic matches are tolerable up to a low cap; if code
+    # fires above that, the noun-filter regressed.
+    if scores["code"] > 0:
+        assert "the fix" not in prompt.lower() or scores["code"] <= 2
 
 
 # ────────────────────────────────────────────────────────────────────────

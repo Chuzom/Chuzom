@@ -8,14 +8,12 @@ none of the integrity tests are allowed to xfail or skip in CI.
 from __future__ import annotations
 
 import concurrent.futures
-import json
 import sqlite3
 from pathlib import Path
 
 import pytest
 
 from tessera.agents import (
-    BudgetEnvelope,
     BudgetExceeded,
     SessionState,
     SessionStore,
@@ -191,7 +189,7 @@ def test_budget_breach_atomically_terminates_session(tmp_path: Path):
     # The forbidden state: consumed > cap AND state == ACTIVE.
     if final.consumed_usd > final.budget_cap_usd:
         assert final.state == SessionState.BUDGET_EXCEEDED, (
-            f"Session over budget but still ACTIVE — atomicity broken"
+            "Session over budget but still ACTIVE — atomicity broken"
         )
 
 

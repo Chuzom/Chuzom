@@ -22,7 +22,7 @@ import pytest
 
 from tessera.agents import SessionStore
 from tessera.decisions.engine import Decision, DecisionEngine, _apply_boosts
-from tessera.lineage import LineageStore, Tier, make_record, tier_for_model
+from tessera.lineage import LineageStore, make_record, tier_for_model
 from tessera.signals.base import SignalScore
 from tessera.signals.keyword import KeywordSignal
 from tessera.signals.pii import PiiSignal
