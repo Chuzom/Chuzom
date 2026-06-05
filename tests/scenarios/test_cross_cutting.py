@@ -12,7 +12,6 @@ from tessera.decisions.engine import Decision, DecisionEngine
 from tessera.health import HealthTracker
 from tessera.lineage import Inversion, LineageStore, Tier, make_record
 from tessera.signals.base import SignalScore
-from tessera.signals.keyword import KeywordSignal
 
 from tests.scenarios.core import Scenario
 
@@ -63,8 +62,8 @@ def test_scenario_cascading_provider_failures_final_fallback(scenario_collector)
         chain_attempted=attempted, model_chosen=chain[3], outcome="success",
     )
     s.outcome(
-        f"User got an answer after 3 fallbacks. Lineage chain_attempted "
-        f"shows the full path. 3 provider breakers now in cooldown.",
+        "User got an answer after 3 fallbacks. Lineage chain_attempted "
+        "shows the full path. 3 provider breakers now in cooldown.",
         success=True,
     )
     scenario_collector.add(s)
@@ -115,9 +114,9 @@ def test_scenario_inversion_detected_complex_to_local(
         inversion=rec.inversion.value,
     )
     s.outcome(
-        f"Lineage flagged UP-inversion (complex prompt → local tier). "
-        f"v0.0.3's quality_gap table will use this signal to bias against "
-        f"Ollama for complex prompts in future routing decisions.",
+        "Lineage flagged UP-inversion (complex prompt → local tier). "
+        "v0.0.3's quality_gap table will use this signal to bias against "
+        "Ollama for complex prompts in future routing decisions.",
         success=(
             rec.inversion == Inversion.UP
             and len(inversions) == 1
@@ -252,9 +251,9 @@ def test_scenario_agent_profile_boost_promotes_signal(scenario_collector):
     s.note(f"With 1.5× boost: action={boosted.action!r}")
 
     s.outcome(
-        f"Same prompt routed two different ways depending on agent profile. "
-        f"This is how Tessera makes agents 'aware' of their context without "
-        f"requiring per-agent decision rules.",
+        "Same prompt routed two different ways depending on agent profile. "
+        "This is how Tessera makes agents 'aware' of their context without "
+        "requiring per-agent decision rules.",
         success=(
             no_boost.action == "default_chain"
             and boosted.action == "code_chain"
@@ -466,8 +465,8 @@ def test_scenario_stale_failure_reset_recovers_provider(scenario_collector):
     s.provider_event("flaky-api", f"is_healthy after reset: {healthy_now}")
 
     s.outcome(
-        f"Stale breaker cleared. Provider is available for retry. This "
-        f"prevents permanently-stuck-unhealthy state from yesterday's outages.",
+        "Stale breaker cleared. Provider is available for retry. This "
+        "prevents permanently-stuck-unhealthy state from yesterday's outages.",
         success=("flaky-api" in reset and healthy_now),
     )
     scenario_collector.add(s)
@@ -521,9 +520,9 @@ def test_scenario_down_inversion_simple_routed_to_premium(
         inversion=rec.inversion.value,
     )
     s.outcome(
-        f"Simple prompt cost $0.008 instead of $0. Down-inversion flagged. "
-        f"v0.0.3's empirical loop will use this signal to detect chain-health "
-        f"issues that consistently force overspend.",
+        "Simple prompt cost $0.008 instead of $0. Down-inversion flagged. "
+        "v0.0.3's empirical loop will use this signal to detect chain-health "
+        "issues that consistently force overspend.",
         success=(rec.inversion == Inversion.DOWN),
     )
     scenario_collector.add(s)

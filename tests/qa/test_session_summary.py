@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import time
 from io import StringIO
-from pathlib import Path
 
-import pytest
 
 from tessera.agents import SessionStore
 from tessera.lineage import LineageStore, Tier, make_record

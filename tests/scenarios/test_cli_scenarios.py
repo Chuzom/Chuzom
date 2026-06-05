@@ -242,8 +242,8 @@ def test_scenario_cursor_implement_feature(scenario_collector):
         chain_attempted=list(chain[:2]),
     )
     s.outcome(
-        f"Codex subscription delivered after Ollama timed out. "
-        f"Total spend $0 (subscription). Lineage shows the full fallback path.",
+        "Codex subscription delivered after Ollama timed out. "
+        "Total spend $0 (subscription). Lineage shows the full fallback path.",
         success=True,
     )
     scenario_collector.add(s)
@@ -286,8 +286,8 @@ def test_scenario_cursor_quick_factual_query(scenario_collector):
         complexity="simple", model_tier="local", inversion="none",
     )
     s.outcome(
-        f"Default chain → Ollama answered in 1.1s. $0 spend. "
-        f"User got an immediate response.",
+        "Default chain → Ollama answered in 1.1s. $0 spend. "
+        "User got an immediate response.",
         success=True,
     )
     scenario_collector.add(s)
@@ -348,8 +348,8 @@ def test_scenario_codex_cli_debug_session(scenario_collector):
         complexity="moderate", model_tier="local", inversion="none",
     )
     s.outcome(
-        f"Code chain answered via Ollama at $0. A quality gate in v0.0.3 "
-        f"would re-route this to Codex on confidence < threshold.",
+        "Code chain answered via Ollama at $0. A quality gate in v0.0.3 "
+        "would re-route this to Codex on confidence < threshold.",
         success=(decision.action == "code_chain"),
     )
     scenario_collector.add(s)
@@ -399,9 +399,9 @@ def test_scenario_gemini_cli_research_latest_news(scenario_collector):
         complexity="moderate", model_tier="mid", inversion="none",
     )
     s.outcome(
-        f"Research chain → Perplexity sonar returned an answer with web "
-        f"citations. Cost $0.002. User got current information vs stale "
-        f"training data.",
+        "Research chain → Perplexity sonar returned an answer with web "
+        "citations. Cost $0.002. User got current information vs stale "
+        "training data.",
         success=(decision.action == "research_chain"),
     )
     scenario_collector.add(s)

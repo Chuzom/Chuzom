@@ -18,11 +18,9 @@ basic `tessera --help` stays snappy.
 """
 from __future__ import annotations
 
-import json
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from tessera.lineage import Inversion, LineageStore, Tier
 from tessera.agents import SessionStore
@@ -69,6 +67,27 @@ class SessionSummaryData:
     earliest_ts: float = 0.0
     latest_ts: float = 0.0
     host_counts: dict[str, int] = field(default_factory=dict)
+    # v2 — latency distribution + per-tier latency
+    latencies_ms: list[int] = field(default_factory=list)
+    latency_p50_ms: int = 0
+    latency_p95_ms: int = 0
+    latency_p99_ms: int = 0
+    # v2 — outcome breakdown for the status badge
+    success_count: int = 0
+    fail_count: int = 0
+
+    @property
+    def health(self) -> str:
+        """Coarse one-glyph health: 🟢 / 🟡 / 🔴 based on inversion + failure rates."""
+        fail_rate = (
+            self.fail_count / self.total_decisions
+            if self.total_decisions else 0.0
+        )
+        if self.inversion_rate < 0.05 and fail_rate < 0.02:
+            return "🟢"
+        if self.inversion_rate < 0.15 and fail_rate < 0.10:
+            return "🟡"
+        return "🔴"
 
     @property
     def duration_seconds(self) -> float:
@@ -116,9 +135,15 @@ def collect(
         model = row.get("model_chosen", "<unknown>")
         provider = model.split("/", 1)[0] if "/" in model else model
         host = row.get("host", "<unknown>")
+        outcome = row.get("outcome", "success")
 
         data.total_cost_usd += cost
         data.total_latency_ms += latency
+        data.latencies_ms.append(latency)
+        if outcome == "success":
+            data.success_count += 1
+        else:
+            data.fail_count += 1
         data.tier_counts[tier] = data.tier_counts.get(tier, 0) + 1
         data.tier_costs[tier] = data.tier_costs.get(tier, 0.0) + cost
         data.provider_counts[provider] = data.provider_counts.get(provider, 0) + 1
@@ -179,6 +204,14 @@ def collect(
         (tt, tier, count)
         for (tt, tier), count in route_counts.most_common(8)
     ]
+
+    # Latency percentiles
+    if data.latencies_ms:
+        sorted_lat = sorted(data.latencies_ms)
+        n = len(sorted_lat)
+        data.latency_p50_ms = sorted_lat[n // 2]
+        data.latency_p95_ms = sorted_lat[int(n * 0.95)] if n > 1 else sorted_lat[-1]
+        data.latency_p99_ms = sorted_lat[int(n * 0.99)] if n > 1 else sorted_lat[-1]
 
     # Cost sparkline — bucket spend into 24 time buckets across session
     if data.duration_seconds > 0:
@@ -249,6 +282,45 @@ def _fmt_duration(seconds: float) -> str:
     return f"{seconds / 3600:.1f} h"
 
 
+def _histogram(values: list[int], buckets: int = 20, width: int = 40) -> list[str]:
+    """Build a horizontal histogram of values. Returns list of (label, bar) strings."""
+    if not values:
+        return []
+    lo, hi = min(values), max(values)
+    if hi == lo:
+        return [f"{lo:>5} ms  {'█' * width}  {len(values)}"]
+    span = hi - lo
+    bucket_size = max(1, span // buckets)
+    counts: dict[int, int] = {}
+    for v in values:
+        idx = (v - lo) // bucket_size
+        counts[idx] = counts.get(idx, 0) + 1
+    max_count = max(counts.values()) if counts else 1
+    out = []
+    for i in range(min(buckets, max(counts.keys()) + 1)):
+        n = counts.get(i, 0)
+        bar_len = int((n / max_count) * width) if max_count else 0
+        bar = "█" * bar_len
+        low = lo + i * bucket_size
+        out.append(f"{low:>5} ms │ {bar}{' ' * (width - bar_len)} │ {n}")
+    return out
+
+
+def _gradient_bar(values: list[float], width: int = 60) -> list[str]:
+    """Multi-block gradient bar for cost-over-time. Returns colored block string."""
+    if not values:
+        return ["—"]
+    max_v = max(values) or 1.0
+    # Bucket into width buckets (or use existing if shorter)
+    blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+    out_parts = []
+    for v in values[:width]:
+        ratio = v / max_v
+        idx = int(round(ratio * (len(blocks) - 1)))
+        out_parts.append(blocks[idx])
+    return ["".join(out_parts)]
+
+
 def render(data: SessionSummaryData, *, console=None) -> None:
     """Render the dashboard to console (defaults to stdout via rich)."""
     from rich import box
@@ -262,6 +334,19 @@ def render(data: SessionSummaryData, *, console=None) -> None:
 
     if console is None:
         console = Console()
+
+    # ── STATUS BANNER — health glyph + service identifier ──────────────
+    status_text = Text.assemble(
+        (f"{data.health}  ", ""),
+        ("TESSERA", "bold bright_blue"),
+        ("  ·  session observability dashboard", "dim"),
+    )
+    status_banner = Panel(
+        Align.center(status_text),
+        border_style="bright_blue",
+        box=box.HEAVY,
+        padding=(0, 2),
+    )
 
     # ── HEADLINE — savings vs baseline ─────────────────────────────────
     headline_text = Text.assemble(
@@ -466,13 +551,38 @@ def render(data: SessionSummaryData, *, console=None) -> None:
         padding=(0, 2),
     )
 
+    # ── LATENCY DISTRIBUTION ──────────────────────────────────────────
+    latency_panel = None
+    if data.latencies_ms:
+        hist_lines = _histogram(data.latencies_ms, buckets=10, width=30)
+        hist_text = Text("\n".join(hist_lines), style="cyan")
+        lat_summary = Text.assemble(
+            ("p50: ", "dim"),
+            (f"{data.latency_p50_ms} ms", "bold green"),
+            ("    p95: ", "dim"),
+            (f"{data.latency_p95_ms} ms",
+             "bold yellow" if data.latency_p95_ms > 5000 else "bold"),
+            ("    p99: ", "dim"),
+            (f"{data.latency_p99_ms} ms",
+             "bold red" if data.latency_p99_ms > 10000 else "bold"),
+        )
+        latency_panel = Panel(
+            Group(lat_summary, Text(""), hist_text),
+            title="◆ Latency distribution",
+            border_style="cyan",
+            padding=(0, 1),
+        )
+
     # ── ASSEMBLE ──────────────────────────────────────────────────────
     console.print()
+    console.print(status_banner)
     console.print(headline)
     if spark_panel:
         console.print(spark_panel)
     console.print(Columns([tier_panel, provider_panel], equal=False,
                           expand=True))
+    if latency_panel:
+        console.print(latency_panel)
     console.print(Columns([inversions_panel, safety_panel], expand=True))
     if agent_panel:
         console.print(agent_panel)
@@ -579,12 +689,55 @@ def cli_summary(
     since_hours: float = 24.0,
     limit: int = 5000,
     markdown: bool = False,
+    watch: bool = False,
+    watch_interval: float = 5.0,
 ) -> int:
-    """Implementation behind `tessera summary`. Returns exit code."""
-    data = collect(since_seconds=since_hours * 3600, limit=limit)
+    """Implementation behind `tessera summary`. Returns exit code.
+
+    --watch enables live mode: re-collects + re-renders every interval
+    seconds using rich.live.Live so the dashboard updates in place.
+    Ideal for keeping it open in a side terminal during a session.
+    """
     if markdown:
+        data = collect(since_seconds=since_hours * 3600, limit=limit)
         print(render_markdown(data))
         return 0
+
+    if watch:
+        from rich.console import Console
+        from rich.live import Live
+
+        console = Console()
+        try:
+            with Live(console=console, screen=True, auto_refresh=False) as live:
+                while True:
+                    import time
+                    data = collect(
+                        since_seconds=since_hours * 3600, limit=limit
+                    )
+                    # Render into a buffer console, capture, then update Live
+                    from io import StringIO
+
+                    from rich.console import Console as BufConsole
+                    buf = StringIO()
+                    sub = BufConsole(file=buf, width=console.width,
+                                     force_terminal=True, color_system="auto")
+                    if data.total_decisions == 0:
+                        sub.print(
+                            f"\n[dim]No routing decisions recorded in the last "
+                            f"{since_hours:.0f}h. Waiting…  "
+                            f"(refresh every {watch_interval:.0f}s, "
+                            f"Ctrl+C to exit)[/]\n"
+                        )
+                    else:
+                        render(data, console=sub)
+                    live.update(buf.getvalue(), refresh=True)
+                    time.sleep(watch_interval)
+        except KeyboardInterrupt:
+            return 0
+        return 0
+
+    data = collect(since_seconds=since_hours * 3600, limit=limit)
     if data.total_decisions == 0:
         print(
             "No routing decisions recorded in the last "

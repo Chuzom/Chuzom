@@ -591,24 +591,42 @@ def main() -> None:
         cmd_dashboard(args[1:])
     elif args and args[0] == "summary":
         # Session Summary Dashboard — rich terminal overview.
-        # Flags: --since-hours N (default 24), --limit N, --markdown
+        # Flags: --since-hours N, --limit N, --markdown, --watch,
+        #        --watch-interval N (seconds, default 5)
         from tessera.summary import cli_summary
         rest = args[1:]
         since = 24.0
         limit = 5000
         markdown = False
+        watch = False
+        watch_interval = 5.0
         i = 0
         while i < len(rest):
             tok = rest[i]
             if tok == "--since-hours" and i + 1 < len(rest):
-                since = float(rest[i + 1]); i += 2; continue
+                since = float(rest[i + 1])
+                i += 2
+                continue
             if tok == "--limit" and i + 1 < len(rest):
-                limit = int(rest[i + 1]); i += 2; continue
+                limit = int(rest[i + 1])
+                i += 2
+                continue
             if tok == "--markdown":
-                markdown = True; i += 1; continue
+                markdown = True
+                i += 1
+                continue
+            if tok == "--watch":
+                watch = True
+                i += 1
+                continue
+            if tok == "--watch-interval" and i + 1 < len(rest):
+                watch_interval = float(rest[i + 1])
+                i += 2
+                continue
             i += 1
         raise SystemExit(cli_summary(
-            since_hours=since, limit=limit, markdown=markdown
+            since_hours=since, limit=limit, markdown=markdown,
+            watch=watch, watch_interval=watch_interval,
         ))
     elif args and args[0] == "tui":
         from tessera.dashboard.tui import run as _tui_run

@@ -276,8 +276,8 @@ def test_scenario_stub_framework_documents_v003_path(
     s.framework_event("is_available() queried", available=available)
     if available:
         s.note(
-            f"Concrete implementation exists — flip this test to exercise "
-            f"the real adapter path"
+            "Concrete implementation exists — flip this test to exercise "
+            "the real adapter path"
         )
 
     adapter = adapter_cls()

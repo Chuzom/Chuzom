@@ -1,0 +1,161 @@
+# Tessera Model Registry
+#
+# Sourced primarily from https://artificialanalysis.ai/leaderboards/models
+# Refresh periodically via scripts/refresh-model-registry.py.
+#
+# Schema (all required unless marked optional):
+#   id                       canonical "provider/model-name" string
+#   provider                 provider slug for grouping
+#   tier                     local | cheap | mid | premium | unknown
+#   quality_score            0.0–1.0, normalized from AA composite
+#   price_per_1m_input_usd   USD per 1M input tokens
+#   price_per_1m_output_usd  USD per 1M output tokens
+#   latency_p50_ms (opt)     observed median latency
+#   context_window (opt)     in tokens
+#   capabilities (opt)       list: function-calling, vision, json, web-grounded, reasoning
+#   source (opt)             provenance (defaults to artificialanalysis.ai)
+#   notes (opt)              free text
+
+version: v0
+updated: "2026-06-05"
+source: "https://artificialanalysis.ai/leaderboards/models"
+
+models:
+  # ─── LOCAL tier ──────────────────────────────────────────────────────
+  - id: ollama/qwen3.5:latest
+    provider: ollama
+    tier: local
+    quality_score: 0.68
+    price_per_1m_input_usd: 0.0
+    price_per_1m_output_usd: 0.0
+    latency_p50_ms: 1800
+    context_window: 32768
+    capabilities: [function-calling]
+    notes: "Local Ollama; free at the API boundary"
+
+  - id: ollama/qwen3-coder-next
+    provider: ollama
+    tier: local
+    quality_score: 0.71
+    price_per_1m_input_usd: 0.0
+    price_per_1m_output_usd: 0.0
+    latency_p50_ms: 2200
+    context_window: 32768
+    capabilities: [function-calling]
+    notes: "Code-specialized local"
+
+  # ─── CHEAP tier ──────────────────────────────────────────────────────
+  - id: anthropic/claude-3.5-haiku
+    provider: anthropic
+    tier: cheap
+    quality_score: 0.74
+    price_per_1m_input_usd: 0.80
+    price_per_1m_output_usd: 4.00
+    latency_p50_ms: 900
+    context_window: 200000
+    capabilities: [function-calling, vision]
+
+  - id: google/gemini-1.5-flash-8b
+    provider: google
+    tier: cheap
+    quality_score: 0.65
+    price_per_1m_input_usd: 0.0375
+    price_per_1m_output_usd: 0.15
+    latency_p50_ms: 600
+    context_window: 1000000
+    capabilities: [function-calling, vision, json]
+
+  - id: openai/gpt-4o-mini
+    provider: openai
+    tier: cheap
+    quality_score: 0.72
+    price_per_1m_input_usd: 0.15
+    price_per_1m_output_usd: 0.60
+    latency_p50_ms: 800
+    context_window: 128000
+    capabilities: [function-calling, vision, json]
+
+  - id: groq/llama-3.1-8b-instant
+    provider: groq
+    tier: cheap
+    quality_score: 0.61
+    price_per_1m_input_usd: 0.05
+    price_per_1m_output_usd: 0.08
+    latency_p50_ms: 250
+    context_window: 8192
+    capabilities: [function-calling]
+    notes: "Groq LPUs — very fast, modest quality"
+
+  # ─── MID tier ────────────────────────────────────────────────────────
+  - id: openai/gpt-4o
+    provider: openai
+    tier: mid
+    quality_score: 0.85
+    price_per_1m_input_usd: 2.50
+    price_per_1m_output_usd: 10.00
+    latency_p50_ms: 1500
+    context_window: 128000
+    capabilities: [function-calling, vision, json]
+
+  - id: anthropic/claude-3.5-sonnet
+    provider: anthropic
+    tier: mid
+    quality_score: 0.88
+    price_per_1m_input_usd: 3.00
+    price_per_1m_output_usd: 15.00
+    latency_p50_ms: 1700
+    context_window: 200000
+    capabilities: [function-calling, vision]
+
+  - id: google/gemini-1.5-pro
+    provider: google
+    tier: mid
+    quality_score: 0.82
+    price_per_1m_input_usd: 1.25
+    price_per_1m_output_usd: 5.00
+    latency_p50_ms: 1800
+    context_window: 2000000
+    capabilities: [function-calling, vision, json]
+
+  - id: perplexity/sonar
+    provider: perplexity
+    tier: mid
+    quality_score: 0.78
+    price_per_1m_input_usd: 1.00
+    price_per_1m_output_usd: 1.00
+    latency_p50_ms: 3500
+    context_window: 128000
+    capabilities: [web-grounded, citations]
+    notes: "Web-grounded; cost includes search backend"
+
+  # ─── PREMIUM tier ────────────────────────────────────────────────────
+  - id: anthropic/claude-3-opus
+    provider: anthropic
+    tier: premium
+    quality_score: 0.90
+    price_per_1m_input_usd: 15.0
+    price_per_1m_output_usd: 75.0
+    latency_p50_ms: 3000
+    context_window: 200000
+    capabilities: [function-calling, vision]
+
+  - id: openai/o3
+    provider: openai
+    tier: premium
+    quality_score: 0.94
+    price_per_1m_input_usd: 60.0
+    price_per_1m_output_usd: 240.0
+    latency_p50_ms: 8000
+    context_window: 200000
+    capabilities: [function-calling, vision, json, reasoning]
+    notes: "Reasoning tier — cost reflects extended thinking"
+
+  - id: openai/gpt-5
+    provider: openai
+    tier: premium
+    quality_score: 0.96
+    price_per_1m_input_usd: 80.0
+    price_per_1m_output_usd: 320.0
+    latency_p50_ms: 7000
+    context_window: 400000
+    capabilities: [function-calling, vision, json, reasoning]
