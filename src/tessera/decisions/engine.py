@@ -54,22 +54,39 @@ class DecisionEngine:
         self._decisions = sorted(enumerate(decisions), key=lambda kv: (kv[1].priority, kv[0]))
 
     def choose(
-        self, scores: dict[str, SignalScore], default_action: str = "default_chain"
+        self,
+        scores: dict[str, SignalScore],
+        default_action: str = "default_chain",
+        boosts: dict[str, float] | None = None,
     ) -> DecisionResult:
+        """Pick the first firing decision (priority asc) or default.
+
+        Args:
+            scores: bag of SignalScore from the signal layer.
+            default_action: chain alias returned when nothing fires.
+            boosts: optional {signal_name: multiplier} applied to the
+                score (not threshold) before firing checks. Set by the
+                agent layer to bias routing per agent profile. A boost
+                > 1 makes the signal fire more aggressively; < 1 makes
+                it fire less. Score is clamped to [0, 1] after boost.
+        """
+        effective_scores = (
+            _apply_boosts(scores, boosts) if boosts else scores
+        )
         for _, decision in self._decisions:
-            fired = self._evaluate(decision, scores)
+            fired = self._evaluate(decision, effective_scores)
             if fired:
                 return DecisionResult(
                     decision_name=decision.name,
                     action=decision.action,
                     fired_signals=tuple(s.name for s in fired),
-                    all_scores=tuple(scores.values()),
+                    all_scores=tuple(effective_scores.values()),
                 )
         return DecisionResult(
             decision_name="<default>",
             action=default_action,
             fired_signals=(),
-            all_scores=tuple(scores.values()),
+            all_scores=tuple(effective_scores.values()),
         )
 
     @staticmethod
@@ -87,3 +104,28 @@ class DecisionEngine:
         if decision.operator == "SINGLE":
             return fired[:1]
         raise ValueError(f"unknown operator: {decision.operator}")
+
+
+def _apply_boosts(
+    scores: dict[str, SignalScore], boosts: dict[str, float]
+) -> dict[str, SignalScore]:
+    """Return a new score map with multipliers applied to the score field.
+
+    Threshold is NOT boosted — that would defeat the point. Score is
+    clamped to [0, 1] after multiplication.
+    Evidence is annotated so lineage shows the boost was applied.
+    """
+    out: dict[str, SignalScore] = {}
+    for name, signal in scores.items():
+        multiplier = boosts.get(name)
+        if multiplier is None or multiplier == 1.0:
+            out[name] = signal
+            continue
+        boosted_score = max(0.0, min(1.0, signal.score * multiplier))
+        out[name] = SignalScore(
+            name=signal.name,
+            score=boosted_score,
+            threshold=signal.threshold,
+            evidence=f"{signal.evidence} (boost×{multiplier})",
+        )
+    return out

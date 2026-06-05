@@ -14,7 +14,9 @@ from typing import Any
 
 
 @dataclass
-class CacheEntry:
+class SemanticCacheEntry:
+    """A response cache entry keyed by prompt embedding similarity (v0.0.2+)."""
+
     prompt: str
     response: str
     model: str
@@ -33,7 +35,7 @@ class SemanticCache:
         self.similarity_threshold = similarity_threshold
         self.max_entries = max_entries
 
-    def get(self, prompt: str) -> CacheEntry | None:
+    def get(self, prompt: str) -> SemanticCacheEntry | None:
         return None
 
     def put(self, prompt: str, response: str, model: str, **metadata: Any) -> None:

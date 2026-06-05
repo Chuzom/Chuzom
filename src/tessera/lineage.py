@@ -67,7 +67,13 @@ _TIER_ORDER: dict[Tier, int] = {
 
 @dataclass(frozen=True)
 class LineageRecord:
-    """One routing decision, fully audited."""
+    """One routing decision, fully audited.
+
+    v0.0.2 adds agent-session attribution (agent_id, session_id, step_index,
+    parent_session_id, framework). All five are optional — when the call
+    isn't part of an agent run, they're left None and the row behaves
+    exactly like a v0.0.1 row.
+    """
 
     id: str
     timestamp: float
@@ -86,6 +92,12 @@ class LineageRecord:
     latency_ms: int
     cost_usd: float
     notes: str = ""
+    # ── v0.0.2 agent-session attribution (all optional) ──────────────────
+    agent_id: str | None = None
+    session_id: str | None = None
+    step_index: int | None = None
+    parent_session_id: str | None = None
+    framework: str | None = None  # agno / hermes / langgraph / crewai / ...
 
     def to_row(self) -> tuple:
         return (
@@ -106,6 +118,11 @@ class LineageRecord:
             self.latency_ms,
             self.cost_usd,
             self.notes,
+            self.agent_id,
+            self.session_id,
+            self.step_index,
+            self.parent_session_id,
+            self.framework,
         )
 
 
@@ -163,19 +180,38 @@ CREATE TABLE IF NOT EXISTS lineage (
     outcome TEXT NOT NULL,
     latency_ms INTEGER NOT NULL,
     cost_usd REAL NOT NULL,
-    notes TEXT NOT NULL DEFAULT ''
+    notes TEXT NOT NULL DEFAULT '',
+    -- v0.0.2: agent-session attribution (nullable for backward compat)
+    agent_id TEXT,
+    session_id TEXT,
+    step_index INTEGER,
+    parent_session_id TEXT,
+    framework TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_lineage_timestamp ON lineage(timestamp);
 CREATE INDEX IF NOT EXISTS idx_lineage_inversion ON lineage(inversion);
 CREATE INDEX IF NOT EXISTS idx_lineage_model ON lineage(model_chosen);
+CREATE INDEX IF NOT EXISTS idx_lineage_session ON lineage(session_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_agent ON lineage(agent_id);
 """
+
+# Idempotent migrations for DBs created before v0.0.2 — each fails harmlessly
+# if the column already exists.
+_MIGRATIONS = (
+    "ALTER TABLE lineage ADD COLUMN agent_id TEXT",
+    "ALTER TABLE lineage ADD COLUMN session_id TEXT",
+    "ALTER TABLE lineage ADD COLUMN step_index INTEGER",
+    "ALTER TABLE lineage ADD COLUMN parent_session_id TEXT",
+    "ALTER TABLE lineage ADD COLUMN framework TEXT",
+)
 
 _INSERT = """
 INSERT INTO lineage (
     id, timestamp, host, prompt_fingerprint, task_type, complexity,
     classifier_method, signal_scores, fired_decisions, chain_attempted,
-    model_chosen, model_tier, inversion, outcome, latency_ms, cost_usd, notes
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    model_chosen, model_tier, inversion, outcome, latency_ms, cost_usd, notes,
+    agent_id, session_id, step_index, parent_session_id, framework
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -194,6 +230,15 @@ class LineageStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path))
         self._conn.executescript(_SCHEMA)
+        # Apply idempotent migrations for v0.0.2 columns. Pre-v0.0.2 DBs
+        # need ALTER TABLE; newly-created DBs already have these columns
+        # from _SCHEMA and skip via the duplicate-column guard.
+        for stmt in _MIGRATIONS:
+            try:
+                self._conn.execute(stmt)
+            except sqlite3.OperationalError as err:
+                if "duplicate column" not in str(err):
+                    raise
         self._conn.commit()
 
     def record(self, entry: LineageRecord) -> None:
@@ -236,6 +281,46 @@ class LineageStore:
             "inversion_rate": (total - counts.get("none", 0)) / total if total else 0.0,
         }
 
+    # ── v0.0.2: session-aware queries ─────────────────────────────────────
+
+    def by_session(self, session_id: str) -> list[dict]:
+        """Every routing decision in a single agent session, ordered by step."""
+        cursor = self._conn.execute(
+            "SELECT * FROM lineage WHERE session_id = ? "
+            "ORDER BY step_index ASC, timestamp ASC",
+            (session_id,),
+        )
+        cols = [c[0] for c in cursor.description]
+        return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def session_cost(self, session_id: str) -> float:
+        """Cumulative cost across all steps in a session."""
+        cursor = self._conn.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM lineage WHERE session_id = ?",
+            (session_id,),
+        )
+        return float(cursor.fetchone()[0])
+
+    def by_agent(self, agent_id: str, limit: int = 100) -> list[dict]:
+        """Recent decisions for one agent profile, across all its sessions."""
+        cursor = self._conn.execute(
+            "SELECT * FROM lineage WHERE agent_id = ? "
+            "ORDER BY timestamp DESC LIMIT ?",
+            (agent_id, limit),
+        )
+        cols = [c[0] for c in cursor.description]
+        return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def by_framework(self, framework: str, limit: int = 100) -> list[dict]:
+        """Recent decisions originating from one framework adapter."""
+        cursor = self._conn.execute(
+            "SELECT * FROM lineage WHERE framework = ? "
+            "ORDER BY timestamp DESC LIMIT ?",
+            (framework, limit),
+        )
+        cols = [c[0] for c in cursor.description]
+        return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
     def close(self) -> None:
         self._conn.close()
 
@@ -256,8 +341,19 @@ def make_record(
     cost_usd: float,
     model_tier: Tier | None = None,
     notes: str = "",
+    # ── v0.0.2 agent-session attribution ──────────────────────────────────
+    agent_id: str | None = None,
+    session_id: str | None = None,
+    step_index: int | None = None,
+    parent_session_id: str | None = None,
+    framework: str | None = None,
 ) -> LineageRecord:
-    """Convenience builder — derives tier + inversion automatically."""
+    """Convenience builder — derives tier + inversion automatically.
+
+    Agent-session fields are optional. When omitted, the record describes a
+    standalone routing decision (v0.0.1 semantics). When provided, the row
+    joins the agent's lineage for cost rollups + session replay.
+    """
     tier = model_tier if model_tier is not None else tier_for_model(model_chosen)
     inversion = detect_inversion(complexity, tier)
     return LineageRecord(
@@ -278,4 +374,9 @@ def make_record(
         latency_ms=latency_ms,
         cost_usd=cost_usd,
         notes=notes,
+        agent_id=agent_id,
+        session_id=session_id,
+        step_index=step_index,
+        parent_session_id=parent_session_id,
+        framework=framework,
     )
