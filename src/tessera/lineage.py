@@ -264,15 +264,17 @@ class LineageStore:
     def record(self, entry: LineageRecord) -> None:
         self._conn.execute(_INSERT, entry.to_row())
         self._conn.commit()
-        # Auto-emit to OpenTelemetry when enabled. Failure to emit must
-        # never block the lineage write — lineage is the durable record,
-        # observability is best-effort.
-        try:
-            from tessera.observability import emit_routing_decision
+        # Auto-emit to OpenTelemetry when enabled. Fast path: avoid the
+        # import + function call entirely when no OTLP endpoint is set.
+        # Failure to emit must never block the lineage write — lineage is
+        # the durable record, observability is best-effort.
+        if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+            try:
+                from tessera.observability import emit_routing_decision
 
-            emit_routing_decision(entry)
-        except Exception:
-            pass
+                emit_routing_decision(entry)
+            except Exception:
+                pass
 
     def recent(self, limit: int = 50) -> list[dict]:
         cursor = self._conn.execute(
