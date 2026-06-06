@@ -1,0 +1,159 @@
+# RouterArena regression gate
+#
+# Runs the RouterArena `sub_10` split on every PR + main push, stores the
+# score against the commit SHA, and asks `chuzom benchmark regress` to
+# compare against the most recent baseline. A drop greater than the
+# threshold (0.005 by default — about 0.5pp) fails the build.
+#
+# This is the audit's Part 7 rec #6 — "wire RouterArena to live routing"
+# implemented as continuous evidence on every PR rather than as a runtime
+# router change. Same intent (compounding benchmark history), much
+# smaller blast radius.
+#
+# Security note: all workflow_dispatch inputs flow through env: bindings
+# rather than ${{ ... }} interpolation inside `run:` blocks, so a crafted
+# input can't escape into the shell. See
+# github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do
+#
+# Cost characteristics:
+#   * `--limit 50` keeps the per-run cost to ~$0.05 (mostly Ollama + cheap
+#     Gemini Flash fallbacks); no PR pays more than a coffee.
+#   * Requires OPENAI_API_KEY at minimum, GEMINI_API_KEY recommended; the
+#     job skips cleanly if the secrets aren't set so forks don't fail.
+#   * OpenRouter key is opt-in via secrets.OPENROUTER_API_KEY — uses the
+#     `cost_aggressive` policy when present, falls back to `standard`.
+
+name: routerarena-regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/chuzom/router.py"
+      - "src/chuzom/classifier.py"
+      - "src/chuzom/profiles.py"
+      - "src/chuzom/providers.py"
+      - "src/chuzom/policies/**"
+      - "src/chuzom/hooks/auto-route.py"
+      - "scripts/routerarena_prep.py"
+      - "scripts/routerarena_submit.py"
+      - ".github/workflows/routerarena-regression.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Prompt cap (smoke runs)"
+        default: "50"
+      split:
+        description: "Dataset split (sub_10 / full / robustness)"
+        default: "sub_10"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # User-controllable inputs routed through env so they never reach
+      # the shell as raw `${{ ... }}` substitutions. Defaults match the
+      # workflow_dispatch defaults and apply to push / pull_request runs.
+      RA_SPLIT: ${{ github.event.inputs.split || 'sub_10' }}
+      RA_LIMIT: ${{ github.event.inputs.limit || '50' }}
+      RA_VERSION: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Sync project (with dev extras)
+        run: uv sync --extra dev
+
+      - name: Detect API keys
+        id: keys
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::No API key secrets set — skipping the regression gate. Fork PRs see this notice and don't fail."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select policy based on available keys
+        id: policy
+        if: steps.keys.outputs.skip != 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+            echo "policy=cost_aggressive" >> "$GITHUB_OUTPUT"
+          else
+            echo "policy=standard" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate inputs (defence in depth)
+        if: steps.keys.outputs.skip != 'true'
+        run: |
+          # Whitelist allowed splits; reject anything else so a crafted
+          # workflow_dispatch input can't smuggle in unexpected values
+          # even though everything below already passes them via env.
+          case "$RA_SPLIT" in
+            sub_10|full|robustness) ;;
+            *) echo "::error::invalid split: $RA_SPLIT"; exit 1 ;;
+          esac
+          # Limit must be a small positive integer.
+          if ! printf '%s' "$RA_LIMIT" | grep -Eq '^[0-9]{1,4}$'; then
+            echo "::error::invalid limit: $RA_LIMIT"
+            exit 1
+          fi
+
+      - name: Prepare RouterArena slice
+        if: steps.keys.outputs.skip != 'true'
+        run: uv run python scripts/routerarena_prep.py --split "$RA_SPLIT" --limit "$RA_LIMIT"
+
+      - name: Run benchmark + persist score keyed by commit SHA
+        if: steps.keys.outputs.skip != 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          POLICY: ${{ steps.policy.outputs.policy }}
+        run: |
+          uv run chuzom benchmark run routerarena \
+            --policy "$POLICY" \
+            --split "$RA_SPLIT" \
+            --limit "$RA_LIMIT" \
+            --persist --version "$RA_VERSION"
+
+      - name: Regression check (fail if drop > threshold)
+        if: steps.keys.outputs.skip != 'true' && github.event_name == 'pull_request'
+        env:
+          POLICY: ${{ steps.policy.outputs.policy }}
+        run: |
+          uv run chuzom benchmark regress \
+            --policy "$POLICY" \
+            --benchmark routerarena \
+            --split "$RA_SPLIT"
+
+      - name: Upload run artifacts
+        if: always() && steps.keys.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: routerarena-${{ github.sha }}
+          path: |
+            bench/results/
+            ~/.chuzom/benchmarks.json
+          if-no-files-found: ignore
+          retention-days: 30
