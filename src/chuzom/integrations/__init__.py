@@ -1,1 +1,1 @@
-"""LLM Router integrations with external frameworks."""
+"""Chuzom integrations with external frameworks."""

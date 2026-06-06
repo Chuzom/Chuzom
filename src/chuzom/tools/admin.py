@@ -17,6 +17,7 @@ from chuzom.cache import get_cache
 from chuzom.codex_agent import is_codex_available
 from chuzom.config import get_config
 from chuzom.cost import (
+    _get_db,
     get_cache_savings, get_model_acceptance_scores, get_model_latency_stats,
     get_monthly_spend, get_quality_report,
     get_routing_savings_vs_sonnet, get_savings_summary,
@@ -74,6 +75,11 @@ async def llm_usage(period: str = "today") -> str:
         period: Time period — "today", "week", "month", or "all".
     """
     from chuzom.claude_usage import _bar, _row, _time_until
+
+    # Bootstrap schema so fresh / 0-byte usage.db renders the empty-state UI
+    # instead of erroring with `no such table: usage`. Idempotent.
+    _bootstrap_db = await _get_db()
+    await _bootstrap_db.close()
 
     W = 58  # box inner width
     HR = "+" + "-" * W + "+"
@@ -503,7 +509,7 @@ async def llm_providers() -> str:
 
 
 async def llm_dashboard(port: int = 7337) -> str:
-    """Open the LLM Router web dashboard in the background.
+    """Open the Chuzom web dashboard in the background.
 
     Starts a local HTTP server at localhost:<port> showing routing stats,
     cost trends, model distribution, and recent decisions. Refreshes every 30s.
@@ -884,7 +890,7 @@ async def llm_session_dashboard() -> str:
     result = await get_realized_savings(period="today", platform="all")
     bp = result.get("by_platform", {})
 
-    lines = ["**LLM Router — today's dashboard**", ""]
+    lines = ["**Chuzom — today's dashboard**", ""]
     lines.append("| Platform | Gross saved | Routing overhead | Realized (net) |")
     lines.append("|---|---:|---:|---:|")
     for name in ("claude", "codex", "gemini"):

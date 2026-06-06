@@ -154,7 +154,7 @@ def _run_install(flags: list[str]) -> None:
         _save_settings(settings)
 
     print(f"\n{_bold('╔══════════════════════════════════════════╗')}")
-    print(f"{_bold('║   LLM Router — One-Command Install        ║')}")
+    print(f"{_bold('║   Chuzom — One-Command Install        ║')}")
     print(f"{_bold('╚══════════════════════════════════════════╝')}\n")
 
     actions = install()
@@ -173,7 +173,7 @@ def _run_install(flags: list[str]) -> None:
             marker = _green('✓') if ok else _yellow('⚠')
             print(f"  {marker}  {a}")
 
-    print(f"\n{_green('✓')} {_bold('LLM Router installed globally.')}")
+    print(f"\n{_green('✓')} {_bold('Chuzom installed globally.')}")
     print("  Every Claude Code session will now auto-route tasks.")
     print("  Restart Claude Code (and Claude Desktop if installed) to activate.\n")
 
@@ -206,7 +206,7 @@ def _run_install_headless() -> None:
     from chuzom.install_hooks import install
 
     print(f"\n{_bold('╔══════════════════════════════════════════════╗')}")
-    print(f"{_bold('║   LLM Router — Headless / Agent Install       ║')}")
+    print(f"{_bold('║   Chuzom — Headless / Agent Install       ║')}")
     print(f"{_bold('╚══════════════════════════════════════════════╝')}\n")
     print(_dim("  API-key mode — no subscription, no OAuth, routes directly to external providers.\n"))
 

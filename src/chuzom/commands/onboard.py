@@ -64,7 +64,7 @@ def _run_onboard() -> None:
     STATE_DIR = os.path.expanduser("~/.chuzom")
 
     print(f"\n{_bold('╔══════════════════════════════════════════╗')}")
-    print(f"{_bold('║   LLM Router — Onboarding Wizard          ║')}")
+    print(f"{_bold('║   Chuzom — Onboarding Wizard          ║')}")
     print(f"{_bold('╚══════════════════════════════════════════╝')}\n")
     print("  Detecting your setup...\n")
 

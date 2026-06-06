@@ -515,7 +515,7 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
     # ── Summary ────────────────────────────────────────────────────────────
     print()
     if not issues:
-        print(_green(_bold("  ✓ All checks passed. LLM Router is healthy.")))
+        print(_green(_bold("  ✓ All checks passed. Chuzom is healthy.")))
         exit_code = 0
     else:
         print(_red(_bold(f"  ✗ {len(issues)} issue(s) found:")))

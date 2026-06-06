@@ -268,7 +268,7 @@ def _activity_panel_block() -> list[str]:
 def _print_header() -> list[str]:
     return [
         "",
-        "LLM Router · Dashboard Explainer",
+        "Chuzom · Dashboard Explainer",
         f"DB:       {DB_PATH}",
         f"Tracking: {TRACKING_PATH}",
         "",

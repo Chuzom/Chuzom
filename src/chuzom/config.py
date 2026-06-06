@@ -62,7 +62,7 @@ def probe_ollama(base_url: str) -> bool:
 
 
 class RouterConfig(BaseSettings):
-    """Central configuration for the LLM Router.
+    """Central configuration for the Chuzom.
 
     All fields are loaded from environment variables (case-insensitive) or a
     ``.env`` file. Providers with empty API keys are considered unconfigured

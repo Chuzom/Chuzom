@@ -1,4 +1,4 @@
-"""LLM Router web dashboard — read-only stats at localhost:7337.
+"""Chuzom web dashboard — read-only stats at localhost:7337.
 
 A lightweight aiohttp server that reads from the same SQLite DB and
 usage.json the MCP server writes. No shared mutable state with the MCP
@@ -189,7 +189,7 @@ def _html(token: str = "") -> str:
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>LLM Router</title>
+<title>Chuzom</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Space+Grotesk:wght@300;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -253,7 +253,7 @@ tailwind.config = {
 <!-- Top header -->
 <header class="flex justify-between items-center px-6 h-16 w-full fixed z-50 bg-slate-950/40 backdrop-blur-xl shadow-[0_0_32px_rgba(208,188,255,0.06)]">
   <div class="flex items-center gap-6">
-    <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-violet-300 to-violet-600 font-headline tracking-tight">LLM Router</span>
+    <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-violet-300 to-violet-600 font-headline tracking-tight">Chuzom</span>
     <span id="mode-badge" class="text-[10px] font-mono bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full uppercase tracking-wider">CC Subscription</span>
   </div>
   <div class="flex items-center gap-4">

@@ -1088,13 +1088,13 @@ async def _dispatch_model_loop(
                     daily_spend = await cost.get_daily_spend()
                     if daily_spend >= daily_limit:
                         cost.fire_budget_alert(
-                            "LLM Router — Daily Limit Reached",
+                            "Chuzom — Daily Limit Reached",
                             f"Daily spend ${daily_spend:.3f} has crossed the "
                             f"${daily_limit:.2f} limit.",
                         )
                     elif daily_spend >= daily_limit * 0.9:
                         cost.fire_budget_alert(
-                            "LLM Router — Daily Spend Warning",
+                            "Chuzom — Daily Spend Warning",
                             f"Daily spend ${daily_spend:.3f} is at "
                             f"{100 * daily_spend / daily_limit:.0f}% of the "
                             f"${daily_limit:.2f} limit.",

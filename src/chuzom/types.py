@@ -1,4 +1,4 @@
-"""Shared types for LLM Router.
+"""Shared types for Chuzom.
 
 Defines all enums, dataclasses, and lookup tables used across the router.
 All dataclasses are ``frozen=True`` — they are immutable value objects.

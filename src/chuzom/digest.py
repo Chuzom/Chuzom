@@ -161,7 +161,7 @@ async def format_digest(period: str = "week") -> str:
     W = 64
     lines: list[str] = [
         "─" * W,
-        f"  LLM Router — Savings Digest  ({period})",
+        f"  Chuzom — Savings Digest  ({period})",
         "",
         f"  Calls:      {data['calls']:>6}",
         f"  Actual cost: ${data['cost']:.4f}",

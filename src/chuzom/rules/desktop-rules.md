@@ -1,4 +1,4 @@
-# LLM Router — Claude Desktop Integration
+# Chuzom — Claude Desktop Integration
 
 This document explains how to use chuzom MCP tools within Claude Desktop.
 

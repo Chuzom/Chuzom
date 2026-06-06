@@ -1,5 +1,5 @@
 <!-- chuzom-rules-version: 1 -->
-# LLM Router — Pi Coding Agent Routing Rules
+# Chuzom — Pi Coding Agent Routing Rules
 
 > These rules apply when using chuzom MCP tools inside Pi (pi.dev coding agent).
 > Pi supports MCP servers via `~/.pi/agent/mcp.json`.

@@ -1246,7 +1246,7 @@ def _format(tools: dict[str, dict], cc_rows: list[dict], free_rows: list[dict],
             cumulative: list[tuple[str, int, int, int, float]] | None = None,
             session_start: float | None = None) -> str:
     div = f"{'─' * (WIDTH - 4)}"
-    lines = ["", f"  {_C_CYAN}{_BOLD}⚡ LLM Router{_RESET}  session summary", f"  {div}"]
+    lines = ["", f"  {_C_CYAN}{_BOLD}⚡ Chuzom{_RESET}  session summary", f"  {div}"]
 
     if current:
         lines.append("")
@@ -1492,7 +1492,7 @@ def main() -> None:
                 url = f"http://localhost:{DEFAULT_PORT}/?token={token}"
                 summary = (
                     f"\n\033[2m{'─'*WIDTH}\033[0m\n"
-                    f"  \033[1m\ud83d\udcca LLM Router Session Summary Dashboard\033[0m\n"
+                    f"  \033[1m\ud83d\udcca Chuzom Session Summary Dashboard\033[0m\n"
                     f"  No session activity detected\n"
                     f"  \033[1mDashboard:\033[0m \033[4;34m{url}\033[0m\n"
                     f"\033[2m{'─'*WIDTH}\033[0m\n"

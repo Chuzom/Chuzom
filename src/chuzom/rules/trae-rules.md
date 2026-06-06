@@ -1,5 +1,5 @@
 <!-- chuzom-rules-version: 1 -->
-# LLM Router — Trae IDE Routing Rules
+# Chuzom — Trae IDE Routing Rules
 
 > These rules apply when using chuzom MCP tools inside Trae IDE (ByteDance).
 > Trae v1.3.0+ supports MCP via mcpServers config and .rules files.

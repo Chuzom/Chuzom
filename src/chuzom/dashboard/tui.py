@@ -1,4 +1,4 @@
-"""LLM Router — Mission Control TUI Dashboard.
+"""Chuzom — Mission Control TUI Dashboard.
 
 A sophisticated terminal UI dashboard built on Textual that provides
 real-time visibility into routing metrics, subscription usage, cost
@@ -834,7 +834,7 @@ class HeaderBanner(Static):
         now = datetime.now().strftime("%H:%M:%S")
         bolt = "\u26a1"
         dot = "\u25cf"
-        title = _tc_bold(TN.CYAN, f"{bolt} LLM Router") + _dim(" | ") + _tc(TN.FG, "Mission Control")
+        title = _tc_bold(TN.CYAN, f"{bolt} Chuzom") + _dim(" | ") + _tc(TN.FG, "Mission Control")
         sep = _dim("|")
         ver = _tc(TN.FG_DIM, "v8.5.3")
         live = _tc(TN.GREEN, dot)
@@ -847,9 +847,9 @@ class HeaderBanner(Static):
 # ── Main App ──────────────────────────────────────────────────────────────────
 
 class MissionControlApp(App):
-    """LLM Router Mission Control — Terminal Dashboard."""
+    """Chuzom Mission Control — Terminal Dashboard."""
 
-    TITLE = "LLM Router Mission Control"
+    TITLE = "Chuzom Mission Control"
     SUB_TITLE = "Real-time routing intelligence"
 
     CSS = """

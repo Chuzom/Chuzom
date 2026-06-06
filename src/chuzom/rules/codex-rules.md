@@ -1,4 +1,4 @@
-# LLM Router — Codex CLI Integration
+# Chuzom — Codex CLI Integration
 
 This document explains how to use chuzom MCP tools within the Codex CLI agent.
 

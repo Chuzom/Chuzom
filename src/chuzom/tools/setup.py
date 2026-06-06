@@ -570,7 +570,7 @@ def _setup_install_hooks() -> str:
     from chuzom.install_hooks import install
     actions = install()
     lines = [
-        "# LLM Router — Hooks Installed Globally",
+        "# Chuzom — Hooks Installed Globally",
         "",
         "The following actions were performed:",
         "",
@@ -598,7 +598,7 @@ def _setup_uninstall_hooks() -> str:
     from chuzom.install_hooks import uninstall
     actions = uninstall()
     lines = [
-        "# LLM Router — Hooks Removed",
+        "# Chuzom — Hooks Removed",
         "",
     ]
     for a in actions:

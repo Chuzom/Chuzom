@@ -157,7 +157,7 @@ def hook_handler(event_data: dict) -> dict:
         width = 54
         div = "─" * width
         lines = ["\n  " + "\033[2m" + div + "\033[0m"]
-        lines.append("  \033[1m📊 LLM Router Session Summary Dashboard\033[0m")
+        lines.append("  \033[1m📊 Chuzom Session Summary Dashboard\033[0m")
         lines.append("  " + "\033[2m" + div + "\033[0m")
 
         if summary.get("quota"):

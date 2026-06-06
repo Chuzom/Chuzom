@@ -49,7 +49,7 @@ def _run_uninstall(flags: list[str] | None = None) -> None:
     purge = "--purge" in (flags or [])
     from chuzom.install_hooks import uninstall
 
-    print(f"\n{_bold('Uninstalling LLM Router...')}\n")
+    print(f"\n{_bold('Uninstalling Chuzom...')}\n")
     actions = uninstall()
     for a in actions:
         print(f"  {a}")

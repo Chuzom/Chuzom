@@ -1,4 +1,4 @@
-# LLM Router — VS Code / GitHub Copilot Integration
+# Chuzom — VS Code / GitHub Copilot Integration
 
 This document explains how to use chuzom MCP tools with VS Code and GitHub Copilot.
 

@@ -244,7 +244,7 @@ def _render_dashboard(
 
     # ── Header ──────────────────────────────────────────────────────────
     lines.append(f"{_BOLD}╔══════════════════════════════════════════════════════════════╗{_RESET}")
-    lines.append(f"{_BOLD}║  {_CYAN}LLM Router — Savings Dashboard{_RESET}{_BOLD}                              ║{_RESET}")
+    lines.append(f"{_BOLD}║  {_CYAN}Chuzom — Savings Dashboard{_RESET}{_BOLD}                              ║{_RESET}")
     lines.append(f"{_BOLD}║  {_DIM}Baseline: Opus 4.6 ($15/$75 per 1M tokens){_RESET}{_BOLD}                   ║{_RESET}")
     lines.append(f"{_BOLD}╠══════════════════════════════════════════════════════════════╣{_RESET}")
 

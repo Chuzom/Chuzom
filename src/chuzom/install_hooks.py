@@ -897,7 +897,7 @@ def main() -> None:
     """CLI entry point for chuzom-install-hooks."""
 
     if len(sys.argv) > 1 and sys.argv[1] == "uninstall":
-        print("\nUninstalling LLM Router hooks...\n")
+        print("\nUninstalling Chuzom hooks...\n")
         actions = uninstall()
         for a in actions:
             print(f"  {a}")
@@ -905,14 +905,14 @@ def main() -> None:
         return
 
     print("\n╔══════════════════════════════════════════╗")
-    print("║   LLM Router — Install Global Hooks      ║")
+    print("║   Chuzom — Install Global Hooks      ║")
     print("╚══════════════════════════════════════════╝\n")
 
     actions = install()
     for a in actions:
         print(f"  {a}")
 
-    print("\n✓ LLM Router hooks installed globally.")
+    print("\n✓ Chuzom hooks installed globally.")
     print("  Every Claude Code session will now auto-route tasks.")
     print("  Restart Claude Code to activate.\n")
     print("  To uninstall: chuzom-install-hooks uninstall\n")

@@ -49,7 +49,7 @@ def run_init_claude_memory() -> None:
     write_safe_config_template(discovered)
     safe_path = safe_config_path()
 
-    print("\n✅ LLM Router Initialization Complete\n")
+    print("\n✅ Chuzom Initialization Complete\n")
     print("=" * 60)
     print("  Configuration Discovery Results")
     print("=" * 60)

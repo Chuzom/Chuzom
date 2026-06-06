@@ -253,14 +253,32 @@ def _clear_pending(session_id: str) -> None:
     _pending_path(session_id).unlink(missing_ok=True)
 
 
-def _log_violation(session_id: str, tool: str, expected: str) -> None:
+def _log_violation(
+    session_id: str,
+    tool: str,
+    expected: str,
+    *,
+    outcome: str = "PENDING",
+) -> None:
+    """Append a VIOLATION line. ``outcome`` records the action taken:
+
+    * ``PENDING`` — emitted before the block/allow decision (legacy callers)
+    * ``BLOCKED`` — enforcement returned a hard block
+    * ``ALLOWED(soft)`` — soft mode logged and allowed
+    * ``ALLOWED(autopivot_loop)`` / ``ALLOWED(autopivot_count)`` — escape
+      valve fired (deadlock prevention)
+    * ``ALLOWED(readonly_bash)`` — smart mode allowed a read-only shell
+
+    Without an outcome, users can't tell whether a VIOLATION line meant
+    "the bypass succeeded" or "the host attempted a bypass and got blocked".
+    """
     try:
         _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         with _LOG_PATH.open("a", encoding="utf-8") as f:
             f.write(
                 f"[{ts}] VIOLATION session={session_id[:12]} "
-                f"expected={expected} got={tool}\n"
+                f"expected={expected} got={tool} outcome={outcome}\n"
             )
     except OSError:
         pass
@@ -443,6 +461,13 @@ def main() -> None:
     # suggest = soft (log violation but never block)
     if enforce == "suggest":
         enforce = "soft"
+    # strict: like hard, but disables every escape valve (no read-only Bash
+    # exception, no auto-pivot loop unblock, no auto-pivot count unblock).
+    # Sessions can deadlock under strict — use only when bypass discipline
+    # matters more than uninterrupted flow.
+    _strict = enforce == "strict"
+    if _strict:
+        enforce = "hard"
 
     session_id = hook_input.get("session_id", "")
     tool_name = hook_input.get("tool_name", "")
@@ -561,8 +586,11 @@ def main() -> None:
             # Code/non-Q&A tasks: allow read-only Bash (find, ls, git log, gh pr view, ...).
             # Investigation often needs shell; routing intent is preserved because
             # writes (rm, git push, npm install, etc.) still hit the violation path.
+            # Strict mode disables this exception — every Bash counts as a bypass.
             bash_command = hook_input.get("tool_input", {}).get("command", "")
-            if _is_readonly_bash(bash_command):
+            if not _strict and _is_readonly_bash(bash_command):
+                _log_violation(session_id, tool_name, expected_tool,
+                               outcome="ALLOWED(readonly_bash)")
                 sys.exit(0)
             # else: fall through to violation handling (write/unknown Bash)
         elif tool_name not in _block_tools_for(task_type):
@@ -570,14 +598,19 @@ def main() -> None:
         # else: fall through to violation handling
 
     # ── Work tool used before routing ─────────────────────────────────────────
+    # Outcome stamping happens at each exit (soft/autopivot/blocked) so the
+    # log reads "what was observed → what was done" instead of a bare
+    # violation row that requires reading source to disambiguate.
     _record_tool_call(session_id, tool_name)  # Track for loop detection
-    _log_violation(session_id, tool_name, expected_tool)
     violation_count = _increment_violation_count(session_id)
 
     # Detect investigation loops (same tool called 3+ times in 2 minutes)
     loop_detected = _detect_investigation_loop(session_id, tool_name)
 
     if enforce == "soft":
+        # Re-stamp the line with the outcome so the log makes sense after the fact.
+        _log_violation(session_id, tool_name, expected_tool,
+                       outcome="ALLOWED(soft)")
         sys.exit(0)  # soft mode: logged, allowed
 
     # ── Deadlock unblock: loop detection → immediate auto-pivot ──────────────
@@ -586,7 +619,8 @@ def main() -> None:
     # have made progress by now), so release the lock and let work continue.
     # This is the primary escape valve for investigation deadlocks where the
     # routed model can't access local files/shell.
-    if loop_detected:
+    # Strict mode disables this escape valve.
+    if loop_detected and not _strict:
         try:
             _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -605,7 +639,8 @@ def main() -> None:
     # auto-route.py resets violation count on each new user prompt, so this counter
     # is per-turn. After 4 blocked attempts in one turn, allow through to prevent
     # deadlocks — but only for THIS turn (next prompt resets).
-    if violation_count >= 4:
+    # Strict mode disables this escape valve too.
+    if violation_count >= 4 and not _strict:
         try:
             _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -726,8 +761,13 @@ def main() -> None:
         f"  • Disable entirely: export CHUZOM_ENFORCE=off"
     )
 
+    # Record the outcome so the enforcement.log reads as a sequence of
+    # blocks/allows, not bare violation rows whose final disposition is
+    # only knowable by reading the source.
+    _log_violation(session_id, tool_name, expected_tool,
+                   outcome="BLOCKED(strict)" if _strict else "BLOCKED")
     json.dump({"decision": "block", "reason": block_reason}, sys.stdout)
-    
+
     # ── Per-session violation nudge ───────────────────────────────────────────
     # After 3+ violations, output a strong nudge to stderr (visible as hook message)
     if violation_count >= 3:

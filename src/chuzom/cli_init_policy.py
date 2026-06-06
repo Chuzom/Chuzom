@@ -95,7 +95,7 @@ def run_init_policy_wizard() -> None:
     pm = get_policy_manager()
     
     print("\n" + "=" * 60)
-    print("LLM Router — Routing Policy Setup Wizard")
+    print("Chuzom — Routing Policy Setup Wizard")
     print("=" * 60)
     print("\nThis wizard will help you choose or create a routing policy.")
     print("Policies control how aggressively tasks are routed to cheap models.\n")

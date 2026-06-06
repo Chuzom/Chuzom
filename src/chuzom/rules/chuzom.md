@@ -1,5 +1,5 @@
 <!-- chuzom-rules-version: 5 -->
-# LLM Router — Global Routing Rules
+# Chuzom — Global Routing Rules
 
 > Installed by chuzom. These rules control which model handles every task.
 

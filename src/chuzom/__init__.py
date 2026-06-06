@@ -1,4 +1,4 @@
-"""LLM Router — Multi-LLM routing MCP server for Claude Code.
+"""Chuzom — Multi-LLM routing MCP server for Claude Code.
 
 Provides intelligent routing across 15+ LLM providers (text, image, video, audio)
 with complexity-based model selection, budget-aware downshifting, circuit-breaker

@@ -56,7 +56,7 @@ def _run_routing() -> None:
     reset = "\033[0m" if _color_enabled() else ""
 
     w = 80
-    print(f"\n{bold}📊 LLM Router — Current Routing Configuration{reset}\n")
+    print(f"\n{bold}📊 Chuzom — Current Routing Configuration{reset}\n")
     print("─" * min(w, 70))
 
     # 1. Available providers

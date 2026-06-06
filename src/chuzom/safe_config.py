@@ -74,7 +74,7 @@ def write_safe_config_template(discovered: dict[str, Any]) -> None:
     path = safe_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    template = f"""# LLM Router Configuration (Security-Friendly)
+    template = f"""# Chuzom Configuration (Security-Friendly)
 #
 # Use this file when your security team blocks .env at the project level.
 # Place this at: ~/.chuzom/config.yaml

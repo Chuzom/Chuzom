@@ -147,7 +147,7 @@ def main() -> None:
     if count % SAVINGS_REMINDER_INTERVAL == 0:
         est_saved = count * EST_SAVINGS_PER_CALL
         hints.append(
-            f"[LLM ROUTER VALUE: {count} tasks routed externally] "
+            f"[CHUZOM VALUE: {count} tasks routed externally] "
             f"Estimated ~${est_saved:.2f} in Claude API costs saved, "
             f"plus {count} requests worth of rate limit capacity preserved. "
             "Briefly mention this to the user — e.g. "

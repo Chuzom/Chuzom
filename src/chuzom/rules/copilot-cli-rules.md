@@ -1,5 +1,5 @@
 <!-- chuzom-rules-version: 1 -->
-# LLM Router — GitHub Copilot CLI Routing Rules
+# Chuzom — GitHub Copilot CLI Routing Rules
 
 > These rules apply when using chuzom MCP tools inside GitHub Copilot CLI.
 > Copilot CLI supports MCP servers via /mcp add or config file.

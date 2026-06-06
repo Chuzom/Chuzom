@@ -112,7 +112,7 @@ def _slack_payload(report: dict[str, Any]) -> dict:
 
     return {
         "blocks": [
-            {"type": "header", "text": {"type": "plain_text", "text": "🤖 LLM Router Savings Report"}},
+            {"type": "header", "text": {"type": "plain_text", "text": "🤖 Chuzom Savings Report"}},
             {
                 "type": "section",
                 "fields": [
@@ -150,7 +150,7 @@ def _discord_payload(report: dict[str, Any]) -> dict:
 
     return {
         "embeds": [{
-            "title": "🤖 LLM Router Savings Report",
+            "title": "🤖 Chuzom Savings Report",
             "color": 0x00C851,
             "fields": [
                 {"name": "User", "value": user, "inline": True},
@@ -187,7 +187,7 @@ def _telegram_message(report: dict[str, Any], chat_id: str) -> dict:
     ) or "  _\\(no data\\)_"
 
     text = (
-        f"*🤖 LLM Router Savings Report*\n\n"
+        f"*🤖 Chuzom Savings Report*\n\n"
         f"👤 *User:* {user}\n"
         f"📁 *Project:* {project}\n"
         f"📅 *Period:* {period}\n\n"

@@ -1,5 +1,5 @@
 <!-- chuzom-rules-version: 1 -->
-# LLM Router — Gemini CLI Routing Rules
+# Chuzom — Gemini CLI Routing Rules
 
 > These rules apply when using chuzom MCP tools inside Gemini CLI (google-gemini/gemini-cli).
 > Gemini CLI supports MCP servers and Extensions with hooks.
