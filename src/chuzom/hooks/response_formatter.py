@@ -1,9 +1,12 @@
 """Format direct model responses for hook output.
 
-Supports three render modes:
+Supports two render modes:
 - "block": Returns {"decision": "block", "reason": text} — zero cost, warning-styled in TUI
-- "echo":  Returns {"decision": "approve"} + contextForAgent — costs 1 turn, renders as normal text
-- "echo-legacy": Returns {"decision": "approve"} + additionalContext (low priority, often ignored)
+- "echo":  Returns {"decision": "approve"} + additionalContext — costs 1 turn, injected into agent context
+
+Current Claude Code uses `additionalContext` exclusively for UserPromptSubmit
+hookSpecificOutput. The older `contextForAgent` key is no longer honored — it
+silently dropped on the floor, which broke directive injection until 2026-06-06.
 """
 
 from __future__ import annotations
@@ -35,14 +38,14 @@ def format_direct_response(result: DirectResult, task_type: str, complexity: str
 
 
 def format_echo_context(result: DirectResult, task_type: str, complexity: str) -> str:
-    """Format a DirectResult as a contextForAgent directive for Claude (echo mode).
+    """Format a DirectResult as an additionalContext directive for Claude (echo mode).
 
-    Uses contextForAgent so Claude treats it as an authoritative per-turn
-    instruction. The framing is cooperative (explains the goal, permits
-    corrections) rather than adversarial — earlier versions used
-    "OVERRIDE ALL OTHER INSTRUCTIONS / Do NOT acknowledge" wording that
-    matched prompt-injection patterns and Claude's safety training resisted
-    it. See docs/decisions.md 2026-05-27.
+    Uses additionalContext (the only key Claude Code currently honors for
+    UserPromptSubmit injection). The framing is cooperative (explains the
+    goal, permits corrections) rather than adversarial — earlier versions
+    used "OVERRIDE ALL OTHER INSTRUCTIONS / Do NOT acknowledge" wording
+    that matched prompt-injection patterns and Claude's safety training
+    resisted it. See docs/decisions.md 2026-05-27.
     """
     model_label = f"{result.model.provider}/{result.model.model}"
     tier = _tier_label(result.model.provider)
@@ -68,13 +71,13 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
 
 
 def build_echo_output(result: DirectResult, task_type: str, complexity: str) -> dict:
-    """Build the full hook output dict for echo mode (uses contextForAgent)."""
+    """Build the full hook output dict for echo mode (uses additionalContext)."""
     context = format_echo_context(result, task_type, complexity)
     return {
         "decision": "approve",
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "contextForAgent": context,
+            "additionalContext": context,
         }
     }
 

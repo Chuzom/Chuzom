@@ -2256,10 +2256,12 @@ def main() -> None:
     output = {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "contextForAgent": directive,
+            "additionalContext": directive,
         }
     }
     _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUTTING: tool={tool} task={task_type}/{complexity} method={method}")
+    # Visible UI signal — Claude Code surfaces stderr per-prompt so the routing decision is observable.
+    print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool} (via {method})", file=sys.stderr)
     json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
     _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUT COMPLETE")
 

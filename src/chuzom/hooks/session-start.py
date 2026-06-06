@@ -658,10 +658,13 @@ def main() -> None:
     # Runs as a detached subprocess so the session start is never blocked.
     _maybe_refresh_benchmarks_bg()
 
+    # Visible UI signal — Claude Code surfaces stderr as "SessionStart:startup hook success: <msg>".
+    print("⚡ chuzom routing active — subscription mode", file=sys.stderr)
+
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
-            "contextForAgent": banner + hints,
+            "additionalContext": banner + hints,
         }
     }))
 
