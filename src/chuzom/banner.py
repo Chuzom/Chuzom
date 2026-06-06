@@ -68,9 +68,103 @@ _ACCENT = _fg(242, 200, 100)
 def render_banner() -> str:
     """Return the full painterly ASCII banner.
 
-    74 columns wide (fits 80-col terminals with margin), 20 lines tall.
-    Mountains across the top, three stupas mid-frame, river confluence
-    flowing down to the wordmark.
+    Loads the canonical art from ``banner_art.txt`` (a hand-drawn
+    confluence stippling delivered by the user) and dresses it with a
+    river-blue gradient + the gold wordmark below. The .txt source is
+    kept on disk so future edits to the painting don't require touching
+    Python — anyone can iterate the composition with a text editor.
+
+    Falls back to the procedurally-rendered painting when the .txt file
+    is missing (e.g. stripped sdist installs), so SessionStart still
+    gets a banner rather than a stack trace.
+    """
+    art = _load_painting()
+    if art is not None:
+        return _frame_painting(art)
+    return _render_procedural_painting()
+
+
+def _load_painting() -> str | None:
+    """Read the canonical ASCII source. Returns ``None`` when missing.
+
+    Path resolves relative to this module so the file ships in the
+    wheel without needing a manifest entry. importlib.resources would
+    be more orthodox, but the direct read is simpler and fine for a
+    small text file alongside the source.
+    """
+    try:
+        from pathlib import Path
+        return (Path(__file__).resolve().parent / "banner_art.txt").read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return None
+
+
+def _frame_painting(art: str) -> str:
+    """Apply the river-blue gradient + wordmark trim to the raw painting.
+
+    Trims the uniform left-padding the source uses for centering, then
+    runs a depth gradient (glacial turquoise → deep teal) across the
+    non-blank lines so the confluence reads as water on a 24-bit
+    terminal. Terminals that strip colour still see the painting at
+    full fidelity.
+
+    Order matters: trim *before* colouring so the ANSI prefixes don't
+    have to be parsed back out. Variable-length escape sequences
+    (``\\033[38;2;r;g;bm``) make post-colour string slicing fragile.
+    """
+    raw_lines = art.splitlines()
+
+    # Strip uniform leading whitespace so the painting hugs column 0
+    # in narrow terminals. Computed over non-empty lines only — blank
+    # lines are preserved as-is.
+    min_pad = min(
+        (len(line) - len(line.lstrip(" "))
+         for line in raw_lines if line.strip()),
+        default=0,
+    )
+    trimmed = [line[min_pad:] if line.strip() else line for line in raw_lines]
+
+    # Identify the glyph band so the depth gradient flows across the
+    # painting itself, not across leading / trailing blank lines.
+    first = next(
+        (i for i, line in enumerate(trimmed) if line.strip()),
+        0,
+    )
+    last = len(trimmed) - 1 - next(
+        (i for i, line in enumerate(reversed(trimmed)) if line.strip()),
+        0,
+    )
+    span = max(1, last - first)
+
+    coloured: list[str] = []
+    for idx, line in enumerate(trimmed):
+        if not line.strip():
+            coloured.append(line)
+            continue
+        depth = (idx - first) / span
+        depth = max(0.0, min(1.0, depth))
+        r1, g1, b1 = (126, 200, 220)  # glacial turquoise at the surface
+        r2, g2, b2 = (40, 95, 130)    # deep teal at the floor
+        r = int(r1 + (r2 - r1) * depth)
+        g = int(g1 + (g2 - g1) * depth)
+        b = int(b1 + (b2 - b1) * depth)
+        coloured.append(f"{_fg(r, g, b)}{line}{_RESET}")
+
+    wordmark = (
+        f"\n           {_BOLD}{_ACCENT}⚡ C  H  U  Z  O  M  ⚡{_RESET}"
+        f"   {_TEXT_DIM}— meeting of rivers, routing intelligence{_RESET}\n"
+        f"           {_TEXT_DIM}three stupas guard every confluence  ·  every prompt finds its current{_RESET}"
+    )
+    return "\n".join(coloured) + wordmark
+
+
+def _render_procedural_painting() -> str:
+    """Fallback painting — used when banner_art.txt is missing.
+
+    Same composition as the original procedural banner: three peaks,
+    three stupas, two rivers converging into Wang Chhu, wordmark below.
     """
     # Build line-by-line so the composition is editable without parsing
     # multi-line strings. Each line is constructed left-to-right with
