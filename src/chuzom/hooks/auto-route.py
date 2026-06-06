@@ -1913,6 +1913,51 @@ def main() -> None:
     # ── v6.0 Visibility: Initialize HUD session state ─────────────────────────
     initialize_hud()
 
+    # ── Sidecar pre-execution (opt-in via CHUZOM_SIDECAR_PREFETCH=1) ────────
+    # Deterministic patterns ("show me my routing today" / "git status" /
+    # "show me my recent commits") can be answered by the hook directly
+    # without Claude making a single tool call. The sidecar matches the
+    # prompt against a small allowlist of read-only handlers, runs the
+    # one that fires, and injects the pre-rendered result into Claude's
+    # additionalContext. Claude then synthesises a reply from data it
+    # already has, skipping the Read/Bash/Grep cycle entirely.
+    #
+    # All exceptions swallowed: a buggy handler must NEVER block the
+    # prompt from reaching Claude. Failure is silent + we fall through
+    # to the normal classifier chain.
+    try:
+        from chuzom import sidecar as _sidecar
+        if _sidecar.is_enabled():
+            _handler = _sidecar.classify(prompt)
+            if _handler is not None:
+                _pre = _sidecar.execute(_handler, prompt)
+                if _pre is not None:
+                    _debug_log(
+                        f"[INVOCATION {invocation_id:.3f}] "
+                        f"SIDECAR PREEXEC: handler={_pre.handler} "
+                        f"duration={_pre.duration_ms}ms"
+                    )
+                    _sidecar_output = {
+                        "hookSpecificOutput": {
+                            "hookEventName": "UserPromptSubmit",
+                            "contextForAgent": (
+                                f"⚡ chuzom sidecar pre-executed "
+                                f"`{_pre.handler}` ({_pre.duration_ms}ms) — "
+                                f"data below; no tool calls needed.\n\n"
+                                f"{_pre.context}"
+                            ),
+                        }
+                    }
+                    json.dump(
+                        _normalize_output_for_platform(_sidecar_output, hook_input),
+                        sys.stdout,
+                    )
+                    sys.exit(0)
+    except Exception as _sidecar_err:
+        _debug_log(
+            f"[INVOCATION {invocation_id:.3f}] SIDECAR ERROR: {_sidecar_err}"
+        )
+
     # ── Continuation Bypass (v2.6) ───────────────────────────────────────────
     # Short continuation prompts (yes/ok/do it/...) may go to Claude only in
     # normal mode. Strict mode routes them externally or blocks fail-closed.
