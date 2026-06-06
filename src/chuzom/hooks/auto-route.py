@@ -2379,6 +2379,12 @@ def main() -> None:
                     # threshold — enforcing as hard would block legitimate
                     # local work the classifier didn't recognise.
                     "method": method,
+                    # Keep the original prompt so enforce-route.py can run a
+                    # shape-sanity check (e.g. "add X to file Y" looks like
+                    # an Edit task regardless of the classifier's verdict).
+                    # Capped at 4 KB so a pasted dump doesn't bloat the
+                    # pending file — the shape check only needs the lead-in.
+                    "original_prompt": prompt[:4096],
                     "issued_at": _now,
                     "expires_at": _now + _PENDING_ROUTE_TTL_SEC,
                     "turn_id": int(_now),  # proxy for turn — clears when next prompt arrives

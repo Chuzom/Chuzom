@@ -126,6 +126,57 @@ _BASH_FORBIDDEN_RE = re.compile(
 _BASH_REDIRECT_RE = re.compile(r"(?<![<>])(?:>>|&>|>)(?![=>])")
 
 
+_EDIT_VERBS = (
+    r"add(?:ing)?|update|updating|modify|modifying|edit(?:ing)?|"
+    r"rename|renaming|delete|deleting|remove|removing|refactor|"
+    r"document|documenting|write\s+(?:a\s+)?(?:section|paragraph|"
+    r"comment|docstring|note)|"
+    r"fix(?:ing)?\s+(?:the\s+)?(?:typo|comment|docstring|doc|docs)|"
+    r"append(?:ing)?\s+to|inject(?:ing)?"
+)
+_EDIT_TARGETS = (
+    r"to\s+(?:the\s+)?\S*\.(?:py|js|ts|tsx|md|yaml|yml|toml|json|sh|sql|"
+    r"go|rs|java|c|cpp|h|hpp|rb|php)|"
+    r"to\s+(?:the\s+)?chuzom\s+\w+|"
+    r"to\s+(?:the\s+)?[A-Z_][A-Z0-9_]*\b|"  # ALL_CAPS file refs (CHANGELOG, etc.)
+    r"in\s+(?:the\s+)?\S*\.(?:py|js|ts|tsx|md|yaml|yml|toml|json|sh|sql|"
+    r"go|rs|java|c|cpp|h|hpp|rb|php)"
+)
+_EDIT_SHAPE_RE = re.compile(
+    r"\b(" + _EDIT_VERBS + r")\b.*?\b(" + _EDIT_TARGETS + r")",
+    re.IGNORECASE | re.DOTALL,
+)
+# Bonus patterns — file-path-then-verb shapes ("in CHANGELOG.md, add ...").
+_EDIT_PATH_LED_RE = re.compile(
+    r"\b(?:in|to|inside)\s+\S+\.(?:py|js|ts|md|yaml|yml|toml|json)\s*[,:]?\s*"
+    r"(?:please\s+)?(?:" + _EDIT_VERBS + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_edit_task(prompt: str) -> bool:
+    """Return True if the prompt's STRUCTURAL shape implies an Edit task.
+
+    Detects three flavours:
+
+    * ``add|update|modify|...`` + ``to <file.ext>`` / ``in <file.ext>``
+      (the most common shape: "add a section to README.md")
+    * The same verbs targeting a Chuzom subcommand label
+      ("add ... to chuzom doctor", "update chuzom team-sync")
+    * Inverted: file-path first, then verb
+      ("in CHANGELOG.md, add a release note")
+
+    Used by enforce-route.py to override a hard-blocking route
+    directive when the prompt clearly doesn't want an LLM answer —
+    only an Edit. The check is intentionally narrow: matching too
+    eagerly would let routable LLM-generation tasks slip past the
+    enforcer and silently spend Opus quota.
+    """
+    if not prompt:
+        return False
+    return bool(_EDIT_SHAPE_RE.search(prompt) or _EDIT_PATH_LED_RE.search(prompt))
+
+
 def _is_readonly_bash(command: str) -> bool:
     """Return True if a Bash command is conservatively read-only.
 
@@ -420,6 +471,47 @@ def _detect_investigation_loop(session_id: str, tool_name: str) -> dict | None:
         return None
 
 
+def _turn_block_counter_path(session_id: str) -> Path:
+    """Per-(session, turn) per-tool block counter file.
+
+    Distinct from the investigation-loop counter because we want a much
+    tighter trigger: 2 blocks of the SAME tool inside the SAME user
+    turn = trap, auto-pivot. The investigation loop is per-tool 3-in-
+    2-minutes, which is too slow to feel responsive — by the time it
+    fires the agent has visibly stalled.
+    """
+    return _ROUTER_DIR / f"turn_blocks_{session_id}.json"
+
+
+def _record_turn_block(session_id: str, tool_name: str, turn_id: int) -> int:
+    """Increment the per-turn per-tool block counter and return the new count.
+
+    Resets the counter when a new turn arrives (turn_id changes), so each
+    user prompt starts fresh and the trap-detection only fires on a
+    genuine same-turn loop.
+    """
+    try:
+        path = _turn_block_counter_path(session_id)
+        data = _read_json_retry(path) or {}
+        # New turn? Wipe last turn's counts so trap-detection only counts
+        # blocks accumulating in this current turn.
+        if data.get("turn_id") != turn_id:
+            data = {"turn_id": turn_id, "blocks": {}}
+        blocks = data.setdefault("blocks", {})
+        blocks[tool_name] = int(blocks.get(tool_name, 0)) + 1
+        _write_json_atomic(path, data)
+        return blocks[tool_name]
+    except OSError:
+        return 0
+
+
+def _clear_turn_blocks(session_id: str) -> None:
+    try:
+        _turn_block_counter_path(session_id).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def main() -> None:
     try:
         hook_input = json.load(sys.stdin)
@@ -482,17 +574,49 @@ def main() -> None:
     # block they can't satisfy. Exit cleanly so native tools work.
     if pending is not None and pending.get("task_type") == "introspect":
         sys.exit(0)
-    # heuristic-weak: classifier scored positive but below the strong-
-    # confidence threshold. Enforcing the route at full strength on a
-    # low-confidence guess hard-blocks legitimate local work the
-    # classifier didn't recognise. Downgrade to "soft" so users still
-    # see the route suggestion + the violation gets logged, but native
+    # Uncertain classification methods downgrade to soft enforcement:
+    #
+    #   * ``heuristic-weak`` — classifier scored positive but below the
+    #     strong-confidence threshold.
+    #   * ``code-context-inherit`` — strong on TOPIC (the prior turn was
+    #     code) but inherently uncertain about whether THIS turn's task
+    #     shape is still LLM-routable code (could be a doc edit, a
+    #     refactor that needs Edit, or a meta-question).
+    #
+    # Both have the same failure mode: hard-blocking traps the user
+    # behind a directive the cheap LLM can't satisfy. Downgrade to
+    # soft so the route still appears in logs + telemetry but native
     # tools aren't blocked. Strong heuristic / Ollama / API stay hard.
-    if pending is not None and pending.get("method") == "heuristic-weak":
+    _UNCERTAIN_METHODS = {"heuristic-weak", "code-context-inherit"}
+    if pending is not None and pending.get("method") in _UNCERTAIN_METHODS:
         if enforce in ("hard", "smart"):
             enforce = "soft"
         # Override CHUZOM_ENFORCE=strict only as far as soft, NOT off —
         # the operator chose strict so they still want a visible log line.
+
+    # Prompt-shape sanity check: when the prompt structurally looks like
+    # an Edit task ("add X to file Y" / "update docstring in Z" /
+    # "write a section for W"), the classifier's LLM-routing directive
+    # is likely wrong regardless of confidence. User-intent wins —
+    # downgrade to soft and log the disagreement for classifier-
+    # improvement telemetry. The original prompt is stored alongside
+    # the pending directive at write-time (auto-route.py:1980).
+    if pending is not None and enforce in ("hard", "smart"):
+        _original_prompt = pending.get("original_prompt", "")
+        if _original_prompt and _looks_like_edit_task(_original_prompt):
+            enforce = "soft"
+            try:
+                _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
+                ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                with _LOG_PATH.open("a", encoding="utf-8") as f:
+                    f.write(
+                        f"[{ts}] SHAPE_OVERRIDE session={session_id[:12]} "
+                        f"method={pending.get('method')} task={pending.get('task_type')} "
+                        f"prompt_shape=edit reason=user_intent_disagrees_with_classifier\n"
+                    )
+            except OSError:
+                pass
+
     if pending is None:
         sys.exit(0)  # No routing directive was issued
     pending = _downgrade_pending_for_pressure(pending)
@@ -649,6 +773,30 @@ def main() -> None:
         except OSError:
             pass
         _clear_pending(session_id)  # Clear pending so subsequent tools also pass
+        _clear_violation_count(session_id)
+        sys.exit(0)
+
+    # ── Trap-detection: 2 same-tool blocks in the same turn → auto-pivot ────
+    # The 4-violation auto-pivot below is too slow for interactive use — by
+    # the time it fires the agent has visibly stalled and the user feels
+    # the conversation "stuck". This tighter counter resets every turn and
+    # fires at 2 same-tool blocks, catching the trap before the user has
+    # to manually intervene. Strict mode disables this escape valve.
+    _turn_id = int(pending.get("turn_id", 0)) if pending else 0
+    _same_tool_blocks = _record_turn_block(session_id, tool_name, _turn_id)
+    if _same_tool_blocks >= 2 and not _strict:
+        try:
+            _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
+            ts = time.strftime("%Y-%m-%d %H:%M:%S")
+            with _LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"[{ts}] AUTO-PIVOT (trap) session={session_id[:12]} "
+                    f"tool={tool_name} same_turn_blocks={_same_tool_blocks}\n"
+                )
+        except OSError:
+            pass
+        _clear_pending(session_id)
+        _clear_turn_blocks(session_id)
         _clear_violation_count(session_id)
         sys.exit(0)
 

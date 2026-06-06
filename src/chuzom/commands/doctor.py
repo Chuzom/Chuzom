@@ -206,6 +206,75 @@ def _run_doctor_host(host: str) -> None:
             print(_red(f"  {len(issues)} issue(s) found for {h}"))
 
 
+def _render_host_explainer() -> str:
+    """Always-up-to-date explanation of why the host model (Claude Code,
+    Cursor, Codex CLI, ...) runs on a frontier model like Opus 4.7 and
+    not on a local one — and what that means for the savings Chuzom can
+    deliver. Surfaced via ``chuzom doctor --explain-host`` so the
+    answer lives next to the savings posture report.
+    """
+    return (
+        f"\n{_bold('  Why is my host on Opus 4.7 / Sonnet 4.6 and not on a local model?')}\n\n"
+
+        f"  {_bold('Short answer')}\n"
+        "    The host (Claude Code, Cursor, Codex CLI) is the agent loop —\n"
+        "    it reads tool results, decides the next action, generates code,\n"
+        "    and drives the conversation. Chuzom routes the LLM *calls* the\n"
+        "    host makes on your behalf (llm_query, llm_code, llm_research)\n"
+        "    but it does not replace the host itself. The host model is\n"
+        "    whatever Claude Code is configured to use; today that's Opus 4.7\n"
+        "    (1M context) by default.\n\n"
+
+        f"  {_bold('Why not just run the host on Ollama?')}\n"
+        "    Three reasons in descending order of importance:\n\n"
+        "      1. Agent-loop reasoning is the hardest LLM task. The host has\n"
+        "         to hold the conversation, plan multi-step solutions, generate\n"
+        "         working code, and recover from tool failures. Local models\n"
+        "         (qwen3.5, llama-3) drop coherence after 2-3 turns of that\n"
+        "         work — great at single-shot answers, not at multi-turn\n"
+        "         orchestration.\n\n"
+        "      2. Tool-call format conformance. The host must emit tool calls\n"
+        "         in very specific JSON every time. Frontier models get this\n"
+        "         right >99% of the time; mid-tier local models miss enough\n"
+        "         that the agent stalls. Anthropic/OpenAI tune their models\n"
+        "         specifically for this; local wrappers compound failure rate.\n\n"
+        "      3. Claude Code's UX assumes Opus-class reasoning. Plan mode,\n"
+        "         the 1M context window, the way it handles ambiguity — all\n"
+        "         designed around Opus capabilities. Swapping the model would\n"
+        "         degrade UX in subtle, hard-to-debug ways.\n\n"
+
+        f"  {_bold('What Chuzom CAN save')}\n"
+        "      * Cost of LLM calls the host makes (llm_query → Haiku/Flash\n"
+        "        instead of Opus). Visible in routing_decisions.\n"
+        "      * Tokens the host has to *process* (response_router compresses\n"
+        "        explanations in MCP responses before Claude reads them).\n"
+        "      * Wasted tool-call cycles (sidecar pre-executes deterministic\n"
+        "        prompts like 'show me my routing today').\n"
+        "      * Quota burned classifying conversational follow-ups\n"
+        "        (continuation bypass + short-followup pattern).\n\n"
+
+        f"  {_bold('What Chuzom CANT save')}\n"
+        "      * The host model's own reasoning between tool calls. That's\n"
+        "        Opus time, full price, no intercept point.\n"
+        "      * Conversation history shipped through Opus on every turn.\n"
+        "      * Tool-call decisions the host makes (Read file X, Run Bash Y) —\n"
+        "        those decisions ARE the agent loop.\n\n"
+
+        f"  {_bold('Workarounds if you need more headroom')}\n"
+        "      1. /model claude-sonnet-4-6 — drops the host to Sonnet for the\n"
+        "         rest of the conversation. Sonnet handles tool orchestration\n"
+        "         at ~5x lower cost than Opus 4.7. Best for routine work.\n"
+        "      2. /clear between unrelated tasks — drops the 1M context so\n"
+        "         each new request starts cheap. Best for topic switches.\n"
+        "      3. CHUZOM_SIDECAR_PREFETCH=1 — opt into the sidecar so\n"
+        "         introspection prompts skip the host entirely.\n"
+        "      4. Pair-mode subscriptions (Codex CLI / Gemini CLI) — Chuzom\n"
+        "         injects these ahead of paid externals when available, so\n"
+        "         routed work runs on your existing subscription quota\n"
+        "         instead of API spend.\n"
+    )
+
+
 def _check_savings_posture() -> list[str]:
     """Return rendered status lines for each quota-savings configuration check.
 
@@ -711,11 +780,33 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
 
 
 def cmd_doctor(args: list[str]) -> int:
-    """Execute: chuzom doctor [--host claude|vscode|cursor|all]
+    """Execute: chuzom doctor [--host H] [--posture] [--explain-host]
+
+    Flags:
+        --host H        Run host-specific checks (claude|vscode|cursor|all)
+                        IN ADDITION to the general health checks.
+        --posture       Print ONLY the quota-savings posture section.
+                        Skips the long general health scan; ideal for
+                        a fast in-session "am I configured for max
+                        savings?" check.
+        --explain-host  Print the always-up-to-date explainer for why
+                        the host runs on Opus and what routing can vs
+                        can't save. Skips everything else.
 
     Returns:
-        0 if all checks passed, 1 if issues found
+        0 if all checks passed, 1 if issues found.
     """
+    if "--explain-host" in args:
+        print(_render_host_explainer())
+        return 0
+
+    if "--posture" in args:
+        print(f"\n{_bold('  Quota savings posture')}")
+        for line in _check_savings_posture():
+            print(line)
+        print()
+        return 0
+
     host_flag = None
     if "--host" in args:
         idx = args.index("--host")
