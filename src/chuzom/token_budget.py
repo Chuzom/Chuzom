@@ -170,11 +170,93 @@ def calculate_budget(
     )
 
 
-def estimate_tokens(text: str) -> int:
-    """Fast token count approximation.
+# ── Model-aware token counting ───────────────────────────────────────────
+# tiktoken ships with cl100k_base / o200k_base encodings which cover every
+# OpenAI model and approximate non-OpenAI models well. We use it when
+# available and fall back to the chars/4 heuristic when (a) tiktoken
+# isn't installed, (b) the model name is unknown, or (c) the encoding
+# load itself raises (offline, missing tiktoken data).
+#
+# Anthropic publishes its own count_tokens API but it requires a network
+# round-trip — too expensive for hot-path budget checks. cl100k_base
+# under-counts Anthropic by ~5–10% on English text, which is acceptable
+# for budget sizing.
 
-    Uses the ~4 characters per token heuristic for English text.
-    Accurate to within ~10% for mixed English/code content.
+try:
+    import tiktoken as _tiktoken  # type: ignore[import-not-found]
+    _HAS_TIKTOKEN = True
+except ImportError:  # pragma: no cover — defensive for stripped installs
+    _tiktoken = None  # type: ignore[assignment]
+    _HAS_TIKTOKEN = False
+
+# Per-model encoding map. Models not listed fall back to cl100k_base,
+# which is accurate enough for budget arithmetic.
+_MODEL_ENCODING = {
+    # OpenAI
+    "gpt-4o": "o200k_base",
+    "gpt-4o-mini": "o200k_base",
+    "gpt-4": "cl100k_base",
+    "gpt-3.5-turbo": "cl100k_base",
+    "o1": "o200k_base",
+    "o3": "o200k_base",
+    "o3-mini": "o200k_base",
+    # Anthropic, Gemini, others — approximated via cl100k_base.
+    # Acceptable: chars/4 is worse, tiktoken-cl100k is within ~10%.
+}
+
+_encoding_cache: dict[str, object] = {}
+
+
+def _get_encoding(model: str | None):
+    """Return a tiktoken encoding for ``model`` (cached) or None on failure.
+
+    Caches by encoding name (not model name) since multiple models share
+    the same encoder. Returns None if tiktoken is unavailable so callers
+    can fall through to the chars/4 heuristic.
+    """
+    if not _HAS_TIKTOKEN:
+        return None
+
+    enc_name = _MODEL_ENCODING.get(model or "", "cl100k_base")
+    cached = _encoding_cache.get(enc_name)
+    if cached is not None:
+        return cached
+    try:
+        enc = _tiktoken.get_encoding(enc_name)
+    except Exception:  # tiktoken data not cached locally, offline, etc.
+        return None
+    _encoding_cache[enc_name] = enc
+    return enc
+
+
+def count_tokens(text: str, model: str | None = None) -> int:
+    """Accurate token count for ``text`` against ``model``'s tokenizer.
+
+    Uses tiktoken when available; falls back to chars/4 when tiktoken is
+    absent, the model is unknown, or encoding load fails. Always returns
+    at least 1 to keep budget math non-degenerate.
+
+    Preferred over :func:`estimate_tokens` for cost-attribution paths
+    (logging, dashboards, quota enforcement) where the ~10–20% error of
+    chars/4 distorts user-facing numbers. Hot-path budget checks can
+    keep using ``estimate_tokens`` for speed.
+    """
+    enc = _get_encoding(model)
+    if enc is None:
+        return max(1, len(text) // 4)
+    try:
+        return max(1, len(enc.encode(text)))
+    except Exception:
+        return max(1, len(text) // 4)
+
+
+def estimate_tokens(text: str) -> int:
+    """Fast token count approximation (chars/4 heuristic).
+
+    Retained for hot-path budget checks where allocation-free speed
+    matters more than per-model accuracy. For cost-attribution paths
+    (dashboards, quota enforcement, audit), prefer :func:`count_tokens`
+    which uses tiktoken when available.
     """
     return max(1, len(text) // 4)
 

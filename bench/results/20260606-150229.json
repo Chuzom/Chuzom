@@ -1,0 +1,442 @@
+[
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "chuzom",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "Paris",
+    "input_tokens": 28,
+    "output_tokens": 181,
+    "cost_usd": 0.0,
+    "latency_ms": 19643,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ],
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "Paris",
+    "input_tokens": 28,
+    "output_tokens": 181,
+    "cost_usd": 0.0,
+    "latency_ms": 13280,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 2900,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "static-chain",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "Paris",
+    "input_tokens": 28,
+    "output_tokens": 181,
+    "cost_usd": 0.0,
+    "latency_ms": 13310,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "static_chain",
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "chuzom",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 58,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 38275,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ],
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 58,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 39595,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 2324,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "static-chain",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 58,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 38731,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "static_chain",
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "chuzom",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "366",
+    "input_tokens": 31,
+    "output_tokens": 261,
+    "cost_usd": 0.0,
+    "latency_ms": 19717,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ],
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "366",
+    "input_tokens": 31,
+    "output_tokens": 261,
+    "cost_usd": 0.0,
+    "latency_ms": 19598,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 2472,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "static-chain",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "366",
+    "input_tokens": 31,
+    "output_tokens": 261,
+    "cost_usd": 0.0,
+    "latency_ms": 20265,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "static_chain",
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "chuzom",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 36,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 37419,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ],
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 36,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 37320,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 1789,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "static-chain",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 36,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 37329,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "static_chain",
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "chuzom",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 53,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 37416,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ],
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 53,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 37330,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 1843,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "static-chain",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 53,
+    "output_tokens": 512,
+    "cost_usd": 0.0,
+    "latency_ms": 37576,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "empty response",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "static_chain",
+      "fallback_count": 0
+    }
+  }
+]

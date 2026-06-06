@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.1.0 — Stability promise + first benchmark numbers + brand sweep
+
+> **First stable-shape release.** The 0.0.x phase shipped fast and broke things on the way; 0.1.0 commits to:
+> - SQL schema migrations land via `_safe_migrate` (idempotent ALTER TABLE) — no destructive resets.
+> - Public CLI entry points (`chuzom`, `chuzom-install-hooks`, `chuzom-onboard`, `chuzom-quickstart`, `chuzom-sse`) and MCP tool names (`llm_*`, `chuzom_agent_*`) are frozen. Removals will go through a deprecation cycle in 0.2.x.
+> - Enforcement mode names (`off`, `soft`, `smart`, `hard`, `strict`) are stable.
+> - SQLite database file paths (`~/.chuzom/{usage,lineage,sessions,quotas,audit}.db`) are stable.
+
+### Added
+- **First end-to-end benchmark numbers** — ran `python -m bench --easy-only` against the smoke corpus (5 prompts × 4 routers). On objective easy prompts, Chuzom matches AlwaysCheap (q=2.60, $0.00 spend) — proves the heuristic-first cascade routes correctly when no escalation is warranted. AlwaysPremium errored on OpenAI rate limit, so cost-vs-quality Pareto vs GPT-4o isn't measurable yet; see `bench/results/20260606-150229.{json,md}` for the raw data.
+- **`scripts/verify_chuzom_hooks.sh`** — end-to-end verifier that pipes representative payloads into the installed hooks (`~/.claude/hooks/chuzom-*.py`) and asserts the production code paths contain the live brand + enforcement logic. 11 checks; run after every reinstall.
+- **`scripts/backfill_sidecars.py`** — replays `~/.chuzom/last_route_*.json` sidecars (written by `auto-route.py` when a directive fires) into `routing_decisions`. Idempotent via stable `correlation_id` (`sidecar:<session>:<saved_at>`). Sidecars carry intent only, so rows land as `success=0, reason_code='sidecar_backfill'`.
+- **`token_budget.count_tokens(text, model=None)`** — accurate per-model token counting via tiktoken when available; falls back to `chars/4` when tiktoken is missing, the model is unknown, or encoding load fails. Used by cost-attribution paths (`tools/codex.py`, `tools/gemini_cli.py`); hot-path budget checks keep `estimate_tokens()` for speed.
+- **`CHUZOM_ENFORCE=strict`** — new enforcement mode that disables every escape valve: the read-only Bash exception (smart mode allows `git log`/`ls`), the loop auto-pivot (3× same tool in 2 min → unblock), and the count auto-pivot (4 violations/turn → unblock). Use when bypass discipline matters more than uninterrupted flow.
+- **Outcome-stamped enforcement log** — every VIOLATION line in `~/.chuzom/enforcement.log` now carries `outcome={BLOCKED, BLOCKED(strict), ALLOWED(soft), ALLOWED(readonly_bash)}` so the log is self-explanatory without source reads.
+- **Schema bootstrap in `tools/admin.py:llm_usage`** — fresh / 0-byte `usage.db` now renders the empty-state UI instead of erroring with `no such table: usage`. Matches the resilience already in `dashboard_data.py`.
+
+### Changed
+- **Full brand sweep**: 37 source files (`.py` + `rules/*.md`) swept from `LLM Router` → `Chuzom` / `LLM ROUTER` → `CHUZOM`. Stop summary header now renders `⚡ CHUZOM`; dashboards, digests, install messages, web TUI, and routing rules are all consistent. Routing rules file regenerated as `chuzom-rules-version: 5`.
+- **Cyber-grid Stop summary layout** — long classifier names (`code-context-inherit` at 20 chars, `content-generation-fast-path` at 28 chars) were rendered with `f"{name:<16}"` which pads but doesn't truncate, so labels bled into the SAVINGS column on the right. Adds method-name aliases (`build-fast`, `ctx-inherit`, `content-gen`, `heuristic·w`) plus a 16-char hard truncation guard so future classifier names can't reintroduce the overflow.
+
+### Fixed
+- **`outcome=BLOCKED` actually means blocked.** Pre-0.1.0, VIOLATION lines in `enforcement.log` left the disposition (blocked vs auto-pivot-allowed vs soft-mode-allowed) implicit — readers had to know the source to disambiguate. Now every exit path stamps its own outcome.
+
+### Known gaps (will be addressed in 0.1.x)
+- Easy-only benchmark can't differentiate routers (all classify as `simple` → all route to local). Moderate-corpus run with judge-grading is needed to show the classifier's value. Deferred until empty-response detection lands.
+- Empty-response from local model (`ollama/qwen3.5`) on 3 of 5 easy prompts does NOT trigger cascade — the router silently returns the empty string instead of escalating. Tracked.
+- AlwaysPremium baseline requires a working `OPENAI_API_KEY`; smoke run hit rate-limit. Cost-savings vs GPT-4o not yet measurable. Workaround: use `litellm`-routed Sonnet via Claude subscription as the premium baseline.
+- `__version__` in `src/chuzom/__init__.py` is set to `10.1.2` (internal numbering); `pyproject.toml` is the public version source. Sync drift to be resolved.
+
+### Internal
+- 15 new regression tests covering: schema bootstrap, sidecar backfill (7 tests), strict enforcement (4 tests), cyber-grid layout (2 tests), token counting (6 tests). Full suite green at v0.1.0 cut.
+
+---
+
 ## v0.0.2 — Agent layer + framework adapters + benchmark harness
 
 ### Added

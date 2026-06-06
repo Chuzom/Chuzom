@@ -33,15 +33,17 @@ async def llm_codex(
     # Log to usage table so dashboard includes direct llm_codex calls
     try:
         from chuzom import cost
+        from chuzom.token_budget import count_tokens
         from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
-        estimated_tokens = max(1, len(result.content) // 4)
+        # Codex returns OpenAI-class tokens — tiktoken's o200k_base is
+        # near-exact. Falls back to chars/4 if tiktoken is unavailable.
         await cost.log_usage(
             LLMResponse(
                 content=result.content,
                 model=f"codex/{result.model}",
-                input_tokens=max(1, len(prompt) // 4),
-                output_tokens=estimated_tokens,
+                input_tokens=count_tokens(prompt, model=result.model),
+                output_tokens=count_tokens(result.content, model=result.model),
                 cost_usd=0.0,  # free via OpenAI subscription
                 latency_ms=result.duration_sec * 1000,
                 provider="codex",

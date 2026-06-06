@@ -49,3 +49,8 @@ CLAUDE.md
 test_results/
 *.bak
 *.bak.*
+
+# Benchmark artifacts — cache is per-machine, results bloat over time.
+# Commit specific results explicitly when they're evidence-worthy.
+bench/cache/
+bench/results/
