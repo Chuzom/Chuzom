@@ -1,4 +1,4 @@
-<h1 align="center">Tessera</h1>
+<h1 align="center">Chuzom</h1>
 
 <p align="center">
   <strong>The enterprise-ready LLM router for developer organizations.</strong><br/>
@@ -6,9 +6,9 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/tessera-router/"><img src="https://img.shields.io/badge/pypi-tessera--router-4F46E5?style=flat-square" alt="PyPI"></a>
-  <a href="https://github.com/ypollak2/tessera"><img src="https://img.shields.io/badge/tests-732_passing-10B981?style=flat-square" alt="Tests"></a>
-  <a href="https://github.com/ypollak2/tessera"><img src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square" alt="Python"></a>
+  <a href="https://pypi.org/project/chuzom-router/"><img src="https://img.shields.io/badge/pypi-chuzom--router-4F46E5?style=flat-square" alt="PyPI"></a>
+  <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/tests-732_passing-10B981?style=flat-square" alt="Tests"></a>
+  <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-10B981?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/SOC%202-mappable-8B5CF6?style=flat-square" alt="SOC 2">
   <img src="https://img.shields.io/badge/GDPR-mappable-8B5CF6?style=flat-square" alt="GDPR">
@@ -22,8 +22,8 @@
 <p align="center">
 
 ```bash
-pip install tessera-router
-tessera install --host claude-code   # or cursor / codex-cli / gemini-cli
+pip install chuzom-router
+chuzom install --host claude-code   # or cursor / codex-cli / gemini-cli
 ```
 
 </p>
@@ -38,9 +38,9 @@ tessera install --host claude-code   # or cursor / codex-cli / gemini-cli
 <details>
 <summary><b>📑 Table of Contents</b></summary>
 
-- [Why orgs deploy Tessera](#why-orgs-deploy-tessera)
+- [Why orgs deploy Chuzom](#why-orgs-deploy-chuzom)
 - [What you get](#what-you-get)
-- [What makes Tessera different](#what-makes-tessera-different)
+- [What makes Chuzom different](#what-makes-chuzom-different)
 - [Quick start](#quick-start)
 - [Live dashboard](#live-dashboard)
 - [Routing examples](#routing-examples)
@@ -62,7 +62,7 @@ tessera install --host claude-code   # or cursor / codex-cli / gemini-cli
 
 ---
 
-## Why orgs deploy Tessera
+## Why orgs deploy Chuzom
 
 Every engineering org has the same four problems with LLM access:
 
@@ -71,7 +71,7 @@ Every engineering org has the same four problems with LLM access:
 3. **Safety** — developers paste API keys, customer data, and source code into prompts that hit third-party APIs.
 4. **Governance** — there's no per-team cap, no model allow/deny, no way to enforce policy across heterogeneous tools.
 
-Tessera sits between developer tools and LLM providers as an MCP server. Every prompt gets classified, routed to the cheapest capable model, logged with full attribution, and (in org mode) checked against the user's quota + the team's policy.
+Chuzom sits between developer tools and LLM providers as an MCP server. Every prompt gets classified, routed to the cheapest capable model, logged with full attribution, and (in org mode) checked against the user's quota + the team's policy.
 
 The developer's workflow doesn't change. The model choice, the audit trail, and the spend control happen underneath.
 
@@ -92,9 +92,9 @@ The developer's workflow doesn't change. The model choice, the audit trail, and 
 
 ---
 
-## What makes Tessera different
+## What makes Chuzom different
 
-|  | llm-router | **Tessera** |
+|  | llm-router | **Chuzom** |
 |---|:---:|:---:|
 | Cost-aware multi-provider routing | ✅ | ✅ |
 | Local-first, no proxy | ✅ | ✅ |
@@ -120,17 +120,17 @@ The developer's workflow doesn't change. The model choice, the audit trail, and 
 ### 1 · Install
 
 ```bash
-pip install tessera-router
-tessera install --host claude-code
+pip install chuzom-router
+chuzom install --host claude-code
 ```
 
 Or wire it into another host:
 
 ```bash
-tessera install --host cursor       # writes ~/.cursor/mcp.json
-tessera install --host gemini-cli   # writes ~/.gemini/mcp_servers.json
-tessera install --host codex        # writes Codex CLI plugin config
-tessera install --host all          # all of the above
+chuzom install --host cursor       # writes ~/.cursor/mcp.json
+chuzom install --host gemini-cli   # writes ~/.gemini/mcp_servers.json
+chuzom install --host codex        # writes Codex CLI plugin config
+chuzom install --host all          # all of the above
 ```
 
 ### 2 · Add providers (optional)
@@ -147,7 +147,7 @@ Works with **zero API keys** when you run Claude Code Pro/Max (uses the subscrip
 ### 3 · Verify
 
 ```bash
-tessera doctor
+chuzom doctor
 ```
 
 You'll see hooks installed, MCP server reachable, providers detected, and any setup issues called out with a fix command.
@@ -155,7 +155,7 @@ You'll see hooks installed, MCP server reachable, providers detected, and any se
 ### 4 · Watch the dashboard live
 
 ```bash
-tessera summary --watch
+chuzom summary --watch
 ```
 
 ---
@@ -164,7 +164,7 @@ tessera summary --watch
 
 ```
 ╭────────────────── ◆ Session Summary ──────────────────╮
-│  🟢 TESSERA · session observability dashboard          │
+│  🟢 CHUZOM · session observability dashboard          │
 │                                                        │
 │  Session savings $0.0774 (39% vs always-premium)       │
 │  Spent $0.1193 · baseline $0.1967                      │
@@ -230,12 +230,12 @@ The signal layer is YAML-configurable; the routing decisions are auditable; ever
 Install paths:
 
 ```bash
-tessera install --host claude-code
-tessera install --host claude-desktop
-tessera install --host cursor
-tessera install --host codex
-tessera install --host gemini-cli
-tessera install --host all
+chuzom install --host claude-code
+chuzom install --host claude-desktop
+chuzom install --host cursor
+chuzom install --host codex
+chuzom install --host gemini-cli
+chuzom install --host all
 ```
 
 Full integration matrix in [`Docs/HOST_INTEGRATION_REPORT.md`](Docs/HOST_INTEGRATION_REPORT.md) (118 structural tests, all green).
@@ -254,11 +254,11 @@ Full integration matrix in [`Docs/HOST_INTEGRATION_REPORT.md`](Docs/HOST_INTEGRA
 | **Claude Agent SDK** | stub (v0.0.3+) | anthropic client wrap path |
 | **Pydantic AI** | stub (v0.0.3+) | Model-protocol implementation path |
 
-Tessera doesn't replace your agent runtime. It sits inside it, picks the right model per agent step, enforces the session's budget, and tags every routing decision with the framework + agent_id for cost rollups.
+Chuzom doesn't replace your agent runtime. It sits inside it, picks the right model per agent step, enforces the session's budget, and tags every routing decision with the framework + agent_id for cost rollups.
 
 ```python
 from agno.agent import Agent
-from tessera.frameworks.agno import RouteredModel
+from chuzom.frameworks.agno import RouteredModel
 
 agent = Agent(
     model=RouteredModel(task_type="code"),
@@ -267,7 +267,7 @@ agent = Agent(
 agent.print_response("Review src/auth.py for security issues")
 ```
 
-That's the whole integration — every model call inside the agent goes through Tessera's signal layer, lineage gets tagged with `framework="agno"` and the session's `agent_id`, and the agent's budget envelope refuses calls that would breach the cap.
+That's the whole integration — every model call inside the agent goes through Chuzom's signal layer, lineage gets tagged with `framework="agno"` and the session's `agent_id`, and the agent's budget envelope refuses calls that would breach the cap.
 
 ---
 
@@ -282,7 +282,7 @@ Six controls that an organization can adopt incrementally — each module is ind
 - **SHA-256 hashed at rest** — stolen DB = stolen hashes, not credentials
 - Individual + bulk revocation; auto-revoke on user deactivation
 - Optional TTL; `external_id` column for OIDC/SAML federation
-- Persisted at `~/.tessera/identity.db`
+- Persisted at `~/.chuzom/identity.db`
 
 ### 👥 Role-based access control
 
@@ -302,7 +302,7 @@ Four roles × twelve permissions:
 Every event carries a SHA-256 hash of `(prev_hash + canonical_payload)`. Tampering with any row breaks the chain — `verify_chain()` reports the first divergent row.
 
 ```python
-from tessera.enterprise import AuditLog
+from chuzom.enterprise import AuditLog
 log = AuditLog()
 log.append(AuditEvent(
     type="routing.decision",
@@ -326,7 +326,7 @@ log.export_csv(limit=10000)   # spreadsheet
 ### 🛡️ PII / secret redaction
 
 ```python
-from tessera.enterprise import redact_prompt, RedactionPolicy
+from chuzom.enterprise import redact_prompt, RedactionPolicy
 
 result = redact_prompt(
     "Email alice@acme.com or use sk-proj-abc... no really",
@@ -343,7 +343,7 @@ Applied **before** the lineage write so the durable record never contains the ra
 ### 💵 Per-user + per-team quotas
 
 ```python
-from tessera.enterprise import QuotaPolicy, QuotaTracker
+from chuzom.enterprise import QuotaPolicy, QuotaTracker
 
 quotas = QuotaTracker()
 quotas.set_policy("user", alice.id, QuotaPolicy(
@@ -368,14 +368,14 @@ One env var and every routing decision becomes a span + metric + log in your obs
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
 export OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=KEY
-pip install "tessera-router[tracing]"
+pip install "chuzom-router[tracing]"
 ```
 
-That's it. Tessera auto-emits per routing decision:
+That's it. Chuzom auto-emits per routing decision:
 
-- **Spans**: `tessera.route` with full attribution (host, task_type, complexity, model_chosen, tier, cost, latency, agent_id, session_id, framework)
+- **Spans**: `chuzom.route` with full attribution (host, task_type, complexity, model_chosen, tier, cost, latency, agent_id, session_id, framework)
 - **Span events**: `inversion_detected`, `pii_detected`
-- **Metrics**: `tessera.routing.decisions{tier,task_type,host}`, `tessera.routing.inversions{direction}`, `tessera.safety.pii_catches`, histograms for cost and latency
+- **Metrics**: `chuzom.routing.decisions{tier,task_type,host}`, `chuzom.routing.inversions{direction}`, `chuzom.safety.pii_catches`, histograms for cost and latency
 - **Logs**: WARN on inversions, INFO on PII catches, ERROR on budget breaches
 
 Compatible with **Honeycomb, Grafana Cloud, Datadog, Jaeger, AWS X-Ray, GCP Cloud Trace** — anything that speaks OTLP.
@@ -388,7 +388,7 @@ Full deployment guide: [`Docs/ENTERPRISE_DEPLOYMENT.md`](Docs/ENTERPRISE_DEPLOYM
 
 ```
                     ┌──────────────────────┐
-   user prompt ─►   │  Host CLI (MCP call) │  ─► mcp__tessera__llm_*
+   user prompt ─►   │  Host CLI (MCP call) │  ─► mcp__chuzom__llm_*
                     └────────────┬─────────┘
                                  │
               ┌──────────────────▼──────────────────┐
@@ -433,11 +433,11 @@ Architecture deep-dive: [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md).
 
 ## OpenTelemetry observability
 
-Tessera was designed with observability as a first-class concern. The OTLP exporter is auto-wired into `LineageStore.record()` so when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, **every routing decision** becomes a span — no application code changes required.
+Chuzom was designed with observability as a first-class concern. The OTLP exporter is auto-wired into `LineageStore.record()` so when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, **every routing decision** becomes a span — no application code changes required.
 
 What you can build on top:
 
-- **Per-team cost dashboards** filtered on `tessera.framework="agno"` or `tessera.agent_id="code-reviewer"`
+- **Per-team cost dashboards** filtered on `chuzom.framework="agno"` or `chuzom.agent_id="code-reviewer"`
 - **Inversion rate alerts** when up-inversions exceed 5% over rolling 1000 decisions
 - **PII catch heatmaps** by hour of day to identify training opportunities
 - **Latency p95 vs cost scatter plots** to identify expensive-slow models
@@ -474,7 +474,7 @@ tier_budgets:
 **Plaintext-secret detection** at YAML load time — `OrgPolicy.load()` rejects files containing OpenAI / Anthropic / Gemini / GitHub / AWS / Slack / JWT / private-key-block patterns with a clear remediation. Secrets do not live in version-controlled YAML, ever.
 
 ```python
-from tessera.org_policy import OrgPolicy
+from chuzom.org_policy import OrgPolicy
 policy = OrgPolicy.load("config/policies/prod.yaml")  # plaintext check runs
 
 # At request time, secrets resolve via your configured backend
@@ -487,7 +487,7 @@ Custom schemes plug in via `SecretResolver.register_scheme()`.
 
 ## Scenario-based test reports
 
-Tessera ships a scenario harness that produces a markdown *story* per routing journey — every actor that touched the request (host, hook, classifier, signal, decision engine, selector, model, lineage, session, budget) renders as a numbered bullet.
+Chuzom ships a scenario harness that produces a markdown *story* per routing journey — every actor that touched the request (host, hook, classifier, signal, decision engine, selector, model, lineage, session, budget) renders as a numbered bullet.
 
 ```
 ## cli-02 · Claude Code: secret in prompt forces local-only routing
@@ -515,10 +515,10 @@ pytest tests/scenarios/
 
 ## Model registry
 
-Tessera ships a **model registry** sourced from [artificialanalysis.ai/leaderboards/models](https://artificialanalysis.ai/leaderboards/models) with quality scores, prices, latency p50, capabilities, and context windows for every routable model:
+Chuzom ships a **model registry** sourced from [artificialanalysis.ai/leaderboards/models](https://artificialanalysis.ai/leaderboards/models) with quality scores, prices, latency p50, capabilities, and context windows for every routable model:
 
 ```python
-from tessera.model_registry import ModelRegistry
+from chuzom.model_registry import ModelRegistry
 
 reg = ModelRegistry.load_default()
 # Find cheaper models with equivalent quality
@@ -537,36 +537,36 @@ Ships with 13 models pre-loaded; refresh from artificialanalysis.ai via `scripts
 
 ```bash
 # Setup + verify
-tessera install              # install hooks + rules + MCP config
-tessera install --host all   # install for every supported host
-tessera doctor               # health check + remediation hints
+chuzom install              # install hooks + rules + MCP config
+chuzom install --host all   # install for every supported host
+chuzom doctor               # health check + remediation hints
 
 # Session intelligence
-tessera summary              # last 24h dashboard
-tessera summary --watch      # live-updating every 5s
-tessera summary --markdown   # share-able output
+chuzom summary              # last 24h dashboard
+chuzom summary --watch      # live-updating every 5s
+chuzom summary --markdown   # share-able output
 
 # Inspection
-tessera last [--count N]     # recent routing decisions
-tessera replay               # full session transcript
-tessera savings-report       # token + cost breakdown
-tessera retrospect           # IAF-style session debrief
+chuzom last [--count N]     # recent routing decisions
+chuzom replay               # full session transcript
+chuzom savings-report       # token + cost breakdown
+chuzom retrospect           # IAF-style session debrief
 
 # Governance
-tessera budget set <provider> <amount>
-tessera set-enforce <mode>   # smart | soft | hard | off
-tessera policy --check       # validate signal/decision config
+chuzom budget set <provider> <amount>
+chuzom set-enforce <mode>   # smart | soft | hard | off
+chuzom policy --check       # validate signal/decision config
 
 # Team / org
-tessera team report [period]
-tessera team push [period]   # ship to Slack/Discord/webhook
+chuzom team report [period]
+chuzom team push [period]   # ship to Slack/Discord/webhook
 ```
 
 ---
 
 ## Configuration
 
-State lives in `~/.tessera/` (override per-DB via `TESSERA_*_PATH` env vars):
+State lives in `~/.chuzom/` (override per-DB via `CHUZOM_*_PATH` env vars):
 
 | File | Purpose |
 |---|---|
@@ -587,7 +587,7 @@ Per-project config lives in `config/` (gitignored where appropriate):
 | `config/models.yaml` | Model registry snapshot |
 | `config/policies/*.yaml` | Org-grade policies with secret indirections |
 
-Provider keys via env vars or `~/.tessera/config.yaml` (mode-600 user-readable, for security-policy deployments where `.env` is blocked).
+Provider keys via env vars or `~/.chuzom/config.yaml` (mode-600 user-readable, for security-policy deployments where `.env` is blocked).
 
 ---
 
@@ -600,7 +600,7 @@ Provider keys via env vars or `~/.tessera/config.yaml` (mode-600 user-readable, 
 | QA — 5 pillars + Agno deep | 166 | functional / non-functional / perf / integrity / usability |
 | QA — MCP handshake (live subprocess) | 10 | protocol layer end-to-end |
 | QA — network failure simulation | 22 | circuit breaker state machine |
-| QA — multi-host coexistence | 13 | Tessera + llm-router parallel |
+| QA — multi-host coexistence | 13 | Chuzom + llm-router parallel |
 | QA — framework contracts (6 stubs) | 88 | per-framework × 14 contract dims |
 | QA — session summary | 16 | dashboard data + render |
 | QA — plugin packaging | 18 | marketplace + MCP-config plugins |
@@ -647,7 +647,7 @@ pytest tests/integration/    # host structural
 - Concrete adapters for Hermes / LangGraph / CrewAI / OpenAI Agents SDK / Claude Agent SDK / Pydantic AI
 - OIDC / SAML adapter (federated identity)
 - Central proxy mode with mTLS (for orgs that require VPC egress isolation)
-- GDPR right-to-erasure CLI tool (`tessera erase-user <email>`)
+- GDPR right-to-erasure CLI tool (`chuzom erase-user <email>`)
 - Empirical `quality_gap` lookup tables derived from lineage outcomes
 - Embedding signal + semantic response cache (sqlite-vec backend)
 - Per-team model allow/deny lists
@@ -659,4 +659,4 @@ pytest tests/integration/    # host structural
 
 MIT.
 
-Tessera was forked from [llm-router](https://github.com/ypollak2/llm-router) and rebuilt around the signal/decision DSL and enterprise controls. llm-router remains the lightweight personal cost-saver; Tessera is the version you put in front of an organization.
+Chuzom was forked from [llm-router](https://github.com/ypollak2/llm-router) and rebuilt around the signal/decision DSL and enterprise controls. llm-router remains the lightweight personal cost-saver; Chuzom is the version you put in front of an organization.

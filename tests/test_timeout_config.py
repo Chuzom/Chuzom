@@ -2,7 +2,7 @@
 
 import os
 
-from tessera.timeout_config import (
+from chuzom.timeout_config import (
     get_timeout_config,
     request_timeout,
     media_request_timeout,
@@ -22,12 +22,12 @@ class TestTimeoutConfigDefaults:
         reset_cache()
         # Clear any timeout env vars
         for var in [
-            "TESSERA_REQUEST_TIMEOUT",
-            "TESSERA_MEDIA_REQUEST_TIMEOUT",
-            "TESSERA_CODEX_TIMEOUT",
-            "TESSERA_SUBPROCESS_TIMEOUT",
-            "TESSERA_HTTP_TIMEOUT",
-            "TESSERA_BENCHMARK_TIMEOUT",
+            "CHUZOM_REQUEST_TIMEOUT",
+            "CHUZOM_MEDIA_REQUEST_TIMEOUT",
+            "CHUZOM_CODEX_TIMEOUT",
+            "CHUZOM_SUBPROCESS_TIMEOUT",
+            "CHUZOM_HTTP_TIMEOUT",
+            "CHUZOM_BENCHMARK_TIMEOUT",
         ]:
             os.environ.pop(var, None)
         reset_cache()
@@ -75,61 +75,61 @@ class TestTimeoutConfigEnvVars:
         reset_cache()
         # Clear any timeout env vars
         for var in [
-            "TESSERA_REQUEST_TIMEOUT",
-            "TESSERA_MEDIA_REQUEST_TIMEOUT",
-            "TESSERA_CODEX_TIMEOUT",
-            "TESSERA_SUBPROCESS_TIMEOUT",
-            "TESSERA_HTTP_TIMEOUT",
-            "TESSERA_BENCHMARK_TIMEOUT",
+            "CHUZOM_REQUEST_TIMEOUT",
+            "CHUZOM_MEDIA_REQUEST_TIMEOUT",
+            "CHUZOM_CODEX_TIMEOUT",
+            "CHUZOM_SUBPROCESS_TIMEOUT",
+            "CHUZOM_HTTP_TIMEOUT",
+            "CHUZOM_BENCHMARK_TIMEOUT",
         ]:
             os.environ.pop(var, None)
 
     def teardown_method(self):
         """Clean up env vars after each test."""
         for var in [
-            "TESSERA_REQUEST_TIMEOUT",
-            "TESSERA_MEDIA_REQUEST_TIMEOUT",
-            "TESSERA_CODEX_TIMEOUT",
-            "TESSERA_SUBPROCESS_TIMEOUT",
-            "TESSERA_HTTP_TIMEOUT",
-            "TESSERA_BENCHMARK_TIMEOUT",
+            "CHUZOM_REQUEST_TIMEOUT",
+            "CHUZOM_MEDIA_REQUEST_TIMEOUT",
+            "CHUZOM_CODEX_TIMEOUT",
+            "CHUZOM_SUBPROCESS_TIMEOUT",
+            "CHUZOM_HTTP_TIMEOUT",
+            "CHUZOM_BENCHMARK_TIMEOUT",
         ]:
             os.environ.pop(var, None)
         reset_cache()
 
     def test_request_timeout_env(self):
-        """TESSERA_REQUEST_TIMEOUT overrides default."""
-        os.environ["TESSERA_REQUEST_TIMEOUT"] = "240"
+        """CHUZOM_REQUEST_TIMEOUT overrides default."""
+        os.environ["CHUZOM_REQUEST_TIMEOUT"] = "240"
         reset_cache()
         assert request_timeout() == 240
 
     def test_media_request_timeout_env(self):
-        """TESSERA_MEDIA_REQUEST_TIMEOUT overrides default."""
-        os.environ["TESSERA_MEDIA_REQUEST_TIMEOUT"] = "1200"
+        """CHUZOM_MEDIA_REQUEST_TIMEOUT overrides default."""
+        os.environ["CHUZOM_MEDIA_REQUEST_TIMEOUT"] = "1200"
         reset_cache()
         assert media_request_timeout() == 1200
 
     def test_codex_timeout_env(self):
-        """TESSERA_CODEX_TIMEOUT overrides default."""
-        os.environ["TESSERA_CODEX_TIMEOUT"] = "600"
+        """CHUZOM_CODEX_TIMEOUT overrides default."""
+        os.environ["CHUZOM_CODEX_TIMEOUT"] = "600"
         reset_cache()
         assert codex_timeout() == 600
 
     def test_subprocess_timeout_env(self):
-        """TESSERA_SUBPROCESS_TIMEOUT overrides default."""
-        os.environ["TESSERA_SUBPROCESS_TIMEOUT"] = "30"
+        """CHUZOM_SUBPROCESS_TIMEOUT overrides default."""
+        os.environ["CHUZOM_SUBPROCESS_TIMEOUT"] = "30"
         reset_cache()
         assert subprocess_timeout() == 30
 
     def test_http_timeout_env(self):
-        """TESSERA_HTTP_TIMEOUT overrides default."""
-        os.environ["TESSERA_HTTP_TIMEOUT"] = "20"
+        """CHUZOM_HTTP_TIMEOUT overrides default."""
+        os.environ["CHUZOM_HTTP_TIMEOUT"] = "20"
         reset_cache()
         assert http_timeout() == 20
 
     def test_benchmark_timeout_env(self):
-        """TESSERA_BENCHMARK_TIMEOUT overrides default."""
-        os.environ["TESSERA_BENCHMARK_TIMEOUT"] = "60"
+        """CHUZOM_BENCHMARK_TIMEOUT overrides default."""
+        os.environ["CHUZOM_BENCHMARK_TIMEOUT"] = "60"
         reset_cache()
         assert benchmark_timeout() == 60
 
@@ -142,55 +142,55 @@ class TestTimeoutConfigValidation:
         reset_cache()
         # Clear any timeout env vars
         for var in [
-            "TESSERA_REQUEST_TIMEOUT",
-            "TESSERA_MEDIA_REQUEST_TIMEOUT",
-            "TESSERA_CODEX_TIMEOUT",
-            "TESSERA_SUBPROCESS_TIMEOUT",
-            "TESSERA_HTTP_TIMEOUT",
-            "TESSERA_BENCHMARK_TIMEOUT",
+            "CHUZOM_REQUEST_TIMEOUT",
+            "CHUZOM_MEDIA_REQUEST_TIMEOUT",
+            "CHUZOM_CODEX_TIMEOUT",
+            "CHUZOM_SUBPROCESS_TIMEOUT",
+            "CHUZOM_HTTP_TIMEOUT",
+            "CHUZOM_BENCHMARK_TIMEOUT",
         ]:
             os.environ.pop(var, None)
 
     def teardown_method(self):
         """Clean up env vars after each test."""
         for var in [
-            "TESSERA_REQUEST_TIMEOUT",
-            "TESSERA_MEDIA_REQUEST_TIMEOUT",
-            "TESSERA_CODEX_TIMEOUT",
-            "TESSERA_SUBPROCESS_TIMEOUT",
-            "TESSERA_HTTP_TIMEOUT",
-            "TESSERA_BENCHMARK_TIMEOUT",
+            "CHUZOM_REQUEST_TIMEOUT",
+            "CHUZOM_MEDIA_REQUEST_TIMEOUT",
+            "CHUZOM_CODEX_TIMEOUT",
+            "CHUZOM_SUBPROCESS_TIMEOUT",
+            "CHUZOM_HTTP_TIMEOUT",
+            "CHUZOM_BENCHMARK_TIMEOUT",
         ]:
             os.environ.pop(var, None)
         reset_cache()
 
     def test_invalid_timeout_non_numeric(self):
         """Invalid non-numeric value falls back to default."""
-        os.environ["TESSERA_REQUEST_TIMEOUT"] = "not_a_number"
+        os.environ["CHUZOM_REQUEST_TIMEOUT"] = "not_a_number"
         reset_cache()
         assert request_timeout() == 120  # Falls back to default
 
     def test_invalid_timeout_zero(self):
         """Zero timeout falls back to default."""
-        os.environ["TESSERA_REQUEST_TIMEOUT"] = "0"
+        os.environ["CHUZOM_REQUEST_TIMEOUT"] = "0"
         reset_cache()
         assert request_timeout() == 120  # Falls back to default
 
     def test_invalid_timeout_negative(self):
         """Negative timeout falls back to default."""
-        os.environ["TESSERA_REQUEST_TIMEOUT"] = "-10"
+        os.environ["CHUZOM_REQUEST_TIMEOUT"] = "-10"
         reset_cache()
         assert request_timeout() == 120  # Falls back to default
 
     def test_valid_timeout_large_value(self):
         """Large but valid timeout value is accepted."""
-        os.environ["TESSERA_MEDIA_REQUEST_TIMEOUT"] = "3600"
+        os.environ["CHUZOM_MEDIA_REQUEST_TIMEOUT"] = "3600"
         reset_cache()
         assert media_request_timeout() == 3600
 
     def test_valid_timeout_one(self):
         """Timeout of 1 second is valid."""
-        os.environ["TESSERA_HTTP_TIMEOUT"] = "1"
+        os.environ["CHUZOM_HTTP_TIMEOUT"] = "1"
         reset_cache()
         assert http_timeout() == 1
 
@@ -203,24 +203,24 @@ class TestTimeoutConfigCaching:
         reset_cache()
         # Clear any timeout env vars
         for var in [
-            "TESSERA_REQUEST_TIMEOUT",
-            "TESSERA_MEDIA_REQUEST_TIMEOUT",
-            "TESSERA_CODEX_TIMEOUT",
-            "TESSERA_SUBPROCESS_TIMEOUT",
-            "TESSERA_HTTP_TIMEOUT",
-            "TESSERA_BENCHMARK_TIMEOUT",
+            "CHUZOM_REQUEST_TIMEOUT",
+            "CHUZOM_MEDIA_REQUEST_TIMEOUT",
+            "CHUZOM_CODEX_TIMEOUT",
+            "CHUZOM_SUBPROCESS_TIMEOUT",
+            "CHUZOM_HTTP_TIMEOUT",
+            "CHUZOM_BENCHMARK_TIMEOUT",
         ]:
             os.environ.pop(var, None)
 
     def teardown_method(self):
         """Clean up env vars after each test."""
         for var in [
-            "TESSERA_REQUEST_TIMEOUT",
-            "TESSERA_MEDIA_REQUEST_TIMEOUT",
-            "TESSERA_CODEX_TIMEOUT",
-            "TESSERA_SUBPROCESS_TIMEOUT",
-            "TESSERA_HTTP_TIMEOUT",
-            "TESSERA_BENCHMARK_TIMEOUT",
+            "CHUZOM_REQUEST_TIMEOUT",
+            "CHUZOM_MEDIA_REQUEST_TIMEOUT",
+            "CHUZOM_CODEX_TIMEOUT",
+            "CHUZOM_SUBPROCESS_TIMEOUT",
+            "CHUZOM_HTTP_TIMEOUT",
+            "CHUZOM_BENCHMARK_TIMEOUT",
         ]:
             os.environ.pop(var, None)
         reset_cache()
@@ -233,12 +233,12 @@ class TestTimeoutConfigCaching:
 
     def test_env_var_change_requires_reset(self):
         """Changing env var requires reset_cache() to take effect."""
-        os.environ["TESSERA_REQUEST_TIMEOUT"] = "240"
+        os.environ["CHUZOM_REQUEST_TIMEOUT"] = "240"
         reset_cache()
         assert request_timeout() == 240
 
         # Change env var without reset
-        os.environ["TESSERA_REQUEST_TIMEOUT"] = "360"
+        os.environ["CHUZOM_REQUEST_TIMEOUT"] = "360"
         assert request_timeout() == 240  # Still cached
 
         # Reset and verify new value is used
@@ -247,8 +247,8 @@ class TestTimeoutConfigCaching:
 
     def test_cache_is_independent_per_module(self):
         """Each timeout function accesses same cached config."""
-        os.environ["TESSERA_REQUEST_TIMEOUT"] = "240"
-        os.environ["TESSERA_CODEX_TIMEOUT"] = "600"
+        os.environ["CHUZOM_REQUEST_TIMEOUT"] = "240"
+        os.environ["CHUZOM_CODEX_TIMEOUT"] = "600"
         reset_cache()
 
         # Both should use same cached config

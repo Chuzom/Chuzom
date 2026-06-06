@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.router import _reorder_for_agent_context
-from tessera.state import get_active_agent, set_active_agent
-from tessera.types import Complexity
+from chuzom.router import _reorder_for_agent_context
+from chuzom.state import get_active_agent, set_active_agent
+from chuzom.types import Complexity
 
 
 # ─────────────────────────────────────────────────────────────────────────────

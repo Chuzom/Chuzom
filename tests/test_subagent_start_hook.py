@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-HOOK_PATH = Path(__file__).parent.parent / "src" / "tessera" / "hooks" / "subagent-start.py"
+HOOK_PATH = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "subagent-start.py"
 
 
 def _run(agent_type: str, usage_json: dict | None = None, tmp_path: Path | None = None) -> tuple[int, dict | None]:
@@ -20,7 +20,7 @@ def _run(agent_type: str, usage_json: dict | None = None, tmp_path: Path | None 
     env = None
     if usage_json is not None and tmp_path is not None:
         import os
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         (llmr_dir / "usage.json").write_text(json.dumps(usage_json))
         env = {**os.environ, "HOME": str(tmp_path)}
@@ -77,10 +77,10 @@ class TestOutputFormat:
         assert "31%" in ctx
         assert "45%" in ctx
 
-    def test_context_contains_tessera_label(self, tmp_path):
+    def test_context_contains_chuzom_label(self, tmp_path):
         _, out = _run("general", usage_json={"session_pct": 10.0, "sonnet_pct": 10.0, "weekly_pct": 10.0}, tmp_path=tmp_path)
         ctx = out["hookSpecificOutput"]["additionalContext"]
-        assert "tessera" in ctx.lower() or "tessera" in ctx.lower() or "[tessera]" in ctx
+        assert "chuzom" in ctx.lower() or "chuzom" in ctx.lower() or "[chuzom]" in ctx
 
 
 class TestPressureStatus:
@@ -130,7 +130,7 @@ class TestMissingUsageData:
     def test_no_usage_json_exits_cleanly(self, tmp_path):
         """When usage.json is missing, hook runs with 0% pressure (LOW)."""
         import os
-        # Point HOME at empty tmp_path (no .tessera dir)
+        # Point HOME at empty tmp_path (no .chuzom dir)
         env = {**os.environ, "HOME": str(tmp_path)}
         payload = json.dumps({"hook_event_name": "SubagentStart", "agent_id": "x", "agent_type": "general"})
         result = subprocess.run(
@@ -145,7 +145,7 @@ class TestMissingUsageData:
 
     def test_malformed_usage_json_exits_cleanly(self, tmp_path):
         import os
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir()
         (llmr_dir / "usage.json").write_text("not valid json {{{")
         env = {**os.environ, "HOME": str(tmp_path)}

@@ -4,14 +4,14 @@ import pytest
 from unittest.mock import patch
 from datetime import datetime, timedelta
 
-from tessera.judge import (
+from chuzom.judge import (
     evaluate_response_async,
     _build_judge_prompt,
     _parse_judge_score,
     get_judge_scores_for_model,
     reorder_by_quality,
 )
-from tessera import cost
+from chuzom import cost
 
 
 async def _insert_routing_decision(db, model: str, judge_score: float | None = None, days_ago: int = 0):
@@ -43,9 +43,9 @@ async def _insert_routing_decision(db, model: str, judge_score: float | None = N
 @pytest.mark.asyncio
 async def test_evaluate_response_async_with_high_sample_rate(temp_db, monkeypatch):
     """Test evaluate_response_async respects sample rate."""
-    monkeypatch.setenv("TESSERA_JUDGE_SAMPLE_RATE", "1.0")
+    monkeypatch.setenv("CHUZOM_JUDGE_SAMPLE_RATE", "1.0")
     
-    with patch("tessera.judge.asyncio.create_task") as mock_task:
+    with patch("chuzom.judge.asyncio.create_task") as mock_task:
         await evaluate_response_async(
             prompt="What is 2+2?",
             response="The answer is 4",
@@ -59,9 +59,9 @@ async def test_evaluate_response_async_with_high_sample_rate(temp_db, monkeypatc
 @pytest.mark.asyncio
 async def test_evaluate_response_async_with_low_sample_rate(temp_db, monkeypatch):
     """Test evaluate_response_async respects low sample rate."""
-    monkeypatch.setenv("TESSERA_JUDGE_SAMPLE_RATE", "0.0")
+    monkeypatch.setenv("CHUZOM_JUDGE_SAMPLE_RATE", "0.0")
     
-    with patch("tessera.judge.asyncio.create_task") as mock_task:
+    with patch("chuzom.judge.asyncio.create_task") as mock_task:
         await evaluate_response_async(
             prompt="What is 2+2?",
             response="The answer is 4",
@@ -316,7 +316,7 @@ async def test_reorder_by_quality_error_handling(temp_db):
     models = ["model-a", "model-b"]
     
     # Mock _get_db to raise an exception
-    with patch("tessera.judge._get_db", side_effect=Exception("DB error")):
+    with patch("chuzom.judge._get_db", side_effect=Exception("DB error")):
         result = await reorder_by_quality(models)
         # Should return original list unchanged on error
         assert result == models

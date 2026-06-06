@@ -1,4 +1,4 @@
-"""Non-functional pillar — does Tessera degrade gracefully under stress?
+"""Non-functional pillar — does Chuzom degrade gracefully under stress?
 
 Every public-API method must have at least one negative test exercising
 the realistic failure modes: corrupt input, missing parent directories,
@@ -12,16 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from tessera.agents import (
+from chuzom.agents import (
     AgentRegistry,
     BudgetEnvelope,
     BudgetExceeded,
     SessionStore,
 )
-from tessera.agents.registry import AgentNotFound
-from tessera.agents.session import SessionNotFound, TerminalStateViolation
-from tessera.lineage import LineageStore, make_record
-from tessera.signals.pii import PiiSignal
+from chuzom.agents.registry import AgentNotFound
+from chuzom.agents.session import SessionNotFound, TerminalStateViolation
+from chuzom.lineage import LineageStore, make_record
+from chuzom.signals.pii import PiiSignal
 
 from tests.qa.conftest import HostSpec, load_adapter
 
@@ -36,16 +36,16 @@ def test_adapter_recovers_from_corrupt_json(host: HostSpec, tmp_path: Path):
     cfg.write_text("not valid json {{{{ ((( ")
     adapter = cls(config_path=cfg)
     # Install must overwrite — not raise
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     data = json.loads(cfg.read_text())
-    assert "tessera" in data["mcpServers"]
+    assert "chuzom" in data["mcpServers"]
 
 
 def test_adapter_creates_missing_parent_dir(host: HostSpec, tmp_path: Path):
     cls = load_adapter(host)
     deep = tmp_path / "nested" / "deeper" / "config.json"
     adapter = cls(config_path=deep)
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     assert deep.exists()
 
 
@@ -64,20 +64,20 @@ def test_adapter_is_installed_on_empty_file_returns_false(host: HostSpec, tmp_pa
     assert not adapter.is_installed()
 
 
-def test_adapter_handles_pre_existing_tessera_entry(host: HostSpec, tmp_path: Path):
-    """Install over an existing tessera entry must overwrite cleanly."""
+def test_adapter_handles_pre_existing_chuzom_entry(host: HostSpec, tmp_path: Path):
+    """Install over an existing chuzom entry must overwrite cleanly."""
     cls = load_adapter(host)
     cfg = tmp_path / "config.json"
     cfg.write_text(json.dumps({
         "mcpServers": {
-            "tessera": {"command": "old-command", "args": ["--legacy"]},
+            "chuzom": {"command": "old-command", "args": ["--legacy"]},
         }
     }))
     adapter = cls(config_path=cfg)
-    adapter.install(server_command=["tessera", "--new"])
+    adapter.install(server_command=["chuzom", "--new"])
     data = json.loads(cfg.read_text())
-    assert data["mcpServers"]["tessera"]["command"] == "tessera"
-    assert data["mcpServers"]["tessera"]["args"] == ["--new"]
+    assert data["mcpServers"]["chuzom"]["command"] == "chuzom"
+    assert data["mcpServers"]["chuzom"]["args"] == ["--new"]
 
 
 # ────────────────────────────────────────────────────────────────────────

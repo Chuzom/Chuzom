@@ -8,12 +8,12 @@ from unittest import mock
 
 import pytest
 
-from tessera.cost import log_correction, get_correction_count
-from tessera.memory.profiles import parse_routing_directives
-from tessera.monitoring.live_tracker import get_trend_pressure
-from tessera.retrospective import run_weekly_retrospective
-from tessera.model_selector import select_model
-from tessera.types import ClassificationResult, Complexity, QualityMode
+from chuzom.cost import log_correction, get_correction_count
+from chuzom.memory.profiles import parse_routing_directives
+from chuzom.monitoring.live_tracker import get_trend_pressure
+from chuzom.retrospective import run_weekly_retrospective
+from chuzom.model_selector import select_model
+from chuzom.types import ClassificationResult, Complexity, QualityMode
 
 
 class TestCriticalBugFix:
@@ -23,7 +23,7 @@ class TestCriticalBugFix:
     async def test_reroute_populates_corrected_model(self, monkeypatch, tmp_path):
         """Verify that rerouting records the corrected model in the database."""
         db_path = tmp_path / "test.db"
-        monkeypatch.setenv("TESSERA_DB_PATH", str(db_path))
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(db_path))
 
         # Simulate a correction with model
         await log_correction(
@@ -98,7 +98,7 @@ class TestLoop2WeeklyRetrospective:
             retro_dir = Path(tmpdir) / "retrospectives"
             retro_dir.mkdir()
 
-            with mock.patch("tessera.retrospective.RETROSPECT_DIR", retro_dir):
+            with mock.patch("chuzom.retrospective.RETROSPECT_DIR", retro_dir):
                 result = await run_weekly_retrospective()
 
                 assert result["period"] == "weekly"
@@ -112,7 +112,7 @@ class TestLoop3TrendPressure:
 
     def test_get_trend_pressure_no_snapshots(self):
         """Return 0.0 when no snapshots available."""
-        with mock.patch("tessera.monitoring.live_tracker.load_session_snapshots", return_value=[]):
+        with mock.patch("chuzom.monitoring.live_tracker.load_session_snapshots", return_value=[]):
             pressure = get_trend_pressure()
             assert pressure == 0.0
 
@@ -122,7 +122,7 @@ class TestLoop3TrendPressure:
             {"facts": {"accuracy": 0.85}, "hour": 1},
             {"facts": {"accuracy": 0.92}, "hour": 2},  # improved
         ]
-        with mock.patch("tessera.monitoring.live_tracker.load_session_snapshots", return_value=snapshots):
+        with mock.patch("chuzom.monitoring.live_tracker.load_session_snapshots", return_value=snapshots):
             pressure = get_trend_pressure()
             assert pressure == 0.0, "Improving trend should have no pressure"
 
@@ -132,7 +132,7 @@ class TestLoop3TrendPressure:
             {"facts": {"accuracy": 0.95}, "hour": 1},
             {"facts": {"accuracy": 0.88}, "hour": 2},  # declined by 0.07
         ]
-        with mock.patch("tessera.monitoring.live_tracker.load_session_snapshots", return_value=snapshots):
+        with mock.patch("chuzom.monitoring.live_tracker.load_session_snapshots", return_value=snapshots):
             pressure = get_trend_pressure()
             # -0.07 * 2 = 0.14 pressure
             assert 0.1 < pressure < 0.3, f"Expected 0.1-0.3, got {pressure}"
@@ -143,7 +143,7 @@ class TestLoop3TrendPressure:
             {"facts": {"accuracy": 0.99}, "hour": 1},
             {"facts": {"accuracy": 0.75}, "hour": 2},  # declined by 0.24
         ]
-        with mock.patch("tessera.monitoring.live_tracker.load_session_snapshots", return_value=snapshots):
+        with mock.patch("chuzom.monitoring.live_tracker.load_session_snapshots", return_value=snapshots):
             pressure = get_trend_pressure()
             assert pressure <= 0.3, "Pressure should be capped at 0.3"
 
@@ -158,7 +158,7 @@ class TestLoop4CommunityProfiles:
 
         # The actual implementation should have DEFAULT_COMMUNITY_URL
         # We test that the code doesn't error when url is empty
-        from tessera.tools.admin import llm_import_profile
+        from chuzom.tools.admin import llm_import_profile
 
         # We can't actually test the full import without network,
         # but we verify the function signature accepts empty url
@@ -222,7 +222,7 @@ class TestEndToEndClosedLoop:
     async def test_correction_recorded_with_model(self, monkeypatch, tmp_path):
         """Verify full path: correction → model recorded → learned profile built."""
         db_path = tmp_path / "test.db"
-        monkeypatch.setenv("TESSERA_DB_PATH", str(db_path))
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(db_path))
 
         # Record a correction with model
         await log_correction(

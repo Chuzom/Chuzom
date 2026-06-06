@@ -50,9 +50,9 @@ Skip preamble. Lead with result. Fragments fine when meaning is clear.
 No trailing summaries. ≥3 items → bullets. Never restate the user's request.
 
 
-# tessera Routing Rules for VS Code
+# chuzom Routing Rules for VS Code
 
-This section configures tessera for optimal cost-aware LLM routing.
+This section configures chuzom for optimal cost-aware LLM routing.
 
 ## Smart Routing Strategy
 
@@ -64,7 +64,7 @@ This section configures tessera for optimal cost-aware LLM routing.
 
 ## Usage in VS Code
 
-Press **Ctrl+L** to access the tessera prompt. The MCP server automatically:
+Press **Ctrl+L** to access the chuzom prompt. The MCP server automatically:
 - Classifies task complexity (simple/moderate/complex)
 - Routes to optimal LLM provider (local Ollama → cloud APIs → Claude)
 - Tracks spending and applies budget pressure

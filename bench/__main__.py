@@ -3,7 +3,7 @@
 Usage:
     python -m bench                              # full corpus, default routers
     python -m bench --easy-only                  # smoke easy only
-    python -m bench --routers tessera,always-cheap
+    python -m bench --routers chuzom,always-cheap
     python -m bench --judge-model openai/gpt-4o-mini
     python -m bench --no-cache                   # force re-runs
 """
@@ -81,7 +81,7 @@ async def amain(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Tessera router benchmark")
+    parser = argparse.ArgumentParser(description="Chuzom router benchmark")
     parser.add_argument("--easy-only", action="store_true")
     parser.add_argument("--moderate-only", action="store_true")
     parser.add_argument("--routers", help="comma-separated router names (default: all)")

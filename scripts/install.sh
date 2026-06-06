@@ -17,7 +17,7 @@ echo ""
 if [ ! -f "$PROJECT_DIR/.env" ]; then
     echo "No .env found. Running onboard wizard..."
     cd "$PROJECT_DIR"
-    uv run tessera-onboard
+    uv run chuzom-onboard
 fi
 
 # Check for uv
@@ -35,7 +35,7 @@ uv sync --quiet
 MCP_ENTRY=$(cat <<EOF
 {
   "command": "uv",
-  "args": ["run", "--directory", "$PROJECT_DIR", "tessera"],
+  "args": ["run", "--directory", "$PROJECT_DIR", "chuzom"],
   "env": {},
   "description": "Multi-LLM router — query, research, generate, analyze, code"
 }
@@ -59,18 +59,18 @@ with open(config_path) as f:
 if 'mcpServers' not in config:
     config['mcpServers'] = {}
 
-config['mcpServers']['tessera'] = json.loads('''$MCP_ENTRY''')
+config['mcpServers']['chuzom'] = json.loads('''$MCP_ENTRY''')
 
 with open(config_path, 'w') as f:
     json.dump(config, f, indent=2)
 
-print('Added tessera to', config_path)
+print('Added chuzom to', config_path)
 "
 
 # Install auto-routing hook
 HOOKS_DIR="$HOME/.claude/hooks"
-HOOK_SRC="$PROJECT_DIR/src/tessera/hooks/auto-route.py"
-HOOK_DST="$HOOKS_DIR/tessera-auto-route.py"
+HOOK_SRC="$PROJECT_DIR/src/chuzom/hooks/auto-route.py"
+HOOK_DST="$HOOKS_DIR/chuzom-auto-route.py"
 
 if [ -f "$HOOK_SRC" ]; then
     mkdir -p "$HOOKS_DIR"
@@ -112,7 +112,7 @@ fi
 
 # Install usage-refresh hook (PostToolUse)
 USAGE_HOOK_SRC="$PROJECT_DIR/.claude/hooks/usage-refresh.py"
-USAGE_HOOK_DST="$HOOKS_DIR/tessera-usage-refresh.py"
+USAGE_HOOK_DST="$HOOKS_DIR/chuzom-usage-refresh.py"
 
 if [ -f "$USAGE_HOOK_SRC" ]; then
     cp "$USAGE_HOOK_SRC" "$USAGE_HOOK_DST"
@@ -152,8 +152,8 @@ fi
 
 # Install routing rules globally
 RULES_DIR="$HOME/.claude/rules"
-RULES_SRC="$PROJECT_DIR/src/tessera/rules/tessera.md"
-RULES_DST="$RULES_DIR/tessera.md"
+RULES_SRC="$PROJECT_DIR/src/chuzom/rules/chuzom.md"
+RULES_DST="$RULES_DIR/chuzom.md"
 
 if [ -f "$RULES_SRC" ]; then
     mkdir -p "$RULES_DIR"

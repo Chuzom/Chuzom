@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.agents import AgentRegistry, AgentProfile, SessionStore
-from tessera.lineage import LineageStore, make_record
+from chuzom.agents import AgentRegistry, AgentProfile, SessionStore
+from chuzom.lineage import LineageStore, make_record
 
 from tests.scenarios.core import Scenario
 
@@ -36,7 +36,7 @@ def _profile(id_: str, **kw) -> AgentProfile:
 
 def test_scenario_agno_code_reviewer_session(scenario_collector, tmp_path):
     """Agno spawns a code-reviewer agent. The agent makes 3 routing calls
-    (read 2 files, write a review). Tessera enforces the per-session
+    (read 2 files, write a review). Chuzom enforces the per-session
     budget and tags every lineage row with framework='agno'."""
     s = Scenario(
         id="fw-01",
@@ -130,7 +130,7 @@ def test_scenario_agno_code_reviewer_session(scenario_collector, tmp_path):
 
 
 def test_scenario_agno_budget_breach_terminates_session(scenario_collector, tmp_path):
-    """Agno agent attempts a step that would exceed its budget. Tessera
+    """Agno agent attempts a step that would exceed its budget. Chuzom
     refuses the call, transitions the session to BUDGET_EXCEEDED, and
     Agno receives a structured error."""
     s = Scenario(
@@ -142,7 +142,7 @@ def test_scenario_agno_budget_breach_terminates_session(scenario_collector, tmp_
             "Agno spawns a researcher agent with a tight $0.10 budget. "
             "It makes a first call ($0.06) which succeeds, then a second "
             "call estimated at $0.08 which would push consumed past cap. "
-            "Tessera's budget envelope catches this, raises BudgetExceeded, "
+            "Chuzom's budget envelope catches this, raises BudgetExceeded, "
             "session transitions to BUDGET_EXCEEDED. Agno can inspect the "
             "session state and surface a clear error to the user."
         ),
@@ -151,7 +151,7 @@ def test_scenario_agno_budget_breach_terminates_session(scenario_collector, tmp_
             "BUDGET_EXCEEDED, no charges incurred for the refused call"
         ),
     )
-    from tessera.agents.budget import BudgetExceeded
+    from chuzom.agents.budget import BudgetExceeded
 
     sessions = SessionStore(db_path=tmp_path / "s.db")
     session = sessions.create(agent_id="researcher", budget_usd=0.10,
@@ -212,30 +212,30 @@ def test_scenario_agno_budget_breach_terminates_session(scenario_collector, tmp_
 # ════════════════════════════════════════════════════════════════════════
 
 STUB_FRAMEWORKS = [
-    ("hermes", "tessera.frameworks.hermes", "HermesAdapter",
+    ("hermes", "chuzom.frameworks.hermes", "HermesAdapter",
      "function-calling protocol (Nous Hermes / open-weight tool-use)",
      "Hermes agent makes a single tool call; concrete impl streams tokens "
      "and invokes the tool when <tool_call>...</tool_call> is detected."),
-    ("langgraph", "tessera.frameworks.langgraph", "LangGraphAdapter",
+    ("langgraph", "chuzom.frameworks.langgraph", "LangGraphAdapter",
      "graph-based agent runtime",
      "A LangGraph workflow with 3 nodes (plan → act → reflect). Each node "
-     "is one routed call. Tessera tags lineage with the node name as agent_id."),
-    ("crewai", "tessera.frameworks.crewai", "CrewAIAdapter",
+     "is one routed call. Chuzom tags lineage with the node name as agent_id."),
+    ("crewai", "chuzom.frameworks.crewai", "CrewAIAdapter",
      "multi-agent crew (Crew/Task/Agent abstraction)",
      "A CrewAI crew of 2 agents (researcher, writer) executes a sequential "
-     "task. Tessera's adapter wraps the LiteLLM call CrewAI makes."),
-    ("openai-agents", "tessera.frameworks.openai_agents", "OpenAIAgentsAdapter",
+     "task. Chuzom's adapter wraps the LiteLLM call CrewAI makes."),
+    ("openai-agents", "chuzom.frameworks.openai_agents", "OpenAIAgentsAdapter",
      "OpenAI Agents SDK (formerly Swarm)",
      "An Agents-SDK Runner runs a research agent that hands off to a writer "
-     "agent. Tessera detects the handoff via agent_id changes in successive calls."),
-    ("claude-agent-sdk", "tessera.frameworks.claude_agent_sdk",
+     "agent. Chuzom detects the handoff via agent_id changes in successive calls."),
+    ("claude-agent-sdk", "chuzom.frameworks.claude_agent_sdk",
      "ClaudeAgentSdkAdapter", "Anthropic Claude Agent SDK",
-     "A Claude Agent SDK loop with tool_use streaming. Tessera intercepts the "
+     "A Claude Agent SDK loop with tool_use streaming. Chuzom intercepts the "
      "anthropic client and routes each generation through the signal layer."),
-    ("pydantic-ai", "tessera.frameworks.pydantic_ai", "PydanticAiAdapter",
+    ("pydantic-ai", "chuzom.frameworks.pydantic_ai", "PydanticAiAdapter",
      "type-safe Pydantic AI agents",
-     "A Pydantic AI Agent with a typed result_type. Tessera's adapter is a "
-     "Model implementation that delegates to tessera.router."),
+     "A Pydantic AI Agent with a typed result_type. Chuzom's adapter is a "
+     "Model implementation that delegates to chuzom.router."),
 ]
 
 

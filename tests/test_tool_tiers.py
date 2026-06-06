@@ -15,7 +15,7 @@ import pytest
 
 class TestToolTiers:
     def test_off_allows_all_tools(self):
-        from tessera.tool_tiers import make_should_register
+        from chuzom.tool_tiers import make_should_register
 
         gate = make_should_register("off")
         assert gate("llm_query")
@@ -24,7 +24,7 @@ class TestToolTiers:
         assert gate("anything")
 
     def test_core_allows_only_4_tools(self):
-        from tessera.tool_tiers import CORE_TOOLS, make_should_register
+        from chuzom.tool_tiers import CORE_TOOLS, make_should_register
 
         gate = make_should_register("core")
         for t in CORE_TOOLS:
@@ -34,7 +34,7 @@ class TestToolTiers:
         assert not gate("llm_image"), "llm_image should NOT be in core tier"
 
     def test_routing_allows_subset(self):
-        from tessera.tool_tiers import ROUTING_TOOLS, make_should_register
+        from chuzom.tool_tiers import ROUTING_TOOLS, make_should_register
 
         gate = make_should_register("routing")
         for t in ROUTING_TOOLS:
@@ -43,25 +43,25 @@ class TestToolTiers:
         assert not gate("llm_image"), "llm_image should NOT be in routing tier"
 
     def test_routing_is_superset_of_core(self):
-        from tessera.tool_tiers import CORE_TOOLS, ROUTING_TOOLS
+        from chuzom.tool_tiers import CORE_TOOLS, ROUTING_TOOLS
 
         assert CORE_TOOLS.issubset(ROUTING_TOOLS)
 
     def test_unknown_slim_value_allows_all(self):
-        from tessera.tool_tiers import make_should_register
+        from chuzom.tool_tiers import make_should_register
 
         gate = make_should_register("invalid_value")
         assert gate("llm_query")
         assert gate("llm_video")
 
     def test_empty_slim_allows_all(self):
-        from tessera.tool_tiers import make_should_register
+        from chuzom.tool_tiers import make_should_register
 
         gate = make_should_register("")
         assert gate("llm_query")
 
     def test_tier_summary_returns_string(self):
-        from tessera.tool_tiers import tier_summary
+        from chuzom.tool_tiers import tier_summary
 
         assert "41" in tier_summary("off") or "43" in tier_summary("off")
         assert "routing" in tier_summary("routing")
@@ -73,7 +73,7 @@ class TestToolTiers:
 
 class TestSessionSpend:
     def test_record_accumulates_cost(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
         monkeypatch.setattr(ss, "_spend", None)
 
@@ -87,7 +87,7 @@ class TestSessionSpend:
         assert spend.call_count == 2
 
     def test_per_model_and_per_tool_tracked(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
 
         spend = ss.SessionSpend()
@@ -100,9 +100,9 @@ class TestSessionSpend:
         assert spend.per_tool["llm_query"] == 1
 
     def test_anomaly_fires_above_threshold(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
-        monkeypatch.setenv("TESSERA_ANOMALY_THRESHOLD", "0.10")
+        monkeypatch.setenv("CHUZOM_ANOMALY_THRESHOLD", "0.10")
 
         spend = ss.SessionSpend()
         spend.session_start = time.time() - 60  # only 1 minute elapsed
@@ -112,9 +112,9 @@ class TestSessionSpend:
         assert spend.anomaly_flag
 
     def test_anomaly_not_fired_for_long_session(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
-        monkeypatch.setenv("TESSERA_ANOMALY_THRESHOLD", "0.10")
+        monkeypatch.setenv("CHUZOM_ANOMALY_THRESHOLD", "0.10")
 
         spend = ss.SessionSpend()
         spend.session_start = time.time() - 700  # more than 10 minutes
@@ -124,7 +124,7 @@ class TestSessionSpend:
         assert not spend.anomaly_flag  # elapsed > 600s, no anomaly
 
     def test_persist_writes_to_disk(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         spend_file = tmp_path / "session_spend.json"
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", spend_file)
 
@@ -137,7 +137,7 @@ class TestSessionSpend:
         assert abs(data["total_usd"] - 0.01) < 1e-9
 
     def test_load_from_disk(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         spend_file = tmp_path / "session_spend.json"
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", spend_file)
 
@@ -150,7 +150,7 @@ class TestSessionSpend:
         assert loaded.call_count == 1
 
     def test_reset_clears_data(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
 
         spend = ss.SessionSpend()
@@ -162,13 +162,13 @@ class TestSessionSpend:
         assert not spend.anomaly_flag
 
     def test_cost_estimation_fallback(self):
-        from tessera.session_spend import _estimate_cost
+        from chuzom.session_spend import _estimate_cost
 
         cost = _estimate_cost("unknown-model-xyz", 500, 300)
         assert cost > 0  # uses conservative fallback
 
     def test_get_summary_structure(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
+        from chuzom import session_spend as ss
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
 
         spend = ss.SessionSpend()
@@ -188,12 +188,12 @@ class TestSessionSpend:
 class TestCorrectionsTable:
     @pytest.mark.asyncio
     async def test_log_and_count_corrections(self, tmp_path, monkeypatch):
-        from tessera import config as cfg_module
-        from tessera.cost import log_correction, get_correction_count
+        from chuzom import config as cfg_module
+        from chuzom.cost import log_correction, get_correction_count
 
         test_db = tmp_path / "test.db"
         mock_config = MagicMock()
-        mock_config.tessera_db_path = test_db
+        mock_config.chuzom_db_path = test_db
         monkeypatch.setattr(cfg_module, "_config", mock_config)
 
         await log_correction("llm_query", "gemini-flash", "llm_analyze", reason="too simple")
@@ -204,12 +204,12 @@ class TestCorrectionsTable:
 
     @pytest.mark.asyncio
     async def test_correction_count_zero_for_unknown_tool(self, tmp_path, monkeypatch):
-        from tessera import config as cfg_module
-        from tessera.cost import get_correction_count
+        from chuzom import config as cfg_module
+        from chuzom.cost import get_correction_count
 
         test_db = tmp_path / "test2.db"
         mock_config = MagicMock()
-        mock_config.tessera_db_path = test_db
+        mock_config.chuzom_db_path = test_db
         monkeypatch.setattr(cfg_module, "_config", mock_config)
 
         count = await get_correction_count("llm_nonexistent_tool")
@@ -219,12 +219,12 @@ class TestCorrectionsTable:
 class TestLlmReroute:
     @pytest.mark.asyncio
     async def test_reroute_valid_tool_records_correction(self, tmp_path, monkeypatch):
-        from tessera import config as cfg_module
-        from tessera.tools.routing import llm_reroute
+        from chuzom import config as cfg_module
+        from chuzom.tools.routing import llm_reroute
 
         test_db = tmp_path / "test.db"
         mock_config = MagicMock()
-        mock_config.tessera_db_path = test_db
+        mock_config.chuzom_db_path = test_db
         monkeypatch.setattr(cfg_module, "_config", mock_config)
 
         result = await llm_reroute(
@@ -238,19 +238,19 @@ class TestLlmReroute:
 
     @pytest.mark.asyncio
     async def test_reroute_invalid_tool_returns_error(self):
-        from tessera.tools.routing import llm_reroute
+        from chuzom.tools.routing import llm_reroute
 
         result = await llm_reroute(to_tool="llm_nonexistent")
         assert "Unknown tool" in result
 
     @pytest.mark.asyncio
     async def test_reroute_shows_confidence_impact(self, tmp_path, monkeypatch):
-        from tessera import config as cfg_module
-        from tessera.tools.routing import llm_reroute
+        from chuzom import config as cfg_module
+        from chuzom.tools.routing import llm_reroute
 
         test_db = tmp_path / "test.db"
         mock_config = MagicMock()
-        mock_config.tessera_db_path = test_db
+        mock_config.chuzom_db_path = test_db
         monkeypatch.setattr(cfg_module, "_config", mock_config)
 
         result = await llm_reroute(
@@ -265,13 +265,13 @@ class TestLlmReroute:
 
 class TestQuickstart:
     def test_detect_hosts_returns_list(self):
-        from tessera.quickstart import detect_hosts
+        from chuzom.quickstart import detect_hosts
 
         result = detect_hosts()
         assert isinstance(result, list)
 
     def test_detect_hosts_finds_cursor_when_dir_exists(self, tmp_path, monkeypatch):
-        from tessera import quickstart as qs
+        from chuzom import quickstart as qs
 
         cursor_dir = tmp_path / ".cursor"
         cursor_dir.mkdir()
@@ -282,7 +282,7 @@ class TestQuickstart:
 
     def test_detect_hosts_empty_when_nothing_installed(self, tmp_path, monkeypatch):
         import shutil
-        from tessera import quickstart as qs
+        from chuzom import quickstart as qs
 
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         monkeypatch.setattr(shutil, "which", lambda _: None)
@@ -297,7 +297,7 @@ class TestQuickstart:
 
 class TestDoctorHost:
     def test_doctor_host_vscode_missing_mcp_json(self, tmp_path, monkeypatch, capsys):
-        from tessera.commands.doctor import _run_doctor_host
+        from chuzom.commands.doctor import _run_doctor_host
 
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
@@ -306,7 +306,7 @@ class TestDoctorHost:
         assert "mcp.json" in out.lower() or "not found" in out.lower() or "vscode" in out.lower()
 
     def test_doctor_host_cursor_missing_mcp_json(self, tmp_path, monkeypatch, capsys):
-        from tessera.commands.doctor import _run_doctor_host
+        from chuzom.commands.doctor import _run_doctor_host
 
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
@@ -315,7 +315,7 @@ class TestDoctorHost:
         assert "cursor" in out.lower()
 
     def test_doctor_host_cursor_passes_when_configured(self, tmp_path, monkeypatch, capsys):
-        from tessera.commands.doctor import _run_doctor_host
+        from chuzom.commands.doctor import _run_doctor_host
 
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
@@ -323,14 +323,14 @@ class TestDoctorHost:
         cursor_dir = tmp_path / ".cursor"
         cursor_dir.mkdir()
         mcp_json = cursor_dir / "mcp.json"
-        mcp_json.write_text(json.dumps({"mcpServers": {"tessera": {"command": "uvx"}}}))
+        mcp_json.write_text(json.dumps({"mcpServers": {"chuzom": {"command": "uvx"}}}))
 
         _run_doctor_host("cursor")
         out = capsys.readouterr().out
-        assert "registered" in out.lower() or "tessera" in out.lower()
+        assert "registered" in out.lower() or "chuzom" in out.lower()
 
     def test_doctor_host_vscode_passes_when_configured(self, tmp_path, monkeypatch, capsys):
-        from tessera.commands.doctor import _run_doctor_host
+        from chuzom.commands.doctor import _run_doctor_host
 
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
@@ -340,14 +340,14 @@ class TestDoctorHost:
             mcp_dir = tmp_path / ".config" / "Code" / "User"
         mcp_dir.mkdir(parents=True)
         mcp_json = mcp_dir / "mcp.json"
-        mcp_json.write_text(json.dumps({"servers": {"tessera": {"command": "uvx"}}}))
+        mcp_json.write_text(json.dumps({"servers": {"chuzom": {"command": "uvx"}}}))
 
         _run_doctor_host("vscode")
         out = capsys.readouterr().out
-        assert "tessera" in out.lower() or "registered" in out.lower()
+        assert "chuzom" in out.lower() or "registered" in out.lower()
 
     def test_doctor_host_all_checks_multiple_hosts(self, tmp_path, monkeypatch, capsys):
-        from tessera.commands.doctor import _run_doctor_host
+        from chuzom.commands.doctor import _run_doctor_host
         pass  # no additional imports needed
 
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
@@ -358,7 +358,7 @@ class TestDoctorHost:
         assert "cursor" in out.lower()
 
     def test_doctor_host_invalid_host(self, capsys):
-        from tessera.commands.doctor import _run_doctor_host
+        from chuzom.commands.doctor import _run_doctor_host
 
         _run_doctor_host("unknown_host_xyz")
         out = capsys.readouterr().out
@@ -370,29 +370,29 @@ class TestDoctorHost:
 
 class TestV4Config:
     def test_slim_field_defaults_to_routing(self):
-        from tessera.config import RouterConfig
+        from chuzom.config import RouterConfig
 
         cfg = RouterConfig()
-        assert cfg.tessera_slim == "routing"
+        assert cfg.chuzom_slim == "routing"
 
     def test_escalate_above_defaults_to_zero(self):
-        from tessera.config import RouterConfig
+        from chuzom.config import RouterConfig
 
         cfg = RouterConfig()
-        assert cfg.tessera_escalate_above == 0.0
+        assert cfg.chuzom_escalate_above == 0.0
 
     def test_hard_stop_defaults_to_zero(self):
-        from tessera.config import RouterConfig
+        from chuzom.config import RouterConfig
 
         cfg = RouterConfig()
-        assert cfg.tessera_hard_stop_above == 0.0
+        assert cfg.chuzom_hard_stop_above == 0.0
 
     def test_slim_field_read_from_env(self, monkeypatch):
-        from tessera.config import RouterConfig
+        from chuzom.config import RouterConfig
 
-        monkeypatch.setenv("TESSERA_SLIM", "routing")
+        monkeypatch.setenv("CHUZOM_SLIM", "routing")
         cfg = RouterConfig()
-        assert cfg.tessera_slim == "routing"
+        assert cfg.chuzom_slim == "routing"
 
 
 # ── llm_fs_analyze_context ────────────────────────────────────────────────────
@@ -401,7 +401,7 @@ class TestV4Config:
 class TestFsAnalyzeContext:
     @pytest.mark.asyncio
     async def test_analyze_with_no_key_files_returns_message(self, tmp_path, monkeypatch):
-        from tessera.tools.fs import llm_fs_analyze_context
+        from chuzom.tools.fs import llm_fs_analyze_context
 
         # Empty directory — no key files
         result = await llm_fs_analyze_context(path=str(tmp_path))
@@ -409,9 +409,9 @@ class TestFsAnalyzeContext:
 
     @pytest.mark.asyncio
     async def test_analyze_reads_pyproject_toml(self, tmp_path, monkeypatch):
-        from tessera.tools import fs as fs_module
-        from tessera.tools.fs import llm_fs_analyze_context
-        from tessera.types import LLMResponse
+        from chuzom.tools import fs as fs_module
+        from chuzom.tools.fs import llm_fs_analyze_context
+        from chuzom.types import LLMResponse
 
         # Create a pyproject.toml
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "test-project"\n')
@@ -439,8 +439,8 @@ class TestFsAnalyzeContext:
 class TestLlmSessionSpend:
     @pytest.mark.asyncio
     async def test_session_spend_tool_returns_summary(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
-        from tessera.tools.admin import llm_session_spend
+        from chuzom import session_spend as ss
+        from chuzom.tools.admin import llm_session_spend
 
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
         monkeypatch.setattr(ss, "_spend", None)
@@ -449,19 +449,19 @@ class TestLlmSessionSpend:
         spend = ss.get_session_spend()
         spend.record("gpt-4o", "llm_code", 100, 200, 0.05)
 
-        with patch("tessera.tools.admin.get_config") as mc:
-            mc.return_value.tessera_escalate_above = 0.0
-            mc.return_value.tessera_hard_stop_above = 0.0
+        with patch("chuzom.tools.admin.get_config") as mc:
+            mc.return_value.chuzom_escalate_above = 0.0
+            mc.return_value.chuzom_hard_stop_above = 0.0
             result = await llm_session_spend()
 
         assert "Session spend" in result
-        assert "routed tessera calls only" in result
+        assert "routed chuzom calls only" in result
         assert "$" in result
 
     @pytest.mark.asyncio
     async def test_session_spend_shows_anomaly_warning(self, tmp_path, monkeypatch):
-        from tessera import session_spend as ss
-        from tessera.tools.admin import llm_session_spend
+        from chuzom import session_spend as ss
+        from chuzom.tools.admin import llm_session_spend
 
         monkeypatch.setattr(ss, "SESSION_SPEND_FILE", tmp_path / "session_spend.json")
         monkeypatch.setattr(ss, "_spend", None)
@@ -473,9 +473,9 @@ class TestLlmSessionSpend:
         spend.per_model = {}
         spend.per_tool = {}
 
-        with patch("tessera.tools.admin.get_config") as mc:
-            mc.return_value.tessera_escalate_above = 0.0
-            mc.return_value.tessera_hard_stop_above = 0.0
+        with patch("chuzom.tools.admin.get_config") as mc:
+            mc.return_value.chuzom_escalate_above = 0.0
+            mc.return_value.chuzom_hard_stop_above = 0.0
             result = await llm_session_spend()
 
         assert "ANOMALY" in result

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Analyze routing violations from enforcement.log — per-session breakdown.
 
-This script reads ~/.tessera/enforcement.log and:
+This script reads ~/.chuzom/enforcement.log and:
   1. Groups violations by session_id with counts
   2. For the top 10 worst sessions, reads corresponding tool_history_*.json
   3. Outputs a markdown report with:
      - Summary: total violations, date range, distinct sessions
      - Top 10 sessions table: session_id, violation count, expected vs actual tools
      - Per-session detail: timestamps, tool sequence, what should have been called
-  4. Writes to ~/.tessera/retrospectives/violation-report-<date>.md
+  4. Writes to ~/.chuzom/retrospectives/violation-report-<date>.md
   5. Prints report to stdout
 
 Usage:
@@ -25,7 +25,7 @@ from typing import Optional
 
 def parse_enforcement_log() -> tuple[list[dict], Optional[str], Optional[str]]:
     """Parse enforcement.log and return violations list, earliest date, latest date."""
-    log_path = Path.home() / ".tessera" / "enforcement.log"
+    log_path = Path.home() / ".chuzom" / "enforcement.log"
     if not log_path.exists():
         return [], None, None
     
@@ -86,7 +86,7 @@ def group_violations_by_session(violations: list[dict]) -> dict[str, list[dict]]
 
 def read_tool_history(session_id: str) -> Optional[list[dict]]:
     """Read tool_history_{session_id}.json if it exists."""
-    path = Path.home() / ".tessera" / f"tool_history_{session_id}.json"
+    path = Path.home() / ".chuzom" / f"tool_history_{session_id}.json"
     if not path.exists():
         return None
     try:
@@ -226,7 +226,7 @@ def generate_report(
     report.append("\n## Recommendations\n\n")
     report.append("1. **Check the MANDATORY ROUTE hint** — Review sessions with high violation counts to see if the hint was visible in their context.\n")
     report.append("2. **Improve hint visibility** — The box-drawing format in v7.5.0 makes violations less likely.\n")
-    report.append("3. **Monitor enforcement mode** — Sessions with many violations may benefit from `TESSERA_ENFORCE=hard`.\n")
+    report.append("3. **Monitor enforcement mode** — Sessions with many violations may benefit from `CHUZOM_ENFORCE=hard`.\n")
     report.append("4. **Per-session nudges** — After 3+ violations, the model receives a warning message to call the routed tool first.\n")
     
     return "".join(report)
@@ -247,7 +247,7 @@ def main():
     report = generate_report(violations, groups, earliest, latest)
     
     # Write to file
-    retrospectives_dir = Path.home() / ".tessera" / "retrospectives"
+    retrospectives_dir = Path.home() / ".chuzom" / "retrospectives"
     retrospectives_dir.mkdir(parents=True, exist_ok=True)
     
     date_str = datetime.now().strftime("%Y-%m-%d_%H%M%S")

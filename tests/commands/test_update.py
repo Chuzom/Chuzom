@@ -7,7 +7,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 
-from tessera.commands.update import cmd_update, _run_update
+from chuzom.commands.update import cmd_update, _run_update
 
 
 class TestCmdUpdate:
@@ -15,13 +15,13 @@ class TestCmdUpdate:
 
     def test_cmd_update_returns_zero(self):
         """cmd_update should return 0."""
-        with patch("tessera.commands.update._run_update"):
+        with patch("chuzom.commands.update._run_update"):
             result = cmd_update([])
         assert result == 0
 
     def test_cmd_update_ignores_args(self):
         """cmd_update should ignore arguments."""
-        with patch("tessera.commands.update._run_update") as mock_run:
+        with patch("chuzom.commands.update._run_update") as mock_run:
             cmd_update(["ignored", "args"])
         mock_run.assert_called_once()
 
@@ -31,7 +31,7 @@ class TestUpdateCommand:
 
     def test_run_update_calls_install(self, capsys):
         """_run_update should call install."""
-        with patch("tessera.install_hooks.install") as mock_install:
+        with patch("chuzom.install_hooks.install") as mock_install:
             mock_install.return_value = []
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
@@ -45,7 +45,7 @@ class TestUpdateCommand:
 
     def test_run_update_displays_header(self, capsys):
         """_run_update should display update header."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
                     mock_response = MagicMock()
@@ -55,12 +55,12 @@ class TestUpdateCommand:
                     mock_urlopen.return_value = mock_response
                     _run_update()
         captured = capsys.readouterr()
-        assert "tessera update" in captured.out
+        assert "chuzom update" in captured.out
         assert "Hooks & rules" in captured.out
 
     def test_run_update_handles_empty_install_actions(self, capsys):
         """_run_update should handle no install actions."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
                     mock_response = MagicMock()
@@ -75,7 +75,7 @@ class TestUpdateCommand:
     def test_run_update_displays_updated_actions(self, capsys):
         """_run_update should display updated actions."""
         actions = ["Hook → ~/.claude/hooks/auto-route.py", "Updated rule", "Registered"]
-        with patch("tessera.install_hooks.install", return_value=actions):
+        with patch("chuzom.install_hooks.install", return_value=actions):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
                     mock_response = MagicMock()
@@ -90,7 +90,7 @@ class TestUpdateCommand:
 
     def test_run_update_checks_version_match(self, capsys):
         """_run_update should show up-to-date message when versions match."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
                     mock_response = MagicMock()
@@ -104,7 +104,7 @@ class TestUpdateCommand:
 
     def test_run_update_shows_available_upgrade(self, capsys):
         """_run_update should show upgrade available message."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
                     mock_response = MagicMock()
@@ -120,7 +120,7 @@ class TestUpdateCommand:
 
     def test_run_update_handles_unknown_current_version(self, capsys):
         """_run_update should handle unknown current version."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version") as mock_version:
                 mock_version.side_effect = importlib.metadata.PackageNotFoundError()
                 with patch("urllib.request.urlopen") as mock_urlopen:
@@ -135,7 +135,7 @@ class TestUpdateCommand:
 
     def test_run_update_handles_pypi_error(self, capsys):
         """_run_update should handle PyPI check failure."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
                     _run_update()
@@ -144,7 +144,7 @@ class TestUpdateCommand:
 
     def test_run_update_displays_install_command(self, capsys):
         """_run_update should display pip install command for upgrades."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
                     mock_response = MagicMock()
@@ -162,13 +162,13 @@ class TestUpdateIntegration:
 
     def test_cmd_update_basic(self):
         """cmd_update should execute and return 0."""
-        with patch("tessera.commands.update._run_update"):
+        with patch("chuzom.commands.update._run_update"):
             result = cmd_update([])
         assert result == 0
 
     def test_run_update_completes_without_error(self):
         """_run_update should complete without raising exceptions."""
-        with patch("tessera.install_hooks.install", return_value=[]):
+        with patch("chuzom.install_hooks.install", return_value=[]):
             with patch("importlib.metadata.version", return_value="1.0.0"):
                 with patch("urllib.request.urlopen") as mock_urlopen:
                     mock_response = MagicMock()

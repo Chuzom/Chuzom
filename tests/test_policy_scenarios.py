@@ -1,7 +1,7 @@
 """Behavioral tests simulating real user scenarios with each policy."""
 
 import pytest
-from tessera.policy import PolicyManager
+from chuzom.policy import PolicyManager
 
 
 class TestAggressivePolicyScenarios:

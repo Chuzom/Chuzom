@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import patch
 
 
-from tessera.config import RouterConfig, _config_lock, get_config
+from chuzom.config import RouterConfig, _config_lock, get_config
 
 
 class TestConfigSingleton:
@@ -16,8 +16,8 @@ class TestConfigSingleton:
     def test_returns_same_instance(self) -> None:
         """Multiple calls return the same instance."""
         # Reset config for testing
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         config1 = get_config()
         config2 = get_config()
@@ -26,8 +26,8 @@ class TestConfigSingleton:
     def test_thread_safe_initialization(self) -> None:
         """Concurrent initialization creates only one instance."""
         # Reset config for testing
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         instances = []
         lock = threading.Lock()
@@ -53,8 +53,8 @@ class TestConfigSingleton:
     def test_concurrent_access_consistency(self) -> None:
         """Concurrent access to config returns consistent state."""
         # Reset config for testing
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         results = []
         lock = threading.Lock()
@@ -82,8 +82,8 @@ class TestConfigSingleton:
 
     def test_lock_prevents_double_initialization(self) -> None:
         """Lock prevents multiple threads from creating multiple instances."""
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         call_count = 0
         original_init = RouterConfig.__init__
@@ -107,8 +107,8 @@ class TestConfigSingleton:
 
     def test_lock_is_acquired_and_released(self) -> None:
         """Lock is properly acquired and released."""
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         # Lock should not be held after get_config returns
         assert not _config_lock.locked()
@@ -122,8 +122,8 @@ class TestConfigSingleton:
 
     def test_double_check_pattern(self) -> None:
         """Implementation uses double-check pattern correctly."""
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         init_count = 0
         original_init = RouterConfig.__init__
@@ -144,8 +144,8 @@ class TestConfigSingleton:
 
     def test_no_deadlock_on_repeated_calls(self) -> None:
         """Repeated calls don't cause deadlock."""
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         # This should complete without deadlock
         for _ in range(100):
@@ -158,8 +158,8 @@ class TestConfigIntegration:
 
     def test_config_properties_accessible(self) -> None:
         """Config properties are accessible after concurrent initialization."""
-        import tessera.config
-        tessera.config._config = None
+        import chuzom.config
+        chuzom.config._config = None
 
         configs = []
 

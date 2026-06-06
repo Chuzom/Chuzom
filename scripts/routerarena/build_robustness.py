@@ -17,7 +17,7 @@ import json
 import os
 from pathlib import Path
 
-os.environ.setdefault("TESSERA_POLICY", "routerarena_tuned")
+os.environ.setdefault("CHUZOM_POLICY", "routerarena_tuned")
 
 # Reuse the dataset→subject mapping from the main submission builder
 from build_submission import DATASET_TO_SUBJECT  # noqa: E402
@@ -43,13 +43,13 @@ def _subject_for(global_index: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--parquet", type=Path,
-                        default=Path.home() / ".tessera" / "data" / "routerarena" / "robustness.parquet")
+                        default=Path.home() / ".chuzom" / "data" / "routerarena" / "robustness.parquet")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
     import pandas as pd
-    from tessera.policy import get_policy_manager
-    from tessera.policy_diff import predict_head_model
+    from chuzom.policy import get_policy_manager
+    from chuzom.policy_diff import predict_head_model
 
     get_policy_manager().set_active_policy("routerarena_tuned")
     policy = get_policy_manager().get_active_policy()

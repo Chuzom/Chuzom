@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-AUTO_ROUTE_HOOK = ROOT / "src" / "tessera" / "hooks" / "auto-route.py"
-ENFORCE_ROUTE_HOOK = ROOT / "src" / "tessera" / "hooks" / "enforce-route.py"
+AUTO_ROUTE_HOOK = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"
+ENFORCE_ROUTE_HOOK = ROOT / "src" / "chuzom" / "hooks" / "enforce-route.py"
 
 
 def _load_hook_module(path: Path, name_prefix: str):
@@ -28,7 +28,7 @@ def test_auto_route_atomic_write_preserves_existing_target_until_swap(tmp_path, 
     monkeypatch.setenv("HOME", str(tmp_path))
     auto_route = _load_hook_module(AUTO_ROUTE_HOOK, "auto_route_hook")
 
-    target = tmp_path / ".tessera" / "pending_route_test.json"
+    target = tmp_path / ".chuzom" / "pending_route_test.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     old_data = {"expected_tool": "llm_query", "issued_at": 1.0}
     new_data = {"expected_tool": "llm_code", "issued_at": 2.0}
@@ -56,7 +56,7 @@ def test_enforce_route_retries_partial_pending_state_reads(tmp_path, monkeypatch
     enforce_route = _load_hook_module(ENFORCE_ROUTE_HOOK, "enforce_route_hook")
 
     session_id = "sess-retry"
-    pending_path = tmp_path / ".tessera" / f"pending_route_{session_id}.json"
+    pending_path = tmp_path / ".chuzom" / f"pending_route_{session_id}.json"
     pending_path.parent.mkdir(parents=True, exist_ok=True)
     pending_path.write_text('{"expected_tool":', encoding="utf-8")
 

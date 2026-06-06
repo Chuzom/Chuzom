@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from tessera.error_sanitization import (
+from chuzom.error_sanitization import (
     create_user_error_message,
     sanitize_api_error,
     sanitize_database_error,

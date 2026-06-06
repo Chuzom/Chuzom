@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from tessera import cost
-from tessera.cost import calc_savings, log_claude_usage, get_savings_summary
-from tessera.types import MODEL_COST_PER_1K, MODEL_SPEED_TPS
+from chuzom import cost
+from chuzom.cost import calc_savings, log_claude_usage, get_savings_summary
+from chuzom.types import MODEL_COST_PER_1K, MODEL_SPEED_TPS
 
 
 class TestCalcSavings:
@@ -56,7 +56,7 @@ class TestCalcSavings:
 class TestLogClaudeUsageReturns:
     @pytest.mark.asyncio
     async def test_returns_savings_dict(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
         result = await log_claude_usage("haiku", 5000, "simple")
         assert "cost_saved_usd" in result
         assert "time_saved_sec" in result
@@ -65,7 +65,7 @@ class TestLogClaudeUsageReturns:
 
     @pytest.mark.asyncio
     async def test_opus_returns_zero_savings(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
         result = await log_claude_usage("opus", 5000, "complex")
         assert result["cost_saved_usd"] == 0.0
         assert result["time_saved_sec"] == 0.0
@@ -115,9 +115,9 @@ def temp_savings_db(tmp_path, monkeypatch):
     db_path = tmp_path / "test_savings.db"
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("TESSERA_DB_PATH", str(db_path))
+    monkeypatch.setenv("CHUZOM_DB_PATH", str(db_path))
     # Reset config singleton so it reads the new env vars
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
     log_path = tmp_path / "savings_log.jsonl"
     monkeypatch.setattr(cost, "SAVINGS_LOG_PATH", log_path)
@@ -228,14 +228,14 @@ class TestCacheAwareCost:
     and price each at its own published Anthropic rate."""
 
     def test_claude_cost_input_output_only(self):
-        from tessera.cost import _claude_cost
+        from chuzom.cost import _claude_cost
         # Sonnet: 1000 input × $3/Mtok + 500 output × $15/Mtok
         #       = (3000 + 7500) / 1_000_000 = $0.0105
         cost_usd = _claude_cost("sonnet", input_t=1000, output_t=500)
         assert abs(cost_usd - 0.0105) < 1e-6
 
     def test_claude_cost_with_cache_read_is_much_cheaper(self):
-        from tessera.cost import _claude_cost
+        from chuzom.cost import _claude_cost
         # 10_000 cache_read tokens at Sonnet's $0.30/Mtok = $0.003
         # vs 10_000 raw input tokens at $3/Mtok = $0.030 — 10× cheaper
         cached = _claude_cost("sonnet", input_t=0, output_t=0, cache_read_t=10_000)
@@ -243,14 +243,14 @@ class TestCacheAwareCost:
         assert cached < uncached / 5  # at least 5× cheaper
 
     def test_claude_cost_with_cache_write_is_more_expensive(self):
-        from tessera.cost import _claude_cost
+        from chuzom.cost import _claude_cost
         # Cache write is ~25% more expensive than input
         write = _claude_cost("sonnet", input_t=0, output_t=0, cache_write_t=10_000)
         regular = _claude_cost("sonnet", input_t=10_000, output_t=0)
         assert write > regular
 
     def test_claude_cost_full_4_component(self):
-        from tessera.cost import _claude_cost
+        from chuzom.cost import _claude_cost
         # Opus: 1000 in × 15 + 500 out × 75 + 200 cw × 18.75 + 5000 cr × 1.50
         # = 15_000 + 37_500 + 3750 + 7500 = 63_750 / 1_000_000 = $0.06375
         cost_usd = _claude_cost(
@@ -260,12 +260,12 @@ class TestCacheAwareCost:
         assert abs(cost_usd - 0.06375) < 1e-6
 
     def test_claude_cost_unknown_model_returns_zero(self):
-        from tessera.cost import _claude_cost
+        from chuzom.cost import _claude_cost
         assert _claude_cost("nonexistent-model", input_t=1000, output_t=500) == 0.0
 
     @pytest.mark.asyncio
     async def test_log_claude_usage_persists_cache_token_columns(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
         await log_claude_usage(
             model="sonnet",
             tokens_used=0,  # forces computation from sub-components
@@ -291,30 +291,30 @@ class TestTaskAwareBaseline:
     without routing) rather than always crediting Opus-vs-cheap delta."""
 
     def test_simple_query_baseline_is_haiku(self):
-        from tessera.cost import _get_baseline_for_task
+        from chuzom.cost import _get_baseline_for_task
         assert _get_baseline_for_task("query", "simple") == "haiku"
 
     def test_moderate_query_baseline_is_haiku(self):
-        from tessera.cost import _get_baseline_for_task
+        from chuzom.cost import _get_baseline_for_task
         assert _get_baseline_for_task("query", "moderate") == "haiku"
 
     def test_code_moderate_baseline_is_sonnet(self):
-        from tessera.cost import _get_baseline_for_task
+        from chuzom.cost import _get_baseline_for_task
         assert _get_baseline_for_task("code", "moderate") == "sonnet"
 
     def test_complex_anything_baseline_is_opus(self):
-        from tessera.cost import _get_baseline_for_task
+        from chuzom.cost import _get_baseline_for_task
         assert _get_baseline_for_task("code", "complex") == "opus"
         assert _get_baseline_for_task("analyze", "complex") == "opus"
         assert _get_baseline_for_task("query", "complex") == "opus"
 
     def test_research_baseline_is_opus(self):
-        from tessera.cost import _get_baseline_for_task
+        from chuzom.cost import _get_baseline_for_task
         assert _get_baseline_for_task("research", "simple") == "opus"
 
     def test_haiku_in_baseline_pricing(self):
         """Haiku must be in the BASELINE_PRICING table for task-aware logic to work."""
-        from tessera.cost import BASELINE_PRICING
+        from chuzom.cost import BASELINE_PRICING
         assert "haiku" in BASELINE_PRICING
         assert "input" in BASELINE_PRICING["haiku"]
         assert "output" in BASELINE_PRICING["haiku"]
@@ -326,7 +326,7 @@ class TestNegativeSavingsAndRoutingOverhead:
 
     def test_savings_can_be_negative_when_routing_cost_money(self):
         """Use the new signature that accepts routing_overhead_usd."""
-        from tessera.cost import calc_savings
+        from chuzom.cost import calc_savings
         # 100 tokens on Haiku vs Sonnet baseline saves very little.
         # If routing_overhead is large, realized is negative.
         cost_saved, _time = calc_savings(
@@ -340,7 +340,7 @@ class TestNegativeSavingsAndRoutingOverhead:
         assert cost_saved < 0
 
     def test_savings_positive_when_overhead_small(self):
-        from tessera.cost import calc_savings
+        from chuzom.cost import calc_savings
         # Haiku-handling Opus-baseline task → big gross savings, small overhead
         cost_saved, _ = calc_savings(
             "haiku", tokens_used=10_000,
@@ -351,14 +351,14 @@ class TestNegativeSavingsAndRoutingOverhead:
 
     @pytest.mark.asyncio
     async def test_get_realized_savings_returns_gross_overhead_net(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
         # Log a call with overhead
         await log_claude_usage(
             model="haiku", tokens_used=1000, complexity="simple",
             input_tokens=500, output_tokens=500,
             routing_overhead_usd=0.002,
         )
-        from tessera.cost import get_realized_savings
+        from chuzom.cost import get_realized_savings
         result = await get_realized_savings(period="all")
         assert "gross_saved_usd" in result
         assert "routing_overhead_usd" in result
@@ -374,7 +374,7 @@ class TestAnthropicResponseFieldsExist:
     has somewhere to put them. Caller in router.py then forwards to log_claude_usage."""
 
     def test_llm_response_has_cache_token_fields(self):
-        from tessera.types import LLMResponse
+        from chuzom.types import LLMResponse
         # Construct a response with cache fields — must not raise
         r = LLMResponse(
             model="sonnet",
@@ -392,7 +392,7 @@ class TestAnthropicResponseFieldsExist:
 
     def test_llm_response_cache_fields_default_to_zero(self):
         """Backward compat — old code creating LLMResponse without cache args still works."""
-        from tessera.types import LLMResponse
+        from chuzom.types import LLMResponse
         r = LLMResponse(
             model="haiku", provider="anthropic", content="x",
             input_tokens=10, output_tokens=5, cost_usd=0.0001, latency_ms=100,
@@ -408,39 +408,39 @@ class TestAnthropicResponseFieldsExist:
 
 class TestCodexCost:
     def test_codex_cost_input_output_only(self):
-        from tessera.cost import _codex_cost
+        from chuzom.cost import _codex_cost
         # gpt-5.4: 1000 input × $5/Mtok + 500 output × $20/Mtok
         # = (5000 + 10000) / 1_000_000 = $0.015
         cost = _codex_cost("gpt-5.4", input_t=1000, output_t=500)
         assert abs(cost - 0.015) < 1e-6
 
     def test_codex_cost_with_cache_read(self):
-        from tessera.cost import _codex_cost
+        from chuzom.cost import _codex_cost
         # 10_000 cache_read on gpt-5.4 = 10_000 × $1.25/Mtok = $0.0125
         cost = _codex_cost("gpt-5.4", input_t=0, output_t=0, cache_read_t=10_000)
         assert abs(cost - 0.0125) < 1e-6
 
     def test_codex_cost_unknown_model_zero(self):
-        from tessera.cost import _codex_cost
+        from chuzom.cost import _codex_cost
         assert _codex_cost("nonexistent-gpt", input_t=1000, output_t=500) == 0.0
 
     def test_codex_baseline_simple_query_is_gpt5_mini(self):
-        from tessera.cost import _get_codex_baseline_for_task
+        from chuzom.cost import _get_codex_baseline_for_task
         assert _get_codex_baseline_for_task("query", "simple") == "gpt-5-mini"
 
     def test_codex_baseline_code_moderate_is_gpt5_4(self):
-        from tessera.cost import _get_codex_baseline_for_task
+        from chuzom.cost import _get_codex_baseline_for_task
         assert _get_codex_baseline_for_task("code", "moderate") == "gpt-5.4"
 
     def test_codex_baseline_complex_is_o3(self):
-        from tessera.cost import _get_codex_baseline_for_task
+        from chuzom.cost import _get_codex_baseline_for_task
         assert _get_codex_baseline_for_task("code", "complex") == "o3"
         assert _get_codex_baseline_for_task("research", "simple") == "o3"
 
     @pytest.mark.asyncio
     async def test_log_codex_usage_persists_4_components(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.cost import log_codex_usage
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.cost import log_codex_usage
         await log_codex_usage(
             model="gpt-5-mini",
             tokens_used=0,
@@ -462,8 +462,8 @@ class TestCodexCost:
 
     @pytest.mark.asyncio
     async def test_log_codex_usage_returns_savings_dict(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.cost import log_codex_usage
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.cost import log_codex_usage
         # gpt-5-mini for a query task (baseline=gpt-5-mini per task-aware) → 0 savings
         # Use o3 baseline (complex) for actual savings demonstration
         result = await log_codex_usage(
@@ -479,8 +479,8 @@ class TestCodexCost:
 class TestDualPlatformRealizedSavings:
     @pytest.mark.asyncio
     async def test_realized_savings_all_sums_both_tables(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.cost import log_claude_usage, log_codex_usage, get_realized_savings
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.cost import log_claude_usage, log_codex_usage, get_realized_savings
         await log_claude_usage(
             "haiku", tokens_used=1000, complexity="complex",
             task_type="code", input_tokens=500, output_tokens=500,
@@ -501,8 +501,8 @@ class TestDualPlatformRealizedSavings:
 
     @pytest.mark.asyncio
     async def test_realized_savings_codex_only(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.cost import log_codex_usage, get_realized_savings
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.cost import log_codex_usage, get_realized_savings
         await log_codex_usage(
             "gpt-5-mini", tokens_used=1000, complexity="complex",
             task_type="code", input_tokens=500, output_tokens=500,
@@ -519,38 +519,38 @@ class TestDualPlatformRealizedSavings:
 
 class TestGeminiCost:
     def test_gemini_cost_input_output_only(self):
-        from tessera.cost import _gemini_cost
+        from chuzom.cost import _gemini_cost
         # gemini-2.5-flash: 1000 input × $0.30/Mtok + 500 output × $2.50/Mtok
         # = (300 + 1250) / 1_000_000 = $0.00155
         cost = _gemini_cost("gemini-2.5-flash", input_t=1000, output_t=500)
         assert abs(cost - 0.00155) < 1e-7
 
     def test_gemini_cost_with_cache_read(self):
-        from tessera.cost import _gemini_cost
+        from chuzom.cost import _gemini_cost
         # 10_000 cache_read on gemini-2.5-pro = 10_000 × $0.31/Mtok = $0.0031
         cost = _gemini_cost("gemini-2.5-pro", input_t=0, output_t=0, cache_read_t=10_000)
         assert abs(cost - 0.0031) < 1e-6
 
     def test_gemini_cost_unknown_model_zero(self):
-        from tessera.cost import _gemini_cost
+        from chuzom.cost import _gemini_cost
         assert _gemini_cost("nonexistent-gemini", input_t=1000, output_t=500) == 0.0
 
     def test_gemini_baseline_simple_query_is_flash(self):
-        from tessera.cost import _get_gemini_baseline_for_task
+        from chuzom.cost import _get_gemini_baseline_for_task
         assert _get_gemini_baseline_for_task("query", "simple") == "gemini-2.0-flash"
 
     def test_gemini_baseline_moderate_code_is_25_flash(self):
-        from tessera.cost import _get_gemini_baseline_for_task
+        from chuzom.cost import _get_gemini_baseline_for_task
         assert _get_gemini_baseline_for_task("code", "moderate") == "gemini-2.5-flash"
 
     def test_gemini_baseline_complex_is_pro(self):
-        from tessera.cost import _get_gemini_baseline_for_task
+        from chuzom.cost import _get_gemini_baseline_for_task
         assert _get_gemini_baseline_for_task("code", "complex") == "gemini-2.5-pro"
 
     @pytest.mark.asyncio
     async def test_log_gemini_usage_persists(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.cost import log_gemini_usage
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.cost import log_gemini_usage
         await log_gemini_usage(
             model="gemini-2.5-flash", tokens_used=0, complexity="moderate",
             task_type="code", input_tokens=100, output_tokens=200,
@@ -569,8 +569,8 @@ class TestGeminiCost:
 class TestTriPlatformRealizedSavings:
     @pytest.mark.asyncio
     async def test_realized_savings_all_sums_three_tables(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.cost import (
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.cost import (
             log_claude_usage, log_codex_usage, log_gemini_usage, get_realized_savings,
         )
         # Use complex task so each platform's cheap-model-vs-flagship-baseline has savings
@@ -601,8 +601,8 @@ class TestTriPlatformRealizedSavings:
 
     @pytest.mark.asyncio
     async def test_realized_savings_gemini_only(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.cost import log_gemini_usage, get_realized_savings
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.cost import log_gemini_usage, get_realized_savings
         await log_gemini_usage(
             "gemini-2.0-flash", tokens_used=0, complexity="complex",
             task_type="code", input_tokens=500, output_tokens=500,

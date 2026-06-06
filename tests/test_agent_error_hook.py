@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-HOOK_PATH = Path(__file__).parent.parent / "src" / "tessera" / "hooks" / "agent-error.py"
+HOOK_PATH = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-error.py"
 
 
 def _run(
@@ -38,7 +38,7 @@ def _run(
         (exit_code, parsed_stdout_dict_or_None)
     """
     if tmp_path is not None:
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
 
         # Write agent_calls.json if prompt is provided
@@ -296,7 +296,7 @@ class TestCallTracking:
 
     def test_call_history_logged(self, tmp_path):
         """Agent calls are logged to agent_calls.json."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
 
         # Create initial agent_calls.json
@@ -328,7 +328,7 @@ class TestCallTracking:
 
     def test_last_call_read_correctly(self, tmp_path):
         """Hook reads the last call from agent_calls.json."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
 
         # Create agent_calls.json with multiple calls

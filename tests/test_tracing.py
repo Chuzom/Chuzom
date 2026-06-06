@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-import tessera.tracing as tracing
-from tessera.cache import get_cache
-from tessera.chain_builder import build_chain
-from tessera.classifier import classify_complexity
-from tessera.router import route_and_call
-from tessera.scorer import score_all_models
-from tessera.types import (
+import chuzom.tracing as tracing
+from chuzom.cache import get_cache
+from chuzom.chain_builder import build_chain
+from chuzom.classifier import classify_complexity
+from chuzom.router import route_and_call
+from chuzom.scorer import score_all_models
+from chuzom.types import (
     Complexity,
     LLMResponse,
     ModelCapability,
@@ -73,7 +73,7 @@ def test_get_tracer_returns_noop_without_endpoint(monkeypatch):
     monkeypatch.setattr(tracing, "_STATUS", None)
     monkeypatch.setattr(tracing, "_STATUS_CODE", None)
 
-    tracer = tracing.get_tracer("tessera.test")
+    tracer = tracing.get_tracer("chuzom.test")
     with tracer.start_as_current_span("noop") as span:
         tracing.set_span_attributes(span, task_type=TaskType.QUERY, answer=42)
 
@@ -93,8 +93,8 @@ async def test_classify_complexity_emits_span(mock_env):
         provider="gemini",
     )
 
-    with patch("tessera.tracing.get_tracer", return_value=tracer):
-        with patch("tessera.providers.call_llm", new_callable=AsyncMock, return_value=response):
+    with patch("chuzom.tracing.get_tracer", return_value=tracer):
+        with patch("chuzom.providers.call_llm", new_callable=AsyncMock, return_value=response):
             result = await classify_complexity("What is 2+2?")
 
     span = next(span for span in tracer.spans if span.name == "classify_complexity")
@@ -108,7 +108,7 @@ async def test_classify_complexity_emits_span(mock_env):
 async def test_route_and_call_emits_route_and_provider_spans(temp_db, mock_env, mock_acompletion):
     tracer = FakeTracer()
 
-    with patch("tessera.tracing.get_tracer", return_value=tracer):
+    with patch("chuzom.tracing.get_tracer", return_value=tracer):
         response = await route_and_call(
             TaskType.QUERY,
             "Hello",
@@ -143,9 +143,9 @@ async def test_build_chain_emits_span():
         acceptance_score=0.8,
     )
 
-    with patch("tessera.tracing.get_tracer", return_value=tracer):
-        with patch("tessera.discover.discover_available_models", new_callable=AsyncMock, return_value={capability.model_id: capability}):
-            with patch("tessera.scorer.score_all_models", new_callable=AsyncMock, return_value=[scored_model]):
+    with patch("chuzom.tracing.get_tracer", return_value=tracer):
+        with patch("chuzom.discover.discover_available_models", new_callable=AsyncMock, return_value={capability.model_id: capability}):
+            with patch("chuzom.scorer.score_all_models", new_callable=AsyncMock, return_value=[scored_model]):
                 chain = await build_chain(TaskType.QUERY, "simple", RoutingProfile.BUDGET)
 
     span = next(span for span in tracer.spans if span.name == "build_chain")
@@ -164,11 +164,11 @@ async def test_score_all_models_emits_span():
         task_types=frozenset({TaskType.QUERY}),
     )
 
-    with patch("tessera.tracing.get_tracer", return_value=tracer):
-        with patch("tessera.cost.get_model_failure_rates", new_callable=AsyncMock, return_value={}):
-            with patch("tessera.cost.get_model_latency_stats", new_callable=AsyncMock, return_value={}):
-                with patch("tessera.cost.get_model_acceptance_scores", new_callable=AsyncMock, return_value={}):
-                    with patch("tessera.scorer._fetch_pressures", new_callable=AsyncMock, return_value={capability.model_id: 0.1}):
+    with patch("chuzom.tracing.get_tracer", return_value=tracer):
+        with patch("chuzom.cost.get_model_failure_rates", new_callable=AsyncMock, return_value={}):
+            with patch("chuzom.cost.get_model_latency_stats", new_callable=AsyncMock, return_value={}):
+                with patch("chuzom.cost.get_model_acceptance_scores", new_callable=AsyncMock, return_value={}):
+                    with patch("chuzom.scorer._fetch_pressures", new_callable=AsyncMock, return_value={capability.model_id: 0.1}):
                         scored = await score_all_models([capability], "query", "simple")
 
     span = next(span for span in tracer.spans if span.name == "score_all_models")

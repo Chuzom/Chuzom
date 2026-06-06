@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.health import ProviderHealth, HealthTracker, RATE_LIMIT_COOLDOWN_SECONDS
-from tessera.router import _is_rate_limit_error
-from tessera.types import LLMResponse, RoutingProfile, TaskType
+from chuzom.health import ProviderHealth, HealthTracker, RATE_LIMIT_COOLDOWN_SECONDS
+from chuzom.router import _is_rate_limit_error
+from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
 
 # ── Rate Limit Detection ─────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ class TestRouterRateLimitSwitching:
     @pytest.mark.asyncio
     async def test_switches_provider_on_rate_limit(self):
         """When first provider is rate-limited, router should switch to the next."""
-        from tessera.router import route_and_call
+        from chuzom.router import route_and_call
 
         call_count = 0
 
@@ -138,13 +138,13 @@ class TestRouterRateLimitSwitching:
             )
 
         with (
-            patch("tessera.router.providers.call_llm", side_effect=mock_call_llm),
-            patch("tessera.router.cost.log_usage", new_callable=AsyncMock),
-            patch("tessera.router.get_config") as mock_config,
-            patch("tessera.router.get_tracker") as mock_get_tracker,
+            patch("chuzom.router.providers.call_llm", side_effect=mock_call_llm),
+            patch("chuzom.router.cost.log_usage", new_callable=AsyncMock),
+            patch("chuzom.router.get_config") as mock_config,
+            patch("chuzom.router.get_tracker") as mock_get_tracker,
         ):
-            mock_config.return_value.tessera_profile = RoutingProfile.BUDGET
-            mock_config.return_value.tessera_monthly_budget = 0
+            mock_config.return_value.chuzom_profile = RoutingProfile.BUDGET
+            mock_config.return_value.chuzom_monthly_budget = 0
             mock_config.return_value.available_providers = {"gemini", "openai"}
             mock_config.return_value.compaction_mode = "off"
             mock_config.return_value.compaction_threshold = 4000
@@ -155,7 +155,7 @@ class TestRouterRateLimitSwitching:
             mock_get_tracker.return_value = tracker
 
             with patch(
-                "tessera.router.get_model_chain",
+                "chuzom.router.get_model_chain",
                 return_value=["gemini/gemini-2.5-flash", "openai/gpt-4o-mini"],
             ):
                 resp = await route_and_call(TaskType.QUERY, "test prompt")
@@ -168,18 +168,18 @@ class TestRouterRateLimitSwitching:
     @pytest.mark.asyncio
     async def test_all_providers_rate_limited_raises(self):
         """When all providers are rate-limited, router should raise."""
-        from tessera.router import route_and_call
+        from chuzom.router import route_and_call
 
         async def mock_call_llm(model, messages, **kwargs):
             raise Exception("429 Too Many Requests")
 
         with (
-            patch("tessera.router.providers.call_llm", side_effect=mock_call_llm),
-            patch("tessera.router.get_config") as mock_config,
-            patch("tessera.router.get_tracker") as mock_get_tracker,
+            patch("chuzom.router.providers.call_llm", side_effect=mock_call_llm),
+            patch("chuzom.router.get_config") as mock_config,
+            patch("chuzom.router.get_tracker") as mock_get_tracker,
         ):
-            mock_config.return_value.tessera_profile = RoutingProfile.BUDGET
-            mock_config.return_value.tessera_monthly_budget = 0
+            mock_config.return_value.chuzom_profile = RoutingProfile.BUDGET
+            mock_config.return_value.chuzom_monthly_budget = 0
             mock_config.return_value.available_providers = {"openai"}
             mock_config.return_value.compaction_mode = "off"
             mock_config.return_value.compaction_threshold = 4000
@@ -190,7 +190,7 @@ class TestRouterRateLimitSwitching:
             mock_get_tracker.return_value = tracker
 
             with patch(
-                "tessera.router.get_model_chain",
+                "chuzom.router.get_model_chain",
                 return_value=["openai/gpt-4o-mini"],
             ):
                 with pytest.raises(RuntimeError, match="All models failed"):

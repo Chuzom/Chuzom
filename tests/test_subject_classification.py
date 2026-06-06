@@ -16,12 +16,12 @@ class TestSubjectEnum:
     """Subject is a string Enum like TaskType and Complexity."""
 
     def test_subject_general_exists(self) -> None:
-        from tessera.types import Subject
+        from chuzom.types import Subject
 
         assert Subject.GENERAL.value == "general"
 
     def test_all_15_categories_exist(self) -> None:
-        from tessera.types import Subject
+        from chuzom.types import Subject
 
         expected = {
             "general", "code", "medical", "math", "physics",
@@ -32,13 +32,13 @@ class TestSubjectEnum:
 
     def test_subject_is_string_enum(self) -> None:
         """Subject(str, Enum) so .value coerces to string seamlessly."""
-        from tessera.types import Subject
+        from chuzom.types import Subject
 
         assert isinstance(Subject.CODE, str)
         assert Subject.CODE == "code"
 
     def test_subject_constructable_from_string(self) -> None:
-        from tessera.types import Subject
+        from chuzom.types import Subject
 
         assert Subject("medical") is Subject.MEDICAL
         with pytest.raises(ValueError):
@@ -50,7 +50,7 @@ class TestClassificationResultSubject:
 
     def test_subject_defaults_to_general_when_omitted(self) -> None:
         """Backwards compat — 20+ existing constructor calls must not break."""
-        from tessera.types import (
+        from chuzom.types import (
             ClassificationResult,
             Complexity,
             Subject,
@@ -70,7 +70,7 @@ class TestClassificationResultSubject:
         assert result.subject == Subject.GENERAL
 
     def test_subject_can_be_set_explicitly(self) -> None:
-        from tessera.types import (
+        from chuzom.types import (
             ClassificationResult,
             Complexity,
             Subject,
@@ -92,7 +92,7 @@ class TestClassificationResultSubject:
     def test_result_remains_frozen_with_new_field(self) -> None:
         from dataclasses import FrozenInstanceError
 
-        from tessera.types import (
+        from chuzom.types import (
             ClassificationResult,
             Complexity,
             Subject,
@@ -117,7 +117,7 @@ class TestClassifierJSONParsesSubject:
     """The v2 classifier prompt outputs subject; _parse_classification reads it."""
 
     def test_parse_picks_up_subject_field(self) -> None:
-        from tessera.classifier import _parse_classification
+        from chuzom.classifier import _parse_classification
 
         raw = (
             '{"complexity":"moderate","task_type":"analyze",'
@@ -128,7 +128,7 @@ class TestClassifierJSONParsesSubject:
 
     def test_parse_missing_subject_does_not_crash(self) -> None:
         """v1-era responses without `subject` must still parse cleanly."""
-        from tessera.classifier import _parse_classification
+        from chuzom.classifier import _parse_classification
 
         raw = '{"complexity":"simple","task_type":"query","confidence":0.9}'
         parsed = _parse_classification(raw)
@@ -142,7 +142,7 @@ class TestCacheKeyVersioning:
     into v2 lookups with stale subject=general."""
 
     def test_cache_key_changes_when_version_changes(self) -> None:
-        from tessera.cache import ClassificationCache
+        from chuzom.cache import ClassificationCache
 
         key_v1 = ClassificationCache._hash_key("hello", "balanced", "haiku")
         # After the change, the hash incorporates the live classifier version.

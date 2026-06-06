@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tessera.context_optimizer import (
+from chuzom.context_optimizer import (
     ContextOptimizationResult,
     _stage_recency,
     _stage_structural,

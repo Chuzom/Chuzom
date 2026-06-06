@@ -13,8 +13,8 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-AUTO_ROUTE_HOOK = ROOT / "src" / "tessera" / "hooks" / "auto-route.py"
-ENFORCE_ROUTE_HOOK = ROOT / "src" / "tessera" / "hooks" / "enforce-route.py"
+AUTO_ROUTE_HOOK = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"
+ENFORCE_ROUTE_HOOK = ROOT / "src" / "chuzom" / "hooks" / "enforce-route.py"
 
 
 def _run_hook(
@@ -26,7 +26,7 @@ def _run_hook(
 ) -> subprocess.CompletedProcess[str]:
     # Strip shell-level enforcement overrides so tests are deterministic.
     # The hook defaults to "smart"; tests that need a specific mode pass extra_env.
-    env = {k: v for k, v in os.environ.items() if k != "TESSERA_ENFORCE"}
+    env = {k: v for k, v in os.environ.items() if k != "CHUZOM_ENFORCE"}
     env["HOME"] = str(home)
     if extra_env:
         env.update(extra_env)
@@ -40,7 +40,7 @@ def _run_hook(
 
 
 def _write_pending(home: Path, session_id: str, **overrides) -> Path:
-    router_dir = home / ".tessera"
+    router_dir = home / ".chuzom"
     router_dir.mkdir(parents=True, exist_ok=True)
     pending_path = router_dir / f"pending_route_{session_id}.json"
     data = {
@@ -82,12 +82,12 @@ def test_enforce_route_soft_mode_still_logs_but_allows(tmp_path):
         ENFORCE_ROUTE_HOOK,
         {"session_id": session_id, "tool_name": "Bash"},
         home=tmp_path,
-        extra_env={"TESSERA_ENFORCE": "soft"},
+        extra_env={"CHUZOM_ENFORCE": "soft"},
     )
 
     assert result.returncode == 0
     assert result.stdout.strip() == ""
-    log_text = (tmp_path / ".tessera" / "enforcement.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / ".chuzom" / "enforcement.log").read_text(encoding="utf-8")
     assert "VIOLATION" in log_text
     assert "expected=llm_query" in log_text
 
@@ -111,7 +111,7 @@ def test_enforce_route_allows_file_tools_to_prevent_stuck_patterns(tmp_path):
             ENFORCE_ROUTE_HOOK,
             {"session_id": session_id, "tool_name": tool_name},
             home=tmp_path,
-            extra_env={"TESSERA_ENFORCE": "hard"},
+            extra_env={"CHUZOM_ENFORCE": "hard"},
         )
 
         # v13: Read/Glob/Grep/LS are BLOCKED in hard mode for Q&A tasks
@@ -130,7 +130,7 @@ def test_enforce_route_blocks_file_tools_in_hard_mode_for_code_tasks(tmp_path):
             ENFORCE_ROUTE_HOOK,
             {"session_id": session_id, "tool_name": tool_name},
             home=tmp_path,
-            extra_env={"TESSERA_ENFORCE": "hard"},
+            extra_env={"CHUZOM_ENFORCE": "hard"},
         )
 
         assert result.returncode == 0
@@ -148,7 +148,7 @@ def test_smart_mode_allows_read_for_code_tasks(tmp_path):
             ENFORCE_ROUTE_HOOK,
             {"session_id": session_id, "tool_name": tool_name},
             home=tmp_path,
-            extra_env={"TESSERA_ENFORCE": "smart"},
+            extra_env={"CHUZOM_ENFORCE": "smart"},
         )
 
         assert result.returncode == 0
@@ -165,7 +165,7 @@ def test_smart_mode_blocks_read_for_qa_tasks(tmp_path):
             ENFORCE_ROUTE_HOOK,
             {"session_id": session_id, "tool_name": "Read"},
             home=tmp_path,
-            extra_env={"TESSERA_ENFORCE": "smart"},
+            extra_env={"CHUZOM_ENFORCE": "smart"},
         )
 
         assert result.returncode == 0
@@ -174,8 +174,8 @@ def test_smart_mode_blocks_read_for_qa_tasks(tmp_path):
 
 
 def _write_routing_yaml(home: Path, content: str) -> Path:
-    """Write a routing.yaml to the fake home's .tessera directory."""
-    router_dir = home / ".tessera"
+    """Write a routing.yaml to the fake home's .chuzom directory."""
+    router_dir = home / ".chuzom"
     router_dir.mkdir(parents=True, exist_ok=True)
     yaml_path = router_dir / "routing.yaml"
     yaml_path.write_text(content, encoding="utf-8")
@@ -183,7 +183,7 @@ def _write_routing_yaml(home: Path, content: str) -> Path:
 
 
 # ── routing.yaml fallback tests ───────────────────────────────────────────────
-# Fix: The enforcer previously defaulted to "smart" when TESSERA_ENFORCE was
+# Fix: The enforcer previously defaulted to "smart" when CHUZOM_ENFORCE was
 # absent, silently ignoring routing.yaml's `enforce:` setting. Now it reads
 # routing.yaml as a fallback before applying the built-in default.
 
@@ -194,7 +194,7 @@ def test_routing_yaml_enforce_hard_blocks_bash_for_code_tasks(tmp_path):
     session_id = "sess-yaml-hard-code"
     _write_pending(tmp_path, session_id, task_type="code", expected_tool="llm_code")
 
-    # No TESSERA_ENFORCE in extra_env — hook must read routing.yaml
+    # No CHUZOM_ENFORCE in extra_env — hook must read routing.yaml
     result = _run_hook(
         ENFORCE_ROUTE_HOOK,
         {"session_id": session_id, "tool_name": "Bash"},
@@ -221,7 +221,7 @@ def test_routing_yaml_enforce_soft_allows_bash_but_logs(tmp_path):
 
     assert result.returncode == 0
     assert result.stdout.strip() == "", "Soft mode must allow without blocking"
-    log_text = (tmp_path / ".tessera" / "enforcement.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / ".chuzom" / "enforcement.log").read_text(encoding="utf-8")
     assert "VIOLATION" in log_text
 
 
@@ -239,7 +239,7 @@ def test_routing_yaml_enforce_off_skips_all_enforcement(tmp_path):
 
     assert result.returncode == 0
     assert result.stdout.strip() == ""
-    log_path = tmp_path / ".tessera" / "enforcement.log"
+    log_path = tmp_path / ".chuzom" / "enforcement.log"
     assert not log_path.exists(), "Off mode must not write the enforcement log"
 
 
@@ -260,7 +260,7 @@ def test_routing_yaml_enforce_shadow_treated_as_off(tmp_path):
 
 
 def test_env_var_takes_priority_over_routing_yaml(tmp_path):
-    """TESSERA_ENFORCE env var always overrides routing.yaml."""
+    """CHUZOM_ENFORCE env var always overrides routing.yaml."""
     _write_routing_yaml(tmp_path, "enforce: soft\n")  # yaml says soft
     session_id = "sess-env-wins"
     _write_pending(tmp_path, session_id, task_type="code", expected_tool="llm_code")
@@ -269,7 +269,7 @@ def test_env_var_takes_priority_over_routing_yaml(tmp_path):
         ENFORCE_ROUTE_HOOK,
         {"session_id": session_id, "tool_name": "Bash"},
         home=tmp_path,
-        extra_env={"TESSERA_ENFORCE": "hard"},  # env var says hard → must win
+        extra_env={"CHUZOM_ENFORCE": "hard"},  # env var says hard → must win
     )
 
     assert result.returncode == 0
@@ -390,7 +390,7 @@ def test_auto_route_logs_unrouted_previous_turn_on_next_prompt(tmp_path):
         if new_pending["issued_at"] > old_pending["issued_at"]:
             assert new_pending["task_type"] != old_pending["task_type"]
 
-    log_text = (tmp_path / ".tessera" / "enforcement.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / ".chuzom" / "enforcement.log").read_text(encoding="utf-8")
     assert "NO_ROUTE" in log_text
     assert "expected=llm_query" in log_text
     assert "task=query/simple" in log_text
@@ -513,7 +513,7 @@ def test_loop_detection_triggers_auto_pivot(tmp_path):
                    expected_tool="llm_query")
 
     # Seed tool history with 3 prior Bash calls in the last 2 minutes.
-    router_dir = tmp_path / ".tessera"
+    router_dir = tmp_path / ".chuzom"
     history_path = router_dir / f"tool_history_{session_id}.json"
     now = time.time()
     history_path.write_text(
@@ -558,7 +558,7 @@ def test_violation_count_pivot_at_4(tmp_path):
                    expected_tool="llm_query")
 
     # Seed violation counter at 3 — next blocked call hits 4 and triggers pivot.
-    router_dir = tmp_path / ".tessera"
+    router_dir = tmp_path / ".chuzom"
     counter_path = router_dir / f"violations_{session_id}.json"
     counter_path.write_text(
         json.dumps({"count": 3, "last_violation_at": time.time()}),

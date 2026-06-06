@@ -106,20 +106,20 @@ def check_version_sync(data: dict[str, dict]) -> bool:
 
 
 def check_name_consistency(data: dict[str, dict]) -> bool:
-    """Check that all plugins are named 'tessera'."""
+    """Check that all plugins are named 'chuzom'."""
     issues = []
 
     for plugin_dir, files in data.items():
         plugin_name = files["plugin"].get("name")
-        if plugin_name != "tessera":
-            issues.append(f"{plugin_dir}/plugin.json: name is '{plugin_name}', expected 'tessera'")
+        if plugin_name != "chuzom":
+            issues.append(f"{plugin_dir}/plugin.json: name is '{plugin_name}', expected 'chuzom'")
 
         marketplace_plugins = files["marketplace"].get("plugins", [])
         if marketplace_plugins:
             for i, plugin in enumerate(marketplace_plugins):
-                if plugin.get("name") != "tessera":
+                if plugin.get("name") != "chuzom":
                     issues.append(
-                        f"{plugin_dir}/marketplace.json plugin[{i}]: name is '{plugin.get('name')}', expected 'tessera'"
+                        f"{plugin_dir}/marketplace.json plugin[{i}]: name is '{plugin.get('name')}', expected 'chuzom'"
                     )
 
     if issues:
@@ -128,7 +128,7 @@ def check_name_consistency(data: dict[str, dict]) -> bool:
             print(f"   {issue}")
         return False
 
-    print("✅ All plugins named 'tessera'")
+    print("✅ All plugins named 'chuzom'")
     return True
 
 

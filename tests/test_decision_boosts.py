@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.decisions.engine import Decision, DecisionEngine, _apply_boosts
-from tessera.signals.base import SignalScore
+from chuzom.decisions.engine import Decision, DecisionEngine, _apply_boosts
+from chuzom.signals.base import SignalScore
 
 
 def _score(name, score, threshold=0.5):

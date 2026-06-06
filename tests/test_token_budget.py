@@ -2,14 +2,14 @@
 
 import pytest
 
-from tessera.token_budget import (
+from chuzom.token_budget import (
     calculate_budget,
     estimate_tokens,
     fits_budget,
     get_model_context_limit,
     truncate_to_budget,
 )
-from tessera.types import Complexity, TaskType
+from chuzom.types import Complexity, TaskType
 
 
 class TestGetModelContextLimit:

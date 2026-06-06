@@ -13,7 +13,7 @@ Three behaviours under test:
    without a label, which made apparent discrepancies impossible to
    reason about.
 
-3. ``tessera explain-dashboard`` (commands.explain_dashboard) prints
+3. ``chuzom explain-dashboard`` (commands.explain_dashboard) prints
    per-panel diagnostics — source tables, windows, row counts — so any
    future drift is debuggable in seconds rather than requiring a code
    read.
@@ -35,13 +35,13 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 @pytest.fixture
 def fake_state_dir(tmp_path, monkeypatch):
-    """Temp ~/.tessera with empty DB + tracking JSONL.
+    """Temp ~/.chuzom with empty DB + tracking JSONL.
 
     Patches the module-level constants that ``session-end.py`` and the
     explain-dashboard command resolve at import time, so writes/reads
     land in the test directory instead of the real one.
     """
-    state = tmp_path / ".tessera"
+    state = tmp_path / ".chuzom"
     state.mkdir()
     db = state / "usage.db"
     tracking = state / "model_tracking.jsonl"
@@ -118,10 +118,10 @@ def test_cumulative_rolls_claude_usage_tokens(fake_state_dir, monkeypatch):
     # Patch the session-end module's constants to point at the fake state.
     import importlib
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
-    se = importlib.import_module("tessera.hooks").__path__  # noqa: F841
+    se = importlib.import_module("chuzom.hooks").__path__  # noqa: F841
     spec = importlib.util.spec_from_file_location(
         "session_end_test",
-        PROJECT_ROOT / "src" / "tessera" / "hooks" / "session-end.py",
+        PROJECT_ROOT / "src" / "chuzom" / "hooks" / "session-end.py",
     )
     se_mod = importlib.util.module_from_spec(spec)
     monkeypatch.setattr(spec.loader, "exec_module", spec.loader.exec_module)
@@ -176,7 +176,7 @@ def test_routing_logic_uses_today_cutoff(fake_state_dir, monkeypatch):
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         "session_end_test2",
-        PROJECT_ROOT / "src" / "tessera" / "hooks" / "session-end.py",
+        PROJECT_ROOT / "src" / "chuzom" / "hooks" / "session-end.py",
     )
     se_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(se_mod)
@@ -235,7 +235,7 @@ def test_daily_14d_includes_v93_tables(fake_state_dir, monkeypatch):
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         "se_daily14d_test",
-        PROJECT_ROOT / "src" / "tessera" / "hooks" / "session-end.py",
+        PROJECT_ROOT / "src" / "chuzom" / "hooks" / "session-end.py",
     )
     se_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(se_mod)
@@ -266,7 +266,7 @@ def test_explain_dashboard_prints_sources(fake_state_dir, monkeypatch, capsys):
     )
 
     # Patch the module's path constants.
-    from tessera.commands import explain_dashboard as ed
+    from chuzom.commands import explain_dashboard as ed
     monkeypatch.setattr(ed, "DB_PATH", db)
     monkeypatch.setattr(ed, "TRACKING_PATH", tracking)
     monkeypatch.setattr(ed, "STATE_DIR", state)

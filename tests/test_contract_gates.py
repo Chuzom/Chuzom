@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.contract import (
+from chuzom.contract import (
     GateType,
     build_contract,
 )
-from tessera.gates import (
+from chuzom.gates import (
     GateResult,
     _check_citation,
     _check_length,
@@ -16,8 +16,8 @@ from tessera.gates import (
     _check_syntax,
     run_gates,
 )
-from tessera.receipt_store import compute_receipt
-from tessera.types import Complexity, TaskType
+from chuzom.receipt_store import compute_receipt
+from chuzom.types import Complexity, TaskType
 
 
 class TestContractGeneration:
@@ -122,14 +122,14 @@ class TestRunGatesIntegration:
     """Test the run_gates orchestrator.
 
     Gates auto-skip under pytest (PYTEST_CURRENT_TEST set). To test gates
-    themselves, we set TESSERA_GATES=on which overrides the pytest skip.
+    themselves, we set CHUZOM_GATES=on which overrides the pytest skip.
     """
 
     @pytest.fixture(autouse=True)
     def _enable_gates(self, monkeypatch):
         """Force gates to run even under pytest."""
         monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-        monkeypatch.setenv("TESSERA_GATES", "on")
+        monkeypatch.setenv("CHUZOM_GATES", "on")
 
     def test_all_gates_pass(self):
         contract = build_contract("t1", TaskType.CODE, Complexity.MODERATE, "test/m")
@@ -149,7 +149,7 @@ class TestRunGatesIntegration:
         assert results == []
 
     def test_env_disable_skips_gates(self, monkeypatch):
-        monkeypatch.setenv("TESSERA_GATES", "off")
+        monkeypatch.setenv("CHUZOM_GATES", "off")
         contract = build_contract("t4", TaskType.CODE, Complexity.COMPLEX, "test/m")
         passed, results = run_gates(contract, "x")  # Would normally fail length
         assert passed

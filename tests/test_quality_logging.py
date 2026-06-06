@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tessera import cost
+from chuzom import cost
 
 
 async def _log_decision(prompt: str = "test prompt", **overrides) -> None:
@@ -158,7 +158,7 @@ async def test_get_daily_spend_empty(temp_db):
 @pytest.mark.asyncio
 async def test_get_daily_spend_with_usage(temp_db):
     """Returns sum of today's external usage costs."""
-    from tessera.types import LLMResponse, RoutingProfile, TaskType
+    from chuzom.types import LLMResponse, RoutingProfile, TaskType
     for _ in range(3):
         resp = LLMResponse(
             content="x", model="openai/gpt-4o-mini",

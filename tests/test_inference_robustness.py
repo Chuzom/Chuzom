@@ -26,39 +26,39 @@ class FakeMessage:
 
 class TestExtractContent:
     def test_returns_content_when_populated(self) -> None:
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         msg = FakeMessage(content="real answer", reasoning="some thinking")
         assert extract_content(msg) == "real answer"
 
     def test_falls_back_to_reasoning_when_content_is_none(self) -> None:
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         msg = FakeMessage(content=None, reasoning="actually the answer")
         assert extract_content(msg) == "actually the answer"
 
     def test_falls_back_to_reasoning_when_content_is_empty_string(self) -> None:
         """Some providers send "" not None — both must trigger fallback."""
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         msg = FakeMessage(content="", reasoning="actually the answer")
         assert extract_content(msg) == "actually the answer"
 
     def test_returns_empty_string_when_both_are_none(self) -> None:
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         msg = FakeMessage(content=None, reasoning=None)
         assert extract_content(msg) == ""
 
     def test_returns_empty_string_when_both_are_empty(self) -> None:
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         msg = FakeMessage(content="", reasoning="")
         assert extract_content(msg) == ""
 
     def test_does_not_crash_when_reasoning_attribute_missing(self) -> None:
         """OpenAI-style messages have no `reasoning` attribute at all."""
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         class NoReasoningMessage:
             content = "openai answer"
@@ -67,7 +67,7 @@ class TestExtractContent:
 
     def test_does_not_crash_when_content_attribute_missing(self) -> None:
         """Defensive: missing content attribute should not raise."""
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         class OnlyReasoningMessage:
             reasoning = "only thinking"
@@ -76,7 +76,7 @@ class TestExtractContent:
 
     def test_whitespace_only_content_is_treated_as_empty(self) -> None:
         """Whitespace-only content shouldn't count as a real answer."""
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         msg = FakeMessage(content="   \n  ", reasoning="real answer")
         assert extract_content(msg) == "real answer"
@@ -99,7 +99,7 @@ class TestExtractContent:
         reasoning: Optional[str],
         expected: str,
     ) -> None:
-        from tessera.inference_robustness import extract_content
+        from chuzom.inference_robustness import extract_content
 
         msg = FakeMessage(content=content, reasoning=reasoning)
         assert extract_content(msg) == expected
@@ -111,30 +111,30 @@ class TestSafeMaxTokensKnownModels:
     and Anthropic 400-errors on oversized max_tokens."""
 
     def test_below_cap_returns_requested(self) -> None:
-        from tessera.inference_robustness import safe_max_tokens
+        from chuzom.inference_robustness import safe_max_tokens
 
         assert safe_max_tokens(2000, "anthropic/claude-sonnet-4-6") == 2000
 
     def test_above_cap_clamps_to_cap(self) -> None:
-        from tessera.inference_robustness import safe_max_tokens
+        from chuzom.inference_robustness import safe_max_tokens
 
         # Claude 4.x output cap is 8192
         assert safe_max_tokens(50000, "anthropic/claude-sonnet-4-6") == 8192
 
     def test_at_cap_returns_cap(self) -> None:
-        from tessera.inference_robustness import safe_max_tokens
+        from chuzom.inference_robustness import safe_max_tokens
 
         assert safe_max_tokens(8192, "anthropic/claude-sonnet-4-6") == 8192
 
     def test_gpt4o_higher_cap(self) -> None:
         """OpenAI gpt-4o family caps at 16384 — higher than Claude's 8192."""
-        from tessera.inference_robustness import safe_max_tokens
+        from chuzom.inference_robustness import safe_max_tokens
 
         assert safe_max_tokens(20000, "openai/gpt-4o") == 16384
         assert safe_max_tokens(20000, "openai/gpt-4o-mini") == 16384
 
     def test_all_three_claude_4x_models_have_caps(self) -> None:
-        from tessera.inference_robustness import safe_max_tokens
+        from chuzom.inference_robustness import safe_max_tokens
 
         for model in (
             "anthropic/claude-opus-4-6",
@@ -151,12 +151,12 @@ class TestSafeMaxTokensUnknownModels:
     asked for than over-restrict a newer/better model that's not in our table."""
 
     def test_unknown_model_returns_requested(self) -> None:
-        from tessera.inference_robustness import safe_max_tokens
+        from chuzom.inference_robustness import safe_max_tokens
 
         assert safe_max_tokens(50000, "newprovider/newmodel") == 50000
 
     def test_unknown_model_with_small_request(self) -> None:
-        from tessera.inference_robustness import safe_max_tokens
+        from chuzom.inference_robustness import safe_max_tokens
 
         assert safe_max_tokens(500, "newprovider/newmodel") == 500
 
@@ -166,7 +166,7 @@ class TestSafeMaxTokensNoneAndZero:
     behavior)."""
 
     def test_none_with_known_model_returns_default_or_cap(self) -> None:
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             DEFAULT_MAX_TOKENS,
             safe_max_tokens,
         )
@@ -176,7 +176,7 @@ class TestSafeMaxTokensNoneAndZero:
         assert result == DEFAULT_MAX_TOKENS
 
     def test_none_with_unknown_model_returns_default(self) -> None:
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             DEFAULT_MAX_TOKENS,
             safe_max_tokens,
         )
@@ -184,7 +184,7 @@ class TestSafeMaxTokensNoneAndZero:
         assert safe_max_tokens(None, "newprovider/x") == DEFAULT_MAX_TOKENS
 
     def test_zero_treated_as_none(self) -> None:
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             DEFAULT_MAX_TOKENS,
             safe_max_tokens,
         )
@@ -192,7 +192,7 @@ class TestSafeMaxTokensNoneAndZero:
         assert safe_max_tokens(0, "anthropic/claude-sonnet-4-6") == DEFAULT_MAX_TOKENS
 
     def test_negative_treated_as_none(self) -> None:
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             DEFAULT_MAX_TOKENS,
             safe_max_tokens,
         )
@@ -223,7 +223,7 @@ class TestSafeMaxTokensNoneAndZero:
     ],
 )
 def test_safe_max_tokens_matrix(requested: int, model: str, expected: int) -> None:
-    from tessera.inference_robustness import safe_max_tokens
+    from chuzom.inference_robustness import safe_max_tokens
 
     assert safe_max_tokens(requested, model) == expected
 
@@ -233,12 +233,12 @@ class TestEmptyResponseError:
     existing exception handler falls through to the next model in the chain."""
 
     def test_is_runtime_error_subclass(self) -> None:
-        from tessera.inference_robustness import EmptyResponseError
+        from chuzom.inference_robustness import EmptyResponseError
 
         assert issubclass(EmptyResponseError, RuntimeError)
 
     def test_message_names_the_model(self) -> None:
-        from tessera.inference_robustness import EmptyResponseError
+        from chuzom.inference_robustness import EmptyResponseError
 
         try:
             raise EmptyResponseError("model 'openai/gpt-4o' returned nothing")
@@ -251,13 +251,13 @@ class TestEnsureNonEmptyContent:
     failure signal when the model genuinely returned nothing useful."""
 
     def test_non_empty_content_returns_unchanged(self) -> None:
-        from tessera.inference_robustness import ensure_non_empty_content
+        from chuzom.inference_robustness import ensure_non_empty_content
 
         out = ensure_non_empty_content("real answer", "openai/gpt-4o")
         assert out == "real answer"
 
     def test_empty_string_raises(self) -> None:
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             EmptyResponseError,
             ensure_non_empty_content,
         )
@@ -267,7 +267,7 @@ class TestEnsureNonEmptyContent:
         assert "openai/gpt-4o" in str(exc_info.value)
 
     def test_whitespace_only_raises(self) -> None:
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             EmptyResponseError,
             ensure_non_empty_content,
         )
@@ -276,7 +276,7 @@ class TestEnsureNonEmptyContent:
             ensure_non_empty_content("   \n  \t  ", "anthropic/claude-sonnet-4-6")
 
     def test_none_raises(self) -> None:
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             EmptyResponseError,
             ensure_non_empty_content,
         )
@@ -286,7 +286,7 @@ class TestEnsureNonEmptyContent:
 
     def test_error_message_mentions_router_fallback(self) -> None:
         """Operators reading the error should understand routing semantics."""
-        from tessera.inference_robustness import (
+        from chuzom.inference_robustness import (
             EmptyResponseError,
             ensure_non_empty_content,
         )
@@ -301,6 +301,6 @@ class TestEnsureNonEmptyContent:
 
     def test_single_character_content_passes(self) -> None:
         """A single non-whitespace character is a valid response."""
-        from tessera.inference_robustness import ensure_non_empty_content
+        from chuzom.inference_robustness import ensure_non_empty_content
 
         assert ensure_non_empty_content("a", "openai/gpt-4o") == "a"

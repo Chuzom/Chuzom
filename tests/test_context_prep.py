@@ -1,7 +1,7 @@
 """Tests for context_prep module — the prompt preparation pipeline."""
 
-from tessera.context_prep import PreparedPrompt, prepare_prompt
-from tessera.types import Complexity, TaskType
+from chuzom.context_prep import PreparedPrompt, prepare_prompt
+from chuzom.types import Complexity, TaskType
 
 
 class TestPreparePrompt:

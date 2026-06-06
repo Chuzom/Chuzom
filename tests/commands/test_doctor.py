@@ -6,7 +6,7 @@ import pytest
 
 # Add pytest to available tools
 
-from tessera.commands.doctor import (
+from chuzom.commands.doctor import (
     _hook_version_num,
     _run_doctor,
     _run_doctor_host,
@@ -19,7 +19,7 @@ class TestDoctorCommand:
 
     def test_cmd_doctor_no_args(self, capsys):
         """Test doctor with no arguments runs full check."""
-        with patch("tessera.commands.doctor._run_doctor") as mock_run:
+        with patch("chuzom.commands.doctor._run_doctor") as mock_run:
             mock_run.return_value = (0, [])
             result = cmd_doctor([])
             assert result == 0
@@ -27,7 +27,7 @@ class TestDoctorCommand:
 
     def test_cmd_doctor_with_host_flag(self, capsys):
         """Test doctor with --host flag."""
-        with patch("tessera.commands.doctor._run_doctor") as mock_run:
+        with patch("chuzom.commands.doctor._run_doctor") as mock_run:
             mock_run.return_value = (0, [])
             result = cmd_doctor(["--host", "claude"])
             assert result == 0
@@ -35,7 +35,7 @@ class TestDoctorCommand:
 
     def test_cmd_doctor_with_host_all(self, capsys):
         """Test doctor with --host all."""
-        with patch("tessera.commands.doctor._run_doctor") as mock_run:
+        with patch("chuzom.commands.doctor._run_doctor") as mock_run:
             mock_run.return_value = (0, [])
             result = cmd_doctor(["--host", "all"])
             assert result == 0
@@ -43,7 +43,7 @@ class TestDoctorCommand:
 
     def test_cmd_doctor_missing_host_value(self, capsys):
         """Test doctor with --host but no value."""
-        with patch("tessera.commands.doctor._run_doctor") as mock_run:
+        with patch("chuzom.commands.doctor._run_doctor") as mock_run:
             mock_run.return_value = (0, [])
             result = cmd_doctor(["--host"])
             assert result == 0
@@ -58,7 +58,7 @@ class TestHookVersionNum:
         hook_file = tmp_path / "hook.py"
         hook_file.write_text(
             "#!/usr/bin/env python3\n"
-            "# tessera-hook-version: 5\n"
+            "# chuzom-hook-version: 5\n"
             "# Some hook code\n"
         )
         assert _hook_version_num(hook_file) == 5
@@ -78,8 +78,8 @@ class TestHookVersionNum:
         """Test that first version is used when multiple exist."""
         hook_file = tmp_path / "hook.py"
         hook_file.write_text(
-            "# tessera-hook-version: 3\n"
-            "# tessera-hook-version: 5\n"
+            "# chuzom-hook-version: 3\n"
+            "# chuzom-hook-version: 5\n"
         )
         assert _hook_version_num(hook_file) == 3
 
@@ -230,7 +230,7 @@ class TestDoctorIntegration:
 
     def test_doctor_formatting(self, capsys):
         """Test that doctor output is properly formatted."""
-        with patch("tessera.commands.doctor._run_doctor") as mock_run:
+        with patch("chuzom.commands.doctor._run_doctor") as mock_run:
             mock_run.return_value = (0, [])
             cmd_doctor([])
             capsys.readouterr().out

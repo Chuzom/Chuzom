@@ -36,13 +36,13 @@ def test_marketplace_manifest_loadable(host: HostSpec):
     assert isinstance(data, dict)
 
 
-def test_plugin_declares_tessera_name(host: HostSpec):
+def test_plugin_declares_chuzom_name(host: HostSpec):
     if not host.plugin_path:
         pytest.skip(f"{host.id} has no plugin manifest")
     data = json.loads((host.plugin_path / "plugin.json").read_text())
     name = data.get("name", "").lower()
-    assert "tessera" in name or "llm-routing" in name, (
-        f"{host.id}: plugin name should mention tessera, got {name!r}"
+    assert "chuzom" in name or "llm-routing" in name, (
+        f"{host.id}: plugin name should mention chuzom, got {name!r}"
     )
 
 
@@ -81,23 +81,23 @@ def test_adapter_writes_valid_config(host: HostSpec, tmp_path: Path):
     cls = load_adapter(host)
     cfg = tmp_path / "config.json"
     adapter = cls(config_path=cfg)
-    written = adapter.install(server_command=["tessera"])
+    written = adapter.install(server_command=["chuzom"])
 
     assert written.exists(), f"{host.id}: install did not create the config"
     data = json.loads(written.read_text())
     assert "mcpServers" in data
-    assert "tessera" in data["mcpServers"]
+    assert "chuzom" in data["mcpServers"]
 
 
 def test_adapter_install_records_command_args(host: HostSpec, tmp_path: Path):
     cls = load_adapter(host)
     cfg = tmp_path / "config.json"
     adapter = cls(config_path=cfg)
-    adapter.install(server_command=["tessera", "--stdio", "--verbose"])
+    adapter.install(server_command=["chuzom", "--stdio", "--verbose"])
 
     data = json.loads(cfg.read_text())
-    entry = data["mcpServers"]["tessera"]
-    assert entry["command"] == "tessera"
+    entry = data["mcpServers"]["chuzom"]
+    assert entry["command"] == "chuzom"
     assert entry["args"] == ["--stdio", "--verbose"]
 
 
@@ -105,7 +105,7 @@ def test_adapter_uninstall_returns_path_when_present(host: HostSpec, tmp_path: P
     cls = load_adapter(host)
     cfg = tmp_path / "config.json"
     adapter = cls(config_path=cfg)
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     result = adapter.uninstall()
     assert result is not None, f"{host.id}: uninstall should return the path it cleaned"
 
@@ -115,7 +115,7 @@ def test_adapter_is_installed_after_install(host: HostSpec, tmp_path: Path):
     cfg = tmp_path / "config.json"
     adapter = cls(config_path=cfg)
     assert not adapter.is_installed()
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     assert adapter.is_installed()
 
 
@@ -134,33 +134,33 @@ def test_host_has_at_least_one_artifact(host: HostSpec):
 
 
 # ────────────────────────────────────────────────────────────────────────
-# MCP server tool surface — relevant for every host that runs Tessera
+# MCP server tool surface — relevant for every host that runs Chuzom
 # ────────────────────────────────────────────────────────────────────────
 
 def test_mcp_server_main_importable():
-    from tessera.server import main
+    from chuzom.server import main
 
     assert callable(main)
 
 
 def test_mcp_agent_tools_importable():
-    from tessera.tools.agents import (
+    from chuzom.tools.agents import (
         register,
-        tessera_agent_check_budget,
-        tessera_agent_complete_session,
-        tessera_agent_lineage,
-        tessera_agent_list,
-        tessera_agent_route,
-        tessera_agent_start_session,
+        chuzom_agent_check_budget,
+        chuzom_agent_complete_session,
+        chuzom_agent_lineage,
+        chuzom_agent_list,
+        chuzom_agent_route,
+        chuzom_agent_start_session,
     )
 
     for tool in (
         register,
-        tessera_agent_check_budget,
-        tessera_agent_complete_session,
-        tessera_agent_lineage,
-        tessera_agent_list,
-        tessera_agent_route,
-        tessera_agent_start_session,
+        chuzom_agent_check_budget,
+        chuzom_agent_complete_session,
+        chuzom_agent_lineage,
+        chuzom_agent_list,
+        chuzom_agent_route,
+        chuzom_agent_start_session,
     ):
         assert callable(tool)

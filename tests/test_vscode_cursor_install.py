@@ -33,7 +33,7 @@ def fake_cwd(tmp_path, monkeypatch):
 
 class TestInstallVsCodeFiles:
     def test_creates_mcp_json_with_servers_key(self, fake_home):
-        from tessera.cli import _install_vscode_files
+        from chuzom.cli import _install_vscode_files
 
         _install_vscode_files()  # noqa: F841
 
@@ -51,18 +51,18 @@ class TestInstallVsCodeFiles:
         # VS Code uses "servers", NOT "mcpServers"
         assert "servers" in data, "VS Code mcp.json must use 'servers' root key"
         assert "mcpServers" not in data, "VS Code mcp.json must NOT use 'mcpServers'"
-        assert "tessera" in data["servers"]
-        assert data["servers"]["tessera"]["command"] == "uvx"
+        assert "chuzom" in data["servers"]
+        assert data["servers"]["chuzom"]["command"] == "uvx"
 
     def test_action_confirms_file_written(self, fake_home):
-        from tessera.cli import _install_vscode_files
+        from chuzom.cli import _install_vscode_files
 
         actions = _install_vscode_files()
-        file_actions = [a for a in actions if "tessera" in a or "mcp.json" in a.lower()]
+        file_actions = [a for a in actions if "chuzom" in a or "mcp.json" in a.lower()]
         assert file_actions, f"Expected confirmation action, got: {actions}"
 
     def test_idempotent_no_duplicate_server(self, fake_home):
-        from tessera.cli import _install_vscode_files
+        from chuzom.cli import _install_vscode_files
 
         _install_vscode_files()
         _install_vscode_files()
@@ -78,7 +78,7 @@ class TestInstallVsCodeFiles:
         assert len(data["servers"]) == 1  # not duplicated
 
     def test_copilot_instructions_appended(self, fake_home, fake_cwd):
-        from tessera.cli import _install_vscode_files
+        from chuzom.cli import _install_vscode_files
 
         # Create .github/copilot-instructions.md in cwd
         github_dir = fake_cwd / ".github"
@@ -89,22 +89,22 @@ class TestInstallVsCodeFiles:
         _install_vscode_files()
 
         content = instructions.read_text()
-        assert "tessera" in content
+        assert "chuzom" in content
 
     def test_copilot_instructions_not_duplicated(self, fake_home, fake_cwd):
-        from tessera.cli import _install_vscode_files
+        from chuzom.cli import _install_vscode_files
 
         github_dir = fake_cwd / ".github"
         github_dir.mkdir()
         instructions = github_dir / "copilot-instructions.md"
-        instructions.write_text("# tessera already here\n")
+        instructions.write_text("# chuzom already here\n")
 
         actions = _install_vscode_files()
         skip_actions = [a for a in actions if "skipped" in a]
-        assert skip_actions, "Should skip copilot-instructions.md if tessera already present"
+        assert skip_actions, "Should skip copilot-instructions.md if chuzom already present"
 
     def test_merges_with_existing_servers(self, fake_home):
-        from tessera.cli import _install_vscode_files
+        from chuzom.cli import _install_vscode_files
 
         if sys.platform == "darwin":
             mcp_json = fake_home / "Library" / "Application Support" / "Code" / "User" / "mcp.json"
@@ -120,7 +120,7 @@ class TestInstallVsCodeFiles:
 
         data = json.loads(mcp_json.read_text())
         assert "other-tool" in data["servers"]
-        assert "tessera" in data["servers"]
+        assert "chuzom" in data["servers"]
 
 
 # ── Cursor install ────────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ class TestInstallVsCodeFiles:
 
 class TestInstallCursorFiles:
     def test_creates_cursor_mcp_json(self, fake_home):
-        from tessera.cli import _install_cursor_files
+        from chuzom.cli import _install_cursor_files
 
         _install_cursor_files()
 
@@ -139,16 +139,16 @@ class TestInstallCursorFiles:
         # Cursor uses "mcpServers"
         assert "mcpServers" in data, "Cursor mcp.json must use 'mcpServers' root key"
         assert "servers" not in data, "Cursor mcp.json must NOT use 'servers'"
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
     def test_action_confirms_file_written(self, fake_home):
-        from tessera.cli import _install_cursor_files
+        from chuzom.cli import _install_cursor_files
 
         actions = _install_cursor_files()
-        assert any("tessera" in a or ".cursor" in a for a in actions)
+        assert any("chuzom" in a or ".cursor" in a for a in actions)
 
     def test_idempotent_no_duplicate_server(self, fake_home):
-        from tessera.cli import _install_cursor_files
+        from chuzom.cli import _install_cursor_files
 
         _install_cursor_files()
         _install_cursor_files()
@@ -158,17 +158,17 @@ class TestInstallCursorFiles:
         assert len(data["mcpServers"]) == 1
 
     def test_cursor_rules_written(self, fake_home):
-        from tessera.cli import _install_cursor_files
+        from chuzom.cli import _install_cursor_files
 
         _install_cursor_files()
 
-        cursor_rules = fake_home / ".cursor" / "rules" / "tessera.md"
+        cursor_rules = fake_home / ".cursor" / "rules" / "chuzom.md"
         assert cursor_rules.exists(), f"Cursor rules not written to {cursor_rules}"
         content = cursor_rules.read_text()
-        assert "tessera" in content.lower()
+        assert "chuzom" in content.lower()
 
     def test_cursor_rules_not_duplicated(self, fake_home):
-        from tessera.cli import _install_cursor_files
+        from chuzom.cli import _install_cursor_files
 
         _install_cursor_files()
         actions_second = _install_cursor_files()
@@ -177,7 +177,7 @@ class TestInstallCursorFiles:
         assert len(skip_actions) >= 1
 
     def test_merges_with_existing_mcp_servers(self, fake_home):
-        from tessera.cli import _install_cursor_files
+        from chuzom.cli import _install_cursor_files
 
         mcp_json = fake_home / ".cursor" / "mcp.json"
         mcp_json.parent.mkdir(parents=True, exist_ok=True)
@@ -187,7 +187,7 @@ class TestInstallCursorFiles:
 
         data = json.loads(mcp_json.read_text())
         assert "existing" in data["mcpServers"]
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
 
 # ── _install_host dispatch ────────────────────────────────────────────────────
@@ -195,21 +195,21 @@ class TestInstallCursorFiles:
 
 class TestInstallHostDispatch:
     def test_install_host_vscode(self, capsys, fake_home):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
 
         _install_host("vscode")
         out = capsys.readouterr().out
         assert "VS Code" in out
 
     def test_install_host_cursor(self, capsys, fake_home):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
 
         _install_host("cursor")
         out = capsys.readouterr().out
         assert "Cursor" in out
 
     def test_install_host_all_includes_vscode_cursor(self, capsys, fake_home):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
 
         _install_host("all")
         out = capsys.readouterr().out
@@ -222,26 +222,26 @@ class TestInstallHostDispatch:
 
 class TestRulesFilesExist:
     def test_vscode_rules_exists(self):
-        from tessera import __file__ as pkg_init
+        from chuzom import __file__ as pkg_init
 
         rules = Path(pkg_init).parent / "rules" / "vscode-rules.md"
         assert rules.exists(), f"vscode-rules.md not found at {rules}"
 
     def test_cursor_rules_exists(self):
-        from tessera import __file__ as pkg_init
+        from chuzom import __file__ as pkg_init
 
         rules = Path(pkg_init).parent / "rules" / "cursor-rules.md"
         assert rules.exists(), f"cursor-rules.md not found at {rules}"
 
     def test_vscode_rules_contain_routing_guidance(self):
-        from tessera import __file__ as pkg_init
+        from chuzom import __file__ as pkg_init
 
         rules = Path(pkg_init).parent / "rules" / "vscode-rules.md"
         content = rules.read_text()
         assert "llm_auto" in content or "llm_research" in content
 
     def test_cursor_rules_contain_routing_guidance(self):
-        from tessera import __file__ as pkg_init
+        from chuzom import __file__ as pkg_init
 
         rules = Path(pkg_init).parent / "rules" / "cursor-rules.md"
         content = rules.read_text()
@@ -253,7 +253,7 @@ class TestRulesFilesExist:
 
 class TestMergeJsonMcpBlockRootKey:
     def test_default_root_key_is_mcpServers(self, tmp_path):
-        from tessera.cli import _merge_json_mcp_block
+        from chuzom.cli import _merge_json_mcp_block
 
         path = tmp_path / "test.json"
         _merge_json_mcp_block(path, "my-server", {"command": "uvx"})
@@ -262,7 +262,7 @@ class TestMergeJsonMcpBlockRootKey:
         assert "servers" not in data
 
     def test_custom_root_key_servers(self, tmp_path):
-        from tessera.cli import _merge_json_mcp_block
+        from chuzom.cli import _merge_json_mcp_block
 
         path = tmp_path / "test.json"
         _merge_json_mcp_block(path, "my-server", {"command": "uvx"}, root_key="servers")
@@ -271,12 +271,12 @@ class TestMergeJsonMcpBlockRootKey:
         assert "mcpServers" not in data
 
     def test_preserves_existing_keys_with_different_root(self, tmp_path):
-        from tessera.cli import _merge_json_mcp_block
+        from chuzom.cli import _merge_json_mcp_block
 
         path = tmp_path / "test.json"
         path.write_text(json.dumps({"version": 1, "servers": {"existing": {}}}))
-        _merge_json_mcp_block(path, "tessera", {"command": "uvx"}, root_key="servers")
+        _merge_json_mcp_block(path, "chuzom", {"command": "uvx"}, root_key="servers")
         data = json.loads(path.read_text())
         assert data["version"] == 1
         assert "existing" in data["servers"]
-        assert "tessera" in data["servers"]
+        assert "chuzom" in data["servers"]

@@ -1,6 +1,6 @@
 """Tests for RTK-style command output compression."""
 
-from tessera.compression.rtk_adapter import RTKAdapter, CompressionResult
+from chuzom.compression.rtk_adapter import RTKAdapter, CompressionResult
 
 
 class TestCompressionResult:

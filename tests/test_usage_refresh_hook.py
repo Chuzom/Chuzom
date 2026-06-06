@@ -29,7 +29,7 @@ def _run_hook(tool_name: str, state_file: str | None = None) -> dict | None:
 import json, sys, os, time
 
 # Override STATE_FILE for testing
-STATE_FILE = os.environ.get('_TEST_STATE_FILE', os.path.expanduser('~/.tessera/usage_last_refresh.txt'))
+STATE_FILE = os.environ.get('_TEST_STATE_FILE', os.path.expanduser('~/.chuzom/usage_last_refresh.txt'))
 STALE_THRESHOLD_SEC = 15 * 60
 
 payload = json.loads('''{payload}''')

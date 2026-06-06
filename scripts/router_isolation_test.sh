@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test tessera routing in isolated environments to verify:
+# Test chuzom routing in isolated environments to verify:
 # 1. No cache contamination between runs
 # 2. Routing decisions are sensible
 # 3. Dashboard (savings, cost) is accurate
@@ -55,9 +55,9 @@ alert_failure() {
         echo "$message" | mail -s "$subject" "$(whoami)@localhost" 2>/dev/null || true
     fi
 
-    # Slack webhook (if TESSERA_ALERT_WEBHOOK is set)
-    if [ -n "${TESSERA_ALERT_WEBHOOK:-}" ]; then
-        curl -s -X POST "${TESSERA_ALERT_WEBHOOK}" \
+    # Slack webhook (if CHUZOM_ALERT_WEBHOOK is set)
+    if [ -n "${CHUZOM_ALERT_WEBHOOK:-}" ]; then
+        curl -s -X POST "${CHUZOM_ALERT_WEBHOOK}" \
             -H "Content-Type: application/json" \
             -d "{\"text\": \"$subject\n\n$message\"}" 2>/dev/null || true
     fi
@@ -68,14 +68,14 @@ alert_failure() {
 main() {
     local start_time=$(date +%s)
 
-    log "Starting tessera isolation tests..."
+    log "Starting chuzom isolation tests..."
     log "Project root: $PROJECT_ROOT"
     log "Log file: $LOG_FILE"
 
     # Verify dependencies
-    if ! command -v tessera &> /dev/null; then
-        log "ERROR: tessera not found in PATH"
-        alert_failure "Router isolation test failed" "tessera CLI not found"
+    if ! command -v chuzom &> /dev/null; then
+        log "ERROR: chuzom not found in PATH"
+        alert_failure "Router isolation test failed" "chuzom CLI not found"
         exit 1
     fi
 
@@ -85,7 +85,7 @@ main() {
         exit 1
     fi
 
-    log "tessera version: $(tessera --version 2>/dev/null || echo 'unknown')"
+    log "chuzom version: $(chuzom --version 2>/dev/null || echo 'unknown')"
     log "pytest version: $(pytest --version)"
 
     # Run the test suite (via uv to use project environment)
@@ -120,16 +120,16 @@ show_cron_example() {
 To run this test automatically on a schedule, add to crontab:
 
 # Run every 6 hours
-0 */6 * * * /Users/yali.pollak/Projects/tessera/scripts/router_isolation_test.sh >> /tmp/router_test.log 2>&1
+0 */6 * * * /Users/yali.pollak/Projects/chuzom/scripts/router_isolation_test.sh >> /tmp/router_test.log 2>&1
 
 # Run daily at 2 AM
-0 2 * * * /Users/yali.pollak/Projects/tessera/scripts/router_isolation_test.sh
+0 2 * * * /Users/yali.pollak/Projects/chuzom/scripts/router_isolation_test.sh
 
 # Run every hour (aggressive)
-0 * * * * /Users/yali.pollak/Projects/tessera/scripts/router_isolation_test.sh
+0 * * * * /Users/yali.pollak/Projects/chuzom/scripts/router_isolation_test.sh
 
 Enable alerts with:
-  export TESSERA_ALERT_WEBHOOK="https://hooks.slack.com/services/..."
+  export CHUZOM_ALERT_WEBHOOK="https://hooks.slack.com/services/..."
 EOF
 }
 

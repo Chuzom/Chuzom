@@ -1,11 +1,11 @@
-"""Tests for tessera.lineage — inversion detection + SQLite persistence."""
+"""Tests for chuzom.lineage — inversion detection + SQLite persistence."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from tessera.lineage import (
+from chuzom.lineage import (
     Inversion,
     LineageStore,
     Tier,

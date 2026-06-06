@@ -22,7 +22,7 @@ break the dashboard:
 
 from __future__ import annotations
 
-from tessera.tiers import (
+from chuzom.tiers import (
     Tier,
     TierRollup,
     render_tier_table,

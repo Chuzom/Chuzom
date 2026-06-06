@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tessera.tools.dashboard import (
+from chuzom.tools.dashboard import (
     _format_tokens,
     _render_bar,
     _render_sparkline,

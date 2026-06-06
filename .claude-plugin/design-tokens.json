@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "metadata": {
-    "name": "tessera Design Tokens",
+    "name": "chuzom Design Tokens",
     "description": "Design system tokens for v6.0+ (Visibility + Memory)",
     "updated": "2026-04-16"
   },
@@ -363,9 +363,9 @@
     }
   },
   "implementation": {
-    "python_module": "src/tessera/terminal_style.py",
+    "python_module": "src/chuzom/terminal_style.py",
     "test_module": "tests/test_terminal_styling.py",
     "documentation": "docs/DESIGN_SYSTEM_v6.md",
-    "usage_example": "from tessera.terminal_style import Color, Symbol, format_routing_hud"
+    "usage_example": "from chuzom.terminal_style import Color, Symbol, format_routing_hud"
   }
 }

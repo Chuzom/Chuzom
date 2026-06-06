@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.policy import PolicyManager, RoutingPolicy
-from tessera.profiles import ROUTING_TABLE
-from tessera.types import RoutingProfile, TaskType
+from chuzom.policy import PolicyManager, RoutingPolicy
+from chuzom.profiles import ROUTING_TABLE
+from chuzom.types import RoutingProfile, TaskType
 
 
 @pytest.fixture
@@ -80,12 +80,12 @@ class TestPhase1b2LoaderInvariant:
     """
 
     def test_loader_function_exists_and_is_callable(self) -> None:
-        from tessera.profiles import _load_routing_table_from_policy
+        from chuzom.profiles import _load_routing_table_from_policy
 
         assert callable(_load_routing_table_from_policy)
 
     def test_routing_table_equals_loader_output(self) -> None:
-        from tessera.profiles import (
+        from chuzom.profiles import (
             ROUTING_TABLE,
             _load_routing_table_from_policy,
         )

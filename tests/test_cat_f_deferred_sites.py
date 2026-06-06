@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from tessera.calibration import cost_for_tokens
-from tessera.types import TaskType
+from chuzom.calibration import cost_for_tokens
+from chuzom.types import TaskType
 
 
 # ── cost_for_tokens public helper ───────────────────────────────────────────
@@ -61,19 +61,19 @@ class TestSessionSpendEstimateCost:
 
     def test_known_model_matches_calibration(self):
         """No more drift — sessionspend cost equals calibration cost."""
-        from tessera.session_spend import _estimate_cost
+        from chuzom.session_spend import _estimate_cost
         assert _estimate_cost("openai/gpt-4o", 200, 300) == pytest.approx(
             cost_for_tokens("openai/gpt-4o", 200, 300)
         )
 
     def test_free_provider_returns_zero(self):
         """Ollama remains zero — the unknown-model fallback must skip free providers."""
-        from tessera.session_spend import _estimate_cost
+        from chuzom.session_spend import _estimate_cost
         assert _estimate_cost("ollama/qwen", 500, 500) == 0.0
 
     def test_unknown_model_uses_conservative_fallback(self):
         """Unknown models bias high so anomaly detection still has a signal."""
-        from tessera.session_spend import _estimate_cost
+        from chuzom.session_spend import _estimate_cost
         # Pre-Cat-F behaviour: 0.01 per 1K output → 0.003 for 300 tokens.
         # Post-Cat-F: same fallback rate, so the change is invisible to
         # downstream anomaly thresholds.
@@ -87,7 +87,7 @@ def _load_hook_module():
     """Import the hook file by path — it lives outside the regular package."""
     spec = importlib.util.spec_from_file_location(
         "auto_route_hook",
-        Path(__file__).parent.parent / "src" / "tessera" / "hooks" / "auto-route.py",
+        Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "auto-route.py",
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -146,7 +146,7 @@ class TestSingleSourceOfTruth:
     """
 
     def test_session_spend_has_no_pricing_dict(self):
-        from tessera import session_spend
+        from chuzom import session_spend
         assert not hasattr(session_spend, "_COST_PER_1K_OUT"), (
             "session_spend reintroduced a parallel pricing dict — "
             "route through calibration.cost_for_tokens instead."
@@ -157,7 +157,7 @@ class TestSingleSourceOfTruth:
         cost_map must not be a top-level constant. (Inline inside the fallback
         helper is fine; that's by design.)"""
         text = (
-            Path(__file__).parent.parent / "src" / "tessera" / "hooks" / "auto-route.py"
+            Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "auto-route.py"
         ).read_text()
         # Heuristic: the only "cost_map" reference should be inside _legacy_static_savings.
         # If a future edit re-promotes it to module scope, this regex catches it.

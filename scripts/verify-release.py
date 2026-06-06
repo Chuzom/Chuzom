@@ -146,7 +146,7 @@ def main():
 
     results = {
         "PyPI": check_pypi("llm-routing", version),
-        "GitHub": check_github("ypollak2", "tessera", version),
+        "GitHub": check_github("ypollak2", "chuzom", version),
         "Tests": run_tests(),
     }
 

@@ -1,29 +1,29 @@
 """Integration tests for policy system with routing hooks."""
 
 import pytest
-from tessera.policy import RoutingPolicy, PolicyManager, get_active_policy
+from chuzom.policy import RoutingPolicy, PolicyManager, get_active_policy
 
 
 class TestPolicyEnvironmentIntegration:
     """Test policy loading from environment variables."""
 
     def test_policy_from_env_var(self, monkeypatch):
-        """Load policy from TESSERA_POLICY environment variable."""
-        monkeypatch.setenv("TESSERA_POLICY", "aggressive")
+        """Load policy from CHUZOM_POLICY environment variable."""
+        monkeypatch.setenv("CHUZOM_POLICY", "aggressive")
         pm = PolicyManager()
         policy = pm.get_active_policy()
         assert policy.name == "aggressive"
 
     def test_policy_fallback_to_balanced(self, monkeypatch):
         """Fallback to balanced if env var not set."""
-        monkeypatch.delenv("TESSERA_POLICY", raising=False)
+        monkeypatch.delenv("CHUZOM_POLICY", raising=False)
         pm = PolicyManager()
         policy = pm.get_active_policy()
         assert policy is not None
 
     def test_policy_invalid_env_fallback(self, monkeypatch):
         """Fallback to balanced if env var points to missing policy."""
-        monkeypatch.setenv("TESSERA_POLICY", "nonexistent_xyz")
+        monkeypatch.setenv("CHUZOM_POLICY", "nonexistent_xyz")
         pm = PolicyManager()
         # Should not raise, should fallback
         policy = pm.get_active_policy()
@@ -141,11 +141,11 @@ class TestPolicyGlobalFunction:
         assert policy.name in ("aggressive", "balanced", "conservative")
 
     def test_get_active_policy_uses_env(self, monkeypatch):
-        """Global function respects TESSERA_POLICY env var."""
-        monkeypatch.setenv("TESSERA_POLICY", "aggressive")
+        """Global function respects CHUZOM_POLICY env var."""
+        monkeypatch.setenv("CHUZOM_POLICY", "aggressive")
         # Force reload of policy manager
-        import tessera.policy
-        tessera.policy._policy_manager = tessera.policy.PolicyManager()
+        import chuzom.policy
+        chuzom.policy._policy_manager = chuzom.policy.PolicyManager()
         
         policy = get_active_policy()
         assert policy.name == "aggressive"

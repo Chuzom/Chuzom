@@ -16,7 +16,7 @@ from unittest.mock import patch
 import pytest
 
 # Import the session-end hook as a module
-_hook_path = Path(__file__).parent.parent / "src" / "tessera" / "hooks"
+_hook_path = Path(__file__).parent.parent / "src" / "chuzom" / "hooks"
 sys.path.insert(0, str(_hook_path))
 
 _spec = importlib.util.spec_from_file_location(
@@ -522,7 +522,7 @@ class TestEnhancedDashboard:
 
     def test_sparkline_renders_with_valid_data(self):
         """Sparkline produces multi-line output with axes."""
-        from tessera.hooks.dashboard_enhanced import render_enhanced_sparkline
+        from chuzom.hooks.dashboard_enhanced import render_enhanced_sparkline
 
         data = [
             ("2026-05-10", 10, 500, 0.01),
@@ -537,14 +537,14 @@ class TestEnhancedDashboard:
 
     def test_sparkline_empty_data(self):
         """Empty data returns empty string."""
-        from tessera.hooks.dashboard_enhanced import render_enhanced_sparkline
+        from chuzom.hooks.dashboard_enhanced import render_enhanced_sparkline
 
         assert render_enhanced_sparkline([]) == ""
         assert render_enhanced_sparkline([("2026-05-10", 0, 0, 0.0)]) == ""
 
     def test_models_section_renders(self):
         """Models section shows model names and percentages."""
-        from tessera.hooks.dashboard_enhanced import render_models_section
+        from chuzom.hooks.dashboard_enhanced import render_models_section
 
         models = {"ollama:gemma4": 10, "gpt-4o-mini": 5}
         output = render_models_section(models)
@@ -555,13 +555,13 @@ class TestEnhancedDashboard:
 
     def test_models_section_empty(self):
         """Empty models returns empty string."""
-        from tessera.hooks.dashboard_enhanced import render_models_section
+        from chuzom.hooks.dashboard_enhanced import render_models_section
 
         assert render_models_section({}) == ""
 
     def test_query_session_models_filters_test_models(self, temp_db, session_start):
         """Mock/test models are filtered from query results."""
-        from tessera.hooks.dashboard_enhanced import query_session_models
+        from chuzom.hooks.dashboard_enhanced import query_session_models
 
         ts = se._session_start_iso(session_start - 60)
         _insert_usage(temp_db, [

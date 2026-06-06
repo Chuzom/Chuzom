@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from tessera.lineage import Tier
-from tessera.model_registry import (
+from chuzom.lineage import Tier
+from chuzom.model_registry import (
     ModelMetadata,
     ModelRegistry,
     _BUNDLED_DEFAULTS,
@@ -58,7 +58,7 @@ def test_load_default_finds_config_models_yaml():
     """The shipped config/models.yaml must load without error."""
     ROOT = Path(__file__).resolve().parent.parent.parent
     path = ROOT / "config" / "models.yaml"
-    assert path.exists(), "config/models.yaml must ship with Tessera"
+    assert path.exists(), "config/models.yaml must ship with Chuzom"
     reg = ModelRegistry.from_yaml(path)
     assert len(reg.all()) >= 10
 

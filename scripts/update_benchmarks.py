@@ -12,7 +12,7 @@ import logging
 import sys
 from pathlib import Path
 
-# Add src/ to path so we can import tessera without installing.
+# Add src/ to path so we can import chuzom without installing.
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 logging.basicConfig(
@@ -21,7 +21,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-from tessera.benchmark_fetcher import generate_benchmarks_json  # noqa: E402
+from chuzom.benchmark_fetcher import generate_benchmarks_json  # noqa: E402
 
 if __name__ == "__main__":
     try:

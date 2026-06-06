@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from tessera.result_cache import (
+from chuzom.result_cache import (
     CachedResult,
     _sanitize_fts_query,
     check_dedup,
@@ -18,7 +18,7 @@ from tessera.result_cache import (
 @pytest.fixture(autouse=True)
 def isolate_cache(tmp_path, monkeypatch):
     """Redirect cache DBs to temp directory for test isolation."""
-    monkeypatch.setattr("tessera.result_cache._ROUTER_DIR", tmp_path)
+    monkeypatch.setattr("chuzom.result_cache._ROUTER_DIR", tmp_path)
 
 
 class TestStoreResult:

@@ -9,7 +9,7 @@ echo "────────────────────────�
 
 # Get baseline savings
 echo "Baseline status:"
-BASELINE=$(tessera status 2>&1)
+BASELINE=$(chuzom status 2>&1)
 echo "$BASELINE" | grep -A 5 "Routing savings" || echo "  (no baseline savings data)"
 
 SAVINGS_BEFORE=$(echo "$BASELINE" | grep "7 days" | grep -o '\$[0-9.]*' | head -1 || echo "unknown")
@@ -24,7 +24,7 @@ echo
 # Simulate routing by running a few router commands
 echo "Triggering routing decisions..."
 for i in {1..3}; do
-    tessera last --count 1 >/dev/null 2>&1 || true
+    chuzom last --count 1 >/dev/null 2>&1 || true
     sleep 0.5
 done
 
@@ -32,7 +32,7 @@ echo
 
 # Get new status
 echo "Status after routing:"
-AFTER=$(tessera status 2>&1)
+AFTER=$(chuzom status 2>&1)
 echo "$AFTER" | grep -A 5 "Routing savings" || echo "  (no savings data)"
 
 SAVINGS_AFTER=$(echo "$AFTER" | grep "7 days" | grep -o '\$[0-9.]*' | head -1 || echo "unknown")
@@ -48,7 +48,7 @@ echo
 if [ "$SAVINGS_BEFORE" = "$SAVINGS_AFTER" ] && [ "$SAVINGS_BEFORE" != "unknown" ]; then
     echo "⚠️  WARNING: Savings amount didn't update!"
     echo "   This may indicate:"
-    echo "   1. Stale cache (clear with: rm ~/.tessera/cache)"
+    echo "   1. Stale cache (clear with: rm ~/.chuzom/cache)"
     echo "   2. Batch updates (savings calculated periodically, not real-time)"
     echo "   3. Database transaction issue (routing not being recorded)"
     exit 1

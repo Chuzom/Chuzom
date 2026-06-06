@@ -7,7 +7,7 @@ from base64 import urlsafe_b64encode
 
 import pytest
 
-from tessera.oauth_token_rotation import (
+from chuzom.oauth_token_rotation import (
     TokenRefreshStrategy,
     ExpiryTracker,
 )

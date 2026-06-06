@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tessera.org_policy import (
+from chuzom.org_policy import (
     OrgPolicy,
     PlaintextSecretInPolicy,
     SecretResolver,

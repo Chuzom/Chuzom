@@ -590,7 +590,7 @@ def star_cta(c, mode):
   <!-- Text -->
   <text x="210" y="24" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="{c['text']}">
     <tspan dx="24">Star on GitHub</tspan>
-    <tspan dx="8" font-weight="400" fill="{c['text2']}">if tessera saves your quota</tspan>
+    <tspan dx="8" font-weight="400" fill="{c['text2']}">if chuzom saves your quota</tspan>
   </text>
 </svg>'''
 

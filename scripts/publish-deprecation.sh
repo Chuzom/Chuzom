@@ -1,5 +1,5 @@
 #!/bin/bash
-# Publish deprecation package for claude-code-tessera to PyPI
+# Publish deprecation package for claude-code-chuzom to PyPI
 
 set -e
 
@@ -8,7 +8,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DEPRECATION_DIR="$PROJECT_ROOT/deprecation"
 
 echo "📦 Building and publishing deprecation package..."
-echo "   Package: claude-code-tessera (redirects to llm-routing)"
+echo "   Package: claude-code-chuzom (redirects to llm-routing)"
 echo "   Version: 1.0.0"
 echo ""
 
@@ -74,7 +74,7 @@ fi
 echo ""
 echo "✅ Deprecation package published!"
 echo ""
-echo "Verify on PyPI: https://pypi.org/project/claude-code-tessera/"
+echo "Verify on PyPI: https://pypi.org/project/claude-code-chuzom/"
 echo ""
 echo "Users with the old package will now see:"
 echo "  1. A deprecation warning on import"

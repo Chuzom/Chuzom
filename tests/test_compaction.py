@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.compaction import (
+from chuzom.compaction import (
     collapse_stack_traces,
     collapse_whitespace,
     compact_structural,

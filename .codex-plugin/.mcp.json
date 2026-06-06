@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "tessera": {
+    "chuzom": {
       "command": "uvx",
-      "args": ["tessera-router"],
+      "args": ["chuzom-router"],
       "env": {
-        "TESSERA_PROFILE": "balanced"
+        "CHUZOM_PROFILE": "balanced"
       }
     }
   }

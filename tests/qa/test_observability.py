@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pytest
 
-from tessera import observability
-from tessera.lineage import LineageStore, make_record
+from chuzom import observability
+from chuzom.lineage import LineageStore, make_record
 
 
 def _otel_available() -> bool:
@@ -30,7 +30,7 @@ def _otel_available() -> bool:
 
 requires_otel = pytest.mark.skipif(
     not _otel_available(),
-    reason="opentelemetry-sdk not installed; install via tessera-router[tracing]",
+    reason="opentelemetry-sdk not installed; install via chuzom-router[tracing]",
 )
 
 
@@ -101,10 +101,10 @@ def test_span_created_per_routing_decision(monkeypatch):
 
     # Replace setup() to wire an in-memory exporter instead of OTLP
     exporter = InMemorySpanExporter()
-    provider = TracerProvider(resource=Resource.create({"service.name": "tessera"}))
+    provider = TracerProvider(resource=Resource.create({"service.name": "chuzom"}))
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
-    observability._tracer = trace.get_tracer("tessera")
+    observability._tracer = trace.get_tracer("chuzom")
     observability._initialized = True
 
     record = make_record(
@@ -122,13 +122,13 @@ def test_span_created_per_routing_decision(monkeypatch):
     spans = exporter.get_finished_spans()
     assert len(spans) == 1
     span = spans[0]
-    assert span.name == "tessera.route"
+    assert span.name == "chuzom.route"
     attrs = dict(span.attributes)
-    assert attrs.get("tessera.host") == "claude-code"
-    assert attrs.get("tessera.task_type") == "code"
-    assert attrs.get("tessera.model_chosen") == "ollama/qwen3.5:latest"
-    assert attrs.get("tessera.framework") == "agno"
-    assert attrs.get("tessera.agent_id") == "code-reviewer"
+    assert attrs.get("chuzom.host") == "claude-code"
+    assert attrs.get("chuzom.task_type") == "code"
+    assert attrs.get("chuzom.model_chosen") == "ollama/qwen3.5:latest"
+    assert attrs.get("chuzom.framework") == "agno"
+    assert attrs.get("chuzom.agent_id") == "code-reviewer"
 
 
 @requires_otel
@@ -145,10 +145,10 @@ def test_inversion_emits_span_event(monkeypatch):
 
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
     exporter = InMemorySpanExporter()
-    provider = TracerProvider(resource=Resource.create({"service.name": "tessera"}))
+    provider = TracerProvider(resource=Resource.create({"service.name": "chuzom"}))
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
-    observability._tracer = trace.get_tracer("tessera")
+    observability._tracer = trace.get_tracer("chuzom")
     observability._initialized = True
 
     # A complex prompt routed to local is UP-inversion
@@ -183,10 +183,10 @@ def test_pii_detected_emits_span_event(monkeypatch):
 
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
     exporter = InMemorySpanExporter()
-    provider = TracerProvider(resource=Resource.create({"service.name": "tessera"}))
+    provider = TracerProvider(resource=Resource.create({"service.name": "chuzom"}))
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
-    observability._tracer = trace.get_tracer("tessera")
+    observability._tracer = trace.get_tracer("chuzom")
     observability._initialized = True
 
     record = make_record(
@@ -211,7 +211,7 @@ def test_pii_detected_emits_span_event(monkeypatch):
 # Attribute mapping
 # ────────────────────────────────────────────────────────────────────────
 
-def test_record_to_attributes_namespaces_with_tessera_prefix():
+def test_record_to_attributes_namespaces_with_chuzom_prefix():
     record = make_record(
         host="cursor", prompt_fingerprint="fp",
         task_type="research", complexity="moderate",
@@ -223,8 +223,8 @@ def test_record_to_attributes_namespaces_with_tessera_prefix():
     )
     attrs = observability._record_to_attributes(record)
     for key in attrs:
-        assert key.startswith("tessera."), (
-            f"All OTel attribute keys must be namespaced with 'tessera.', "
+        assert key.startswith("chuzom."), (
+            f"All OTel attribute keys must be namespaced with 'chuzom.', "
             f"got {key!r}"
         )
 
@@ -240,6 +240,6 @@ def test_record_to_attributes_handles_optional_fields():
         outcome="success", latency_ms=10, cost_usd=0.0,
     )
     attrs = observability._record_to_attributes(record)
-    assert attrs["tessera.agent_id"] == ""
-    assert attrs["tessera.session_id"] == ""
-    assert attrs["tessera.framework"] == ""
+    assert attrs["chuzom.agent_id"] == ""
+    assert attrs["chuzom.session_id"] == ""
+    assert attrs["chuzom.framework"] == ""

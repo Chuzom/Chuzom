@@ -2,9 +2,9 @@
 
 Sessionlore: "Agno — current primary agent framework (Apache 2.0, fka phidata)"
 
-The Agno integration lives in tessera/integrations/agno.py (concrete
+The Agno integration lives in chuzom/integrations/agno.py (concrete
 RouteredModel + RouteredTeam) and is re-exported via
-tessera/frameworks/agno.py. This suite proves:
+chuzom/frameworks/agno.py. This suite proves:
 
     Functional      — Adapter class shape; is_available() responds honestly
     Non-functional  — Adapter raises ImportError with remediation when
@@ -54,23 +54,23 @@ requires_agno = pytest.mark.skipif(
 # ────────────────────────────────────────────────────────────────────────
 
 def test_agno_module_importable():
-    """Importing tessera.frameworks.agno must NOT raise even if Agno is
+    """Importing chuzom.frameworks.agno must NOT raise even if Agno is
     missing — the adapter ships an AGNO_AVAILABLE flag."""
-    from tessera.frameworks import agno
+    from chuzom.frameworks import agno
 
     assert hasattr(agno, "AGNO_AVAILABLE")
     assert isinstance(agno.AGNO_AVAILABLE, bool)
 
 
 def test_agno_adapter_class_exists():
-    from tessera.frameworks.agno import AgnoAdapter
+    from chuzom.frameworks.agno import AgnoAdapter
 
     assert hasattr(AgnoAdapter, "name")
     assert AgnoAdapter.name == "agno"
 
 
 def test_agno_adapter_implements_framework_protocol():
-    from tessera.frameworks.agno import AgnoAdapter
+    from chuzom.frameworks.agno import AgnoAdapter
 
     adapter = AgnoAdapter()
     assert hasattr(adapter, "wrap_model")
@@ -81,14 +81,14 @@ def test_agno_adapter_implements_framework_protocol():
 
 
 def test_agno_adapter_is_available_matches_runtime_state():
-    from tessera.frameworks.agno import AGNO_AVAILABLE, AgnoAdapter
+    from chuzom.frameworks.agno import AGNO_AVAILABLE, AgnoAdapter
 
     assert AgnoAdapter.is_available() == AGNO_AVAILABLE
 
 
 def test_agno_adapter_detect_agent_id_returns_string_or_none():
     """detect_agent_id reads agent.name from an Agno Agent — or None if absent."""
-    from tessera.frameworks.agno import AgnoAdapter
+    from chuzom.frameworks.agno import AgnoAdapter
 
     adapter = AgnoAdapter()
 
@@ -116,7 +116,7 @@ def test_agno_adapter_wrap_model_raises_with_install_hint_when_missing(
 ):
     """When AGNO_AVAILABLE is False, wrap_model must raise ImportError with
     a pip install hint — the user shouldn't have to grep source."""
-    from tessera.frameworks import agno as agno_module
+    from chuzom.frameworks import agno as agno_module
 
     monkeypatch.setattr(agno_module, "AGNO_AVAILABLE", False)
 
@@ -127,7 +127,7 @@ def test_agno_adapter_wrap_model_raises_with_install_hint_when_missing(
 
 def test_agno_adapter_error_message_names_the_pip_extra():
     """The user must learn from the error message what `pip install` to run."""
-    from tessera.frameworks import agno as agno_module
+    from chuzom.frameworks import agno as agno_module
 
     if agno_module.AGNO_AVAILABLE:
         pytest.skip("Agno installed — can't test missing-dep error path")
@@ -137,7 +137,7 @@ def test_agno_adapter_error_message_names_the_pip_extra():
         adapter.wrap_model(framework_model=None)
     except ImportError as exc:
         msg = str(exc)
-        assert "tessera-router" in msg or "claude-code-tessera" in msg, (
+        assert "chuzom-router" in msg or "claude-code-chuzom" in msg, (
             "Error must reference the installable package name"
         )
         assert "agno" in msg.lower(), "Error must mention the agno extra"
@@ -151,7 +151,7 @@ def test_agno_adapter_construction_is_constant_time():
     """Constructing AgnoAdapter is O(1) — no DB connection, no IO."""
     import time
 
-    from tessera.frameworks.agno import AgnoAdapter
+    from chuzom.frameworks.agno import AgnoAdapter
 
     samples = []
     for _ in range(100):
@@ -169,14 +169,14 @@ def test_agno_module_import_is_cheap():
 
     # Force fresh import
     for mod_name in list(sys.modules):
-        if mod_name.startswith("tessera.frameworks.agno"):
+        if mod_name.startswith("chuzom.frameworks.agno"):
             del sys.modules[mod_name]
 
     start = time.perf_counter()
-    importlib.import_module("tessera.frameworks.agno")
+    importlib.import_module("chuzom.frameworks.agno")
     elapsed_ms = (time.perf_counter() - start) * 1000
     assert elapsed_ms < 100, (
-        f"tessera.frameworks.agno import took {elapsed_ms:.1f}ms, budget 100ms"
+        f"chuzom.frameworks.agno import took {elapsed_ms:.1f}ms, budget 100ms"
     )
 
 
@@ -185,25 +185,25 @@ def test_agno_module_import_is_cheap():
 # ────────────────────────────────────────────────────────────────────────
 
 def test_agno_routered_model_is_re_exported_consistently():
-    """tessera.frameworks.agno re-exports from tessera.integrations.agno —
+    """chuzom.frameworks.agno re-exports from chuzom.integrations.agno —
     the symbol must be the same object (not a copy) so isinstance() works."""
-    from tessera.frameworks import agno as frameworks_agno
+    from chuzom.frameworks import agno as frameworks_agno
 
     if not frameworks_agno.AGNO_AVAILABLE:
         pytest.skip("Agno not installed")
 
-    from tessera.integrations import agno as integrations_agno
+    from chuzom.integrations import agno as integrations_agno
 
     assert frameworks_agno.RouteredModel is integrations_agno.RouteredModel
 
 
 def test_agno_routered_team_is_re_exported_consistently():
-    from tessera.frameworks import agno as frameworks_agno
+    from chuzom.frameworks import agno as frameworks_agno
 
     if not frameworks_agno.AGNO_AVAILABLE:
         pytest.skip("Agno not installed")
 
-    from tessera.integrations import agno as integrations_agno
+    from chuzom.integrations import agno as integrations_agno
 
     assert frameworks_agno.RouteredTeam is integrations_agno.RouteredTeam
 
@@ -214,7 +214,7 @@ def test_agno_routered_team_is_re_exported_consistently():
 
 def test_agno_module_exports_documented_symbols():
     """__all__ should list every symbol a user would import."""
-    from tessera.frameworks import agno
+    from chuzom.frameworks import agno
 
     assert hasattr(agno, "__all__")
     expected = {"AgnoAdapter", "RouteredModel", "RouteredTeam", "AGNO_AVAILABLE"}
@@ -226,7 +226,7 @@ def test_agno_module_exports_documented_symbols():
 
 
 def test_agno_module_has_install_instructions_in_docstring():
-    from tessera.frameworks import agno
+    from chuzom.frameworks import agno
 
     assert agno.__doc__, "frameworks/agno.py module docstring missing"
     assert "pip install" in agno.__doc__, (
@@ -242,7 +242,7 @@ def test_agno_module_has_install_instructions_in_docstring():
 def test_routered_model_subclasses_agno_model():
     from agno.models.base import Model
 
-    from tessera.frameworks.agno import RouteredModel
+    from chuzom.frameworks.agno import RouteredModel
 
     assert issubclass(RouteredModel, Model)
 
@@ -251,14 +251,14 @@ def test_routered_model_subclasses_agno_model():
 def test_routered_team_subclasses_agno_team():
     from agno.team.team import Team
 
-    from tessera.frameworks.agno import RouteredTeam
+    from chuzom.frameworks.agno import RouteredTeam
 
     assert issubclass(RouteredTeam, Team)
 
 
 @requires_agno
 def test_routered_model_constructible_with_task_type():
-    from tessera.frameworks.agno import RouteredModel
+    from chuzom.frameworks.agno import RouteredModel
 
     model = RouteredModel(task_type="code")
     assert model is not None
@@ -266,7 +266,7 @@ def test_routered_model_constructible_with_task_type():
 
 @requires_agno
 def test_agno_adapter_wrap_model_returns_routered_model():
-    from tessera.frameworks.agno import AgnoAdapter, RouteredModel
+    from chuzom.frameworks.agno import AgnoAdapter, RouteredModel
 
     adapter = AgnoAdapter()
     wrapped = adapter.wrap_model(framework_model=None)
@@ -286,7 +286,7 @@ class _FakeAgnoAgent:
 
 
 def test_agno_detect_agent_id_from_fake_agent():
-    from tessera.frameworks.agno import AgnoAdapter
+    from chuzom.frameworks.agno import AgnoAdapter
 
     adapter = AgnoAdapter()
     fake = _FakeAgnoAgent(name="researcher")
@@ -296,7 +296,7 @@ def test_agno_detect_agent_id_from_fake_agent():
 
 def test_agno_detect_agent_id_handles_missing_name_attribute():
     """If the runtime object has neither .agent nor .name, return None."""
-    from tessera.frameworks.agno import AgnoAdapter
+    from chuzom.frameworks.agno import AgnoAdapter
 
     adapter = AgnoAdapter()
     bare = object()  # no .agent, no .name
@@ -304,13 +304,13 @@ def test_agno_detect_agent_id_handles_missing_name_attribute():
 
 
 # ────────────────────────────────────────────────────────────────────────
-# Integration with Tessera lineage (mocked Agno path)
+# Integration with Chuzom lineage (mocked Agno path)
 # ────────────────────────────────────────────────────────────────────────
 
 def test_agno_framework_string_recognized_by_lineage(tmp_path: Path):
     """Lineage records tagged framework='agno' must be queryable by
     LineageStore.by_framework."""
-    from tessera.lineage import LineageStore, make_record
+    from chuzom.lineage import LineageStore, make_record
 
     store = LineageStore(db_path=tmp_path / "lineage.db")
     rec = make_record(
@@ -336,7 +336,7 @@ def test_agno_framework_string_recognized_by_lineage(tmp_path: Path):
 
 def test_agno_session_can_use_framework_attribution(tmp_path: Path):
     """SessionStore.create accepts framework='agno' and persists it."""
-    from tessera.agents import SessionStore
+    from chuzom.agents import SessionStore
 
     store = SessionStore(db_path=tmp_path / "s.db")
     s = store.create(agent_id="x", budget_usd=1.0, framework="agno")

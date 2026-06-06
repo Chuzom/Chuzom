@@ -3,8 +3,8 @@
 import time
 
 
-from tessera.cache import ClassificationCache, get_cache
-from tessera.types import ClassificationResult, Complexity, TaskType
+from chuzom.cache import ClassificationCache, get_cache
+from chuzom.types import ClassificationResult, Complexity, TaskType
 
 
 def _make_result(
@@ -164,7 +164,7 @@ class TestCacheHashKey:
 
 class TestGetCacheSingleton:
     def test_returns_same_instance(self):
-        import tessera.cache as cache_module
+        import chuzom.cache as cache_module
         cache_module._cache = None  # reset
         c1 = get_cache()
         c2 = get_cache()

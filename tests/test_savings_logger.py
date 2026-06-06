@@ -9,8 +9,8 @@ Bug background (pre-v9.4.0):
     configured).
 
 Fix:
-    A new module tessera.hooks.savings_logger appends a JSONL record to
-    ~/.tessera/savings_log.jsonl after each successful DIRECT result.
+    A new module chuzom.hooks.savings_logger appends a JSONL record to
+    ~/.chuzom/savings_log.jsonl after each successful DIRECT result.
     session-end.py's existing _sync_import_savings_log() then flushes those
     records into the savings_stats table on session end.
 """
@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from tessera.hooks.direct_executor import DirectResult, ModelSpec
+from chuzom.hooks.direct_executor import DirectResult, ModelSpec
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def _ollama_result(input_tokens: int = 100, output_tokens: int = 50) -> DirectRe
 
 def test_log_direct_savings_creates_jsonl(savings_log_path):
     """A successful DIRECT call must create savings_log.jsonl with one record."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     log_direct_savings(
         result=_ollama_result(),
@@ -57,7 +57,7 @@ def test_log_direct_savings_creates_jsonl(savings_log_path):
 
 def test_record_schema_matches_session_end_flush(savings_log_path):
     """Record keys must match what session-end._sync_import_savings_log expects."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     log_direct_savings(
         result=_ollama_result(),
@@ -83,7 +83,7 @@ def test_record_schema_matches_session_end_flush(savings_log_path):
 
 def test_ollama_has_zero_external_cost_and_positive_savings(savings_log_path):
     """Ollama is free → external_cost=0.0 and estimated_saved > 0 vs Claude baseline."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     log_direct_savings(
         result=_ollama_result(input_tokens=1000, output_tokens=500),
@@ -101,7 +101,7 @@ def test_ollama_has_zero_external_cost_and_positive_savings(savings_log_path):
 
 def test_multiple_calls_append_not_overwrite(savings_log_path):
     """Repeated calls must append, not truncate, the JSONL file."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     for i in range(3):
         log_direct_savings(
@@ -119,7 +119,7 @@ def test_multiple_calls_append_not_overwrite(savings_log_path):
 
 def test_paid_provider_subtracts_external_cost_from_savings(savings_log_path):
     """For a paid provider (Gemini Flash), estimated_saved = baseline − external_cost."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     gemini = DirectResult(
         text="x",
@@ -142,7 +142,7 @@ def test_paid_provider_subtracts_external_cost_from_savings(savings_log_path):
 
 def test_failure_is_silent(temp_router_dir):
     """Filesystem errors must not propagate and break the calling hook."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     # Make the savings_log path a directory so open(..., 'a') will fail
     bad = temp_router_dir / "savings_log.jsonl"
@@ -159,7 +159,7 @@ def test_failure_is_silent(temp_router_dir):
 
 def test_unknown_provider_returns_safe_record(savings_log_path):
     """An unfamiliar provider/model must still produce a record (don't crash)."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     weird = DirectResult(
         text="x",
@@ -184,7 +184,7 @@ def test_unknown_provider_returns_safe_record(savings_log_path):
 def test_records_match_baseline_per_complexity(savings_log_path):
     """Complex tasks should imply higher Claude baseline (Opus) than simple (Haiku),
     so estimated_saved should grow with complexity for identical token counts."""
-    from tessera.hooks.savings_logger import log_direct_savings
+    from chuzom.hooks.savings_logger import log_direct_savings
 
     for complexity in ("simple", "moderate", "complex"):
         log_direct_savings(

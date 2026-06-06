@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.cache import get_cache
-from tessera.classifier import _parse_classification, classify_complexity
-from tessera.types import Complexity, LLMResponse, TaskType
+from chuzom.cache import get_cache
+from chuzom.classifier import _parse_classification, classify_complexity
+from chuzom.types import Complexity, LLMResponse, TaskType
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +76,7 @@ def _make_classifier_response(complexity: str, task_type: str, confidence: float
 async def test_classify_simple(mock_env, mock_acompletion):
     resp = _make_classifier_response("simple", "query")
     mock_acompletion.return_value = None  # override fixture
-    with patch("tessera.providers.call_llm", new_callable=AsyncMock, return_value=resp):
+    with patch("chuzom.providers.call_llm", new_callable=AsyncMock, return_value=resp):
         result = await classify_complexity("What is 2+2?")
     assert result.complexity == Complexity.SIMPLE
     assert result.inferred_task_type == TaskType.QUERY
@@ -86,7 +86,7 @@ async def test_classify_simple(mock_env, mock_acompletion):
 @pytest.mark.asyncio
 async def test_classify_complex(mock_env, mock_acompletion):
     resp = _make_classifier_response("complex", "code", 0.85)
-    with patch("tessera.providers.call_llm", new_callable=AsyncMock, return_value=resp):
+    with patch("chuzom.providers.call_llm", new_callable=AsyncMock, return_value=resp):
         result = await classify_complexity("Design a distributed CQRS event sourcing architecture")
     assert result.complexity == Complexity.COMPLEX
     assert result.inferred_task_type == TaskType.CODE
@@ -100,7 +100,7 @@ async def test_classify_fallback_on_invalid_complexity(mock_env, mock_acompletio
         input_tokens=50, output_tokens=30, cost_usd=0.00001,
         latency_ms=200.0, provider="gemini",
     )
-    with patch("tessera.providers.call_llm", new_callable=AsyncMock, return_value=resp):
+    with patch("chuzom.providers.call_llm", new_callable=AsyncMock, return_value=resp):
         result = await classify_complexity("test prompt")
     assert result.complexity == Complexity.MODERATE  # fallback
 
@@ -112,7 +112,7 @@ async def test_classify_fallback_on_parse_error(mock_env, mock_acompletion):
         input_tokens=50, output_tokens=30, cost_usd=0.00001,
         latency_ms=200.0, provider="gemini",
     )
-    with patch("tessera.providers.call_llm", new_callable=AsyncMock, return_value=resp):
+    with patch("chuzom.providers.call_llm", new_callable=AsyncMock, return_value=resp):
         result = await classify_complexity("test prompt")
     # Should try next model, then fallback to moderate
     assert result.complexity == Complexity.MODERATE
@@ -122,7 +122,7 @@ async def test_classify_fallback_on_parse_error(mock_env, mock_acompletion):
 @pytest.mark.asyncio
 async def test_classify_no_providers():
     """No API keys configured — returns moderate fallback."""
-    with patch("tessera.classifier.get_config") as mock_config:
+    with patch("chuzom.classifier.get_config") as mock_config:
         mock_config.return_value.available_providers = set()
         result = await classify_complexity("test prompt")
     assert result.complexity == Complexity.MODERATE
@@ -138,7 +138,7 @@ async def test_classify_clamps_confidence(mock_env, mock_acompletion):
         input_tokens=50, output_tokens=30, cost_usd=0.00001,
         latency_ms=200.0, provider="gemini",
     )
-    with patch("tessera.providers.call_llm", new_callable=AsyncMock, return_value=resp):
+    with patch("chuzom.providers.call_llm", new_callable=AsyncMock, return_value=resp):
         result = await classify_complexity("test")
     assert result.confidence == 1.0
 
@@ -151,6 +151,6 @@ async def test_classify_invalid_task_type_returns_none(mock_env, mock_acompletio
         input_tokens=50, output_tokens=30, cost_usd=0.00001,
         latency_ms=200.0, provider="gemini",
     )
-    with patch("tessera.providers.call_llm", new_callable=AsyncMock, return_value=resp):
+    with patch("chuzom.providers.call_llm", new_callable=AsyncMock, return_value=resp):
         result = await classify_complexity("test")
     assert result.inferred_task_type is None

@@ -2,9 +2,9 @@
 
 Two surfaces under test:
 
-* :mod:`tessera.telemetry` — ``ModelStats`` arithmetic and the
+* :mod:`chuzom.telemetry` — ``ModelStats`` arithmetic and the
   ``aggregate_stats`` SQL aggregation over ``routing_decisions``.
-* :mod:`tessera.bandit` — the ``EpsilonGreedyBandit.reorder`` exploit/
+* :mod:`chuzom.bandit` — the ``EpsilonGreedyBandit.reorder`` exploit/
   explore logic, with telemetry stubbed so each test pins one concern.
 
 We avoid touching the real router code path here — the wiring inside
@@ -19,8 +19,8 @@ import random
 
 import pytest
 
-from tessera.bandit import DEFAULT_EPSILON, EpsilonGreedyBandit
-from tessera.telemetry import MIN_SAMPLES_FOR_SIGNAL, ModelStats
+from chuzom.bandit import DEFAULT_EPSILON, EpsilonGreedyBandit
+from chuzom.telemetry import MIN_SAMPLES_FOR_SIGNAL, ModelStats
 
 
 # ── ModelStats arithmetic ────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ class TestBanditColdStart:
     async def test_no_telemetry_returns_input_unchanged(self, monkeypatch):
         """No rows in the DB → leave order alone (static policy is the prior)."""
         monkeypatch.setattr(
-            "tessera.bandit.aggregate_stats", _stub_aggregate([])
+            "chuzom.bandit.aggregate_stats", _stub_aggregate([])
         )
         bandit = EpsilonGreedyBandit()
         chain = ["ollama/qwen", "openai/gpt-4o", "anthropic/sonnet"]
@@ -108,7 +108,7 @@ class TestBanditColdStart:
                 success_rate=0.90, avg_cost=0.0, avg_latency_ms=400,
             ),
         ]
-        monkeypatch.setattr("tessera.bandit.aggregate_stats", _stub_aggregate(thin))
+        monkeypatch.setattr("chuzom.bandit.aggregate_stats", _stub_aggregate(thin))
         bandit = EpsilonGreedyBandit()
         chain = ["openai/gpt-4o", "ollama/qwen"]
         out = await bandit.reorder(chain, profile="balanced", subject="code")
@@ -133,7 +133,7 @@ class TestBanditExploit:
                 avg_cost=0.005, avg_latency_ms=1200,
             ),
         ]
-        monkeypatch.setattr("tessera.bandit.aggregate_stats", _stub_aggregate(good))
+        monkeypatch.setattr("chuzom.bandit.aggregate_stats", _stub_aggregate(good))
         bandit = EpsilonGreedyBandit(epsilon=0.0)
         chain = ["openai/gpt-4o", "anthropic/opus", "ollama/qwen"]
         out = await bandit.reorder(chain, profile="balanced", subject="code")
@@ -153,7 +153,7 @@ class TestBanditExploit:
                 avg_cost=0.005, avg_latency_ms=1500,
             ),
         ]
-        monkeypatch.setattr("tessera.bandit.aggregate_stats", _stub_aggregate(good))
+        monkeypatch.setattr("chuzom.bandit.aggregate_stats", _stub_aggregate(good))
         bandit = EpsilonGreedyBandit(epsilon=0.0)
         chain = ["openai/gpt-4o", "anthropic/sonnet"]
         out = await bandit.reorder(chain, profile="balanced", subject="code")
@@ -178,7 +178,7 @@ class TestBanditExplore:
                 avg_cost=0.005, avg_latency_ms=1200,
             ),
         ]
-        monkeypatch.setattr("tessera.bandit.aggregate_stats", _stub_aggregate(good))
+        monkeypatch.setattr("chuzom.bandit.aggregate_stats", _stub_aggregate(good))
         # Pinned RNG so the test is deterministic.
         bandit = EpsilonGreedyBandit(epsilon=1.0, rng=random.Random(0))
         chain = ["openai/gpt-4o", "anthropic/sonnet", "ollama/qwen"]
@@ -214,7 +214,7 @@ class TestAggregateStatsIntegration:
 
     async def test_empty_candidates_short_circuits(self, temp_db):
         """No candidates → no rows aggregated, no DB hit."""
-        from tessera.telemetry import aggregate_stats
+        from chuzom.telemetry import aggregate_stats
 
         out = await aggregate_stats(profile="balanced", subject="code", candidates=[])
         assert out == []
@@ -225,7 +225,7 @@ class TestAggregateStatsIntegration:
         Regression guard: if anyone re-orders or removes MIGRATE_ROUTING_DECISIONS_ADD_SUBJECT,
         this test breaks before the bandit silently routes blind.
         """
-        from tessera.cost import _get_db
+        from chuzom.cost import _get_db
 
         db = await _get_db()
         try:
@@ -237,8 +237,8 @@ class TestAggregateStatsIntegration:
 
     async def test_aggregates_persisted_rows(self, temp_db):
         """End-to-end: write rows via log_routing_decision, read via aggregate_stats."""
-        from tessera.cost import log_routing_decision
-        from tessera.telemetry import aggregate_stats
+        from chuzom.cost import log_routing_decision
+        from chuzom.telemetry import aggregate_stats
 
         async def _log(model: str, success: bool, cost: float) -> None:
             await log_routing_decision(

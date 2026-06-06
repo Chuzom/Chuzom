@@ -108,7 +108,7 @@ def fake_db(tmp_path):
 
 def test_query_window_totals_equal_by_source_sum(fake_db):
     """Every source contributing to totals must appear in by_source."""
-    from tessera.dashboard_data import query_window
+    from chuzom.dashboard_data import query_window
 
     for window in ("today", "week", "month", "lifetime"):
         totals = query_window(window, db_path=fake_db)
@@ -126,7 +126,7 @@ def test_query_window_totals_equal_by_source_sum(fake_db):
 
 def test_query_daily_sum_matches_query_window_14d(fake_db):
     """Daily rollup summed across days must equal the 14d window total."""
-    from tessera.dashboard_data import query_daily, query_window
+    from chuzom.dashboard_data import query_daily, query_window
 
     daily = query_daily(14, db_path=fake_db)
     window = query_window("14d", db_path=fake_db)
@@ -145,7 +145,7 @@ def test_query_daily_sum_matches_query_window_14d(fake_db):
 
 def test_query_by_platform_attribution(fake_db):
     """Per-platform rows must sum to the same totals as query_window."""
-    from tessera.dashboard_data import query_by_platform, query_window
+    from chuzom.dashboard_data import query_by_platform, query_window
 
     totals = query_window("today", db_path=fake_db)
     rows = query_by_platform("today", db_path=fake_db)
@@ -161,7 +161,7 @@ def _load_session_end_module():
     """Load session-end.py as a module despite the dash in its filename."""
     spec = importlib.util.spec_from_file_location(
         "session_end_invariant_test",
-        PROJECT_ROOT / "src" / "tessera" / "hooks" / "session-end.py",
+        PROJECT_ROOT / "src" / "chuzom" / "hooks" / "session-end.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -175,7 +175,7 @@ def test_session_end_cumulative_matches_query_window(fake_db, monkeypatch):
     is updated without the other (e.g., session-end starts skipping a
     table again), this test breaks.
     """
-    from tessera.dashboard_data import query_window
+    from chuzom.dashboard_data import query_window
 
     se = _load_session_end_module()
     monkeypatch.setattr(se, "DB_PATH", str(fake_db))
@@ -194,7 +194,7 @@ def test_session_end_cumulative_matches_query_window(fake_db, monkeypatch):
 
 def test_session_end_daily_matches_query_daily(fake_db, monkeypatch):
     """`_query_daily_14d` ≡ `query_daily(14)` for the same DB."""
-    from tessera.dashboard_data import query_daily
+    from chuzom.dashboard_data import query_daily
 
     se = _load_session_end_module()
     monkeypatch.setattr(se, "DB_PATH", str(fake_db))
@@ -216,20 +216,20 @@ def test_session_end_daily_matches_query_daily(fake_db, monkeypatch):
 def test_canary_returns_zero_on_clean_db(fake_db, monkeypatch):
     """explain-dashboard --check must exit 0 when all sources are read."""
     # Point the canary at our test DB by patching DEFAULT_DB_PATH.
-    from tessera import dashboard_data as dd
+    from chuzom import dashboard_data as dd
     monkeypatch.setattr(dd, "DEFAULT_DB_PATH", fake_db)
 
-    from tessera.commands.explain_dashboard import _check_mode_canary
+    from chuzom.commands.explain_dashboard import _check_mode_canary
     rc = _check_mode_canary()
     assert rc == 0, "canary failed on a clean DB"
 
 
 def test_canary_via_cli(fake_db, monkeypatch):
     """Invoke `cmd_explain_dashboard(["--check"])` routes to the canary."""
-    # The CLI resolves DEFAULT_DB_PATH from ~/.tessera; we patch the
+    # The CLI resolves DEFAULT_DB_PATH from ~/.chuzom; we patch the
     # module constant rather than relocating $HOME for the subprocess.
-    from tessera import dashboard_data as dd
-    from tessera.commands.explain_dashboard import cmd_explain_dashboard
+    from chuzom import dashboard_data as dd
+    from chuzom.commands.explain_dashboard import cmd_explain_dashboard
     monkeypatch.setattr(dd, "DEFAULT_DB_PATH", fake_db)
     rc = cmd_explain_dashboard(["--check"])
     assert rc == 0

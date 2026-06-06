@@ -1,7 +1,7 @@
 """Unit tests for routing policy system."""
 
 import pytest
-from tessera.policy import RoutingPolicy, PolicyManager
+from chuzom.policy import RoutingPolicy, PolicyManager
 
 
 class TestPolicySchema:
@@ -187,7 +187,7 @@ class TestCustomPolicies:
     """Test creating and saving custom policies."""
 
     def test_save_custom_policy(self):
-        """Save a custom policy to ~/.tessera/policies/."""
+        """Save a custom policy to ~/.chuzom/policies/."""
         pm = PolicyManager()
         custom = RoutingPolicy(
             name="custom_test",

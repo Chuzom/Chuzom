@@ -37,7 +37,7 @@ import pytest
 SCRIPT = (
     Path(__file__).parent.parent
     / "src"
-    / "tessera"
+    / "chuzom"
     / "hooks"
     / "statusline-command.sh"
 )
@@ -45,14 +45,14 @@ SCRIPT = (
 
 @pytest.fixture
 def fake_home(tmp_path):
-    """Temp HOME with an empty .tessera so the script writes/reads in isolation."""
-    (tmp_path / ".tessera").mkdir()
+    """Temp HOME with an empty .chuzom so the script writes/reads in isolation."""
+    (tmp_path / ".chuzom").mkdir()
     return tmp_path
 
 
 def _seed_usage_db(home: Path, rows: list[dict]) -> None:
     """Create usage.db with the v9.4.0+ schema and the given rows."""
-    db = home / ".tessera" / "usage.db"
+    db = home / ".chuzom" / "usage.db"
     conn = sqlite3.connect(str(db))
     conn.execute(
         """CREATE TABLE IF NOT EXISTS usage (
@@ -98,7 +98,7 @@ def _seed_usage_db(home: Path, rows: list[dict]) -> None:
 
 
 def _seed_savings_log(home: Path, records: list[dict]) -> None:
-    path = home / ".tessera" / "savings_log.jsonl"
+    path = home / ".chuzom" / "savings_log.jsonl"
     with path.open("w") as f:
         for r in records:
             f.write(json.dumps(r) + "\n")
@@ -117,7 +117,7 @@ def _run_statusline(home: Path, stdin_json: dict | None = None) -> str:
     env = {
         **os.environ,
         "HOME": str(home),
-        "TESSERA_ENFORCE": "soft",
+        "CHUZOM_ENFORCE": "soft",
         "NO_COLOR": "1",
     }
     payload = json.dumps(stdin_json) if stdin_json is not None else "{}"
@@ -238,7 +238,7 @@ def _seed_platform_tables(home: Path, rows: dict[str, list[dict]]) -> None:
     gemini_usage each have `timestamp`, `model`, `tokens_used`, `complexity`,
     `cost_saved_usd`, `routing_overhead_usd`.
     """
-    db = home / ".tessera" / "usage.db"
+    db = home / ".chuzom" / "usage.db"
     conn = sqlite3.connect(str(db))
     for table, table_rows in rows.items():
         conn.execute(
@@ -314,7 +314,7 @@ def test_last_route_uses_per_session_glob(fake_home):
     import time as _time
 
     # Old route (>5min ago) — must be ignored
-    old = fake_home / ".tessera" / "last_route_old.json"
+    old = fake_home / ".chuzom" / "last_route_old.json"
     old.write_text(json.dumps({
         "task_type": "query",
         "tool": "llm_query",
@@ -322,7 +322,7 @@ def test_last_route_uses_per_session_glob(fake_home):
     }))
 
     # Recent route — must be shown
-    recent = fake_home / ".tessera" / "last_route_new.json"
+    recent = fake_home / ".chuzom" / "last_route_new.json"
     recent.write_text(json.dumps({
         "task_type": "code",
         "tool": "llm_code",
@@ -343,7 +343,7 @@ def test_last_route_uses_per_session_glob(fake_home):
 
 
 def _seed_usage_json(home: Path, **overrides) -> None:
-    """Write ~/.tessera/usage.json with sensible defaults plus overrides."""
+    """Write ~/.chuzom/usage.json with sensible defaults plus overrides."""
     data = {
         "session_pct": 8.0,
         "weekly_pct": 20.0,
@@ -355,7 +355,7 @@ def _seed_usage_json(home: Path, **overrides) -> None:
     data.update(overrides)
     # Drop None-valued keys so the script's `if not raw: raise` branch fires.
     data = {k: v for k, v in data.items() if v is not None}
-    (home / ".tessera" / "usage.json").write_text(json.dumps(data))
+    (home / ".chuzom" / "usage.json").write_text(json.dumps(data))
 
 
 def test_reset_segment_renders_future_time(fake_home):

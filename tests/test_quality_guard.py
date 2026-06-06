@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.cost import (
+from chuzom.cost import (
     _get_db,
     log_quality_trend,
     log_routing_decision,
 )
-from tessera.judge import get_judge_scores_for_model
-from tessera.model_selector import _get_quality_floor
-from tessera.tools.admin import llm_quality_guard
+from chuzom.judge import get_judge_scores_for_model
+from chuzom.model_selector import _get_quality_floor
+from chuzom.tools.admin import llm_quality_guard
 
 
 def _get_provider_for_model(model: str) -> str:

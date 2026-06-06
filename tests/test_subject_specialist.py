@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.policy import RoutingPolicy
-from tessera.types import (
+from chuzom.policy import RoutingPolicy
+from chuzom.types import (
     ClassificationResult,
     Complexity,
     Subject,
@@ -41,7 +41,7 @@ class TestNoOpBehavior:
     """When the policy has nothing relevant, chain is unchanged."""
 
     def test_empty_specialists_returns_chain_unchanged(self) -> None:
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         chain = ["openai/gpt-4o-mini", "openai/gpt-4o"]
         policy = RoutingPolicy(
@@ -52,7 +52,7 @@ class TestNoOpBehavior:
         assert out is not chain  # always returns a new list
 
     def test_subject_not_in_specialists_returns_chain_unchanged(self) -> None:
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         chain = ["openai/gpt-4o-mini", "openai/gpt-4o"]
         policy = RoutingPolicy(
@@ -65,7 +65,7 @@ class TestNoOpBehavior:
 
     def test_general_subject_is_not_overridden_by_default(self) -> None:
         """GENERAL is the catchall — policies should explicitly opt in."""
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         chain = ["openai/gpt-4o-mini"]
         policy = RoutingPolicy(
@@ -81,7 +81,7 @@ class TestSpecialistPrepend:
     """When a specialist is declared, it moves to position 0."""
 
     def test_specialist_prepended_when_absent(self) -> None:
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         chain = ["openai/gpt-4o-mini", "anthropic/claude-sonnet-4-6"]
         policy = RoutingPolicy(
@@ -97,7 +97,7 @@ class TestSpecialistPrepend:
         ]
 
     def test_specialist_already_first_returns_equivalent_chain(self) -> None:
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         chain = ["openai/gpt-4o", "openai/gpt-4o-mini"]
         policy = RoutingPolicy(
@@ -110,7 +110,7 @@ class TestSpecialistPrepend:
 
     def test_specialist_already_mid_chain_moves_to_front(self) -> None:
         """Dedupe semantics — never duplicate the specialist."""
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         chain = ["openai/gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-sonnet-4-6"]
         policy = RoutingPolicy(
@@ -127,7 +127,7 @@ class TestSpecialistPrepend:
 
     def test_empty_chain_yields_specialist_only(self) -> None:
         """A specialist with no fallback is a valid (if risky) configuration."""
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         policy = RoutingPolicy(
             name="code_spec",
@@ -140,7 +140,7 @@ class TestSpecialistPrepend:
 
 class TestImmutability:
     def test_input_chain_is_not_mutated(self) -> None:
-        from tessera.policy import apply_subject_specialist
+        from chuzom.policy import apply_subject_specialist
 
         original = ["openai/gpt-4o-mini", "anthropic/claude-sonnet-4-6"]
         snapshot = list(original)
@@ -159,7 +159,7 @@ class TestByeSubjectPrimitive:
     ClassificationResult objects)."""
 
     def test_subject_enum_works(self) -> None:
-        from tessera.policy import apply_subject_specialist_by_subject
+        from chuzom.policy import apply_subject_specialist_by_subject
 
         policy = RoutingPolicy(
             name="t", description="", specialists={"code": "openai/gpt-4o"}
@@ -171,7 +171,7 @@ class TestByeSubjectPrimitive:
 
     def test_raw_string_subject_works(self) -> None:
         """Router.py reads subject from a dict — passes a string, not an enum."""
-        from tessera.policy import apply_subject_specialist_by_subject
+        from chuzom.policy import apply_subject_specialist_by_subject
 
         policy = RoutingPolicy(
             name="t", description="", specialists={"medical": "openai/o3"}
@@ -180,7 +180,7 @@ class TestByeSubjectPrimitive:
         assert out == ["openai/o3", "a", "b"]
 
     def test_none_subject_returns_chain_copy(self) -> None:
-        from tessera.policy import apply_subject_specialist_by_subject
+        from chuzom.policy import apply_subject_specialist_by_subject
 
         policy = RoutingPolicy(
             name="t", description="", specialists={"code": "openai/gpt-4o"}
@@ -190,7 +190,7 @@ class TestByeSubjectPrimitive:
         assert out is not None  # always a new list
 
     def test_unknown_string_subject_is_noop(self) -> None:
-        from tessera.policy import apply_subject_specialist_by_subject
+        from chuzom.policy import apply_subject_specialist_by_subject
 
         policy = RoutingPolicy(
             name="t", description="", specialists={"code": "openai/gpt-4o"}
@@ -227,7 +227,7 @@ def test_apply_subject_specialist_matrix(
     chain: list[str],
     expected: list[str],
 ) -> None:
-    from tessera.policy import apply_subject_specialist
+    from chuzom.policy import apply_subject_specialist
 
     policy = RoutingPolicy(
         name="matrix", description="", specialists=specialists

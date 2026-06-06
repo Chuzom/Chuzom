@@ -10,9 +10,9 @@ import time
 from io import StringIO
 
 
-from tessera.agents import SessionStore
-from tessera.lineage import LineageStore, Tier, make_record
-from tessera.summary import (
+from chuzom.agents import SessionStore
+from chuzom.lineage import LineageStore, Tier, make_record
+from chuzom.summary import (
     SessionSummaryData,
     _fmt_cost,
     _render_sparkline,
@@ -206,7 +206,7 @@ def test_render_markdown_has_all_sections(tmp_path):
     data = collect(lineage_store=store, since_seconds=None)
     md = render_markdown(data)
     for section in (
-        "# Tessera Session Summary",
+        "# Chuzom Session Summary",
         "## Headline",
         "## Tier distribution",
         "## Providers",

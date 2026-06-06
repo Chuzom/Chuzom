@@ -15,15 +15,15 @@ from unittest.mock import patch
 
 import pytest
 
-from tessera.router import route_and_call
-from tessera.types import RoutingProfile, TaskType
+from chuzom.router import route_and_call
+from chuzom.types import RoutingProfile, TaskType
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _mock_codex_result(content: str = "codex output"):
     """Return a CodexResult that looks like a successful execution."""
-    from tessera.codex_agent import CodexResult
+    from chuzom.codex_agent import CodexResult
     return CodexResult(content=content, model="gpt-5.4", exit_code=0, duration_sec=1.2)
 
 
@@ -48,23 +48,23 @@ async def test_code_task_codex_before_paid_externals_subscription_mode(
     """
     # Subscription mode: no Anthropic API key
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
-    monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "true")
-    monkeypatch.setattr("tessera.router.is_codex_available", lambda: True)
-    monkeypatch.setattr("tessera.claude_usage.get_claude_pressure", lambda: 0.1)
+    monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "true")
+    monkeypatch.setattr("chuzom.router.is_codex_available", lambda: True)
+    monkeypatch.setattr("chuzom.claude_usage.get_claude_pressure", lambda: 0.1)
 
     # Disable Ollama to ensure Codex is first in chain
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "")
 
     # Mock discovery cache to return empty BEFORE any config is accessed
-    monkeypatch.setattr("tessera.discover.get_cached_ollama_models", lambda: [])
+    monkeypatch.setattr("chuzom.discover.get_cached_ollama_models", lambda: [])
 
     # Reset config singleton to pick up env var changes
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
 
     codex_result = _mock_codex_result()
-    with patch("tessera.router.run_codex", return_value=codex_result) as mock_codex:
+    with patch("chuzom.router.run_codex", return_value=codex_result) as mock_codex:
         resp = await route_and_call(
             TaskType.CODE, "implement a binary search function",
             profile=RoutingProfile.BALANCED,
@@ -88,18 +88,18 @@ async def test_code_task_codex_after_first_claude_not_last(
     Chain before fix:  [Sonnet, GPT-4o, Gemini Pro, DeepSeek, Haiku, Codex/gpt-5.4]
     Chain after fix:   [Sonnet, Codex/gpt-5.4, Codex/o3, GPT-4o, Gemini Pro, DeepSeek, Haiku]
     """
-    monkeypatch.setattr("tessera.router.is_codex_available", lambda: True)
-    monkeypatch.setattr("tessera.claude_usage.get_claude_pressure", lambda: 0.2)
+    monkeypatch.setattr("chuzom.router.is_codex_available", lambda: True)
+    monkeypatch.setattr("chuzom.claude_usage.get_claude_pressure", lambda: 0.2)
 
     # Disable Ollama to ensure Claude is first in chain
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "")
 
     # Mock discovery cache to return empty BEFORE any config is accessed
-    monkeypatch.setattr("tessera.discover.get_cached_ollama_models", lambda: [])
+    monkeypatch.setattr("chuzom.discover.get_cached_ollama_models", lambda: [])
 
     # Reset config singleton to pick up env var changes
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
 
     # Make Claude (first model) fail, then verify second model is Codex
@@ -125,7 +125,7 @@ async def test_code_task_codex_after_first_claude_not_last(
 
     with patch("litellm.acompletion", side_effect=_selective_fail), \
          patch("litellm.completion_cost", return_value=0.001), \
-         patch("tessera.router.run_codex", return_value=codex_result) as mock_codex:
+         patch("chuzom.router.run_codex", return_value=codex_result) as mock_codex:
         resp = await route_and_call(
             TaskType.CODE, "write a merge sort",
             profile=RoutingProfile.BALANCED,
@@ -150,21 +150,21 @@ async def test_analyze_task_codex_before_paid_externals_subscription_mode(
     Chain: [Codex/gpt-5.4, Codex/o3, GPT-4o, Gemini Pro, DeepSeek, ...]
     """
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
-    monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "true")
+    monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "true")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "")
-    monkeypatch.setattr("tessera.router.is_codex_available", lambda: True)
-    monkeypatch.setattr("tessera.claude_usage.get_claude_pressure", lambda: 0.2)
+    monkeypatch.setattr("chuzom.router.is_codex_available", lambda: True)
+    monkeypatch.setattr("chuzom.claude_usage.get_claude_pressure", lambda: 0.2)
 
     # Mock discovery cache to return empty BEFORE any config is accessed
-    monkeypatch.setattr("tessera.discover.get_cached_ollama_models", lambda: [])
+    monkeypatch.setattr("chuzom.discover.get_cached_ollama_models", lambda: [])
 
     # Reset config singleton to pick up env var changes
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
 
     codex_result = _mock_codex_result("Codex analyze output")
 
-    with patch("tessera.router.run_codex", return_value=codex_result) as mock_codex:
+    with patch("chuzom.router.run_codex", return_value=codex_result) as mock_codex:
         resp = await route_and_call(
             TaskType.ANALYZE, "analyze the tradeoffs",
             profile=RoutingProfile.BALANCED,
@@ -186,21 +186,21 @@ async def test_query_task_codex_before_paid_externals_subscription_mode(
     for QUERY tasks in subscription mode — not just for CODE tasks.
     """
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
-    monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "true")
+    monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "true")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "")
-    monkeypatch.setattr("tessera.router.is_codex_available", lambda: True)
-    monkeypatch.setattr("tessera.claude_usage.get_claude_pressure", lambda: 0.2)
+    monkeypatch.setattr("chuzom.router.is_codex_available", lambda: True)
+    monkeypatch.setattr("chuzom.claude_usage.get_claude_pressure", lambda: 0.2)
 
     # Mock discovery cache to return empty BEFORE any config is accessed
-    monkeypatch.setattr("tessera.discover.get_cached_ollama_models", lambda: [])
+    monkeypatch.setattr("chuzom.discover.get_cached_ollama_models", lambda: [])
 
     # Reset config singleton to pick up env var changes
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
 
     codex_result = _mock_codex_result("Codex query output")
 
-    with patch("tessera.router.run_codex", return_value=codex_result) as mock_codex:
+    with patch("chuzom.router.run_codex", return_value=codex_result) as mock_codex:
         resp = await route_and_call(
             TaskType.QUERY, "what is the capital of France?",
             profile=RoutingProfile.BALANCED,
@@ -217,13 +217,13 @@ async def test_codex_at_front_when_pressure_very_high(
     """At pressure ≥ 0.95, Codex should be tried first (before Claude) to
     preserve any remaining subscription capacity.
     """
-    monkeypatch.setattr("tessera.router.is_codex_available", lambda: True)
-    monkeypatch.setattr("tessera.router.is_gemini_cli_available", lambda: False)
-    monkeypatch.setattr("tessera.claude_usage.get_claude_pressure", lambda: 0.97)
+    monkeypatch.setattr("chuzom.router.is_codex_available", lambda: True)
+    monkeypatch.setattr("chuzom.router.is_gemini_cli_available", lambda: False)
+    monkeypatch.setattr("chuzom.claude_usage.get_claude_pressure", lambda: 0.97)
 
     codex_result = _mock_codex_result("Codex at high pressure")
 
-    with patch("tessera.router.run_codex", return_value=codex_result) as mock_codex:
+    with patch("chuzom.router.run_codex", return_value=codex_result) as mock_codex:
         resp = await route_and_call(
             TaskType.CODE, "refactor this function",
             profile=RoutingProfile.BALANCED,
@@ -316,18 +316,18 @@ class TestCodexPluginDetection:
         # Redirect home to a temp dir with no plugins installed
         monkeypatch.setenv("HOME", str(tmp_path))
         from importlib import reload
-        import tessera.codex_agent as ca
+        import chuzom.codex_agent as ca
         reload(ca)  # re-evaluate CODEX_PATHS with new HOME
 
         # Patch Path.home() to tmp_path
-        with patch("tessera.codex_agent.Path") as mock_path:
+        with patch("chuzom.codex_agent.Path") as mock_path:
             mock_path.home.return_value = tmp_path
             mock_path.cwd.return_value = tmp_path
             # Construct the same check as the real function
             plugin_dir = tmp_path / ".claude" / "plugins" / "codex"
             assert not plugin_dir.exists()
 
-        from tessera.codex_agent import is_codex_plugin_available
+        from chuzom.codex_agent import is_codex_plugin_available
         # Should return False safely — no plugin installed in tmp_path
         # (the real function will check the real home, which may or may not have the plugin)
         # We just verify the function is callable and returns a bool
@@ -339,7 +339,7 @@ class TestCodexPluginDetection:
         plugin_dir = tmp_path / ".claude" / "plugins" / "codex"
         plugin_dir.mkdir(parents=True)
 
-        with patch("tessera.codex_agent.Path") as mock_path_cls:
+        with patch("chuzom.codex_agent.Path") as mock_path_cls:
             # Make Path.home() return tmp_path so the check finds our dir
             mock_path_cls.home.return_value = tmp_path
             mock_path_cls.cwd.return_value = tmp_path
@@ -356,7 +356,7 @@ class TestCodexPluginDetection:
 
 def test_codex_binary_search_includes_npm_paths():
     """The CODEX_PATHS list should include npm global install locations."""
-    from tessera.codex_agent import CODEX_PATHS
+    from chuzom.codex_agent import CODEX_PATHS
     paths_str = " ".join(CODEX_PATHS)
     assert "npm" in paths_str or "/usr/local/bin" in paths_str, (
         "CODEX_PATHS should include npm global install paths "

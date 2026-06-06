@@ -118,7 +118,7 @@ def render_executive_summary(scenarios: list[Scenario]) -> str:
     by_framework = Counter(s.framework or "—" for s in scenarios)
 
     out = []
-    out.append("# Tessera Scenario Report\n")
+    out.append("# Chuzom Scenario Report\n")
     out.append("Each scenario below is a *story*, not just a pass/fail.")
     out.append("The trace shows every actor that touched the request — the")
     out.append("host CLI, the classifier, each signal, the decision engine,")

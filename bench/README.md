@@ -1,4 +1,4 @@
-# Tessera Benchmark Harness
+# Chuzom Benchmark Harness
 
 > Head-to-head router comparison on a fixed corpus. Every comparison decision
 > is data-derived — no human judgment in the aggregate ranking.
@@ -6,7 +6,7 @@
 ## What it does
 
 1. Loads a corpus of prompts (easy + moderate, tagged objective/subjective).
-2. Routes each prompt through every contender router (Tessera, AlwaysCheap, AlwaysPremium, StaticChain).
+2. Routes each prompt through every contender router (Chuzom, AlwaysCheap, AlwaysPremium, StaticChain).
 3. Grades each response — **deterministic** for objective prompts (string match), **LLM-judge** for subjective.
 4. Produces a scorecard, Pareto frontier (cost vs quality), and per-prompt detail.
 
@@ -20,7 +20,7 @@ python -m bench --easy-only
 python -m bench
 
 # Specific router subset
-python -m bench --routers tessera,always-cheap
+python -m bench --routers chuzom,always-cheap
 
 # Force re-run (clear cache)
 python -m bench --no-cache
@@ -30,7 +30,7 @@ python -m bench --no-cache
 
 | Router | Calls | Approx spend |
 |---|---|---|
-| `tessera` | 10 | $0 (mostly Ollama hits) |
+| `chuzom` | 10 | $0 (mostly Ollama hits) |
 | `always-cheap` (Ollama) | 10 | $0 |
 | `always-premium` (GPT-4o) | 10 | ~$0.10 |
 | `static-chain` | 10 | $0 (mostly Ollama hits) |

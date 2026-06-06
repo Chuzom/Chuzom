@@ -2,7 +2,7 @@
 
 Replaces toxiproxy with mock-based exception injection. Each failure
 class (ConnectionError, TimeoutError, RateLimitError, AuthenticationError,
-QuotaExceeded) gets a dedicated test that verifies Tessera handles it
+QuotaExceeded) gets a dedicated test that verifies Chuzom handles it
 according to the documented contract — falling back through the chain,
 opening the circuit breaker, recording the failure in lineage, surfacing
 a clear error to the user.
@@ -27,7 +27,7 @@ import time
 
 import pytest
 
-from tessera.health import HealthTracker, ProviderHealth
+from chuzom.health import HealthTracker, ProviderHealth
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ def test_single_failure_does_not_trip_breaker():
 
 def test_repeated_failures_trip_breaker():
     """Hitting the failure threshold should mark the provider unhealthy."""
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     h = ProviderHealth()
@@ -58,7 +58,7 @@ def test_repeated_failures_trip_breaker():
 
 def test_success_resets_failure_count():
     """A success after partial failures must reset the consecutive counter."""
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     h = ProviderHealth()
@@ -98,7 +98,7 @@ def test_rate_limit_recovers_after_custom_cooldown():
 def test_breaker_recovers_after_cooldown():
     """After the consecutive-failure cooldown elapses, the breaker should
     transition to half-open and allow a retry."""
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     h = ProviderHealth()
@@ -128,7 +128,7 @@ def test_total_calls_increments_on_every_record():
 
 def test_status_string_reflects_current_state():
     """The status property must read correctly through every state
-    transition — used by `tessera doctor` and the dashboard."""
+    transition — used by `chuzom doctor` and the dashboard."""
     h = ProviderHealth()
     assert h.status == "healthy"
 
@@ -136,7 +136,7 @@ def test_status_string_reflects_current_state():
     assert "rate" in h.status.lower()
 
     h2 = ProviderHealth()
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     for _ in range(threshold + 1):
@@ -151,7 +151,7 @@ def test_status_string_reflects_current_state():
 def test_tracker_isolates_failures_per_provider():
     """A failure on Provider A must NOT mark Provider B unhealthy."""
     tracker = HealthTracker()
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     for _ in range(threshold + 1):
@@ -167,7 +167,7 @@ def test_tracker_reset_stale_recovers_old_providers():
     """reset_stale should clear breakers whose last failure is older than
     max_age — prevents permanently-stuck-unhealthy providers."""
     tracker = HealthTracker()
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     for _ in range(threshold + 1):
@@ -223,7 +223,7 @@ def test_quota_exhaustion_is_treated_as_rate_limit():
 def test_authentication_error_recorded_as_hard_failure():
     """Bad credentials are a hard failure (won't fix themselves), so the
     breaker should trip after the threshold."""
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     h = ProviderHealth()
@@ -240,7 +240,7 @@ def test_authentication_error_recorded_as_hard_failure():
 def test_lineage_record_supports_failure_outcome(tmp_path):
     """LineageRecord must accept outcome='fail' / 'timeout' / 'quota' so
     network failure events can be persisted with a meaningful tag."""
-    from tessera.lineage import LineageStore, make_record
+    from chuzom.lineage import LineageStore, make_record
 
     store = LineageStore(db_path=tmp_path / "l.db")
     for outcome in ("fail", "timeout", "quota"):
@@ -263,7 +263,7 @@ def test_lineage_record_supports_failure_outcome(tmp_path):
 def test_lineage_failed_chain_records_full_attempted_chain(tmp_path):
     """When the whole chain fails, chain_attempted should list every model
     we tried so the user can see exactly how many fallbacks happened."""
-    from tessera.lineage import LineageStore, make_record
+    from chuzom.lineage import LineageStore, make_record
 
     store = LineageStore(db_path=tmp_path / "l.db")
     rec = make_record(
@@ -330,7 +330,7 @@ def test_chain_walk_with_one_healthy_provider_succeeds():
 def test_state_machine_failure_success_failure_cycle():
     """A provider going through failure → success → failure → ... must
     track each transition correctly."""
-    from tessera.config import get_config
+    from chuzom.config import get_config
 
     threshold = get_config().health_failure_threshold
     h = ProviderHealth()

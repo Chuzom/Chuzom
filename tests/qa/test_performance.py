@@ -1,7 +1,7 @@
 """Performance pillar — explicit budgets enforced as test assertions.
 
 Each test measures one operation and asserts it stays under the budget
-defined in Docs/QA_TEST_STRATEGY.md §4.3. Failures here mean Tessera
+defined in Docs/QA_TEST_STRATEGY.md §4.3. Failures here mean Chuzom
 added user-visible latency or regressed throughput; both are unacceptable.
 
 Methodology:
@@ -20,12 +20,12 @@ from pathlib import Path
 
 import pytest
 
-from tessera.agents import SessionStore
-from tessera.decisions.engine import Decision, DecisionEngine, _apply_boosts
-from tessera.lineage import LineageStore, make_record, tier_for_model
-from tessera.signals.base import SignalScore
-from tessera.signals.keyword import KeywordSignal
-from tessera.signals.pii import PiiSignal
+from chuzom.agents import SessionStore
+from chuzom.decisions.engine import Decision, DecisionEngine, _apply_boosts
+from chuzom.lineage import LineageStore, make_record, tier_for_model
+from chuzom.signals.base import SignalScore
+from chuzom.signals.keyword import KeywordSignal
+from chuzom.signals.pii import PiiSignal
 
 
 pytestmark = pytest.mark.performance
@@ -242,11 +242,11 @@ def test_perf_tier_for_model_under_5us():
 # ────────────────────────────────────────────────────────────────────────
 
 def test_perf_cursor_install_under_50ms(tmp_path: Path):
-    from tessera.hosts.cursor import CursorAdapter
+    from chuzom.hosts.cursor import CursorAdapter
 
     def op():
         adapter = CursorAdapter(config_path=tmp_path / f"c_{time.perf_counter()}.json")
-        adapter.install(server_command=["tessera"])
+        adapter.install(server_command=["chuzom"])
 
     results = measure(op, iterations=30)
     assert results["p95"] < 50.0, (
@@ -255,13 +255,13 @@ def test_perf_cursor_install_under_50ms(tmp_path: Path):
 
 
 def test_perf_gemini_cli_install_under_50ms(tmp_path: Path):
-    from tessera.hosts.gemini_cli import GeminiCliAdapter
+    from chuzom.hosts.gemini_cli import GeminiCliAdapter
 
     def op():
         adapter = GeminiCliAdapter(
             config_path=tmp_path / f"g_{time.perf_counter()}.json"
         )
-        adapter.install(server_command=["tessera"])
+        adapter.install(server_command=["chuzom"])
 
     results = measure(op, iterations=30)
     assert results["p95"] < 50.0, (

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automate tessera releases."""
+"""Automate chuzom releases."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT_PATH = ROOT / "pyproject.toml"
-INIT_PATH = ROOT / "src" / "tessera" / "__init__.py"
+INIT_PATH = ROOT / "src" / "chuzom" / "__init__.py"
 CHANGELOG_PATH = ROOT / "CHANGELOG.md"
 PLUGIN_DIRS = (".claude-plugin", ".codex-plugin", ".factory-plugin")
 
@@ -66,7 +66,7 @@ def update_marketplace_data(data: dict, version: str) -> dict:
 
     plugins = [dict(plugin) for plugin in updated.get("plugins", [])]
     for plugin in plugins:
-        if plugin.get("name") == "tessera":
+        if plugin.get("name") == "chuzom":
             plugin["version"] = version
     updated["plugins"] = plugins
     return updated
@@ -78,7 +78,7 @@ def _write_json(path: Path, data: dict) -> None:
 
 def bump_versions(version: str, *, root: Path = ROOT) -> None:
     pyproject_path = root / "pyproject.toml"
-    init_path = root / "src" / "tessera" / "__init__.py"
+    init_path = root / "src" / "chuzom" / "__init__.py"
     pyproject_text = pyproject_path.read_text(encoding="utf-8")
     pyproject_path.write_text(update_pyproject_text(pyproject_text, version), encoding="utf-8")
 
@@ -98,7 +98,7 @@ def bump_versions(version: str, *, root: Path = ROOT) -> None:
 
 def read_versions(*, root: Path = ROOT) -> dict[str, str]:
     pyproject_path = root / "pyproject.toml"
-    init_path = root / "src" / "tessera" / "__init__.py"
+    init_path = root / "src" / "chuzom" / "__init__.py"
     pyproject_version = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))["project"]["version"]
     init_match = _INIT_VERSION_RE.search(init_path.read_text(encoding="utf-8"))
     if init_match is None:
@@ -116,11 +116,11 @@ def read_versions(*, root: Path = ROOT) -> dict[str, str]:
         marketplace_data = json.loads(marketplace_path.read_text(encoding="utf-8"))
         marketplace_version = None
         for plugin in marketplace_data.get("plugins", []):
-            if plugin.get("name") == "tessera":
+            if plugin.get("name") == "chuzom":
                 marketplace_version = plugin.get("version")
                 break
         if marketplace_version is None:
-            raise ValueError(f"Could not find tessera entry in {marketplace_path}")
+            raise ValueError(f"Could not find chuzom entry in {marketplace_path}")
 
         versions[f"{plugin_dir}/plugin.json"] = plugin_version
         versions[f"{plugin_dir}/marketplace.json"] = marketplace_version
@@ -251,8 +251,8 @@ def perform_release(
 
     if not skip_plugin_reinstall:
         print("9. Reinstalling Codex plugin...")
-        run(["Codex", "plugin", "remove", "tessera"], dry_run=dry_run)
-        run(["Codex", "plugin", "add", "tessera"], dry_run=dry_run)
+        run(["Codex", "plugin", "remove", "chuzom"], dry_run=dry_run)
+        run(["Codex", "plugin", "add", "chuzom"], dry_run=dry_run)
         run(["Codex", "plugin", "list"], dry_run=dry_run)
 
     print(f"\nRelease flow for v{version} completed.")

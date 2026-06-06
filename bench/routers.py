@@ -1,14 +1,14 @@
-"""Built-in benchmark routers — Tessera + reference baselines.
+"""Built-in benchmark routers — Chuzom + reference baselines.
 
 v0.0.1 ships:
-    - TesseraRouter: signal-driven via tessera.router (the real product)
+    - ChuzomRouter: signal-driven via chuzom.router (the real product)
     - AlwaysCheapRouter: always picks the cheapest local model (Ollama)
     - AlwaysPremiumRouter: always picks one premium model (GPT-4o default)
     - StaticChainRouter: fixed fallback list, no signal layer (for
       ablation: shows the value of signals vs raw cost-ordered chain)
 
-v0.0.2 candidates: LiteLLMRouter, OpenRouterRouter, AggressiveTesseraRouter
-(forcing a specific Tessera policy profile).
+v0.0.2 candidates: LiteLLMRouter, OpenRouterRouter, AggressiveChuzomRouter
+(forcing a specific Chuzom policy profile).
 """
 from __future__ import annotations
 
@@ -60,22 +60,22 @@ async def _call_litellm(model: str, prompt: str) -> tuple[str, int, int]:
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# Tessera router — uses the real product
+# Chuzom router — uses the real product
 # ─────────────────────────────────────────────────────────────────────────
 
 @dataclass
-class TesseraRouter:
-    """The actual Tessera router. v0.0.1 uses the inherited llm-router chain
+class ChuzomRouter:
+    """The actual Chuzom router. v0.0.1 uses the inherited llm-router chain
     selection. v0.0.2 will exercise the signal/decision engine end-to-end.
     """
 
-    name: str = "tessera"
+    name: str = "chuzom"
     profile: str = "balanced"
 
     async def route(self, prompt: str) -> RouterResult:
         # v0.0.1 stub: ask the chain to pick the cheapest model that works.
         # The chain is hardcoded here for the smoke; v0.0.2 wires this into
-        # tessera.router.Router.choose_chain(prompt, profile=self.profile).
+        # chuzom.router.Router.choose_chain(prompt, profile=self.profile).
         chain = [
             "ollama/qwen3.5:latest",
             "google/gemini-1.5-flash-8b",
@@ -150,7 +150,7 @@ class FixedModelRouter:
 @dataclass
 class StaticChainRouter:
     """Fallback chain with no signal layer. Demonstrates the value (or not)
-    of Tessera's signal-driven routing relative to a naïve cost-ordered
+    of Chuzom's signal-driven routing relative to a naïve cost-ordered
     chain.
     """
 
@@ -193,7 +193,7 @@ class StaticChainRouter:
 def default_routers() -> list:
     """The v0.0.1 head-to-head lineup."""
     return [
-        TesseraRouter(),
+        ChuzomRouter(),
         FixedModelRouter(name="always-cheap", model="ollama/qwen3.5:latest"),
         FixedModelRouter(name="always-premium", model="openai/gpt-4o"),
         StaticChainRouter(),

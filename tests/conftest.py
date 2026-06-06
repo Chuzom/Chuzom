@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for all tessera tests."""
+"""Shared pytest fixtures for all chuzom tests."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,16 +25,16 @@ def get_hook_path(hook_name: str) -> Path:
         hook = get_hook_path("session-end.py")
         assert hook.exists()
     """
-    return get_project_root() / "src" / "tessera" / "hooks" / hook_name
+    return get_project_root() / "src" / "chuzom" / "hooks" / hook_name
 
 
 def get_src_path(*parts: str) -> Path:
     """Safely get path in src/ directory.
 
     Example:
-        cost_py = get_src_path("tessera", "cost.py")
+        cost_py = get_src_path("chuzom", "cost.py")
     """
-    return get_project_root() / "src" / "tessera" / Path(*parts)
+    return get_project_root() / "src" / "chuzom" / Path(*parts)
 
 
 @pytest.fixture
@@ -42,34 +42,34 @@ def temp_db(tmp_path, monkeypatch):
     """Provide a temporary database for tests.
     
     Sets up a clean SQLite database in a temp directory and ensures
-    all config reads the temp path, not the user's real ~/.tessera.
+    all config reads the temp path, not the user's real ~/.chuzom.
     
     CRITICAL: This fixture MUST be used by any test that writes to the database
     (including log_claude_usage, log_routing_decision, etc.). Failure to use this
     fixture will contaminate the production database.
     """
-    db_dir = tmp_path / ".tessera"
+    db_dir = tmp_path / ".chuzom"
     db_dir.mkdir(parents=True, exist_ok=True)
     db_path = db_dir / "test_usage.db"
     
     # Set env vars for config to pick up
-    monkeypatch.setenv("TESSERA_DB_PATH", str(db_path))
+    monkeypatch.setenv("CHUZOM_DB_PATH", str(db_path))
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     # Allow stub LLMResponse shapes (100/50/$0.003, 100/100/$0.001) to be
     # written. The stub guard in cost.log_usage blocks these shapes by default
-    # to stop unisolated tests from polluting ~/.tessera/usage.db.
-    monkeypatch.setenv("TESSERA_ALLOW_STUBS", "1")
+    # to stop unisolated tests from polluting ~/.chuzom/usage.db.
+    monkeypatch.setenv("CHUZOM_ALLOW_STUBS", "1")
     
     # Reset singleton so config reads the new env vars
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
     
     # Verify isolation: make sure we're NOT using production path
-    from tessera.config import get_config
+    from chuzom.config import get_config
     config = get_config()
-    assert str(config.tessera_db_path) != str(Path.home() / ".tessera" / "usage.db"), \
-        f"CRITICAL: Fixture failed to isolate database. Using production path: {config.tessera_db_path}"
+    assert str(config.chuzom_db_path) != str(Path.home() / ".chuzom" / "usage.db"), \
+        f"CRITICAL: Fixture failed to isolate database. Using production path: {config.chuzom_db_path}"
     assert "test" in str(db_path).lower(), \
         f"CRITICAL: Database path should contain 'test': {db_path}"
     
@@ -87,14 +87,14 @@ def temp_router_dir(tmp_path, monkeypatch):
     Patches module-level variables to use a temp directory for tests.
     """
     temp_home = tmp_path
-    router_dir = temp_home / ".tessera"
+    router_dir = temp_home / ".chuzom"
     router_dir.mkdir(parents=True, exist_ok=True)
 
     # Patch module-level variables that were evaluated at import time
-    import tessera.hook_health
-    monkeypatch.setattr(tessera.hook_health, "_ROUTER_DIR", router_dir)
-    monkeypatch.setattr(tessera.hook_health, "_HOOK_HEALTH_FILE", router_dir / "hook_health.json")
-    monkeypatch.setattr(tessera.hook_health, "_HOOK_LOG_FILE", router_dir / "hook_errors.log")
+    import chuzom.hook_health
+    monkeypatch.setattr(chuzom.hook_health, "_ROUTER_DIR", router_dir)
+    monkeypatch.setattr(chuzom.hook_health, "_HOOK_HEALTH_FILE", router_dir / "hook_health.json")
+    monkeypatch.setattr(chuzom.hook_health, "_HOOK_LOG_FILE", router_dir / "hook_errors.log")
     # Also patch Path.home for any runtime calls
     monkeypatch.setattr("pathlib.Path.home", lambda: temp_home)
 
@@ -119,12 +119,12 @@ def mock_env(monkeypatch):
     """Mock environment for classification and routing tests."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("TESSERA_PROFILE", "balanced")
-    monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "false")
-    monkeypatch.setenv("TESSERA_GEMINI_SUBSCRIPTION", "false")
+    monkeypatch.setenv("CHUZOM_PROFILE", "balanced")
+    monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "false")
+    monkeypatch.setenv("CHUZOM_GEMINI_SUBSCRIPTION", "false")
     
     # Reset singleton so config reads fresh env vars
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
     
     yield
@@ -144,7 +144,7 @@ def minimal_env(monkeypatch):
 
     # Set only one key to trigger "Recommended to Add"
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("TESSERA_PROFILE", "balanced")
+    monkeypatch.setenv("CHUZOM_PROFILE", "balanced")
     yield
 
 
@@ -157,7 +157,7 @@ def no_providers_env(monkeypatch):
     Used by tests that verify error handling when no providers are available.
     """
     # Create a manual config object without reading from env or .env
-    from tessera.types import QualityMode
+    from chuzom.types import QualityMode
     
     # Create a mock config with all providers disabled
     class EmptyConfig:
@@ -172,11 +172,11 @@ def no_providers_env(monkeypatch):
         xai_api_key = ""
         cohere_api_key = ""
         ollama_base_url = ""
-        tessera_profile = "balanced"
-        tessera_claw_code = False
-        tessera_claude_subscription = False
-        tessera_enforce = "soft"
-        tessera_db_path = str(Path.home() / ".tessera" / "routing.db")
+        chuzom_profile = "balanced"
+        chuzom_claw_code = False
+        chuzom_claude_subscription = False
+        chuzom_enforce = "soft"
+        chuzom_db_path = str(Path.home() / ".chuzom" / "routing.db")
         token_budget = 10_000_000
         quality = QualityMode.BALANCED
         min_model_floor = "haiku"
@@ -191,7 +191,7 @@ def no_providers_env(monkeypatch):
     empty_config = EmptyConfig()
 
     # Mock the get_config function to return our empty config
-    import tessera.config as config_module
+    import chuzom.config as config_module
     monkeypatch.setattr(config_module, "get_config", lambda: empty_config)
 
     # Also reset the singleton
@@ -204,11 +204,11 @@ def no_providers_env(monkeypatch):
 def mock_acompletion():
     """Mock async completion for provider tests.
     
-    Patches tessera.providers.call_llm to return a mock LLM response,
+    Patches chuzom.providers.call_llm to return a mock LLM response,
     preventing actual API calls in tests. Also disables Codex injection
     and marks all providers as healthy to avoid skipping injected models.
     """
-    from tessera.types import LLMResponse
+    from chuzom.types import LLMResponse
 
     mock_response = LLMResponse(
         content="Mock response",
@@ -226,9 +226,9 @@ def mock_acompletion():
     mock_tracker = MagicMock()
     mock_tracker.is_healthy.return_value = True
 
-    with patch("tessera.providers.call_llm", async_mock):
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.router.get_tracker", return_value=mock_tracker):
+    with patch("chuzom.providers.call_llm", async_mock):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.router.get_tracker", return_value=mock_tracker):
                 yield async_mock
 
 
@@ -268,7 +268,7 @@ def _reset_config_singleton():
     Ensures that monkeypatched environment variables are picked up by get_config(),
     and prevents test pollution from config state changes.
     """
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
     yield
     config_module._config = None

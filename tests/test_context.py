@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.context import (
+from chuzom.context import (
     SessionBuffer,
     auto_summarize_session,
     build_context_messages,
@@ -15,7 +15,7 @@ from tessera.context import (
     get_session_buffer,
     save_session_summary,
 )
-from tessera.types import LLMResponse
+from chuzom.types import LLMResponse
 
 
 class TestSessionBuffer:
@@ -127,12 +127,12 @@ class TestPersistentSummaries:
     @pytest.fixture
     def db_path(self, tmp_path):
         path = tmp_path / "test.db"
-        with patch("tessera.context._get_db_path", return_value=path):
+        with patch("chuzom.context._get_db_path", return_value=path):
             yield path
 
     @pytest.mark.asyncio
     async def test_save_and_retrieve(self, db_path):
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             await save_session_summary(
                 summary="Built context injection feature",
                 message_count=8,
@@ -147,7 +147,7 @@ class TestPersistentSummaries:
 
     @pytest.mark.asyncio
     async def test_respects_limit(self, db_path):
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             for i in range(5):
                 await save_session_summary(f"Session {i}", i, ["query"])
 
@@ -159,7 +159,7 @@ class TestPersistentSummaries:
     @pytest.mark.asyncio
     async def test_no_db_returns_empty(self, tmp_path):
         missing = tmp_path / "nonexistent" / "db.sqlite"
-        with patch("tessera.context._get_db_path", return_value=missing):
+        with patch("chuzom.context._get_db_path", return_value=missing):
             summaries = await get_recent_session_summaries()
             assert summaries == []
 
@@ -168,7 +168,7 @@ class TestBuildContextMessages:
     @pytest.fixture
     def reset_session_buffer(self):
         """Reset the global session buffer before each test."""
-        import tessera.context as context_module
+        import chuzom.context as context_module
         context_module._session_buffer = None
         yield
         context_module._session_buffer = None
@@ -176,14 +176,14 @@ class TestBuildContextMessages:
     @pytest.mark.asyncio
     async def test_no_context_returns_empty(self, tmp_path, reset_session_buffer):
         db_path = tmp_path / "empty.db"
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             msgs = await build_context_messages()
             assert msgs == []
 
     @pytest.mark.asyncio
     async def test_with_session_buffer_only(self, tmp_path, reset_session_buffer):
         db_path = tmp_path / "empty.db"
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             buf = get_session_buffer()
             buf.record("user", "What is FastAPI?", task_type="query")
             buf.record("assistant", "FastAPI is a web framework.", task_type="query")
@@ -196,18 +196,18 @@ class TestBuildContextMessages:
     @pytest.mark.asyncio
     async def test_with_caller_context(self, tmp_path):
         db_path = tmp_path / "empty.db"
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             msgs = await build_context_messages(
-                caller_context="Working on the tessera project, adding context injection",
+                caller_context="Working on the chuzom project, adding context injection",
             )
             assert len(msgs) == 1
-            assert "tessera" in msgs[0]["content"]
+            assert "chuzom" in msgs[0]["content"]
             assert "[Additional context]" in msgs[0]["content"]
 
     @pytest.mark.asyncio
     async def test_combined_context_order(self, tmp_path):
         db_path = tmp_path / "test.db"
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             # Save a previous session summary
             await save_session_summary("Worked on auth", 3, ["code"])
 
@@ -230,7 +230,7 @@ class TestBuildContextMessages:
     @pytest.mark.asyncio
     async def test_respects_token_budget(self, tmp_path):
         db_path = tmp_path / "empty.db"
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             # Fill buffer with lots of content
             buf = get_session_buffer()
             for i in range(10):
@@ -246,20 +246,20 @@ class TestAutoSummarize:
     @pytest.fixture
     def db_path(self, tmp_path):
         path = tmp_path / "test.db"
-        with patch("tessera.context._get_db_path", return_value=path):
+        with patch("chuzom.context._get_db_path", return_value=path):
             yield path
 
     @pytest.fixture
     def reset_session_buffer(self):
         """Reset the global session buffer before each test."""
-        import tessera.context as context_module
+        import chuzom.context as context_module
         context_module._session_buffer = None
         yield
         context_module._session_buffer = None
 
     @pytest.mark.asyncio
     async def test_skips_short_sessions(self, db_path, reset_session_buffer):
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             buf = get_session_buffer()
             buf.record("user", "hello")
             result = await auto_summarize_session(min_messages=3)
@@ -277,14 +277,14 @@ class TestAutoSummarize:
             provider="gemini",
         )
 
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             buf = get_session_buffer()
             buf.record("user", "What is FastAPI?", task_type="query")
             buf.record("assistant", "FastAPI is a modern web framework.", task_type="query")
             buf.record("user", "How do I install it?", task_type="query")
             buf.record("assistant", "Run pip install fastapi.", task_type="query")
 
-            with patch("tessera.router.route_and_call", new_callable=AsyncMock, return_value=mock_response):
+            with patch("chuzom.router.route_and_call", new_callable=AsyncMock, return_value=mock_response):
                 summary = await auto_summarize_session(min_messages=3)
 
             assert summary is not None
@@ -298,13 +298,13 @@ class TestAutoSummarize:
 
     @pytest.mark.asyncio
     async def test_falls_back_on_llm_failure(self, db_path):
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             buf = get_session_buffer()
             buf.record("user", "Build a REST API", task_type="code")
             buf.record("assistant", "Here's the code...", task_type="code")
             buf.record("user", "Add auth", task_type="code")
 
-            with patch("tessera.router.route_and_call", new_callable=AsyncMock, side_effect=RuntimeError("No models")):
+            with patch("chuzom.router.route_and_call", new_callable=AsyncMock, side_effect=RuntimeError("No models")):
                 summary = await auto_summarize_session(min_messages=3)
 
             assert summary is not None
@@ -320,14 +320,14 @@ class TestAutoSummarize:
             cost_usd=0.0001, latency_ms=200.0, provider="gemini",
         )
 
-        with patch("tessera.context._get_db_path", return_value=db_path):
+        with patch("chuzom.context._get_db_path", return_value=db_path):
             buf = get_session_buffer()
             buf.record("user", "Research caching", task_type="research")
             buf.record("assistant", "Redis is popular", task_type="research")
             buf.record("user", "Write cache code", task_type="code")
             buf.record("assistant", "Here's the code", task_type="code")
 
-            with patch("tessera.router.route_and_call", new_callable=AsyncMock, return_value=mock_response):
+            with patch("chuzom.router.route_and_call", new_callable=AsyncMock, return_value=mock_response):
                 await auto_summarize_session(min_messages=3)
 
             summaries = await get_recent_session_summaries()

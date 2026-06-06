@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from tessera.hooks.dashboard_enhanced import query_last_prompt_calls
+from chuzom.hooks.dashboard_enhanced import query_last_prompt_calls
 
 
 def _seed_usage(db_path: Path, rows: list[tuple]) -> None:

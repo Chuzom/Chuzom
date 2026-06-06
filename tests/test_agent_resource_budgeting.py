@@ -16,8 +16,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-AGENT_ROUTE_HOOK = Path(__file__).parent.parent / "src" / "tessera" / "hooks" / "agent-route.py"
-AGENT_ERROR_HOOK = Path(__file__).parent.parent / "src" / "tessera" / "hooks" / "agent-error.py"
+AGENT_ROUTE_HOOK = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-route.py"
+AGENT_ERROR_HOOK = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-error.py"
 
 
 def _run_agent_route(
@@ -41,7 +41,7 @@ def _run_agent_route(
 
     env = None
     if tmp_path is not None:
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
 
         # Write session_id.txt
@@ -198,7 +198,7 @@ class TestProvisionalSpendTracking:
 
     def test_retrieval_agent_approved_no_spend_tracked(self, tmp_path):
         """Retrieval-only agents approved without tracking provisional spend."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         sid = "test-session-6"
         (llmr_dir / "session_id.txt").write_text(sid)
@@ -224,7 +224,7 @@ class TestProvisionalSpendTracking:
 
     def test_reasoning_agent_decrements_budget_provisionally(self, tmp_path):
         """Reasoning agents decrement remaining budget when approved (provisional spend)."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         sid = "test-session-7"
         (llmr_dir / "session_id.txt").write_text(sid)
@@ -256,7 +256,7 @@ class TestBudgetReconciliation:
 
     def test_failure_refunds_50_percent(self, tmp_path):
         """On agent failure, 50% of provisional spend is refunded."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         sid = "test-session-8"
         (llmr_dir / "session_id.txt").write_text(sid)
@@ -292,7 +292,7 @@ class TestBudgetReconciliation:
 
     def test_multiple_failures_accumulate_refunds(self, tmp_path):
         """Multiple agent failures accumulate refunds."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         sid = "test-session-9"
         (llmr_dir / "session_id.txt").write_text(sid)
@@ -350,7 +350,7 @@ class TestBudgetStarvation:
 
     def test_multiple_agents_exhaust_budget(self, tmp_path):
         """Multiple agents can exhaust remaining budget."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         sid = "test-session-10"
         (llmr_dir / "session_id.txt").write_text(sid)
@@ -390,7 +390,7 @@ class TestBudgetStarvation:
 
     def test_sixth_agent_blocked_due_to_budget(self, tmp_path):
         """Sixth agent blocked when budget exhausted."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         sid = "test-session-11"
         (llmr_dir / "session_id.txt").write_text(sid)
@@ -447,7 +447,7 @@ class TestSessionBudgetInitialization:
 
     def test_budget_initialized_from_pressure(self, tmp_path):
         """First agent initializes session budget based on quota pressure."""
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
         sid = "test-session-12"
         (llmr_dir / "session_id.txt").write_text(sid)

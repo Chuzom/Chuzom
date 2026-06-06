@@ -11,8 +11,8 @@ import os
 from unittest.mock import patch
 
 
-from tessera.config import RouterConfig
-from tessera.types import RoutingProfile
+from chuzom.config import RouterConfig
+from chuzom.types import RoutingProfile
 
 
 class TestAvailableProviders:
@@ -70,7 +70,7 @@ class TestAvailableProviders:
     def test_multiple_keys_all_visible(self, monkeypatch):
         # Clear env first to prevent .env leakage; then explicitly configure
         for var in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY",
-                    "OLLAMA_BASE_URL", "TESSERA_CLAUDE_SUBSCRIPTION", "TESSERA_GEMINI_SUBSCRIPTION"]:
+                    "OLLAMA_BASE_URL", "CHUZOM_CLAUDE_SUBSCRIPTION", "CHUZOM_GEMINI_SUBSCRIPTION"]:
             monkeypatch.delenv(var, raising=False)
         cfg = RouterConfig(
             openai_api_key="sk-openai",
@@ -78,8 +78,8 @@ class TestAvailableProviders:
             gemini_api_key="AIz-gemini",
             groq_api_key="gsk-groq",
             ollama_base_url="",
-            tessera_claude_subscription=False,
-            tessera_gemini_subscription=False,
+            chuzom_claude_subscription=False,
+            chuzom_gemini_subscription=False,
         )
         providers = cfg.available_providers
         assert {"openai", "anthropic", "gemini", "groq"}.issubset(providers)
@@ -118,7 +118,7 @@ class TestAvailableProviders:
 
 
 class TestClaudeSubscriptionMode:
-    """When TESSERA_CLAUDE_SUBSCRIPTION=true, Anthropic is excluded.
+    """When CHUZOM_CLAUDE_SUBSCRIPTION=true, Anthropic is excluded.
 
     This is the most important cost-saving contract: inside Claude Code the user
     already pays for Claude via their Pro/Max subscription. Routing back to
@@ -129,14 +129,14 @@ class TestClaudeSubscriptionMode:
     def test_anthropic_excluded_when_subscription_mode_on(self):
         cfg = RouterConfig(
             anthropic_api_key="sk-anthropic-valid",
-            tessera_claude_subscription=True,
+            chuzom_claude_subscription=True,
         )
         assert "anthropic" not in cfg.available_providers
 
     def test_anthropic_included_when_subscription_mode_off(self):
         cfg = RouterConfig(
             anthropic_api_key="sk-anthropic-valid",
-            tessera_claude_subscription=False,
+            chuzom_claude_subscription=False,
         )
         assert "anthropic" in cfg.available_providers
 
@@ -145,8 +145,8 @@ class TestClaudeSubscriptionMode:
             openai_api_key="sk-openai",
             gemini_api_key="AIz-gemini",
             anthropic_api_key="sk-anthropic",
-            tessera_claude_subscription=True,
-            tessera_gemini_subscription=False,
+            chuzom_claude_subscription=True,
+            chuzom_gemini_subscription=False,
         )
         providers = cfg.available_providers
         assert "openai" in providers
@@ -162,7 +162,7 @@ class TestClaudeSubscriptionMode:
             os.environ.pop("ANTHROPIC_API_KEY", None)
             cfg = RouterConfig(
                 anthropic_api_key="sk-secret-anthropic",
-                tessera_claude_subscription=True,
+                chuzom_claude_subscription=True,
             )
             cfg.apply_keys_to_env()
             # The key must NOT have been exported to the environment
@@ -180,7 +180,7 @@ class TestClaudeSubscriptionMode:
             os.environ.pop("ANTHROPIC_API_KEY", None)
             cfg = RouterConfig(
                 anthropic_api_key="sk-secret-anthropic",
-                tessera_claude_subscription=False,
+                chuzom_claude_subscription=False,
             )
             cfg.apply_keys_to_env()
             assert os.environ.get("ANTHROPIC_API_KEY") == "sk-secret-anthropic"
@@ -200,12 +200,12 @@ class TestOllamaProviderInclusion:
     """
 
     def test_ollama_included_when_reachable(self):
-        with patch("tessera.config.probe_ollama", return_value=True):
+        with patch("chuzom.config.probe_ollama", return_value=True):
             cfg = RouterConfig(ollama_base_url="http://localhost:11434")
             assert "ollama" in cfg.available_providers
 
     def test_ollama_excluded_when_unreachable(self):
-        with patch("tessera.config.probe_ollama", return_value=False):
+        with patch("chuzom.config.probe_ollama", return_value=False):
             cfg = RouterConfig(ollama_base_url="http://localhost:11434")
             assert "ollama" not in cfg.available_providers
 
@@ -239,11 +239,11 @@ class TestRoutingDefaults:
 
     def test_default_profile_is_balanced(self):
         cfg = RouterConfig()
-        assert cfg.tessera_profile == RoutingProfile.BALANCED
+        assert cfg.chuzom_profile == RoutingProfile.BALANCED
 
     def test_default_monthly_budget_is_twenty_dollars(self):
         cfg = RouterConfig()
-        assert cfg.tessera_monthly_budget == 20.0
+        assert cfg.chuzom_monthly_budget == 20.0
 
     def test_default_temperature_is_point_seven(self):
         cfg = RouterConfig()

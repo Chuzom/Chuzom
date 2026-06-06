@@ -39,7 +39,7 @@ def _load_auto_route():
         return cached
     path = (
         Path(__file__).resolve().parents[1]
-        / "src" / "tessera" / "hooks" / "auto-route.py"
+        / "src" / "chuzom" / "hooks" / "auto-route.py"
     )
     spec = importlib.util.spec_from_file_location(
         "auto_route_under_test_signals", path
@@ -102,18 +102,18 @@ class TestPreviouslyMisfiredPrompts:
             f"Long substantive prompt still scoring coordination: {scores}"
         )
 
-    def test_tessera_fix_request_does_not_win_coordination(self, auto_route):
+    def test_chuzom_fix_request_does_not_win_coordination(self, auto_route):
         """Fixed in v0.0.2 by expanding the 'fix' verb pattern in code
         intent to match generic noun phrases with a required determiner.
         See `(?:fix|patch|repair|resolve)\\s+(?:the\\s+|...)\\w+` in
         SIGNALS['code']['intent']."""
-        text = "I want to continue with the fix for the tessera and its branch"
+        text = "I want to continue with the fix for the chuzom and its branch"
         scores = auto_route.score_categories(text)
         winner = max(scores, key=lambda k: scores[k])
         assert winner != "coordination", (
             f"Substantive fix request still winning coordination: {scores}"
         )
-        # Specifically: code must win because "fix for the tessera" is an
+        # Specifically: code must win because "fix for the chuzom" is an
         # implementation request, not a coordination ack.
         assert winner == "code", f"Expected code, got {winner}: {scores}"
 

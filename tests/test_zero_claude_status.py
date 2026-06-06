@@ -6,10 +6,10 @@ import importlib.util
 import json
 from pathlib import Path
 
-from tessera.hooks.chain_builder import get_current_pressure, needs_claude_tools
+from chuzom.hooks.chain_builder import get_current_pressure, needs_claude_tools
 
 ROOT = Path(__file__).resolve().parents[1]
-SESSION_START_PATH = ROOT / "src" / "tessera" / "hooks" / "session-start.py"
+SESSION_START_PATH = ROOT / "src" / "chuzom" / "hooks" / "session-start.py"
 
 
 def _load_session_start():
@@ -27,7 +27,7 @@ def test_explicit_read_file_prompt_uses_external_agent_path() -> None:
 def test_one_percent_session_usage_is_not_read_as_one_hundred_percent(
     tmp_path: Path, monkeypatch
 ) -> None:
-    router_dir = tmp_path / ".tessera"
+    router_dir = tmp_path / ".chuzom"
     router_dir.mkdir()
     (router_dir / "usage.json").write_text(json.dumps({"session_pct": 1.0}), encoding="utf-8")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -37,7 +37,7 @@ def test_one_percent_session_usage_is_not_read_as_one_hundred_percent(
 
 def test_zero_claude_banner_overrides_detected_subscription(tmp_path: Path) -> None:
     session_start = _load_session_start()
-    state_dir = tmp_path / ".tessera"
+    state_dir = tmp_path / ".chuzom"
     state_dir.mkdir()
     (state_dir / "routing.yaml").write_text("mode: zero_claude\n", encoding="utf-8")
     session_start.STATE_DIR = str(state_dir)

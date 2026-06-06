@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from tessera.edit import (
+from chuzom.edit import (
     EditInstruction,
     build_edit_prompt,
     format_edit_result,

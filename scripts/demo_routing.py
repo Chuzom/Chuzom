@@ -8,10 +8,10 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from tessera.classifier import classify_complexity
-from tessera.cost import calc_savings, log_claude_usage, get_savings_summary
-from tessera.model_selector import select_model
-from tessera.types import MODEL_COST_PER_1K, QualityMode
+from chuzom.classifier import classify_complexity
+from chuzom.cost import calc_savings, log_claude_usage, get_savings_summary
+from chuzom.model_selector import select_model
+from chuzom.types import MODEL_COST_PER_1K, QualityMode
 
 
 PROMPTS = [
@@ -195,10 +195,10 @@ async def test_session_simulation() -> None:
     print_header("TEST 7: Full Session Simulation (10 Tasks)")
 
     # Use in-memory DB for this test
-    os.environ["TESSERA_DB_PATH"] = "/tmp/tessera_demo.db"
+    os.environ["CHUZOM_DB_PATH"] = "/tmp/chuzom_demo.db"
     # Remove old DB if exists
     try:
-        os.unlink("/tmp/tessera_demo.db")
+        os.unlink("/tmp/chuzom_demo.db")
     except FileNotFoundError:
         pass
 

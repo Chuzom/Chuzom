@@ -2,21 +2,21 @@
 
 from unittest.mock import patch
 
-from tessera.profiles import get_model_chain, provider_from_model, ROUTING_TABLE
-from tessera.types import RoutingProfile, TaskType
+from chuzom.profiles import get_model_chain, provider_from_model, ROUTING_TABLE
+from chuzom.types import RoutingProfile, TaskType
 
 
 class TestGetModelChain:
     def test_budget_research_prefers_perplexity(self):
         # Regression test: Perplexity should NOT be in the chain if API key is not configured.
         # See: User reported Perplexity usage (50%) without having API key.
-        with patch("tessera.benchmarks.get_benchmark_data", return_value=None):
+        with patch("chuzom.benchmarks.get_benchmark_data", return_value=None):
             chain = get_model_chain(RoutingProfile.BUDGET, TaskType.RESEARCH)
         # Verify Perplexity is NOT in the chain (since no API key is configured)
         assert not any(model.startswith("perplexity/") for model in chain)
 
     def test_premium_code_prefers_o3(self):
-        with patch("tessera.benchmarks.get_benchmark_data", return_value=None):
+        with patch("chuzom.benchmarks.get_benchmark_data", return_value=None):
             chain = get_model_chain(RoutingProfile.PREMIUM, TaskType.CODE)
         assert "openai/o3" in chain
 
@@ -42,8 +42,8 @@ class TestResearchPressureTail:
     def test_research_perplexity_stays_first_at_high_pressure(self):
         """Regression test: Perplexity should NOT be in chain even at high pressure."""
         with (
-            patch("tessera.benchmarks.get_benchmark_data", return_value=None),
-            patch("tessera.claude_usage.get_claude_pressure", return_value=0.90),
+            patch("chuzom.benchmarks.get_benchmark_data", return_value=None),
+            patch("chuzom.claude_usage.get_claude_pressure", return_value=0.90),
         ):
             chain = get_model_chain(RoutingProfile.BALANCED, TaskType.RESEARCH)
         # Verify Perplexity is NOT in the chain (since no API key is configured)
@@ -52,8 +52,8 @@ class TestResearchPressureTail:
     def test_research_claude_demoted_from_tail_at_high_pressure(self):
         """At ≥ 85% pressure Claude models in RESEARCH tail move to the end."""
         with (
-            patch("tessera.benchmarks.get_benchmark_data", return_value=None),
-            patch("tessera.claude_usage.get_claude_pressure", return_value=0.90),
+            patch("chuzom.benchmarks.get_benchmark_data", return_value=None),
+            patch("chuzom.claude_usage.get_claude_pressure", return_value=0.90),
         ):
             chain = get_model_chain(RoutingProfile.BALANCED, TaskType.RESEARCH)
 
@@ -70,8 +70,8 @@ class TestResearchPressureTail:
     def test_research_claude_leads_tail_at_low_pressure(self):
         """At < 85% pressure Claude is effectively free and leads the RESEARCH tail."""
         with (
-            patch("tessera.benchmarks.get_benchmark_data", return_value=None),
-            patch("tessera.claude_usage.get_claude_pressure", return_value=0.30),
+            patch("chuzom.benchmarks.get_benchmark_data", return_value=None),
+            patch("chuzom.claude_usage.get_claude_pressure", return_value=0.30),
         ):
             chain = get_model_chain(RoutingProfile.BALANCED, TaskType.RESEARCH)
 
@@ -88,8 +88,8 @@ class TestBudgetHardCap:
     def test_budget_pressure_99_removes_claude(self):
         """At ≥ 99% pressure Claude must be excluded from BUDGET chains."""
         with (
-            patch("tessera.benchmarks.get_benchmark_data", return_value=None),
-            patch("tessera.claude_usage.get_claude_pressure", return_value=0.99),
+            patch("chuzom.benchmarks.get_benchmark_data", return_value=None),
+            patch("chuzom.claude_usage.get_claude_pressure", return_value=0.99),
         ):
             chain = get_model_chain(RoutingProfile.BUDGET, TaskType.CODE)
 
@@ -103,7 +103,7 @@ class TestPrefetchedPenalties:
 
     def test_failure_rates_dict_used_directly(self):
         """When failure_rates dict is provided, penalty uses it without DB access."""
-        from tessera.benchmarks import apply_benchmark_ordering
+        from chuzom.benchmarks import apply_benchmark_ordering
 
         # Mock benchmark data with two scored models
         mock_data = {
@@ -114,7 +114,7 @@ class TestPrefetchedPenalties:
             }},
         }
 
-        with patch("tessera.benchmarks.get_benchmark_data", return_value=mock_data):
+        with patch("chuzom.benchmarks.get_benchmark_data", return_value=mock_data):
             # gpt-4o has 80% failure rate — should drop below gemini even though scores differ
             result = apply_benchmark_ordering(
                 ["gemini/gemini-2.5-pro", "openai/gpt-4o"],
@@ -130,7 +130,7 @@ class TestPrefetchedPenalties:
 
     def test_latency_stats_dict_used_directly(self):
         """When latency_stats dict is provided, penalty uses it without DB access."""
-        from tessera.benchmarks import apply_benchmark_ordering
+        from chuzom.benchmarks import apply_benchmark_ordering
 
         mock_data = {
             "tiers": {"code": {"balanced": ["openai/gpt-4o", "gemini/gemini-2.5-flash"]}},
@@ -140,7 +140,7 @@ class TestPrefetchedPenalties:
             }},
         }
 
-        with patch("tessera.benchmarks.get_benchmark_data", return_value=mock_data):
+        with patch("chuzom.benchmarks.get_benchmark_data", return_value=mock_data):
             # gpt-4o has 200s P95 latency → 0.50 penalty → drops below gemini-flash
             result = apply_benchmark_ordering(
                 ["openai/gpt-4o", "gemini/gemini-2.5-flash"],

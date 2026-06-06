@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.types import LLMResponse, RoutingProfile, TaskType
+from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
 # Skip all tests in this module if agno is not installed
 pytest.importorskip("agno")
@@ -28,7 +28,7 @@ def mock_llm_response():
 @pytest.fixture
 def mock_route_and_call(mock_llm_response):
     with patch(
-        "tessera.integrations.agno.route_and_call",
+        "chuzom.integrations.agno.route_and_call",
         new_callable=AsyncMock,
         return_value=mock_llm_response,
     ) as mock:
@@ -40,30 +40,30 @@ def mock_route_and_call(mock_llm_response):
 # ---------------------------------------------------------------------------
 
 def test_routered_model_defaults():
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
     m = RouteredModel()
-    assert m.id == "tessera"
+    assert m.id == "chuzom"
     assert m.task_type == "query"
     assert m.profile == "balanced"
     assert m.model_override is None
 
 
 def test_routered_model_string_params():
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
     m = RouteredModel(task_type="code", profile="budget")
     assert m.task_type == "code"
     assert m.profile == "budget"
 
 
 def test_routered_model_enum_params():
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
     m = RouteredModel(task_type=TaskType.RESEARCH, profile=RoutingProfile.PREMIUM)
     assert m.task_type == "research"
     assert m.profile == "premium"
 
 
 def test_routered_model_with_override():
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
     m = RouteredModel(model_override="openai/gpt-4o")
     assert m.model_override == "openai/gpt-4o"
 
@@ -75,7 +75,7 @@ def test_routered_model_with_override():
 @pytest.mark.asyncio
 async def test_invoke_calls_route_and_call(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel(task_type="query", profile="budget")
     messages = [Message(role="user", content="Hello")]
@@ -95,7 +95,7 @@ async def test_invoke_calls_route_and_call(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_ainvoke_calls_route_and_call(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel(task_type="code", profile="premium")
     messages = [Message(role="user", content="Write a sort function")]
@@ -112,7 +112,7 @@ async def test_ainvoke_calls_route_and_call(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_invoke_with_model_override(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel(model_override="openai/gpt-4o")
     messages = [Message(role="user", content="test")]
@@ -127,7 +127,7 @@ async def test_invoke_with_model_override(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_system_prompt_extracted_from_messages(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel()
     messages = [
@@ -146,7 +146,7 @@ async def test_system_prompt_extracted_from_messages(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_multi_turn_conversation_concatenated(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel()
     messages = [
@@ -173,7 +173,7 @@ async def test_multi_turn_conversation_concatenated(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_invoke_stream_yields_response(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel()
     messages = [Message(role="user", content="Stream this")]
@@ -187,7 +187,7 @@ async def test_invoke_stream_yields_response(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_ainvoke_stream_yields_response(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel()
     messages = [Message(role="user", content="Stream this async")]
@@ -208,7 +208,7 @@ async def test_ainvoke_stream_yields_response(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_response_includes_token_counts(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel()
     messages = [Message(role="user", content="test")]
@@ -224,7 +224,7 @@ async def test_response_includes_token_counts(mock_route_and_call):
 @pytest.mark.asyncio
 async def test_response_provider_data_contains_model(mock_route_and_call):
     from agno.models.message import Message
-    from tessera.integrations.agno import RouteredModel
+    from chuzom.integrations.agno import RouteredModel
 
     m = RouteredModel()
     messages = [Message(role="user", content="test")]
@@ -243,7 +243,7 @@ async def test_response_provider_data_contains_model(mock_route_and_call):
 
 def test_routered_team_defaults():
     from agno.agent import Agent
-    from tessera.integrations.agno import RouteredModel, RouteredTeam
+    from chuzom.integrations.agno import RouteredModel, RouteredTeam
 
     agent = Agent(model=RouteredModel(task_type="query"), instructions="test")
     team = RouteredTeam(members=[agent])
@@ -253,7 +253,7 @@ def test_routered_team_defaults():
 
 def test_routered_team_budget_params():
     from agno.agent import Agent
-    from tessera.integrations.agno import RouteredModel, RouteredTeam
+    from chuzom.integrations.agno import RouteredModel, RouteredTeam
 
     agent = Agent(model=RouteredModel(), instructions="test")
     team = RouteredTeam(members=[agent], monthly_budget_usd=50.0, downshift_at=0.75)
@@ -263,7 +263,7 @@ def test_routered_team_budget_params():
 
 def test_get_routered_models_finds_members():
     from agno.agent import Agent
-    from tessera.integrations.agno import RouteredModel, RouteredTeam
+    from chuzom.integrations.agno import RouteredModel, RouteredTeam
 
     m1 = RouteredModel(task_type="code")
     m2 = RouteredModel(task_type="research")
@@ -280,7 +280,7 @@ def test_get_routered_models_finds_members():
 @pytest.mark.asyncio
 async def test_budget_pressure_downshifts_models():
     from agno.agent import Agent
-    from tessera.integrations.agno import RouteredModel, RouteredTeam
+    from chuzom.integrations.agno import RouteredModel, RouteredTeam
 
     model = RouteredModel(task_type="code", profile="premium")
     agent = Agent(model=model, instructions="test")
@@ -288,11 +288,11 @@ async def test_budget_pressure_downshifts_models():
 
     # Simulate spend at 85% of budget ($8.50 of $10.00)
     with patch(
-        "tessera.integrations.agno.RouteredTeam._apply_budget_pressure",
+        "chuzom.integrations.agno.RouteredTeam._apply_budget_pressure",
         wraps=team._apply_budget_pressure,
     ):
         with patch(
-            "tessera.cost.get_quality_report",
+            "chuzom.cost.get_quality_report",
             new_callable=AsyncMock,
             return_value={"total_cost_usd": 8.5},
         ):
@@ -305,7 +305,7 @@ async def test_budget_pressure_downshifts_models():
 @pytest.mark.asyncio
 async def test_budget_pressure_no_downshift_under_threshold():
     from agno.agent import Agent
-    from tessera.integrations.agno import RouteredModel, RouteredTeam
+    from chuzom.integrations.agno import RouteredModel, RouteredTeam
 
     model = RouteredModel(task_type="code", profile="premium")
     agent = Agent(model=model, instructions="test")
@@ -313,7 +313,7 @@ async def test_budget_pressure_no_downshift_under_threshold():
 
     # Spend at 50% — should NOT downshift
     with patch(
-        "tessera.cost.get_quality_report",
+        "chuzom.cost.get_quality_report",
         new_callable=AsyncMock,
         return_value={"total_cost_usd": 5.0},
     ):
@@ -326,7 +326,7 @@ async def test_budget_pressure_no_downshift_under_threshold():
 @pytest.mark.asyncio
 async def test_budget_pressure_disabled_when_zero_budget():
     from agno.agent import Agent
-    from tessera.integrations.agno import RouteredModel, RouteredTeam
+    from chuzom.integrations.agno import RouteredModel, RouteredTeam
 
     model = RouteredModel(task_type="code", profile="premium")
     agent = Agent(model=model, instructions="test")

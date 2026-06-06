@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
-from tessera.router import route_and_call
-from tessera.types import RoutingProfile, TaskType
+from chuzom.router import route_and_call
+from chuzom.types import RoutingProfile, TaskType
 
 @pytest.mark.asyncio
 async def test_openai_query_model_override_end_to_end(temp_db, mock_env, mock_litellm_response):

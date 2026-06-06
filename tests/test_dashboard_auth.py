@@ -11,8 +11,8 @@ import pytest
 
 def test_get_or_create_token_creates_file(tmp_path):
     token_file = tmp_path / "dashboard.token"
-    with patch("tessera.dashboard.server._TOKEN_FILE", token_file):
-        from tessera.dashboard.server import _get_or_create_token
+    with patch("chuzom.dashboard.server._TOKEN_FILE", token_file):
+        from chuzom.dashboard.server import _get_or_create_token
 
         token = _get_or_create_token()
         assert token_file.exists()
@@ -24,16 +24,16 @@ def test_get_or_create_token_returns_existing(tmp_path):
     token_file = tmp_path / "dashboard.token"
     expected = "existing-token-abc123"
     token_file.write_text(expected)
-    with patch("tessera.dashboard.server._TOKEN_FILE", token_file):
-        from tessera.dashboard.server import _get_or_create_token
+    with patch("chuzom.dashboard.server._TOKEN_FILE", token_file):
+        from chuzom.dashboard.server import _get_or_create_token
 
         assert _get_or_create_token() == expected
 
 
 def test_get_or_create_token_sets_permissions(tmp_path):
     token_file = tmp_path / "dashboard.token"
-    with patch("tessera.dashboard.server._TOKEN_FILE", token_file):
-        from tessera.dashboard.server import _get_or_create_token
+    with patch("chuzom.dashboard.server._TOKEN_FILE", token_file):
+        from chuzom.dashboard.server import _get_or_create_token
 
         _get_or_create_token()
         mode = oct(os.stat(token_file).st_mode)[-3:]
@@ -41,7 +41,7 @@ def test_get_or_create_token_sets_permissions(tmp_path):
 
 
 def test_html_injects_token():
-    from tessera.dashboard.server import _html
+    from chuzom.dashboard.server import _html
 
     token = secrets.token_urlsafe(16)
     html = _html(token)
@@ -50,7 +50,7 @@ def test_html_injects_token():
 
 def test_html_default_empty_token():
     """_html() with no token injects an empty string — server always passes real token."""
-    from tessera.dashboard.server import _html
+    from chuzom.dashboard.server import _html
 
     html = _html()
     assert "window.DASHBOARD_TOKEN" in html
@@ -66,7 +66,7 @@ async def test_auth_middleware_allows_index_without_token():
     """GET / should be accessible without token (displays dashboard UI)."""
     from aiohttp import web
     from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
-    from tessera.dashboard.server import _get_or_create_token, _html
+    from chuzom.dashboard.server import _get_or_create_token, _html
 
     class DashboardTestApp(AioHTTPTestCase):
         async def get_application(self):

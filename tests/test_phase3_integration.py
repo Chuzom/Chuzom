@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from tessera.tools.text import _apply_response_compression
+from chuzom.tools.text import _apply_response_compression
 
 
 class TestResponseCompressionIntegration:
@@ -13,8 +13,8 @@ class TestResponseCompressionIntegration:
     def test_compression_disabled_by_default(self):
         """Compression should be disabled unless explicitly enabled."""
         # Ensure the env var is not set
-        if "TESSERA_COMPRESS_RESPONSE" in os.environ:
-            del os.environ["TESSERA_COMPRESS_RESPONSE"]
+        if "CHUZOM_COMPRESS_RESPONSE" in os.environ:
+            del os.environ["CHUZOM_COMPRESS_RESPONSE"]
         
         response = "I think this is basically a really important solution. " * 50
         compressed, was_applied = _apply_response_compression(response)
@@ -23,8 +23,8 @@ class TestResponseCompressionIntegration:
         assert was_applied is False
 
     def test_compression_enabled_via_env_var(self):
-        """Compression should apply when TESSERA_COMPRESS_RESPONSE=true."""
-        os.environ["TESSERA_COMPRESS_RESPONSE"] = "true"
+        """Compression should apply when CHUZOM_COMPRESS_RESPONSE=true."""
+        os.environ["CHUZOM_COMPRESS_RESPONSE"] = "true"
         try:
             response = (
                 "I think this is basically a really important solution. "
@@ -37,11 +37,11 @@ class TestResponseCompressionIntegration:
             # Compressed should be shorter
             assert len(compressed) < len(response)
         finally:
-            del os.environ["TESSERA_COMPRESS_RESPONSE"]
+            del os.environ["CHUZOM_COMPRESS_RESPONSE"]
 
     def test_compression_skips_short_responses(self):
         """Compression should not apply to responses < 200 chars."""
-        os.environ["TESSERA_COMPRESS_RESPONSE"] = "true"
+        os.environ["CHUZOM_COMPRESS_RESPONSE"] = "true"
         try:
             short_response = "This is a short response."
             compressed, was_applied = _apply_response_compression(short_response)
@@ -49,11 +49,11 @@ class TestResponseCompressionIntegration:
             assert compressed == short_response
             assert was_applied is False
         finally:
-            del os.environ["TESSERA_COMPRESS_RESPONSE"]
+            del os.environ["CHUZOM_COMPRESS_RESPONSE"]
 
     def test_compression_ratio_threshold(self):
         """Compression should only apply if achieving < 95% ratio."""
-        os.environ["TESSERA_COMPRESS_RESPONSE"] = "true"
+        os.environ["CHUZOM_COMPRESS_RESPONSE"] = "true"
         try:
             # Text with minimal filler - hard to compress
             response = "Function definition. Implementation details. Return value. " * 20
@@ -64,11 +64,11 @@ class TestResponseCompressionIntegration:
             assert isinstance(compressed, str)
             assert isinstance(was_applied, bool)
         finally:
-            del os.environ["TESSERA_COMPRESS_RESPONSE"]
+            del os.environ["CHUZOM_COMPRESS_RESPONSE"]
 
     def test_compression_handles_exceptions(self):
         """Compression should handle exceptions gracefully."""
-        os.environ["TESSERA_COMPRESS_RESPONSE"] = "true"
+        os.environ["CHUZOM_COMPRESS_RESPONSE"] = "true"
         try:
             response = "I think this is basically important. " * 50
             # Should not raise even if something goes wrong
@@ -78,11 +78,11 @@ class TestResponseCompressionIntegration:
             assert isinstance(compressed, str)
             assert isinstance(was_applied, bool)
         finally:
-            del os.environ["TESSERA_COMPRESS_RESPONSE"]
+            del os.environ["CHUZOM_COMPRESS_RESPONSE"]
 
     def test_compression_with_real_response(self):
         """Compression should work with realistic responses."""
-        os.environ["TESSERA_COMPRESS_RESPONSE"] = "true"
+        os.environ["CHUZOM_COMPRESS_RESPONSE"] = "true"
         try:
             response = (
                 "I think this is basically a really important solution. "
@@ -96,7 +96,7 @@ class TestResponseCompressionIntegration:
             # Compressed should be shorter
             assert len(compressed) < len(response)
         finally:
-            del os.environ["TESSERA_COMPRESS_RESPONSE"]
+            del os.environ["CHUZOM_COMPRESS_RESPONSE"]
 
 
 class TestCompressionStatsDashboard:
@@ -105,7 +105,7 @@ class TestCompressionStatsDashboard:
     @pytest.mark.asyncio
     async def test_get_compression_stats_returns_both_layers(self):
         """get_compression_stats should return RTK and Token-Savior stats."""
-        from tessera.cost import get_compression_stats
+        from chuzom.cost import get_compression_stats
         
         # Call the function
         stats = await get_compression_stats(days=7)
@@ -135,7 +135,7 @@ class TestCompressionStatsDashboard:
 
     def test_format_savings_includes_compression_layer_section(self):
         """format_savings should include compression layer statistics."""
-        from tessera.commands.gain import SavingsAnalytics
+        from chuzom.commands.gain import SavingsAnalytics
         
         analytics = SavingsAnalytics()
         # Use mock savings data
@@ -159,7 +159,7 @@ class TestCompressionStatsDashboard:
 
     def test_format_savings_handles_missing_compression_stats(self):
         """format_savings should gracefully handle missing compression data."""
-        from tessera.commands.gain import SavingsAnalytics
+        from chuzom.commands.gain import SavingsAnalytics
         
         analytics = SavingsAnalytics()
         savings = {

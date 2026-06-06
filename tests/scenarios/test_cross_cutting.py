@@ -2,16 +2,16 @@
 
 These stories span multiple components (signals + decisions + selector +
 provider + lineage + sessions + budget) and test interactions, not single
-features. Reading them in the report tells you how Tessera behaves under
+features. Reading them in the report tells you how Chuzom behaves under
 adversarial conditions.
 """
 from __future__ import annotations
 
-from tessera.agents import SessionStore
-from tessera.decisions.engine import Decision, DecisionEngine
-from tessera.health import HealthTracker
-from tessera.lineage import Inversion, LineageStore, Tier, make_record
-from tessera.signals.base import SignalScore
+from chuzom.agents import SessionStore
+from chuzom.decisions.engine import Decision, DecisionEngine
+from chuzom.health import HealthTracker
+from chuzom.lineage import Inversion, LineageStore, Tier, make_record
+from chuzom.signals.base import SignalScore
 
 from tests.scenarios.core import Scenario
 
@@ -28,7 +28,7 @@ def test_scenario_cascading_provider_failures_final_fallback(scenario_collector)
         title="Cascading failure: 3 providers down, 4th catches the ball",
         narrative=(
             "A regional network issue takes Ollama, Codex, and OpenAI "
-            "offline. Tessera's selector walks the chain, records a failure "
+            "offline. Chuzom's selector walks the chain, records a failure "
             "for each, increments circuit breakers, and ultimately reaches "
             "Anthropic Claude which succeeds. The lineage row captures "
             "the full chain_attempted so the user can see exactly how many "
@@ -141,7 +141,7 @@ def test_scenario_multi_agent_parent_child_rollup(
         narrative=(
             "An orchestrator agent in Agno spawns two subagents in parallel "
             "— a researcher and a writer. Each subagent makes 2 routing "
-            "calls. Tessera's session rollup walks the parent→children tree "
+            "calls. Chuzom's session rollup walks the parent→children tree "
             "and reports total cost, total steps, descendant count. This is "
             "what a single 'how much did this agent run cost?' query needs."
         ),
@@ -252,7 +252,7 @@ def test_scenario_agent_profile_boost_promotes_signal(scenario_collector):
 
     s.outcome(
         "Same prompt routed two different ways depending on agent profile. "
-        "This is how Tessera makes agents 'aware' of their context without "
+        "This is how Chuzom makes agents 'aware' of their context without "
         "requiring per-agent decision rules.",
         success=(
             no_boost.action == "default_chain"
@@ -268,13 +268,13 @@ def test_scenario_agent_profile_boost_promotes_signal(scenario_collector):
 # ════════════════════════════════════════════════════════════════════════
 
 def test_scenario_pre_emptive_budget_refusal(scenario_collector, tmp_path):
-    """The tessera_agent_route tool pre-checks the budget BEFORE
+    """The chuzom_agent_route tool pre-checks the budget BEFORE
     dispatching — refusing rather than spending then breaching."""
     s = Scenario(
         id="x-05",
         title="Pre-emptive budget refusal: route() refuses before spending",
         narrative=(
-            "A LangGraph-style agent calls tessera_agent_route with "
+            "A LangGraph-style agent calls chuzom_agent_route with "
             "estimated_cost=$0.30. The session has $0.20 remaining. The "
             "tool pre-checks via SessionStore.envelope() and returns a "
             "structured error {error: 'budget_would_exceed', cap_usd, "
@@ -288,8 +288,8 @@ def test_scenario_pre_emptive_budget_refusal(scenario_collector, tmp_path):
     )
     import asyncio
 
-    from tessera.agents import AgentRegistry, AgentProfile
-    from tessera.tools import agents as tool_mod
+    from chuzom.agents import AgentRegistry, AgentProfile
+    from chuzom.tools import agents as tool_mod
 
     sessions = SessionStore(db_path=tmp_path / "s.db")
     reg = AgentRegistry.from_profiles([
@@ -301,7 +301,7 @@ def test_scenario_pre_emptive_budget_refusal(scenario_collector, tmp_path):
     )
     try:
         start = asyncio.run(
-            tool_mod.tessera_agent_start_session(
+            tool_mod.chuzom_agent_start_session(
                 agent_id="anyagent", budget_usd=0.30
             )
         )
@@ -316,7 +316,7 @@ def test_scenario_pre_emptive_budget_refusal(scenario_collector, tmp_path):
 
         # Try to spend $0.30 — should refuse
         result = asyncio.run(
-            tool_mod.tessera_agent_route(
+            tool_mod.chuzom_agent_route(
                 session_id=sid, prompt="expensive",
                 estimated_cost_usd=0.30,
             )
@@ -346,7 +346,7 @@ def test_scenario_pre_emptive_budget_refusal(scenario_collector, tmp_path):
 
 def test_scenario_concurrent_sessions_isolated(scenario_collector, tmp_path):
     """Two agents from different frameworks (Agno + a future Pydantic AI)
-    can run concurrently in the same Tessera process without state
+    can run concurrently in the same Chuzom process without state
     leaks."""
     s = Scenario(
         id="x-06",
@@ -441,7 +441,7 @@ def test_scenario_stale_failure_reset_recovers_provider(scenario_collector):
         narrative=(
             "Provider 'flaky-api' failed N times yesterday. Its circuit "
             "breaker opened. Without intervention, every new Claude Code "
-            "session would skip it forever. Tessera's reset_stale() — "
+            "session would skip it forever. Chuzom's reset_stale() — "
             "called at session start — clears breakers older than 30 minutes "
             "so providers get a fresh chance each session."
         ),

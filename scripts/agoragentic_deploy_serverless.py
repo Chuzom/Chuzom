@@ -31,7 +31,7 @@ async def deploy_relay_function():
     """Deploy serverless function to Agoragentic relay platform."""
     
     # Load credentials
-    creds_file = Path.home() / ".tessera" / "agoragentic.json"
+    creds_file = Path.home() / ".chuzom" / "agoragentic.json"
     if not creds_file.exists():
         print("❌ Agoragentic not configured. Run: python3 scripts/agoragentic_register.py")
         return
@@ -41,7 +41,7 @@ async def deploy_relay_function():
     
     # Deploy function to relay
     payload = {
-        "name": "tessera-relay",
+        "name": "chuzom-relay",
         "source_code": SERVERLESS_CODE,
     }
     
@@ -75,7 +75,7 @@ async def deploy_relay_function():
             print(f"\n✅ Relay URL: {relay_url}")
             
             # Save relay URL
-            relay_file = Path.home() / ".tessera" / "agoragentic_relay.json"
+            relay_file = Path.home() / ".chuzom" / "agoragentic_relay.json"
             relay_file.write_text(json.dumps(result, indent=2))
             relay_file.chmod(0o600)
             print(f"✅ Relay info saved to {relay_file}")

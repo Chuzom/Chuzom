@@ -1,8 +1,8 @@
-# Tessera v0.0.1 — signal & decision config (template)
+# Chuzom v0.0.1 — signal & decision config (template)
 #
 # This YAML defines the signal layer (independent prompt detectors) and the
 # decision layer (boolean composition over signals → model pick). At runtime,
-# Tessera evaluates all signals against every prompt, then walks decisions in
+# Chuzom evaluates all signals against every prompt, then walks decisions in
 # priority order; the first decision whose operator condition is satisfied
 # wins, and its `action` selects the model chain.
 

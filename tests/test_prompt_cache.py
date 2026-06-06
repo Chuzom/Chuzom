@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from tessera.prompt_cache import inject_cache_control
+from chuzom.prompt_cache import inject_cache_control
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tessera.benchmarks import (
+from chuzom.benchmarks import (
     _LOCAL_QUALITY_SCORES,
     _resolve_local_alias,
     get_quality_score,
@@ -115,12 +115,12 @@ class TestGetQualityScore:
                 "code": {"openai/gpt-4o": 0.85},
             }
         }
-        with patch("tessera.benchmarks.get_benchmark_data", return_value=fake_data):
+        with patch("chuzom.benchmarks.get_benchmark_data", return_value=fake_data):
             score = get_quality_score("openai/gpt-4o", "code")
         assert score == pytest.approx(0.85)
 
     def test_api_model_falls_back_to_default_when_no_data(self):
-        with patch("tessera.benchmarks.get_benchmark_data", return_value=None):
+        with patch("chuzom.benchmarks.get_benchmark_data", return_value=None):
             score = get_quality_score("openai/gpt-4o", "code")
         assert score == 0.5
 
@@ -131,12 +131,12 @@ class TestGetQualityScore:
                 "code": {"anthropic/claude-haiku-4-5-20251001": 0.92},
             }
         }
-        with patch("tessera.benchmarks.get_benchmark_data", return_value=fake_data):
+        with patch("chuzom.benchmarks.get_benchmark_data", return_value=fake_data):
             score = get_quality_score("anthropic/claude-haiku-4-5-20251001", "code")
         assert score == pytest.approx(0.92)
 
     def test_exception_in_benchmark_data_returns_default(self):
-        with patch("tessera.benchmarks.get_benchmark_data", side_effect=RuntimeError("db error")):
+        with patch("chuzom.benchmarks.get_benchmark_data", side_effect=RuntimeError("db error")):
             score = get_quality_score("openai/gpt-4o", "code")
         assert score == 0.5
 
@@ -152,8 +152,8 @@ class TestMaybeRefreshBenchmarks:
         benchmarks_file.write_text(json.dumps(fresh_data))
 
         with (
-            patch("tessera.benchmarks._INSTALLED", benchmarks_file),
-            patch("tessera.benchmarks._refresh_in_progress", False),
+            patch("chuzom.benchmarks._INSTALLED", benchmarks_file),
+            patch("chuzom.benchmarks._refresh_in_progress", False),
         ):
             result = maybe_refresh_benchmarks_background(ttl_days=7)
 
@@ -167,10 +167,10 @@ class TestMaybeRefreshBenchmarks:
         benchmarks_file.write_text(json.dumps(old_data))
 
         with (
-            patch("tessera.benchmarks._INSTALLED", benchmarks_file),
-            patch("tessera.benchmarks._refresh_in_progress", False),
-            patch("tessera.benchmarks._refresh_lock", threading.Lock()),
-            patch("tessera.benchmarks.threading") as mock_threading,
+            patch("chuzom.benchmarks._INSTALLED", benchmarks_file),
+            patch("chuzom.benchmarks._refresh_in_progress", False),
+            patch("chuzom.benchmarks._refresh_lock", threading.Lock()),
+            patch("chuzom.benchmarks.threading") as mock_threading,
         ):
             mock_thread = MagicMock()
             mock_threading.Thread.return_value = mock_thread
@@ -182,7 +182,7 @@ class TestMaybeRefreshBenchmarks:
 
     def test_returns_false_when_already_refreshing(self):
         """If refresh is in progress, don't start another one."""
-        with patch("tessera.benchmarks._refresh_in_progress", True):
+        with patch("chuzom.benchmarks._refresh_in_progress", True):
             result = maybe_refresh_benchmarks_background(ttl_days=7)
         assert result is False
 
@@ -190,10 +190,10 @@ class TestMaybeRefreshBenchmarks:
         """Missing benchmarks.json should trigger a refresh."""
         missing_path = tmp_path / "benchmarks.json"  # does not exist
         with (
-            patch("tessera.benchmarks._INSTALLED", missing_path),
-            patch("tessera.benchmarks._refresh_in_progress", False),
-            patch("tessera.benchmarks._refresh_lock", threading.Lock()),
-            patch("tessera.benchmark_fetcher.generate_benchmarks_json"),
+            patch("chuzom.benchmarks._INSTALLED", missing_path),
+            patch("chuzom.benchmarks._refresh_in_progress", False),
+            patch("chuzom.benchmarks._refresh_lock", threading.Lock()),
+            patch("chuzom.benchmark_fetcher.generate_benchmarks_json"),
         ):
             result = maybe_refresh_benchmarks_background(ttl_days=7)
         # Should attempt to start (file is missing = stale)
@@ -201,7 +201,7 @@ class TestMaybeRefreshBenchmarks:
 
     def test_worker_releases_original_lock_when_global_lock_changes(self, tmp_path):
         """Worker should release the lock it acquired, not whatever is later in the global."""
-        import tessera.benchmarks as bm
+        import chuzom.benchmarks as bm
 
         benchmarks_file = tmp_path / "benchmarks.json"
         from datetime import datetime, timezone, timedelta
@@ -222,11 +222,11 @@ class TestMaybeRefreshBenchmarks:
             bm._refresh_lock = threading.Lock()
 
         with (
-            patch("tessera.benchmarks._INSTALLED", benchmarks_file),
-            patch("tessera.benchmarks._refresh_in_progress", False),
-            patch("tessera.benchmarks._refresh_lock", original_lock),
-            patch("tessera.benchmark_fetcher.generate_benchmarks_json", side_effect=swap_global_lock),
-            patch("tessera.benchmarks.threading.Thread", ImmediateThread),
+            patch("chuzom.benchmarks._INSTALLED", benchmarks_file),
+            patch("chuzom.benchmarks._refresh_in_progress", False),
+            patch("chuzom.benchmarks._refresh_lock", original_lock),
+            patch("chuzom.benchmark_fetcher.generate_benchmarks_json", side_effect=swap_global_lock),
+            patch("chuzom.benchmarks.threading.Thread", ImmediateThread),
         ):
             result = maybe_refresh_benchmarks_background(ttl_days=7)
 

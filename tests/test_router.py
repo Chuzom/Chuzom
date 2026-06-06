@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tessera.router import route_and_call
-from tessera.types import BudgetState, LLMResponse, RoutingProfile, TaskType
+from chuzom.router import route_and_call
+from chuzom.types import BudgetState, LLMResponse, RoutingProfile, TaskType
 
 
 @pytest.mark.asyncio
@@ -28,8 +28,8 @@ async def test_logs_structured_routing_decision(temp_db, mock_env, mock_acomplet
     route_log = MagicMock()
     fake_uuid = MagicMock(hex="deadbeefcafebabe")
 
-    with patch("tessera.router.log") as mock_log:
-        with patch("tessera.router.uuid4", return_value=fake_uuid):
+    with patch("chuzom.router.log") as mock_log:
+        with patch("chuzom.router.uuid4", return_value=fake_uuid):
             mock_log.bind.return_value = route_log
             resp = await route_and_call(
                 TaskType.QUERY,
@@ -76,7 +76,7 @@ async def test_system_prompt_included(temp_db, mock_env, mock_acompletion):
 @pytest.mark.asyncio
 @pytest.mark.requires_api_keys
 async def test_falls_back_on_failure(temp_db, mock_env, mock_litellm_response):
-    from tessera.types import LLMResponse
+    from chuzom.types import LLMResponse
 
     call_count = 0
 
@@ -96,7 +96,7 @@ async def test_falls_back_on_failure(temp_db, mock_env, mock_litellm_response):
             provider="test",
         )
 
-    with patch("tessera.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
+    with patch("chuzom.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
         resp = await route_and_call(
             TaskType.QUERY, "Hello",
             profile=RoutingProfile.BUDGET,
@@ -116,7 +116,7 @@ async def test_raises_when_all_fail(temp_db, mock_env):
 @pytest.mark.asyncio
 async def test_no_providers_configured(no_providers_env, monkeypatch):
     """When no providers are configured, the router should raise an error."""
-    monkeypatch.setattr("tessera.router.is_codex_available", lambda: False)
+    monkeypatch.setattr("chuzom.router.is_codex_available", lambda: False)
     with pytest.raises((ValueError, RuntimeError), match="No available models|All models failed"):
         await route_and_call(TaskType.QUERY, "Hello")
 
@@ -133,7 +133,7 @@ async def test_research_no_search_params_for_non_perplexity(temp_db, mock_env, m
 @pytest.mark.asyncio
 async def test_research_adds_search_params_for_perplexity(temp_db, mock_env, mock_acompletion, monkeypatch):
     # Perplexity sonar models should receive the recency filter.
-    monkeypatch.setenv("TESSERA_PROFILE", "balanced")
+    monkeypatch.setenv("CHUZOM_PROFILE", "balanced")
     await route_and_call(TaskType.RESEARCH, "What happened today?", model_override="perplexity/sonar")
     call_kwargs = mock_acompletion.call_args.kwargs
     # extra_body is passed via extra_params dict
@@ -145,7 +145,7 @@ async def test_research_adds_search_params_for_perplexity(temp_db, mock_env, moc
 @pytest.mark.requires_api_keys
 async def test_content_filter_error_is_silent_fallback(temp_db, mock_env, mock_litellm_response):
     """Content filter errors should silently skip to next model without warning."""
-    from tessera.types import LLMResponse
+    from chuzom.types import LLMResponse
 
     call_count = 0
 
@@ -165,7 +165,7 @@ async def test_content_filter_error_is_silent_fallback(temp_db, mock_env, mock_l
             provider="test",
         )
 
-    with patch("tessera.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
+    with patch("chuzom.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
         resp = await route_and_call(
             TaskType.QUERY, "Hello",
             profile=RoutingProfile.BUDGET,
@@ -210,10 +210,10 @@ async def test_skips_model_when_budget_exhausts_mid_chain(temp_db, mock_env, moc
 
     with patch("litellm.acompletion", side_effect=completion_side_effect):
         with patch("litellm.completion_cost", return_value=0.001):
-            with patch("tessera.router.get_model_chain", return_value=chain):
-                with patch("tessera.router.get_budget_state", side_effect=budget_side_effect):
-                    with patch("tessera.router.get_tracker", return_value=mock_tracker):
-                        with patch("tessera.chain_builder.build_chain", return_value=[]):
+            with patch("chuzom.router.get_model_chain", return_value=chain):
+                with patch("chuzom.router.get_budget_state", side_effect=budget_side_effect):
+                    with patch("chuzom.router.get_tracker", return_value=mock_tracker):
+                        with patch("chuzom.chain_builder.build_chain", return_value=[]):
                             resp = await route_and_call(
                                 TaskType.QUERY, "Hello",
                                 profile=RoutingProfile.BALANCED,
@@ -230,9 +230,9 @@ async def test_skips_model_when_budget_exhausts_mid_chain(temp_db, mock_env, moc
 @pytest.mark.asyncio
 async def test_subscription_mode_blocks_anthropic_override(temp_db, mock_env, mock_acompletion, monkeypatch):
     """In subscription mode, explicit anthropic/ model_override should be redirected."""
-    monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "true")
-    import tessera.router as _router
-    import tessera.config as _config
+    monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "true")
+    import chuzom.router as _router
+    import chuzom.config as _config
     _config._config = None  # force config reload
     _router._config = None if hasattr(_router, "_config") else None
     resp = await route_and_call(
@@ -249,10 +249,10 @@ async def test_claw_code_mode_injects_ollama_for_balanced_profile(
     temp_db, mock_env, mock_acompletion, monkeypatch
 ):
     """In claw-code mode, Ollama should be injected for BALANCED profile (not just BUDGET)."""
-    monkeypatch.setenv("TESSERA_CLAW_CODE", "true")
+    monkeypatch.setenv("CHUZOM_CLAW_CODE", "true")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "llama3.2")
-    import tessera.config as _config
+    import chuzom.config as _config
     _config._config = None
 
     await route_and_call(TaskType.QUERY, "Hello", profile=RoutingProfile.BALANCED)
@@ -269,10 +269,10 @@ async def test_claw_code_mode_injects_ollama_for_premium_profile(
     temp_db, mock_env, mock_acompletion, monkeypatch
 ):
     """In claw-code mode, Ollama should also be injected for PREMIUM profile."""
-    monkeypatch.setenv("TESSERA_CLAW_CODE", "true")
+    monkeypatch.setenv("CHUZOM_CLAW_CODE", "true")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "llama3.2")
-    import tessera.config as _config
+    import chuzom.config as _config
     _config._config = None
 
     await route_and_call(TaskType.QUERY, "Hello", profile=RoutingProfile.PREMIUM)
@@ -289,11 +289,11 @@ async def test_ollama_always_injected_for_balanced(
     temp_db, mock_env, mock_acompletion, monkeypatch
 ):
     """Ollama should always inject when configured, regardless of profile or pressure."""
-    monkeypatch.setenv("TESSERA_CLAW_CODE", "false")
+    monkeypatch.setenv("CHUZOM_CLAW_CODE", "false")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "llama3.2")
-    import tessera.config as _config
-    import tessera.claude_usage as _usage
+    import chuzom.config as _config
+    import chuzom.claude_usage as _usage
     _config._config = None
     _usage.set_claude_pressure(0.0)  # no subscription pressure
 
@@ -311,13 +311,13 @@ async def test_ollama_always_injected_for_balanced(
 class TestExtraParamsWhitelist:
     def test_allowed_keys_present(self):
         """Whitelisted keys must be in the allowlist."""
-        from tessera.providers import _ALLOWED_EXTRA_PARAMS
+        from chuzom.providers import _ALLOWED_EXTRA_PARAMS
         safe_keys = {"temperature", "top_p", "seed", "stop", "extra_body", "thinking"}
         assert safe_keys.issubset(_ALLOWED_EXTRA_PARAMS)
 
     def test_dangerous_keys_blocked(self):
         """api_key, base_url, api_base must NOT be in the allowlist."""
-        from tessera.providers import _ALLOWED_EXTRA_PARAMS
+        from chuzom.providers import _ALLOWED_EXTRA_PARAMS
         blocked = {"api_key", "base_url", "api_base", "headers", "custom_llm_provider"}
         assert blocked.isdisjoint(_ALLOWED_EXTRA_PARAMS), (
             f"Dangerous key(s) found in allowlist: {blocked & _ALLOWED_EXTRA_PARAMS}"
@@ -335,7 +335,7 @@ class TestExtraParamsWhitelist:
 
         with patch("litellm.acompletion", side_effect=capturing_completion):
             with patch("litellm.completion_cost", return_value=0.0):
-                from tessera import providers
+                from chuzom import providers
                 await providers.call_llm(
                     "openai/gpt-4o",
                     [{"role": "user", "content": "hi"}],
@@ -348,8 +348,8 @@ class TestExtraParamsWhitelist:
 
 class TestMediaParamsWhitelist:
     def test_image_strips_unknown_keys(self):
-        from tessera.router import _filter_media_params
-        from tessera.types import TaskType
+        from chuzom.router import _filter_media_params
+        from chuzom.types import TaskType
         result = _filter_media_params(
             TaskType.IMAGE,
             {"size": "1024x1024", "api_key": "evil", "base_url": "http://evil.com"},
@@ -359,13 +359,13 @@ class TestMediaParamsWhitelist:
         assert "base_url" not in result
 
     def test_video_strips_unknown_keys(self):
-        from tessera.router import _filter_media_params
-        from tessera.types import TaskType
+        from chuzom.router import _filter_media_params
+        from chuzom.types import TaskType
         result = _filter_media_params(TaskType.VIDEO, {"duration": 5, "inject": "bad"})
         assert result == {"duration": 5}
 
     def test_empty_params_returns_empty(self):
-        from tessera.router import _filter_media_params
-        from tessera.types import TaskType
+        from chuzom.router import _filter_media_params
+        from chuzom.types import TaskType
         assert _filter_media_params(TaskType.IMAGE, None) == {}
         assert _filter_media_params(TaskType.AUDIO, {}) == {}

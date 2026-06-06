@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproducible benchmark kit for tessera.
+"""Reproducible benchmark kit for chuzom.
 
 Measures routing performance, model selection accuracy, and cost savings
 across different task complexities and configurations.
@@ -197,7 +197,7 @@ def analyze_results(results: list[BenchmarkResult]) -> None:
 def main() -> int:
     """Run benchmark suite."""
     parser = argparse.ArgumentParser(
-        description="Reproducible benchmark for tessera routing decisions"
+        description="Reproducible benchmark for chuzom routing decisions"
     )
     parser.add_argument(
         "--iterations",
@@ -214,7 +214,7 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    print(f"\n  tessera Benchmark Suite")
+    print(f"\n  chuzom Benchmark Suite")
     print(f"  Iterations: {args.iterations}")
     print(f"  Profile: {args.profile}\n")
 

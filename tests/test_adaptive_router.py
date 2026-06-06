@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tessera.types import ModelCapability, ProviderTier, RoutingProfile, TaskType
+from chuzom.types import ModelCapability, ProviderTier, RoutingProfile, TaskType
 # Import json for URL test response handling
 
 
@@ -28,7 +28,7 @@ class TestOllamaDiscoveryInjection:
     def test_get_cached_ollama_models_reads_discovery_json(self, tmp_path):
         """Cache hit: get_cached_ollama_models reads models from discovery.json."""
         import json
-        from tessera.discover import get_cached_ollama_models
+        from chuzom.discover import get_cached_ollama_models
 
         cache_file = tmp_path / "discovery.json"
         cache_file.write_text(json.dumps({
@@ -67,7 +67,7 @@ class TestOllamaDiscoveryInjection:
             },
         }))
 
-        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+        with patch("chuzom.discover._DISCOVERY_CACHE", cache_file):
             result = get_cached_ollama_models()
 
         assert isinstance(result, list)
@@ -77,21 +77,21 @@ class TestOllamaDiscoveryInjection:
 
     def test_get_cached_ollama_models_empty_cache_returns_empty(self):
         """Cache miss: returns empty list, allowing fallback to env var."""
-        from tessera.discover import get_cached_ollama_models
+        from chuzom.discover import get_cached_ollama_models
 
-        with patch("tessera.discover._load_cache", return_value=None):
+        with patch("chuzom.discover._load_cache", return_value=None):
             result = get_cached_ollama_models()
 
         assert result == []
 
     def test_config_all_ollama_models_uses_cache_first(self, monkeypatch):
         """config.all_ollama_models() should use cached models when available."""
-        from tessera.config import get_config
+        from chuzom.config import get_config
 
         cfg = get_config()
         
         # Mock the discovery cache to return live models
-        with patch("tessera.discover.get_cached_ollama_models",
+        with patch("chuzom.discover.get_cached_ollama_models",
                    return_value=["ollama/qwen3.5:latest", "ollama/llama2:latest"]):
             models = cfg.all_ollama_models()
 
@@ -100,13 +100,13 @@ class TestOllamaDiscoveryInjection:
 
     def test_config_all_ollama_models_falls_back_to_env_var(self, monkeypatch):
         """When cache is empty, fall back to OLLAMA_BUDGET_MODELS env var."""
-        from tessera.config import get_config
+        from chuzom.config import get_config
 
         # No cache available; env var values don't include "ollama/" prefix
         monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "custom:latest,other:v1")
         cfg = get_config()
 
-        with patch("tessera.discover.get_cached_ollama_models", return_value=[]):
+        with patch("chuzom.discover.get_cached_ollama_models", return_value=[]):
             models = cfg.all_ollama_models()
 
         assert "ollama/custom:latest" in models
@@ -114,7 +114,7 @@ class TestOllamaDiscoveryInjection:
 
     def test_router_uses_config_ollama_models(self):
         """Integration: router calls config.all_ollama_models() for injection."""
-        with patch("tessera.config.get_config") as mock_get_config:
+        with patch("chuzom.config.get_config") as mock_get_config:
             mock_config = MagicMock()
             mock_config.all_ollama_models.return_value = [
                 "ollama/qwen3.5:latest",
@@ -137,7 +137,7 @@ class TestOpenAIScanner:
 
     def test_openai_scanner_would_parse_api_response(self):
         """Test that OpenAI API responses are parsed correctly (mock-based)."""
-        from tessera.types import ModelCapability, ProviderTier
+        from chuzom.types import ModelCapability, ProviderTier
 
         # Simulate what a real scanner would produce from API response
         fake_models = [
@@ -162,7 +162,7 @@ class TestOpenAIScanner:
 
     def test_openai_scanner_excludes_embedding_models(self):
         """Test that embedding-only models are filtered out."""
-        from tessera.types import ModelCapability, ProviderTier
+        from chuzom.types import ModelCapability, ProviderTier
 
         # Embedding model should not be included by scanner
         embedding_model = ModelCapability(
@@ -178,15 +178,15 @@ class TestOpenAIScanner:
     @pytest.mark.asyncio
     async def test_discover_available_models_includes_openai(self):
         """Discovery should attempt to scan OpenAI when API key is set."""
-        from tessera.discover import discover_available_models
+        from chuzom.discover import discover_available_models
 
         mock_ollama = AsyncMock(return_value=[])
         mock_openai = AsyncMock(return_value=[])
         mock_gemini = AsyncMock(return_value=[])
 
-        with patch("tessera.discover._scan_ollama", mock_ollama):
-            with patch("tessera.discover._scan_openai", mock_openai):
-                with patch("tessera.discover._scan_gemini", mock_gemini):
+        with patch("chuzom.discover._scan_ollama", mock_ollama):
+            with patch("chuzom.discover._scan_openai", mock_openai):
+                with patch("chuzom.discover._scan_gemini", mock_gemini):
                     result = await discover_available_models()
 
         # Should return dict of capabilities
@@ -195,15 +195,15 @@ class TestOpenAIScanner:
     @pytest.mark.asyncio
     async def test_discover_gracefully_handles_scanner_failure(self):
         """Discovery should handle scanner exceptions gracefully."""
-        from tessera.discover import discover_available_models
+        from chuzom.discover import discover_available_models
 
         mock_ollama = AsyncMock(return_value=[])
         mock_openai = AsyncMock(side_effect=Exception("API error"))
         mock_gemini = AsyncMock(return_value=[])
 
-        with patch("tessera.discover._scan_ollama", mock_ollama):
-            with patch("tessera.discover._scan_openai", mock_openai):
-                with patch("tessera.discover._scan_gemini", mock_gemini):
+        with patch("chuzom.discover._scan_ollama", mock_ollama):
+            with patch("chuzom.discover._scan_openai", mock_openai):
+                with patch("chuzom.discover._scan_gemini", mock_gemini):
                     result = await discover_available_models()
 
         # Should still return a dict (other scanners' results)
@@ -215,7 +215,7 @@ class TestGeminiScanner:
 
     def test_gemini_scanner_would_parse_api_response(self):
         """Test that Gemini API responses are parsed correctly (mock-based)."""
-        from tessera.types import ModelCapability, ProviderTier
+        from chuzom.types import ModelCapability, ProviderTier
 
         # Simulate what a real scanner would produce from API response
         fake_models = [
@@ -238,7 +238,7 @@ class TestGeminiScanner:
 
     def test_gemini_scanner_excludes_embedding_models(self):
         """Test that embedding-only models are filtered out."""
-        from tessera.types import ModelCapability, ProviderTier
+        from chuzom.types import ModelCapability, ProviderTier
 
         # Embedding model has no generation methods supported
         embedding_model = ModelCapability(
@@ -254,15 +254,15 @@ class TestGeminiScanner:
     @pytest.mark.asyncio
     async def test_discover_includes_gemini_scan(self):
         """Discovery should attempt to scan Gemini when API key is set."""
-        from tessera.discover import discover_available_models
+        from chuzom.discover import discover_available_models
 
         mock_ollama = AsyncMock(return_value=[])
         mock_openai = AsyncMock(return_value=[])
         mock_gemini = AsyncMock(return_value=[])
 
-        with patch("tessera.discover._scan_ollama", mock_ollama):
-            with patch("tessera.discover._scan_openai", mock_openai):
-                with patch("tessera.discover._scan_gemini", mock_gemini):
+        with patch("chuzom.discover._scan_ollama", mock_ollama):
+            with patch("chuzom.discover._scan_openai", mock_openai):
+                with patch("chuzom.discover._scan_gemini", mock_gemini):
                     result = await discover_available_models()
 
         assert isinstance(result, dict)
@@ -273,21 +273,21 @@ class TestGeminiScanner:
 class TestAlwaysOnDynamic:
     """Test always-on dynamic routing (no feature flag needed)."""
 
-    def test_tessera_dynamic_flag_removed_from_config(self):
-        """TESSERA_DYNAMIC field should be removed from config."""
-        from tessera.config import get_config
+    def test_chuzom_dynamic_flag_removed_from_config(self):
+        """CHUZOM_DYNAMIC field should be removed from config."""
+        from chuzom.config import get_config
 
         config = get_config()
-        assert not hasattr(config, "tessera_dynamic"), \
-            "tessera_dynamic field must be removed (always-on now)"
+        assert not hasattr(config, "chuzom_dynamic"), \
+            "chuzom_dynamic field must be removed (always-on now)"
 
     @pytest.mark.asyncio
     async def test_build_chain_always_tries_dynamic_first(self):
         """build_chain() should always call _build_dynamic_chain, with static fallback."""
-        from tessera.chain_builder import build_chain
+        from chuzom.chain_builder import build_chain
 
         with (
-            patch("tessera.chain_builder._build_dynamic_chain",
+            patch("chuzom.chain_builder._build_dynamic_chain",
                   new_callable=AsyncMock, return_value=["ollama/qwen3.5:latest", "openai/gpt-4o"]),
         ):
             result = await build_chain(TaskType.CODE, "moderate", RoutingProfile.BALANCED)
@@ -298,12 +298,12 @@ class TestAlwaysOnDynamic:
     @pytest.mark.asyncio
     async def test_build_chain_falls_back_to_static_on_error(self):
         """When _build_dynamic_chain raises, fall back to static profiles."""
-        from tessera.chain_builder import build_chain
+        from chuzom.chain_builder import build_chain
 
         with (
-            patch("tessera.chain_builder._build_dynamic_chain",
+            patch("chuzom.chain_builder._build_dynamic_chain",
                   new_callable=AsyncMock, side_effect=RuntimeError("discovery failed")),
-            patch("tessera.chain_builder._static_chain",
+            patch("chuzom.chain_builder._static_chain",
                   return_value=["openai/gpt-4o", "gemini/gemini-2.5-flash"]),
         ):
             result = await build_chain(TaskType.CODE, "moderate", RoutingProfile.BALANCED)
@@ -314,11 +314,11 @@ class TestAlwaysOnDynamic:
     @pytest.mark.asyncio
     async def test_dynamic_routing_always_active_no_env_check(self):
         """Dynamic routing should not check any env var or flag."""
-        from tessera.chain_builder import build_chain
+        from chuzom.chain_builder import build_chain
 
-        # Never check for TESSERA_DYNAMIC, always run dynamic
+        # Never check for CHUZOM_DYNAMIC, always run dynamic
         with (
-            patch("tessera.chain_builder._build_dynamic_chain",
+            patch("chuzom.chain_builder._build_dynamic_chain",
                   new_callable=AsyncMock, return_value=["ollama/qwen3.5:latest"]),
         ):
             result = await build_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
@@ -328,7 +328,7 @@ class TestAlwaysOnDynamic:
 
     def test_no_is_dynamic_routing_enabled_function(self):
         """is_dynamic_routing_enabled() function must not exist."""
-        from tessera import chain_builder
+        from chuzom import chain_builder
 
         assert not hasattr(chain_builder, "is_dynamic_routing_enabled"), \
             "is_dynamic_routing_enabled() must be removed — dynamic routing is always on"
@@ -338,7 +338,7 @@ class TestAlwaysOnDynamic:
         # v5.4.1+: Router uses pre-built dynamic routing tables instead of per-request
         # discovery. Dynamic tables are built once at session start via
         # initialize_dynamic_routing() in server.py startup sequence.
-        from tessera import router
+        from chuzom import router
         import inspect
 
         source = inspect.getsource(router._build_and_filter_chain)
@@ -357,7 +357,7 @@ class TestSidecarScoreEndpoint:
 
     def test_score_request_model(self):
         """ScoreRequest Pydantic model validates input."""
-        from tessera.service import ScoreRequest
+        from chuzom.service import ScoreRequest
 
         req = ScoreRequest(
             task_type="code",
@@ -371,7 +371,7 @@ class TestSidecarScoreEndpoint:
 
     def test_score_response_model(self):
         """ScoreResponse Pydantic model formats ranking."""
-        from tessera.service import ScoreResponse
+        from chuzom.service import ScoreResponse
 
         resp = ScoreResponse(
             ranked_models=["openai/gpt-4o", "ollama/qwen3.5:latest"],
@@ -385,13 +385,13 @@ class TestSidecarScoreEndpoint:
     @pytest.mark.asyncio
     async def test_score_endpoint_ranks_models(self):
         """POST /score returns models sorted by score (best-first)."""
-        from tessera.service import app
+        from chuzom.service import app
         from fastapi.testclient import TestClient
 
         client = TestClient(app)
 
-        with patch("tessera.scorer.score_all_models") as mock_score:
-            from tessera.types import ScoredModel, ModelCapability, ProviderTier
+        with patch("chuzom.scorer.score_all_models") as mock_score:
+            from chuzom.types import ScoredModel, ModelCapability, ProviderTier
 
             mock_cap1 = ModelCapability(
                 model_id="openai/gpt-4o",
@@ -441,7 +441,7 @@ class TestSidecarScoreEndpoint:
     @pytest.mark.asyncio
     async def test_score_endpoint_invalid_task_type(self):
         """POST /score with invalid task_type returns graceful fallback."""
-        from tessera.service import app
+        from chuzom.service import app
         from fastapi.testclient import TestClient
 
         client = TestClient(app)
@@ -461,12 +461,12 @@ class TestSidecarScoreEndpoint:
     @pytest.mark.asyncio
     async def test_score_endpoint_error_returns_original_order(self):
         """On scoring error, /score returns original model order."""
-        from tessera.service import app
+        from chuzom.service import app
         from fastapi.testclient import TestClient
 
         client = TestClient(app)
 
-        with patch("tessera.scorer.score_all_models") as mock_score:
+        with patch("chuzom.scorer.score_all_models") as mock_score:
             mock_score.side_effect = RuntimeError("scoring failed")
 
             response = client.post("/score", json={
@@ -484,7 +484,7 @@ class TestSidecarScoreEndpoint:
 
     def test_hook_client_score_models(self):
         """hook_client.score_models() calls /score endpoint."""
-        from tessera.hook_client import score_models
+        from chuzom.hook_client import score_models
 
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_response = MagicMock()
@@ -507,7 +507,7 @@ class TestSidecarScoreEndpoint:
 
     def test_hook_client_score_models_timeout_fallback(self):
         """score_models() with timeout returns original order."""
-        from tessera.hook_client import score_models
+        from chuzom.hook_client import score_models
 
         with patch("urllib.request.urlopen") as mock_urlopen:
             import urllib.error
@@ -531,16 +531,16 @@ class TestAdaptiveUniversalRouterIntegration:
     @pytest.mark.asyncio
     async def test_discovery_scanner_integration(self):
         """All scanners run in parallel during discovery."""
-        from tessera.discover import discover_available_models
+        from chuzom.discover import discover_available_models
 
         with (
-            patch("tessera.discover._scan_ollama",
+            patch("chuzom.discover._scan_ollama",
                   new_callable=AsyncMock, return_value=[]),
-            patch("tessera.discover._scan_openai",
+            patch("chuzom.discover._scan_openai",
                   new_callable=AsyncMock, return_value=[]),
-            patch("tessera.discover._scan_gemini",
+            patch("chuzom.discover._scan_gemini",
                   new_callable=AsyncMock, return_value=[]),
-            patch("tessera.discover._scan_api_key_providers",
+            patch("chuzom.discover._scan_api_key_providers",
                   new_callable=AsyncMock, return_value=[]),
         ):
             result = await discover_available_models()
@@ -550,10 +550,10 @@ class TestAdaptiveUniversalRouterIntegration:
     @pytest.mark.asyncio
     async def test_full_routing_path_ollama_to_paid(self):
         """Full path: discover → score → build_chain → route."""
-        from tessera.chain_builder import build_chain
+        from chuzom.chain_builder import build_chain
 
         with (
-            patch("tessera.discover.discover_available_models",
+            patch("chuzom.discover.discover_available_models",
                   new_callable=AsyncMock, return_value={
                       "ollama/qwen3.5:latest": ModelCapability(
                           model_id="ollama/qwen3.5:latest",
@@ -568,7 +568,7 @@ class TestAdaptiveUniversalRouterIntegration:
                           task_types=frozenset({TaskType.CODE}),
                       ),
                   }),
-            patch("tessera.scorer.score_all_models",
+            patch("chuzom.scorer.score_all_models",
                   new_callable=AsyncMock, return_value=[
                       MagicMock(
                           model_id="openai/gpt-4o",

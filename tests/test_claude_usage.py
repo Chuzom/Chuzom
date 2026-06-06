@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tessera.claude_usage import parse_api_response, parse_usage_texts
+from chuzom.claude_usage import parse_api_response, parse_usage_texts
 
 
 # Real API response from claude.ai (captured via Playwright browser_evaluate)
@@ -165,7 +165,7 @@ class TestEffectivePressure:
 
     def test_low_pressure_unchanged(self):
         """Under 85%, effective = raw regardless of time."""
-        from tessera.claude_usage import ClaudeSubscriptionUsage, UsageLimit
+        from chuzom.claude_usage import ClaudeSubscriptionUsage, UsageLimit
         usage = ClaudeSubscriptionUsage(
             session=UsageLimit("Session", 0.60, "2026-03-29T20:00:00+00:00"),
         )
@@ -174,7 +174,7 @@ class TestEffectivePressure:
     def test_high_pressure_reset_imminent(self):
         """At 90% but reset in 5 min → pressure should be reduced."""
         from datetime import datetime, timedelta, timezone
-        from tessera.claude_usage import ClaudeSubscriptionUsage, UsageLimit
+        from chuzom.claude_usage import ClaudeSubscriptionUsage, UsageLimit
         soon = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
         usage = ClaudeSubscriptionUsage(
             session=UsageLimit("Session", 0.90, soon),
@@ -187,7 +187,7 @@ class TestEffectivePressure:
     def test_high_pressure_reset_far(self):
         """At 90% with 3 hours left → full pressure."""
         from datetime import datetime, timedelta, timezone
-        from tessera.claude_usage import ClaudeSubscriptionUsage, UsageLimit
+        from chuzom.claude_usage import ClaudeSubscriptionUsage, UsageLimit
         far = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat()
         usage = ClaudeSubscriptionUsage(
             session=UsageLimit("Session", 0.90, far),
@@ -197,7 +197,7 @@ class TestEffectivePressure:
     def test_pressure_at_reset_boundary(self):
         """At 85% with exactly 30 min left → full pressure (boundary)."""
         from datetime import datetime, timedelta, timezone
-        from tessera.claude_usage import ClaudeSubscriptionUsage, UsageLimit
+        from chuzom.claude_usage import ClaudeSubscriptionUsage, UsageLimit
         boundary = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
         usage = ClaudeSubscriptionUsage(
             session=UsageLimit("Session", 0.85, boundary),
@@ -207,14 +207,14 @@ class TestEffectivePressure:
 
     def test_no_session_data(self):
         """No session data → effective = raw."""
-        from tessera.claude_usage import ClaudeSubscriptionUsage
+        from chuzom.claude_usage import ClaudeSubscriptionUsage
         usage = ClaudeSubscriptionUsage()
         assert usage.effective_pressure == 0.0
 
     def test_weekly_higher_than_session(self):
         """Weekly pressure dominates even with session time reduction."""
         from datetime import datetime, timedelta, timezone
-        from tessera.claude_usage import ClaudeSubscriptionUsage, UsageLimit
+        from chuzom.claude_usage import ClaudeSubscriptionUsage, UsageLimit
         soon = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
         far = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
         usage = ClaudeSubscriptionUsage(

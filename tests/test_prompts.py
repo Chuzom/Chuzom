@@ -1,8 +1,8 @@
 """Tests for prompts module — task-specific system prompt registry."""
 
-from tessera.system_prompts import get_system_prompt
-from tessera.token_budget import estimate_tokens
-from tessera.types import Complexity, TaskType
+from chuzom.system_prompts import get_system_prompt
+from chuzom.token_budget import estimate_tokens
+from chuzom.types import Complexity, TaskType
 
 
 class TestGetSystemPrompt:

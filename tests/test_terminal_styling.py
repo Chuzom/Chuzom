@@ -12,7 +12,7 @@ Tests:
 
 import pytest
 import time
-from tessera.terminal_style import (
+from chuzom.terminal_style import (
     Color,
     Symbol,
     ConfidenceLevel,
@@ -26,7 +26,7 @@ from tessera.terminal_style import (
     enable_colors,
     colors_enabled,
 )
-from tessera.statusline_hud import (
+from chuzom.statusline_hud import (
     initialize_hud,
     record_routing_decision,
     get_session_summary,

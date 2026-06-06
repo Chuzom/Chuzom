@@ -23,8 +23,8 @@ class HostSpec:
         id: short identifier (matches CLI --host name when applicable)
         name: human-readable
         plugin_dir: relative path to .{name}-plugin dir (or None)
-        rules_file: filename of *-rules.md under src/tessera/rules/ (or None)
-        python_adapter: module path under tessera.hosts (or None)
+        rules_file: filename of *-rules.md under src/chuzom/rules/ (or None)
+        python_adapter: module path under chuzom.hosts (or None)
         adapter_class: class name to import from python_adapter
     """
 
@@ -43,25 +43,25 @@ class HostSpec:
     def rules_path(self) -> Path | None:
         if not self.rules_file:
             return None
-        return ROOT / "src" / "tessera" / "rules" / self.rules_file
+        return ROOT / "src" / "chuzom" / "rules" / self.rules_file
 
 
 # OpenClaw + OpenCode deferred per user request.
 HOSTS: list[HostSpec] = [
     HostSpec("claude-code",   "Claude Code",
-             plugin_dir=".claude-plugin", rules_file="tessera.md"),
+             plugin_dir=".claude-plugin", rules_file="chuzom.md"),
     HostSpec("claude-desktop", "Claude Desktop",
              rules_file="desktop-rules.md"),
     HostSpec("cursor",        "Cursor",
              rules_file="cursor-rules.md",
-             python_adapter="tessera.hosts.cursor", adapter_class="CursorAdapter"),
+             python_adapter="chuzom.hosts.cursor", adapter_class="CursorAdapter"),
     HostSpec("codex-cli",     "Codex CLI",
              plugin_dir=".codex-plugin", rules_file="codex-rules.md"),
     HostSpec("vscode",        "Codex / VS Code",
              rules_file="vscode-rules.md"),
     HostSpec("gemini-cli",    "Gemini CLI",
              rules_file="gemini-cli-rules.md",
-             python_adapter="tessera.hosts.gemini_cli", adapter_class="GeminiCliAdapter"),
+             python_adapter="chuzom.hosts.gemini_cli", adapter_class="GeminiCliAdapter"),
     HostSpec("gemini",        "Gemini",
              rules_file="gemini-rules.md"),
     HostSpec("copilot",       "GitHub Copilot",

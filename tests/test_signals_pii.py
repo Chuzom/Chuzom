@@ -1,9 +1,9 @@
-"""Tests for tessera.signals.pii — secret detection must catch the common shapes."""
+"""Tests for chuzom.signals.pii — secret detection must catch the common shapes."""
 from __future__ import annotations
 
 import pytest
 
-from tessera.signals.pii import PiiSignal
+from chuzom.signals.pii import PiiSignal
 
 
 @pytest.fixture

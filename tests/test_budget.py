@@ -10,17 +10,17 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_spend_aggregation_max_mode():
-    from tessera.budget import _api_provider_state
+    from chuzom.budget import _api_provider_state
 
-    cfg = SimpleNamespace(tessera_spend_aggregation="max")
+    cfg = SimpleNamespace(chuzom_spend_aggregation="max")
     with (
-        patch("tessera.budget.get_config", return_value=cfg),
-        patch("tessera.budget._get_cap", return_value=10.0),
-        patch("tessera.budget._get_provider_monthly_spend", new_callable=AsyncMock, return_value=1.0),
-        patch("tessera.integrations.helicone.get_helicone_spend",
+        patch("chuzom.budget.get_config", return_value=cfg),
+        patch("chuzom.budget._get_cap", return_value=10.0),
+        patch("chuzom.budget._get_provider_monthly_spend", new_callable=AsyncMock, return_value=1.0),
+        patch("chuzom.integrations.helicone.get_helicone_spend",
               new_callable=AsyncMock, return_value={"openai": 2.0}),
-        patch("tessera.integrations.litellm_budget.is_litellm_budget_enabled", return_value=True),
-        patch("tessera.integrations.litellm_budget.get_litellm_spend",
+        patch("chuzom.integrations.litellm_budget.is_litellm_budget_enabled", return_value=True),
+        patch("chuzom.integrations.litellm_budget.get_litellm_spend",
               new_callable=AsyncMock, return_value={"openai": 3.0}),
     ):
         state = await _api_provider_state("openai")
@@ -31,17 +31,17 @@ async def test_spend_aggregation_max_mode():
 
 @pytest.mark.asyncio
 async def test_spend_aggregation_sum_mode():
-    from tessera.budget import _api_provider_state
+    from chuzom.budget import _api_provider_state
 
-    cfg = SimpleNamespace(tessera_spend_aggregation="sum")
+    cfg = SimpleNamespace(chuzom_spend_aggregation="sum")
     with (
-        patch("tessera.budget.get_config", return_value=cfg),
-        patch("tessera.budget._get_cap", return_value=10.0),
-        patch("tessera.budget._get_provider_monthly_spend", new_callable=AsyncMock, return_value=1.0),
-        patch("tessera.integrations.helicone.get_helicone_spend",
+        patch("chuzom.budget.get_config", return_value=cfg),
+        patch("chuzom.budget._get_cap", return_value=10.0),
+        patch("chuzom.budget._get_provider_monthly_spend", new_callable=AsyncMock, return_value=1.0),
+        patch("chuzom.integrations.helicone.get_helicone_spend",
               new_callable=AsyncMock, return_value={"openai": 2.0}),
-        patch("tessera.integrations.litellm_budget.is_litellm_budget_enabled", return_value=True),
-        patch("tessera.integrations.litellm_budget.get_litellm_spend",
+        patch("chuzom.integrations.litellm_budget.is_litellm_budget_enabled", return_value=True),
+        patch("chuzom.integrations.litellm_budget.get_litellm_spend",
               new_callable=AsyncMock, return_value={"openai": 3.0}),
     ):
         state = await _api_provider_state("openai")

@@ -1,7 +1,7 @@
 """Tests for secret scrubbing in structured logs."""
 
 
-from tessera.secret_scrubber import (
+from chuzom.secret_scrubber import (
     scrub_event,
     scrub_environment,
     _scrub_value,

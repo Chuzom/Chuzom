@@ -23,7 +23,7 @@ def render_report(rows: list[RunRow], cards: list[RouterScorecard]) -> str:
         3. Savings — total + per-difficulty
         4. Per-prompt detail — collapsible
     """
-    out: list[str] = ["# Tessera Benchmark — Head-to-Head Results", ""]
+    out: list[str] = ["# Chuzom Benchmark — Head-to-Head Results", ""]
 
     # Sort by quality desc, then cost asc → ranking shows best quality first,
     # then ties broken by who's cheaper.

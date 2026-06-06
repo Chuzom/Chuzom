@@ -1,9 +1,9 @@
 # Security Policy
 
-> Tessera is a routing layer that sits between developer prompts and LLM
+> Chuzom is a routing layer that sits between developer prompts and LLM
 > providers. It handles secrets (provider API keys), processes potentially
 > sensitive prompts, and writes audit-grade logs. This document covers what
-> Tessera does to protect those flows and how to report security issues.
+> Chuzom does to protect those flows and how to report security issues.
 
 ## Reporting a vulnerability
 
@@ -12,7 +12,7 @@ If you find a vulnerability, **please do not open a public issue.**
 Email **ypollak2@users.noreply.github.com** with:
 - A description of the issue and its impact
 - Steps to reproduce (proof-of-concept welcome)
-- Affected Tessera version (`tessera --version`)
+- Affected Chuzom version (`chuzom --version`)
 - Suggested remediation if you have one
 
 You can expect:
@@ -28,7 +28,7 @@ work to it.
 | Version | Supported | Security fixes through |
 |---|---|---|
 | 0.0.x (current dogfood) | ✅ | All releases |
-| Pre-fork llm-router | ⚠️ | Use Tessera; llm-router gets best-effort |
+| Pre-fork llm-router | ⚠️ | Use Chuzom; llm-router gets best-effort |
 
 Production users should upgrade to the latest 0.0.x release. v0.1.0 (the
 public-ring release) is the first version with a formal LTS commitment.
@@ -37,13 +37,13 @@ public-ring release) is the first version with a formal LTS commitment.
 
 ### Secrets handling
 
-- **Provider API keys** are never stored in the Tessera database. They live in:
+- **Provider API keys** are never stored in the Chuzom database. They live in:
   - Environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...)
-  - `~/.tessera/config.yaml` (mode-600 user-readable; for security-policy
+  - `~/.chuzom/config.yaml` (mode-600 user-readable; for security-policy
     deployments that block .env files)
   - For enterprise: `${vault:...}` / `${aws-sm:...}` / `${gcp-sm:...}`
     indirections in `OrgPolicy` YAML; resolution happens at request time
-- **API tokens issued by Tessera** are stored as SHA-256 hashes only. The
+- **API tokens issued by Chuzom** are stored as SHA-256 hashes only. The
   plaintext is returned once at issue time and never persisted. Stolen
   database = stolen hashes, not stolen credentials.
 - **Plaintext-secret detector** rejects YAML containing values that match
@@ -107,23 +107,23 @@ public-ring release) is the first version with a formal LTS commitment.
 
 ### Data residency
 
-- **All state lives in `~/.tessera/`** by default (5 SQLite databases):
+- **All state lives in `~/.chuzom/`** by default (5 SQLite databases):
   - `lineage.db` — every routing decision (privacy-safe prompt
     fingerprints, NOT raw prompts)
   - `sessions.db` — agent session lifecycle
   - `identity.db` — users + teams + tokens
   - `audit.db` — immutable audit chain
   - `quotas.db` — per-identity consumption + policies
-- **Override locations** per database via `TESSERA_LINEAGE_PATH`,
-  `TESSERA_SESSIONS_PATH`, `TESSERA_IDENTITY_PATH`, `TESSERA_AUDIT_PATH`,
-  `TESSERA_QUOTAS_PATH`.
-- **No telemetry** sent to Tessera maintainers. The only outbound traffic
+- **Override locations** per database via `CHUZOM_LINEAGE_PATH`,
+  `CHUZOM_SESSIONS_PATH`, `CHUZOM_IDENTITY_PATH`, `CHUZOM_AUDIT_PATH`,
+  `CHUZOM_QUOTAS_PATH`.
+- **No telemetry** sent to Chuzom maintainers. The only outbound traffic
   is to configured LLM providers + (optionally) the OTLP endpoint.
 
 ### Network security
 
 - **TLS** for all provider API calls (handled by `litellm`).
-- **Egress allowlist** (v0.0.3): planned. Today, providers Tessera will
+- **Egress allowlist** (v0.0.3): planned. Today, providers Chuzom will
   talk to are determined by which API keys are configured.
 - **OTLP**: gRPC or HTTP exporter — uses TLS when endpoint is `https://`
   or when standard `OTEL_EXPORTER_OTLP_INSECURE=false`.
@@ -132,24 +132,24 @@ public-ring release) is the first version with a formal LTS commitment.
 
 - **Direct dependencies** declared in `pyproject.toml` with lower bounds.
 - **Lock file** (`uv.lock`) pins transitive versions.
-- **Security extras**: `tessera-router[secrets-vault]`, `[secrets-aws]`,
+- **Security extras**: `chuzom-router[secrets-vault]`, `[secrets-aws]`,
   `[secrets-gcp]`, `[tracing]` — installed only when needed, reducing
   attack surface for users who don't need them.
 - **Plaintext credentials** in source / config caught by:
-  1. `tessera.signals.pii.PiiSignal` at prompt-routing time
-  2. `tessera.org_policy._scan_for_plaintext_secrets` at policy-load time
-  3. `tessera.enterprise.redaction.redact_prompt` at lineage-write time
+  1. `chuzom.signals.pii.PiiSignal` at prompt-routing time
+  2. `chuzom.org_policy._scan_for_plaintext_secrets` at policy-load time
+  3. `chuzom.enterprise.redaction.redact_prompt` at lineage-write time
 
 ## Threats explicitly NOT in scope
 
 These are valid concerns but the project does not currently mitigate them.
 Listed honestly so users can layer their own controls:
 
-- **Host compromise**: if an attacker has read access to `~/.tessera/`,
+- **Host compromise**: if an attacker has read access to `~/.chuzom/`,
   they can read your lineage and (in production) your agent session state.
   Token hashes are useless to an attacker but the lineage contains
   prompt fingerprints + cost data.
-- **Provider-side breaches**: Tessera cannot defend against OpenAI /
+- **Provider-side breaches**: Chuzom cannot defend against OpenAI /
   Anthropic / Google having their own incidents.
 - **Side-channel attacks** on the routing decisions themselves: timing
   signals from which provider was chosen are not currently obfuscated.
@@ -159,11 +159,11 @@ Listed honestly so users can layer their own controls:
 
 ## Compliance mapping
 
-Tessera provides primitives that map cleanly to common compliance
-controls. **Tessera is not certified** for any of these regimes; the
+Chuzom provides primitives that map cleanly to common compliance
+controls. **Chuzom is not certified** for any of these regimes; the
 mapping below is to help your security team build the case.
 
-| Control | Tessera primitive |
+| Control | Chuzom primitive |
 |---|---|
 | **SOC 2 — Audit logging** | `AuditLog` with hash chain + CEF export |
 | **SOC 2 — Access control** | `IdentityStore` + `Role` + `Permission` |

@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.cache import ClassificationCache, get_cache
-from tessera.classifier import classify_complexity
-from tessera.health import HealthTracker, ProviderHealth
-from tessera.router import route_and_call
-from tessera.types import (
+from chuzom.cache import ClassificationCache, get_cache
+from chuzom.classifier import classify_complexity
+from chuzom.health import HealthTracker, ProviderHealth
+from chuzom.router import route_and_call
+from chuzom.types import (
     ClassificationResult, Complexity, LLMResponse,
     RoutingProfile, TaskType,
 )
@@ -180,8 +180,8 @@ class TestClassifierEdgeCases:
             )
 
         with (
-            patch("tessera.classifier.providers.call_llm", side_effect=mock_call),
-            patch("tessera.classifier.get_config") as mock_config,
+            patch("chuzom.classifier.providers.call_llm", side_effect=mock_call),
+            patch("chuzom.classifier.get_config") as mock_config,
         ):
             mock_config.return_value.available_providers = {"gemini"}
             r1 = await classify_complexity("What is Python?")
@@ -205,8 +205,8 @@ class TestClassifierEdgeCases:
             )
 
         with (
-            patch("tessera.classifier.providers.call_llm", side_effect=mock_call),
-            patch("tessera.classifier.get_config") as mock_config,
+            patch("chuzom.classifier.providers.call_llm", side_effect=mock_call),
+            patch("chuzom.classifier.get_config") as mock_config,
         ):
             mock_config.return_value.available_providers = {"gemini"}
             await classify_complexity("Build a REST API", quality_mode="balanced")
@@ -279,19 +279,19 @@ class TestRouterEdgeCases:
         # cost.log_usage prevents the leak that temp_db would otherwise block.
         """No available models should raise ValueError, not crash."""
         with (
-            patch("tessera.router.get_config") as mock_config,
-            patch("tessera.router.get_tracker"),
-            patch("tessera.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0),
+            patch("chuzom.router.get_config") as mock_config,
+            patch("chuzom.router.get_tracker"),
+            patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0),
         ):
-            mock_config.return_value.tessera_profile = RoutingProfile.BUDGET
-            mock_config.return_value.tessera_monthly_budget = 0
+            mock_config.return_value.chuzom_profile = RoutingProfile.BUDGET
+            mock_config.return_value.chuzom_monthly_budget = 0
             mock_config.return_value.available_providers = set()
             mock_config.return_value.compaction_mode = "off"
             mock_config.return_value.compaction_threshold = 4000
             mock_config.return_value.ollama_models_for_profile.return_value = []
             mock_config.return_value.all_ollama_models.return_value = []
 
-            with patch("tessera.router.get_model_chain", return_value=["openai/gpt-4o"]):
+            with patch("chuzom.router.get_model_chain", return_value=["openai/gpt-4o"]):
                 with pytest.raises(ValueError, match="No available models"):
                     await route_and_call(TaskType.QUERY, "test")
 
@@ -304,19 +304,19 @@ class TestRouterEdgeCases:
             tracker.record_failure("openai")
 
         with (
-            patch("tessera.router.get_config") as mock_config,
-            patch("tessera.router.get_tracker", return_value=tracker),
-            patch("tessera.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0),
+            patch("chuzom.router.get_config") as mock_config,
+            patch("chuzom.router.get_tracker", return_value=tracker),
+            patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0),
         ):
-            mock_config.return_value.tessera_profile = RoutingProfile.BUDGET
-            mock_config.return_value.tessera_monthly_budget = 0
+            mock_config.return_value.chuzom_profile = RoutingProfile.BUDGET
+            mock_config.return_value.chuzom_monthly_budget = 0
             mock_config.return_value.available_providers = {"openai"}
             mock_config.return_value.compaction_mode = "off"
             mock_config.return_value.compaction_threshold = 4000
             mock_config.return_value.ollama_models_for_profile.return_value = []
             mock_config.return_value.all_ollama_models.return_value = []
 
-            with patch("tessera.router.get_model_chain", return_value=["openai/gpt-4o"]):
+            with patch("chuzom.router.get_model_chain", return_value=["openai/gpt-4o"]):
                 with pytest.raises(RuntimeError, match="All models failed"):
                     await route_and_call(TaskType.QUERY, "test")
 
@@ -334,9 +334,9 @@ class TestAutoRouteHookEdgeCases:
         import sys
         from pathlib import Path
         payload = json.dumps({"prompt": prompt})
-        hook_path = Path(__file__).resolve().parents[1] / "src" / "tessera" / "hooks" / "auto-route.py"
+        hook_path = Path(__file__).resolve().parents[1] / "src" / "chuzom" / "hooks" / "auto-route.py"
         env = os.environ.copy()
-        env["TESSERA_DIRECT_EXECUTION"] = "0"  # Test classification only
+        env["CHUZOM_DIRECT_EXECUTION"] = "0"  # Test classification only
         result = subprocess.run(
             [sys.executable, str(hook_path)],
             input=payload, capture_output=True, text=True,
@@ -410,36 +410,36 @@ class TestAutoRouteHookEdgeCases:
 
 
 class TestClaudeSubscriptionFlag:
-    """Tests for the tessera_claude_subscription config flag."""
+    """Tests for the chuzom_claude_subscription config flag."""
 
     def test_subscription_flag_excludes_anthropic_from_providers(self, monkeypatch):
-        """When tessera_claude_subscription=True, anthropic is NOT in providers.
+        """When chuzom_claude_subscription=True, anthropic is NOT in providers.
 
         We never route to Claude via API when already inside Claude Code — that
         would require a separate API key and add duplicate billing.
         """
-        import tessera.config as config_mod
+        import chuzom.config as config_mod
         config_mod._config = None  # reset singleton
-        monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "true")
+        monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "true")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         config = config_mod.RouterConfig()
         assert "anthropic" not in config.available_providers
 
     def test_no_subscription_flag_requires_api_key(self, monkeypatch):
         """Without the flag, anthropic requires ANTHROPIC_API_KEY."""
-        import tessera.config as config_mod
+        import chuzom.config as config_mod
         config_mod._config = None
-        monkeypatch.delenv("TESSERA_CLAUDE_SUBSCRIPTION", raising=False)
+        monkeypatch.delenv("CHUZOM_CLAUDE_SUBSCRIPTION", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         config = config_mod.RouterConfig()
         assert "anthropic" not in config.available_providers
 
     def test_api_key_still_adds_anthropic_without_flag(self, monkeypatch):
         """Explicit ANTHROPIC_API_KEY still works when subscription flag is off."""
-        import tessera.config as config_mod
+        import chuzom.config as config_mod
         config_mod._config = None
         # Explicitly set to false — delenv alone won't override a value in .env file
-        monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "false")
+        monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "false")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
         config = config_mod.RouterConfig()
         assert "anthropic" in config.available_providers
@@ -451,9 +451,9 @@ class TestClaudeSubscriptionFlag:
         exclusion was never applied, so a user with both the flag AND an API key
         set would still have anthropic in their routing chain.
         """
-        import tessera.config as config_mod
+        import chuzom.config as config_mod
         config_mod._config = None
-        monkeypatch.setenv("TESSERA_CLAUDE_SUBSCRIPTION", "true")
+        monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "true")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-real-key-123")
         config = config_mod.RouterConfig()
         assert "anthropic" not in config.available_providers, (

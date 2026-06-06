@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.scorer import score_model, score_all_models
-from tessera.types import COMPLEXITY_WEIGHTS, ModelCapability, ProviderTier, TaskType
+from chuzom.scorer import score_model, score_all_models
+from chuzom.types import COMPLEXITY_WEIGHTS, ModelCapability, ProviderTier, TaskType
 
 
 # ── score_model ───────────────────────────────────────────────────────────────
@@ -115,9 +115,9 @@ class TestScoreModel:
 
 class TestScoreAllModels:
     # Patch targets: cost functions are imported locally inside score_all_models,
-    # so we patch at source (tessera.cost) and the budget function at source too.
-    _COST_PATCH_BASE = "tessera.cost"
-    _BUDGET_PATCH = "tessera.budget.get_budget_state"
+    # so we patch at source (chuzom.cost) and the budget function at source too.
+    _COST_PATCH_BASE = "chuzom.cost"
+    _BUDGET_PATCH = "chuzom.budget.get_budget_state"
 
     @pytest.mark.asyncio
     async def test_returns_sorted_list(self):
@@ -128,7 +128,7 @@ class TestScoreAllModels:
             patch(f"{self._COST_PATCH_BASE}.get_model_acceptance_scores", new_callable=AsyncMock, return_value={}),
             patch(self._BUDGET_PATCH, new_callable=AsyncMock) as mock_budget,
         ):
-            from tessera.types import BudgetState
+            from chuzom.types import BudgetState
             mock_budget.return_value = BudgetState(provider="test", pressure=0.0)
             result = await score_all_models(models, "code", "simple")
 
@@ -155,7 +155,7 @@ class TestScoreAllModels:
             patch(f"{self._COST_PATCH_BASE}.get_model_acceptance_scores", new_callable=AsyncMock, return_value={}),
             patch(self._BUDGET_PATCH, new_callable=AsyncMock) as mock_budget,
         ):
-            from tessera.types import BudgetState
+            from chuzom.types import BudgetState
             mock_budget.return_value = BudgetState(provider="test", pressure=0.0)
             result = await score_all_models([cap], "code", "simple")
 
@@ -181,7 +181,7 @@ class TestScoreAllModels:
             patch(f"{self._COST_PATCH_BASE}.get_model_acceptance_scores", new_callable=AsyncMock, return_value={}),
             patch(self._BUDGET_PATCH, new_callable=AsyncMock) as mock_budget,
         ):
-            from tessera.types import BudgetState
+            from chuzom.types import BudgetState
             mock_budget.return_value = BudgetState(provider="test", pressure=0.0)
             result = await score_all_models(models, "code", "simple")
 

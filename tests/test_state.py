@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from tessera import state
+from chuzom import state
 
 
 @pytest.fixture(autouse=True)
@@ -26,19 +26,19 @@ class TestActiveProfile:
         assert state.get_active_profile() is not None  # comes from config default
 
     def test_set_and_get(self):
-        from tessera.types import RoutingProfile
+        from chuzom.types import RoutingProfile
         state.set_active_profile(RoutingProfile.PREMIUM)
         assert state.get_active_profile() == RoutingProfile.PREMIUM
 
     def test_clear_reverts_to_config(self):
-        from tessera.types import RoutingProfile
+        from chuzom.types import RoutingProfile
         state.set_active_profile(RoutingProfile.PREMIUM)
         state.set_active_profile(None)
         assert state.get_active_profile() is not None  # back to config default
 
     def test_concurrent_set_no_corruption(self):
         """100 concurrent threads setting different profiles must not corrupt state."""
-        from tessera.types import RoutingProfile
+        from chuzom.types import RoutingProfile
         errors: list[str] = []
         profiles = [RoutingProfile.BUDGET, RoutingProfile.BALANCED, RoutingProfile.PREMIUM]
 

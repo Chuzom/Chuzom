@@ -2,7 +2,7 @@
 
 import pytest
 
-from tessera.sanitization import sanitize_prompt, sanitize_messages
+from chuzom.sanitization import sanitize_prompt, sanitize_messages
 
 
 class TestSanitizePrompt:

@@ -10,8 +10,8 @@ Comprehensive test coverage for:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tessera.router import route_and_call
-from tessera.types import (
+from chuzom.router import route_and_call
+from chuzom.types import (
     TaskType, BudgetExceededError, LLMResponse
 )
 
@@ -22,16 +22,16 @@ class TestBudgetEnforcement:
     @pytest.mark.asyncio
     async def test_monthly_budget_exceeded_raises_immediately(self, temp_db):
         """Exceeding monthly budget should raise BudgetExceededError immediately."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock) as mock_spend:
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock) as mock_daily:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock) as mock_spend:
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock) as mock_daily:
                 # Current spend exceeds budget
                 mock_spend.return_value = 1.01
                 mock_daily.return_value = 0.0
                 
-                with patch('tessera.router.get_config') as mock_config:
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 1.00  # Budget limit
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 1.00  # Budget limit
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
@@ -41,16 +41,16 @@ class TestBudgetEnforcement:
     @pytest.mark.asyncio
     async def test_daily_budget_exceeded_raises_immediately(self, temp_db):
         """Exceeding daily budget should raise BudgetExceededError immediately."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock) as mock_spend:
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock) as mock_daily:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock) as mock_spend:
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock) as mock_daily:
                 mock_spend.return_value = 0.0
                 # Current daily spend exceeds limit
                 mock_daily.return_value = 0.51
                 
-                with patch('tessera.router.get_config') as mock_config:
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 0.0  # No monthly limit
-                    config.tessera_daily_spend_limit = 0.50  # Daily limit
+                    config.chuzom_monthly_budget = 0.0  # No monthly limit
+                    config.chuzom_daily_spend_limit = 0.50  # Daily limit
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
@@ -60,15 +60,15 @@ class TestBudgetEnforcement:
     @pytest.mark.asyncio
     async def test_budget_exceeded_cleanup_releases_reservation(self, temp_db):
         """When budget is exceeded, the reserved spend should be cleaned up."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock) as mock_spend:
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock) as mock_daily:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock) as mock_spend:
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock) as mock_daily:
                 mock_spend.return_value = 1.01
                 mock_daily.return_value = 0.0
                 
-                with patch('tessera.router.get_config') as mock_config:
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 1.00
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 1.00
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
@@ -88,22 +88,22 @@ class TestEmergencyFallbackChain:
     @pytest.mark.asyncio
     async def test_all_models_fail_returns_error_with_context(self, temp_db):
         """When all models fail, error should include helpful context."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock):
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock):
-                with patch('tessera.router.get_config') as mock_config:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock):
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock):
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 0.0
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 0.0
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
-                    with patch('tessera.router._build_and_filter_chain') as mock_chain:
+                    with patch('chuzom.router._build_and_filter_chain') as mock_chain:
                         mock_chain.return_value = ['openai/gpt-4o-mini']
                         
-                        with patch('tessera.router._call_text', new_callable=AsyncMock) as mock_call:
+                        with patch('chuzom.router._call_text', new_callable=AsyncMock) as mock_call:
                             mock_call.side_effect = RuntimeError("Model unavailable")
                             
-                            with patch('tessera.router.get_tracker') as mock_tracker:
+                            with patch('chuzom.router.get_tracker') as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
                                 mock_tracker.return_value = tracker
@@ -114,22 +114,22 @@ class TestEmergencyFallbackChain:
     @pytest.mark.asyncio
     async def test_media_task_types_skip_fallback(self, temp_db):
         """Media tasks should not attempt emergency fallback (not text-based)."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock):
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock):
-                with patch('tessera.router.get_config') as mock_config:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock):
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock):
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 0.0
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 0.0
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
-                    with patch('tessera.router._build_and_filter_chain') as mock_chain:
+                    with patch('chuzom.router._build_and_filter_chain') as mock_chain:
                         mock_chain.return_value = ['openai/dall-e-3']
                         
-                        with patch('tessera.router._call_media', new_callable=AsyncMock) as mock_media:
+                        with patch('chuzom.router._call_media', new_callable=AsyncMock) as mock_media:
                             mock_media.side_effect = RuntimeError("Image generation failed")
                             
-                            with patch('tessera.router.get_tracker') as mock_tracker:
+                            with patch('chuzom.router.get_tracker') as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
                                 mock_tracker.return_value = tracker
@@ -149,19 +149,19 @@ class TestCorrelationIDTracking:
     @pytest.mark.asyncio
     async def test_correlation_id_passed_to_call_text(self, temp_db):
         """Correlation ID should be passed through to _call_text."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock):
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock):
-                with patch('tessera.router.get_config') as mock_config:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock):
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock):
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 0.0
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 0.0
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
-                    with patch('tessera.router._build_and_filter_chain') as mock_chain:
+                    with patch('chuzom.router._build_and_filter_chain') as mock_chain:
                         mock_chain.return_value = ['openai/gpt-4o-mini']
                         
-                        with patch('tessera.router._call_text', new_callable=AsyncMock) as mock_call:
+                        with patch('chuzom.router._call_text', new_callable=AsyncMock) as mock_call:
                             mock_call.return_value = LLMResponse(
                                 content="test",
                                 model="openai/gpt-4o-mini",
@@ -172,7 +172,7 @@ class TestCorrelationIDTracking:
                                 provider="openai",
                             )
                             
-                            with patch('tessera.router.get_tracker') as mock_tracker:
+                            with patch('chuzom.router.get_tracker') as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
                                 mock_tracker.return_value = tracker
@@ -189,19 +189,19 @@ class TestCorrelationIDTracking:
     @pytest.mark.asyncio
     async def test_correlation_id_logged_on_success(self, temp_db):
         """Correlation ID should be in routing_decision logs."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock):
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock):
-                with patch('tessera.router.get_config') as mock_config:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock):
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock):
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 0.0
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 0.0
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
-                    with patch('tessera.router._build_and_filter_chain') as mock_chain:
+                    with patch('chuzom.router._build_and_filter_chain') as mock_chain:
                         mock_chain.return_value = ['openai/gpt-4o-mini']
                         
-                        with patch('tessera.router._call_text', new_callable=AsyncMock) as mock_call:
+                        with patch('chuzom.router._call_text', new_callable=AsyncMock) as mock_call:
                             mock_call.return_value = LLMResponse(
                                 content="test",
                                 model="openai/gpt-4o-mini",
@@ -212,7 +212,7 @@ class TestCorrelationIDTracking:
                                 provider="openai",
                             )
                             
-                            with patch('tessera.router.get_tracker') as mock_tracker:
+                            with patch('chuzom.router.get_tracker') as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
                                 mock_tracker.return_value = tracker
@@ -227,19 +227,19 @@ class TestInvalidComplexityHandling:
     @pytest.mark.asyncio
     async def test_invalid_complexity_hint_falls_back_to_default(self, temp_db):
         """Invalid complexity_hint should be handled gracefully."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock):
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock):
-                with patch('tessera.router.get_config') as mock_config:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock):
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock):
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 0.0
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 0.0
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
-                    with patch('tessera.router._build_and_filter_chain') as mock_chain:
+                    with patch('chuzom.router._build_and_filter_chain') as mock_chain:
                         mock_chain.return_value = ['openai/gpt-4o-mini']
                         
-                        with patch('tessera.router._call_text', new_callable=AsyncMock) as mock_call:
+                        with patch('chuzom.router._call_text', new_callable=AsyncMock) as mock_call:
                             mock_call.return_value = LLMResponse(
                                 content="test",
                                 model="openai/gpt-4o-mini",
@@ -250,7 +250,7 @@ class TestInvalidComplexityHandling:
                                 provider="openai",
                             )
                             
-                            with patch('tessera.router.get_tracker') as mock_tracker:
+                            with patch('chuzom.router.get_tracker') as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
                                 mock_tracker.return_value = tracker
@@ -269,19 +269,19 @@ class TestInvalidComplexityHandling:
     @pytest.mark.asyncio
     async def test_none_complexity_hint_uses_heuristic(self, temp_db):
         """None complexity_hint should use prompt length heuristic."""
-        with patch('tessera.cost.get_monthly_spend', new_callable=AsyncMock):
-            with patch('tessera.cost.get_daily_spend', new_callable=AsyncMock):
-                with patch('tessera.router.get_config') as mock_config:
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock):
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock):
+                with patch('chuzom.router.get_config') as mock_config:
                     config = MagicMock()
-                    config.tessera_monthly_budget = 0.0
-                    config.tessera_daily_spend_limit = 0.0
+                    config.chuzom_monthly_budget = 0.0
+                    config.chuzom_daily_spend_limit = 0.0
                     config.available_providers = ['openai']
                     mock_config.return_value = config
                     
-                    with patch('tessera.router._build_and_filter_chain') as mock_chain:
+                    with patch('chuzom.router._build_and_filter_chain') as mock_chain:
                         mock_chain.return_value = ['openai/gpt-4o-mini']
                         
-                        with patch('tessera.router._call_text', new_callable=AsyncMock) as mock_call:
+                        with patch('chuzom.router._call_text', new_callable=AsyncMock) as mock_call:
                             mock_call.return_value = LLMResponse(
                                 content="test",
                                 model="openai/gpt-4o-mini",
@@ -292,7 +292,7 @@ class TestInvalidComplexityHandling:
                                 provider="openai",
                             )
                             
-                            with patch('tessera.router.get_tracker') as mock_tracker:
+                            with patch('chuzom.router.get_tracker') as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
                                 mock_tracker.return_value = tracker

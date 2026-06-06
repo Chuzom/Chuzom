@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Register tessera with Agoragentic platform."""
+"""Register chuzom with Agoragentic platform."""
 
 import asyncio
 import json
@@ -10,14 +10,14 @@ import httpx
 
 
 async def register_on_agoragentic():
-    """Register tessera as an agent on Agoragentic."""
+    """Register chuzom as an agent on Agoragentic."""
     
     async with httpx.AsyncClient() as client:
         # Register via quickstart endpoint
         response = await client.post(
             "https://agoragentic.com/api/quickstart",
             json={
-                "name": "tessera-saving-tokens",
+                "name": "chuzom-saving-tokens",
                 "description": "Smart LLM routing with cost optimization, budget control, and 20+ AI providers. Reduces token costs by up to 90% through intelligent model selection based on task complexity, budget pressure, and quality metrics.",
             },
             timeout=30.0,
@@ -30,7 +30,7 @@ async def register_on_agoragentic():
         print(json.dumps(result, indent=2))
         
         # Save credentials
-        config_dir = Path.home() / ".tessera"
+        config_dir = Path.home() / ".chuzom"
         config_dir.mkdir(exist_ok=True)
         
         creds_file = config_dir / "agoragentic.json"

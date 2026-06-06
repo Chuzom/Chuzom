@@ -1,9 +1,9 @@
 """Build a RouterArena leaderboard submission.
 
-Reads the official sub_10 or full parquet from ``~/.tessera/data/routerarena/``,
+Reads the official sub_10 or full parquet from ``~/.chuzom/data/routerarena/``,
 formats each prompt via the dataset's official ``eval_config/zero-shot/*.json``
 template (``\\boxed{X}`` for MCQs, ``\\boxed{answer}`` for QANTA, etc.), routes
-each through tessera via :mod:`tessera.providers.call_llm` per the
+each through chuzom via :mod:`chuzom.providers.call_llm` per the
 ``routerarena_tuned`` policy's subject-specialist mapping, and writes the
 prediction JSON in the exact shape ``router_inference/predictions/<name>.json``
 expects.
@@ -11,9 +11,9 @@ expects.
 Usage::
 
     OPENROUTER_API_KEY=sk-... uv run python scripts/routerarena/build_submission.py \\
-        --split sub_10  --out submissions/routerarena/tessera-sub_10.json
+        --split sub_10  --out submissions/routerarena/chuzom-sub_10.json
     OPENROUTER_API_KEY=sk-... uv run python scripts/routerarena/build_submission.py \\
-        --split full   --out submissions/routerarena/tessera.json
+        --split full   --out submissions/routerarena/chuzom.json
 
 Cost estimate (sub_10, ~810 prompts at $0.31/1K with our workhorse pool):
     ~$0.25 + ~30 min runtime.
@@ -34,8 +34,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-os.environ.setdefault("TESSERA_GATES", "off")
-os.environ.setdefault("TESSERA_POLICY", "routerarena_tuned")
+os.environ.setdefault("CHUZOM_GATES", "off")
+os.environ.setdefault("CHUZOM_POLICY", "routerarena_tuned")
 
 
 # ── Official prompt templates (from config/eval_config/zero-shot/*.json) ────
@@ -181,7 +181,7 @@ def pick_subject(row) -> str:
 
 async def infer_one(model: str, prompt: str) -> dict[str, Any]:
     """Route a single prompt; returns the prediction-row dict shape RouterArena expects."""
-    from tessera.providers import call_llm
+    from chuzom.providers import call_llm
 
     try:
         resp = await call_llm(
@@ -218,8 +218,8 @@ async def infer_one(model: str, prompt: str) -> dict[str, Any]:
 async def build_predictions(parquet_path: Path, *, limit: int = 0) -> list[dict]:
     """Iterate the parquet rows, route each via routerarena_tuned, emit prediction rows."""
     import pandas as pd
-    from tessera.policy import get_policy_manager
-    from tessera.policy_diff import predict_head_model
+    from chuzom.policy import get_policy_manager
+    from chuzom.policy_diff import predict_head_model
 
     get_policy_manager().set_active_policy("routerarena_tuned")
     policy = get_policy_manager().get_active_policy()
@@ -279,13 +279,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", default="sub_10", choices=["sub_10", "full"])
     parser.add_argument("--parquet", type=Path, default=None,
-                        help="Override parquet path. Default: ~/.tessera/data/routerarena/<split>.parquet")
+                        help="Override parquet path. Default: ~/.chuzom/data/routerarena/<split>.parquet")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
 
     if args.parquet is None:
-        args.parquet = Path.home() / ".tessera" / "data" / "routerarena" / f"{args.split}.parquet"
+        args.parquet = Path.home() / ".chuzom" / "data" / "routerarena" / f"{args.split}.parquet"
     if not args.parquet.is_file():
         raise SystemExit(f"Parquet not found at {args.parquet}. Download from HF first.")
 

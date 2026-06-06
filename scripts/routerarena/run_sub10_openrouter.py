@@ -3,7 +3,7 @@
 The standard run_sub10.py path goes through `route_and_call`, but Codex
 injection (always-on in subscription mode) preempts OpenRouter in the
 chain — every prompt ends up routed to codex/gpt-5.4 at $0 cost. That's
-a valid tessera output (subscription users get free routing), but it
+a valid chuzom output (subscription users get free routing), but it
 doesn't exercise the routerarena_tuned workhorse pool the policy was
 designed for.
 
@@ -23,23 +23,23 @@ import os
 import time
 from pathlib import Path
 
-os.environ.setdefault("TESSERA_GATES", "off")
-os.environ.setdefault("TESSERA_POLICY", "routerarena_tuned")
+os.environ.setdefault("CHUZOM_GATES", "off")
+os.environ.setdefault("CHUZOM_POLICY", "routerarena_tuned")
 
 VERSION = os.environ.get("LLM_BENCH_VERSION", "v1.28.0-ra-tuned-openrouter")
 LIMIT = int(os.environ.get("LLM_BENCH_LIMIT", "30"))
 SPLIT = os.environ.get("LLM_BENCH_SPLIT", "sub_10_shuffled")
 
-DATA = Path.home() / ".tessera" / "data" / "routerarena" / f"{SPLIT}.jsonl"
+DATA = Path.home() / ".chuzom" / "data" / "routerarena" / f"{SPLIT}.jsonl"
 PRED_OUT = DATA.parent / f"{SPLIT}_predictions_{VERSION}.jsonl"
 
 
 async def main() -> None:
-    from tessera.benchmark import Prediction
-    from tessera.benchmark.runners.routerarena import RouterArenaRunner
-    from tessera.policy import get_policy_manager
-    from tessera.policy_diff import predict_head_model
-    from tessera.providers import call_llm
+    from chuzom.benchmark import Prediction
+    from chuzom.benchmark.runners.routerarena import RouterArenaRunner
+    from chuzom.policy import get_policy_manager
+    from chuzom.policy_diff import predict_head_model
+    from chuzom.providers import call_llm
 
     get_policy_manager().set_active_policy("routerarena_tuned")
     policy = get_policy_manager().get_active_policy()
@@ -153,10 +153,10 @@ async def main() -> None:
     print(f"\nArena Score (approx, accuracy - 0.06×cost/1K): {arena:.4f}")
     print(f"Compare:")
     print(f"  Sqwish     0.7527 (#1)")
-    print(f"  tessera {arena:.4f}  ({'BEATS #1!' if arena > 0.7527 else 'below #1'})")
+    print(f"  chuzom {arena:.4f}  ({'BEATS #1!' if arena > 0.7527 else 'below #1'})")
 
     # Persist
-    from tessera.benchmark.regression import store_result
+    from chuzom.benchmark.regression import store_result
     await store_result(
         version=VERSION,
         policy="routerarena_tuned_openrouter",

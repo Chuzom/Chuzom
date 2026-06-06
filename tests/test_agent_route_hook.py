@@ -6,7 +6,7 @@ Tests verify:
 3. Session ID reset clears depth counter
 4. Depth is incremented on approval
 5. Missing/malformed state files handled gracefully
-6. Environment variable TESSERA_MAX_AGENT_DEPTH overrides default
+6. Environment variable CHUZOM_MAX_AGENT_DEPTH overrides default
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-HOOK_PATH = Path(__file__).parent.parent / "src" / "tessera" / "hooks" / "agent-route.py"
+HOOK_PATH = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-route.py"
 
 
 def _run(
@@ -35,7 +35,7 @@ def _run(
         subagent_type: Agent type (e.g. "Explore", "general-purpose").
         session_id: Session ID to write to agent_depth.json (if agent_depth is set).
         agent_depth: Current nesting depth to write to agent_depth.json.
-        max_depth: Value for TESSERA_MAX_AGENT_DEPTH env var.
+        max_depth: Value for CHUZOM_MAX_AGENT_DEPTH env var.
         tmp_path: Temp directory for HOME.
 
     Returns:
@@ -52,7 +52,7 @@ def _run(
 
     env = None
     if tmp_path is not None:
-        llmr_dir = tmp_path / ".tessera"
+        llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
 
         # Write agent_depth.json if depth is specified
@@ -72,7 +72,7 @@ def _run(
     if max_depth is not None:
         if env is None:
             env = os.environ.copy()
-        env["TESSERA_MAX_AGENT_DEPTH"] = max_depth
+        env["CHUZOM_MAX_AGENT_DEPTH"] = max_depth
 
     result = subprocess.run(
         [sys.executable, str(HOOK_PATH)],
@@ -138,7 +138,7 @@ class TestDepthGuardBlocks:
         assert out is None
 
         # Verify depth was incremented
-        depth_file = tmp_path / ".tessera" / "agent_depth.json"
+        depth_file = tmp_path / ".chuzom" / "agent_depth.json"
         assert depth_file.exists()
         data = json.loads(depth_file.read_text())
         assert data["depth"] == 1
@@ -181,13 +181,13 @@ class TestSessionReset:
     def test_new_session_resets_depth(self, tmp_path):
         """When session_id in agent_depth.json differs, depth resets to 0."""
         # Write depth for session-old
-        (tmp_path / ".tessera").mkdir(parents=True, exist_ok=True)
-        (tmp_path / ".tessera" / "agent_depth.json").write_text(json.dumps({
+        (tmp_path / ".chuzom").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".chuzom" / "agent_depth.json").write_text(json.dumps({
             "depth": 5,
             "session_id": "session-old",
             "ts": 0,
         }))
-        (tmp_path / ".tessera" / "session_id.txt").write_text("session-new")
+        (tmp_path / ".chuzom" / "session_id.txt").write_text("session-new")
 
         # Run with session-new
         code, out = _run(
@@ -203,7 +203,7 @@ class TestSessionReset:
         assert out is None
 
         # Verify depth was reset and incremented
-        depth_file = tmp_path / ".tessera" / "agent_depth.json"
+        depth_file = tmp_path / ".chuzom" / "agent_depth.json"
         data = json.loads(depth_file.read_text())
         assert data["session_id"] == "session-new"
         assert data["depth"] == 1
@@ -227,7 +227,7 @@ class TestDepthIncrement:
         assert code == 0
 
         # Check depth file — should be incremented
-        depth_file = tmp_path / ".tessera" / "agent_depth.json"
+        depth_file = tmp_path / ".chuzom" / "agent_depth.json"
         assert depth_file.exists()
         data = json.loads(depth_file.read_text())
         assert data["depth"] == 1
@@ -251,7 +251,7 @@ class TestMissingFiles:
         assert out is None
 
         # Verify it was created
-        depth_file = tmp_path / ".tessera" / "agent_depth.json"
+        depth_file = tmp_path / ".chuzom" / "agent_depth.json"
         assert depth_file.exists()
         data = json.loads(depth_file.read_text())
         assert data["depth"] == 1
@@ -271,16 +271,16 @@ class TestMissingFiles:
         assert out is None
 
         # Depth file should use 'unknown' as session_id
-        depth_file = tmp_path / ".tessera" / "agent_depth.json"
+        depth_file = tmp_path / ".chuzom" / "agent_depth.json"
         assert depth_file.exists()
         data = json.loads(depth_file.read_text())
         assert data["session_id"] == "unknown"
 
     def test_malformed_agent_depth_json_defaults_to_0(self, tmp_path):
         """Malformed agent_depth.json defaults to depth=0."""
-        (tmp_path / ".tessera").mkdir(parents=True, exist_ok=True)
-        (tmp_path / ".tessera" / "agent_depth.json").write_text("not valid json {{{")
-        (tmp_path / ".tessera" / "session_id.txt").write_text("test-session-8")
+        (tmp_path / ".chuzom").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".chuzom" / "agent_depth.json").write_text("not valid json {{{")
+        (tmp_path / ".chuzom" / "session_id.txt").write_text("test-session-8")
 
         code, out = _run(
             "find files",
@@ -295,10 +295,10 @@ class TestMissingFiles:
 
 
 class TestEnvVarOverride:
-    """Test that TESSERA_MAX_AGENT_DEPTH env var overrides default."""
+    """Test that CHUZOM_MAX_AGENT_DEPTH env var overrides default."""
 
     def test_env_var_max_depth_5(self, tmp_path):
-        """TESSERA_MAX_AGENT_DEPTH=5 blocks at depth=5."""
+        """CHUZOM_MAX_AGENT_DEPTH=5 blocks at depth=5."""
         code, out = _run(
             "analyze the codebase",
             subagent_type="general-purpose",
@@ -313,7 +313,7 @@ class TestEnvVarOverride:
         assert "5/5" in out["reason"]
 
     def test_env_var_max_depth_1(self, tmp_path):
-        """TESSERA_MAX_AGENT_DEPTH=1 blocks at depth=1."""
+        """CHUZOM_MAX_AGENT_DEPTH=1 blocks at depth=1."""
         code, out = _run(
             "analyze",
             subagent_type="general-purpose",
@@ -328,7 +328,7 @@ class TestEnvVarOverride:
         assert "1/1" in out["reason"]
 
     def test_env_var_invalid_defaults_to_3(self, tmp_path):
-        """Invalid TESSERA_MAX_AGENT_DEPTH defaults to 3."""
+        """Invalid CHUZOM_MAX_AGENT_DEPTH defaults to 3."""
         code, out = _run(
             "analyze",
             subagent_type="general-purpose",

@@ -3,7 +3,7 @@
 
 import pytest
 
-from tessera.server import mcp
+from chuzom.server import mcp
 
 
 def test_all_tools_registered():
@@ -12,7 +12,7 @@ def test_all_tools_registered():
     This test prevents tool registration drift by dynamically discovering
     all @mcp.tool() decorated functions rather than hardcoding names.
     """
-    from tessera.tools import routing, text, media, pipeline, admin, subscription, codex, gemini_cli, setup, agoragentic
+    from chuzom.tools import routing, text, media, pipeline, admin, subscription, codex, gemini_cli, setup, agoragentic
 
     # Get all tools from the MCP server
     registered_tools = mcp._tool_manager.list_tools()
@@ -50,15 +50,15 @@ def test_all_tools_registered():
         "llm_model_eval", "llm_model_usage", "llm_model_export", "llm_savings_dashboard",
         "agoragentic_task", "agoragentic_browse", "agoragentic_wallet", "agoragentic_status",
         # v0.0.2 agent-session MCP tools — registered by tools/agents.py
-        "tessera_agent_list", "tessera_agent_start_session",
-        "tessera_agent_check_budget", "tessera_agent_route",
-        "tessera_agent_complete_session", "tessera_agent_lineage",
+        "chuzom_agent_list", "chuzom_agent_start_session",
+        "chuzom_agent_check_budget", "chuzom_agent_route",
+        "chuzom_agent_complete_session", "chuzom_agent_lineage",
     }
     
     # With slim=routing (default), only routing-tier tools are registered.
     # Check that registered tools are a known subset, not that ALL tools are present.
-    from tessera.config import get_config
-    slim = get_config().tessera_slim
+    from chuzom.config import get_config
+    slim = get_config().chuzom_slim
     if slim == "off":
         assert known_tools.issubset(registered_names), f"Missing tools: {known_tools - registered_names}"
     else:
@@ -80,13 +80,13 @@ def test_resource_registered():
 class TestSetProfile:
     @pytest.mark.asyncio
     async def test_valid_profile(self, mock_env):
-        from tessera.server import llm_set_profile
+        from chuzom.server import llm_set_profile
         result = await llm_set_profile("budget")
         assert "budget" in result
 
     @pytest.mark.asyncio
     async def test_invalid_profile(self, mock_env):
-        from tessera.server import llm_set_profile
+        from chuzom.server import llm_set_profile
         result = await llm_set_profile("invalid")
         assert "Invalid" in result
 
@@ -94,8 +94,8 @@ class TestSetProfile:
 class TestUsage:
     @pytest.mark.asyncio
     async def test_usage_no_data(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.server import llm_usage
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.server import llm_usage
         result = await llm_usage("all")
         assert "Usage Dashboard" in result
 
@@ -103,6 +103,6 @@ class TestUsage:
 class TestHealth:
     @pytest.mark.asyncio
     async def test_health_shows_providers(self, mock_env):
-        from tessera.server import llm_health
+        from chuzom.server import llm_health
         result = await llm_health()
         assert "Provider Health" in result

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 
-from tessera.commands.config import cmd_config, _run_config_init
+from chuzom.commands.config import cmd_config, _run_config_init
 
 
 class TestCmdConfig:
@@ -16,31 +16,31 @@ class TestCmdConfig:
 
     def test_cmd_config_returns_zero(self):
         """cmd_config should return 0."""
-        with patch("tessera.commands.config._run_config"):
+        with patch("chuzom.commands.config._run_config"):
             result = cmd_config([])
         assert result == 0
 
     def test_cmd_config_with_show_subcommand(self):
         """cmd_config with 'show' should call _run_config."""
-        with patch("tessera.commands.config._run_config") as mock_run:
+        with patch("chuzom.commands.config._run_config") as mock_run:
             cmd_config(["show"])
         mock_run.assert_called_once_with(["show"])
 
     def test_cmd_config_with_lint_subcommand(self):
         """cmd_config with 'lint' should call _run_config."""
-        with patch("tessera.commands.config._run_config") as mock_run:
+        with patch("chuzom.commands.config._run_config") as mock_run:
             cmd_config(["lint"])
         mock_run.assert_called_once_with(["lint"])
 
     def test_cmd_config_with_init_subcommand(self):
         """cmd_config with 'init' should call _run_config."""
-        with patch("tessera.commands.config._run_config") as mock_run:
+        with patch("chuzom.commands.config._run_config") as mock_run:
             cmd_config(["init"])
         mock_run.assert_called_once_with(["init"])
 
     def test_cmd_config_no_args_defaults_to_show(self):
         """cmd_config with no args should call _run_config with empty list."""
-        with patch("tessera.commands.config._run_config") as mock_run:
+        with patch("chuzom.commands.config._run_config") as mock_run:
             cmd_config([])
         mock_run.assert_called_once_with([])
 
@@ -49,15 +49,15 @@ class TestConfigInit:
     """Tests for _run_config_init function."""
 
     def test_config_init_creates_file(self):
-        """_run_config_init should create .tessera.yml."""
+        """_run_config_init should create .chuzom.yml."""
         with tempfile.TemporaryDirectory() as tmpdir:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                with patch("tessera.repo_config.fingerprint_repo") as mock_fp:
+                with patch("chuzom.repo_config.fingerprint_repo") as mock_fp:
                     mock_fp.return_value = ("python", "balanced")
                     _run_config_init()
-                assert Path(".tessera.yml").exists()
+                assert Path(".chuzom.yml").exists()
             finally:
                 os.chdir(old_cwd)
 
@@ -67,10 +67,10 @@ class TestConfigInit:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                with patch("tessera.repo_config.fingerprint_repo") as mock_fp:
+                with patch("chuzom.repo_config.fingerprint_repo") as mock_fp:
                     mock_fp.return_value = ("python", "balanced")
                     _run_config_init()
-                content = Path(".tessera.yml").read_text()
+                content = Path(".chuzom.yml").read_text()
                 assert "version: 1" in content
                 assert "profile: balanced" in content
                 assert "enforce: enforce" in content
@@ -84,14 +84,14 @@ class TestConfigInit:
             try:
                 os.chdir(tmpdir)
                 # Create the file first
-                Path(".tessera.yml").write_text("existing content")
+                Path(".chuzom.yml").write_text("existing content")
                 
-                with patch("tessera.repo_config.fingerprint_repo") as mock_fp:
+                with patch("chuzom.repo_config.fingerprint_repo") as mock_fp:
                     mock_fp.return_value = ("python", "balanced")
                     _run_config_init()
                 
                 # File should still have original content
-                content = Path(".tessera.yml").read_text()
+                content = Path(".chuzom.yml").read_text()
                 assert content == "existing content"
                 
                 captured = capsys.readouterr()
@@ -105,10 +105,10 @@ class TestConfigInit:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                with patch("tessera.repo_config.fingerprint_repo") as mock_fp:
+                with patch("chuzom.repo_config.fingerprint_repo") as mock_fp:
                     mock_fp.return_value = ("nodejs", "premium")
                     _run_config_init()
-                content = Path(".tessera.yml").read_text()
+                content = Path(".chuzom.yml").read_text()
                 assert "profile: premium" in content
             finally:
                 os.chdir(old_cwd)
@@ -119,9 +119,9 @@ class TestConfigShow:
 
     def test_config_show_displays_header(self, capsys):
         """config show should display config header."""
-        with patch("tessera.repo_config.effective_config") as mock_config:
-            with patch("tessera.repo_config.fingerprint_repo") as mock_fp:
-                with patch("tessera.repo_config.find_repo_config_path") as mock_find:
+        with patch("chuzom.repo_config.effective_config") as mock_config:
+            with patch("chuzom.repo_config.fingerprint_repo") as mock_fp:
+                with patch("chuzom.repo_config.find_repo_config_path") as mock_find:
                     mock_config_obj = MagicMock()
                     mock_config_obj.effective_enforce.return_value = "enforce"
                     mock_config_obj.effective_profile.return_value = "balanced"
@@ -132,11 +132,11 @@ class TestConfigShow:
                     mock_fp.return_value = ("python", "balanced")
                     mock_find.return_value = None
                     
-                    from tessera.commands.config import _run_config
+                    from chuzom.commands.config import _run_config
                     _run_config(["show"])
         
         captured = capsys.readouterr()
-        assert "tessera config" in captured.out
+        assert "chuzom config" in captured.out
 
     def test_config_lint_validates_yaml(self):
         """config lint should validate YAML syntax."""
@@ -144,11 +144,11 @@ class TestConfigShow:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                Path(".tessera.yml").write_text("version: 1\nprofile: balanced")
+                Path(".chuzom.yml").write_text("version: 1\nprofile: balanced")
                 
-                with patch("tessera.repo_config.effective_config") as mock_config:
-                    with patch("tessera.repo_config.fingerprint_repo") as mock_fp:
-                        with patch("tessera.repo_config.find_repo_config_path") as mock_find:
+                with patch("chuzom.repo_config.effective_config") as mock_config:
+                    with patch("chuzom.repo_config.fingerprint_repo") as mock_fp:
+                        with patch("chuzom.repo_config.find_repo_config_path") as mock_find:
                             mock_config_obj = MagicMock()
                             mock_config_obj.effective_enforce.return_value = "enforce"
                             mock_config_obj.effective_profile.return_value = "balanced"
@@ -157,9 +157,9 @@ class TestConfigShow:
                             mock_config_obj.routing = {}
                             mock_config.return_value = mock_config_obj
                             mock_fp.return_value = ("python", "balanced")
-                            mock_find.return_value = Path.cwd() / ".tessera.yml"
+                            mock_find.return_value = Path.cwd() / ".chuzom.yml"
                             
-                            from tessera.commands.config import _run_config
+                            from chuzom.commands.config import _run_config
                             _run_config(["lint"])
             finally:
                 os.chdir(old_cwd)
@@ -170,9 +170,9 @@ class TestConfigIntegration:
 
     def test_config_command_basic(self):
         """config command should execute without error."""
-        with patch("tessera.repo_config.effective_config") as mock_config:
-            with patch("tessera.repo_config.fingerprint_repo") as mock_fp:
-                with patch("tessera.repo_config.find_repo_config_path") as mock_find:
+        with patch("chuzom.repo_config.effective_config") as mock_config:
+            with patch("chuzom.repo_config.fingerprint_repo") as mock_fp:
+                with patch("chuzom.repo_config.find_repo_config_path") as mock_find:
                     mock_config_obj = MagicMock()
                     mock_config_obj.effective_enforce.return_value = "enforce"
                     mock_config_obj.effective_profile.return_value = None

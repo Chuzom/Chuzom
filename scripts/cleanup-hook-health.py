@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cleanup hook health registry — remove test artifacts and stale entries.
 
-This script cleans up ~/.tessera/hook_health.json by:
+This script cleans up ~/.chuzom/hook_health.json by:
   1. Identifying hooks with only test-session errors (session_id: "abc123" pattern)
   2. Supporting --dry-run to preview changes
   3. Supporting --remove hook-name to force-remove specific hooks
@@ -21,8 +21,8 @@ from typing import Optional
 
 
 def load_hook_health() -> Optional[dict]:
-    """Load hook_health.json from ~/.tessera/. Return None if not found."""
-    path = Path.home() / ".tessera" / "hook_health.json"
+    """Load hook_health.json from ~/.chuzom/. Return None if not found."""
+    path = Path.home() / ".chuzom" / "hook_health.json"
     if not path.exists():
         print(f"❌ {path} not found", file=sys.stderr)
         return None
@@ -34,8 +34,8 @@ def load_hook_health() -> Optional[dict]:
 
 
 def load_hook_errors() -> Optional[dict]:
-    """Load hook_errors.log from ~/.tessera/. Return empty dict if not found."""
-    path = Path.home() / ".tessera" / "hook_errors.log"
+    """Load hook_errors.log from ~/.chuzom/. Return empty dict if not found."""
+    path = Path.home() / ".chuzom" / "hook_errors.log"
     if not path.exists():
         return {}
     try:
@@ -105,7 +105,7 @@ def cleanup_hook_health(
 
 def save_hook_health(health: dict) -> bool:
     """Write cleaned hook_health.json back to disk."""
-    path = Path.home() / ".tessera" / "hook_health.json"
+    path = Path.home() / ".chuzom" / "hook_health.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         path.write_text(json.dumps(health, indent=2))

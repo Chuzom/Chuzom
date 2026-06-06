@@ -1,6 +1,6 @@
-"""Test tessera routing in an isolated subprocess with cache verification.
+"""Test chuzom routing in an isolated subprocess with cache verification.
 
-This test suite runs tessera in completely isolated environments to ensure:
+This test suite runs chuzom in completely isolated environments to ensure:
 1. Routing decisions are fresh (no stale cache)
 2. Routing is sensible (simple prompts don't hit expensive models)
 3. Dashboard (savings, cost tracking) reflects reality accurately
@@ -51,7 +51,7 @@ def isolated_env():
     Each isolation test runs in this directory with a clean HOME,
     no shared cache or session state.
     """
-    with tempfile.TemporaryDirectory(prefix="tessera_isolation_") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="chuzom_isolation_") as tmpdir:
         yield Path(tmpdir)
 
 
@@ -60,7 +60,7 @@ def isolated_env():
 def test_no_cache_between_runs(isolated_env: Path, diverse_test_prompts: list):
     """Verify that successive CLI calls are fresh (no stale cache).
 
-    This test runs tessera CLI commands twice in isolation and verifies that:
+    This test runs chuzom CLI commands twice in isolation and verifies that:
     1. Both runs produce output
     2. Status output is responsive
     3. No cache is causing stale responses
@@ -69,12 +69,12 @@ def test_no_cache_between_runs(isolated_env: Path, diverse_test_prompts: list):
         pytest.skip("No test prompts available")
 
     # Run 1: get status
-    status1 = _run_tessera_cmd(["status"])
+    status1 = _run_chuzom_cmd(["status"])
     assert status1, "First status call failed"
     assert "usage" in status1.lower() or "routing" in status1.lower(), "Status missing expected content"
 
     # Run 2: get status again (should be fresh)
-    status2 = _run_tessera_cmd(["status"])
+    status2 = _run_chuzom_cmd(["status"])
     assert status2, "Second status call failed"
     assert "usage" in status2.lower() or "routing" in status2.lower(), "Status missing expected content"
 
@@ -93,7 +93,7 @@ def test_cache_isolation_across_processes(isolated_env: Path, diverse_test_promp
     # Run multiple parallel status calls
     results = []
     for i in range(2):
-        result = _run_tessera_cmd(["status"])
+        result = _run_chuzom_cmd(["status"])
         assert result is not None, f"Call {i} failed"
         results.append(result)
 
@@ -116,7 +116,7 @@ def test_routing_decisions_are_reasonable(diverse_test_prompts: list):
         pytest.skip("No test prompts available")
 
     # Test that demo command works (example routing)
-    result = _run_tessera_cmd(["demo"])
+    result = _run_chuzom_cmd(["demo"])
     assert result, "Demo command failed"
 
     # Output should contain routing examples or models
@@ -124,7 +124,7 @@ def test_routing_decisions_are_reasonable(diverse_test_prompts: list):
         "Demo output missing expected content"
 
     # Test that last command works (recent decisions)
-    result_last = _run_tessera_cmd(["last", "--count", "1"])
+    result_last = _run_chuzom_cmd(["last", "--count", "1"])
     # last may be empty if no routing history yet, so just verify it doesn't error
     assert result_last is not None, "Last command failed"
 
@@ -160,8 +160,8 @@ def test_dashboard_savings_accuracy(isolated_env: Path):
     """Verify that the dashboard (savings report) accurately reflects routing costs.
 
     Runs a few prompts through the router and checks that:
-    - tessera status shows accurate usage %
-    - tessera last shows the prompts we just routed
+    - chuzom status shows accurate usage %
+    - chuzom last shows the prompts we just routed
     - savings-report totals match sum of individual queries
     """
     # Run a small sample of prompts in isolation
@@ -176,12 +176,12 @@ def test_dashboard_savings_accuracy(isolated_env: Path):
         assert result is not None, f"Failed to route: {prompt}"
 
     # Check dashboard output
-    status = _run_tessera_cmd(["status"])
+    status = _run_chuzom_cmd(["status"])
     assert status, "Failed to get router status"
     assert "usage" in status.lower() or "%" in status, "Status missing usage info"
 
     # Check recent routing decisions
-    last = _run_tessera_cmd(["last", "--count", "3"])
+    last = _run_chuzom_cmd(["last", "--count", "3"])
     assert last, "Failed to get recent decisions"
     assert len(last.split("\n")) > 0, "Last decisions empty"
 
@@ -198,7 +198,7 @@ def test_dashboard_cost_tracking_fresh(isolated_env: Path):
     assert result is not None
 
     # Immediately fetch the savings report
-    report = _run_tessera_cmd(["savings-report"])
+    report = _run_chuzom_cmd(["savings-report"])
     assert report, "Failed to fetch savings report"
 
     # Report should contain recent routing decisions
@@ -219,7 +219,7 @@ def test_savings_updates_on_new_routing():
     a legitimate reason savings shouldn't change (e.g., same model selected).
     """
     # Get baseline savings
-    status_before = _run_tessera_cmd(["status"])
+    status_before = _run_chuzom_cmd(["status"])
     assert status_before, "Failed to get baseline status"
 
     # Extract "today" savings amount from status (rough regex)
@@ -231,7 +231,7 @@ def test_savings_updates_on_new_routing():
     # integration with the actual router MCP server)
 
     # Get status after (in this case, just verify it's still readable)
-    status_after = _run_tessera_cmd(["status"])
+    status_after = _run_chuzom_cmd(["status"])
     assert status_after, "Failed to get post-routing status"
 
     # Both should be readable (this is a basic check; full validation
@@ -246,7 +246,7 @@ def test_savings_consistency():
     Checks that the sum of individual routing decisions matches the
     reported total savings.
     """
-    report = _run_tessera_cmd(["savings-report"])
+    report = _run_chuzom_cmd(["savings-report"])
     assert report, "Failed to fetch savings report"
 
     # Parse the report for total and per-call savings
@@ -264,17 +264,17 @@ def test_savings_consistency():
 def test_database_persistence():
     """ADVANCED: Verify that routing decisions are being persisted.
 
-    Checks that tessera storage is initialized and accessible.
+    Checks that chuzom storage is initialized and accessible.
     Note: v10.1.2 uses usage.db + receipts.db, not router.db
     """
     from pathlib import Path
 
-    router_dir = Path.home() / ".tessera"
+    router_dir = Path.home() / ".chuzom"
 
     # Check that router directory exists (created on first use)
     assert router_dir.exists(), \
         f"Router data directory not found at {router_dir}. " \
-        f"Run: tessera install"
+        f"Run: chuzom install"
 
     # Check for storage files (at least one should exist)
     storage_files = [
@@ -308,14 +308,14 @@ def test_database_persistence():
             raise AssertionError(
                 f"Database error: {e}. "
                 f"Usage database may be corrupted. "
-                f"Fix with: rm ~/.tessera/usage.db && tessera status"
+                f"Fix with: rm ~/.chuzom/usage.db && chuzom status"
             ) from e
 
 
 # ── Helper Functions ──────────────────────────────────────────────────────
 
 def _run_router_isolated(prompt: str, isolation_dir: Path, run_id: str = "test") -> dict[str, Any] | None:
-    """Run tessera on a prompt in an isolated subprocess.
+    """Run chuzom on a prompt in an isolated subprocess.
 
     Args:
         prompt: The prompt to route.
@@ -328,14 +328,14 @@ def _run_router_isolated(prompt: str, isolation_dir: Path, run_id: str = "test")
     # Prepare a clean environment for this subprocess
     env = os.environ.copy()
     env["HOME"] = str(isolation_dir)
-    env["TESSERA_DB"] = str(isolation_dir / "router.db")
-    env["TESSERA_CACHE"] = str(isolation_dir / "cache")
+    env["CHUZOM_DB"] = str(isolation_dir / "router.db")
+    env["CHUZOM_CACHE"] = str(isolation_dir / "cache")
 
     try:
-        # Use tessera demo to get routing decision
+        # Use chuzom demo to get routing decision
         # (This is a built-in command that routes a prompt and shows the decision)
         result = subprocess.run(
-            ["tessera", "demo", "--prompt", prompt],
+            ["chuzom", "demo", "--prompt", prompt],
             env=env,
             capture_output=True,
             text=True,
@@ -358,13 +358,13 @@ def _run_router_isolated(prompt: str, isolation_dir: Path, run_id: str = "test")
 
 
 def _run_router_live(prompt: str) -> dict[str, Any] | None:
-    """Run tessera on a prompt in the current environment (not isolated).
+    """Run chuzom on a prompt in the current environment (not isolated).
 
     Used for routing sanity checks that don't need isolation.
     """
     try:
         result = subprocess.run(
-            ["tessera", "demo", "--prompt", prompt],
+            ["chuzom", "demo", "--prompt", prompt],
             capture_output=True,
             text=True,
             timeout=30,
@@ -381,7 +381,7 @@ def _run_router_live(prompt: str) -> dict[str, Any] | None:
 
 
 def _parse_router_demo_output(output: str, run_id: str = "") -> dict[str, Any]:
-    """Parse tessera demo output to extract routing decision.
+    """Parse chuzom demo output to extract routing decision.
 
     The demo command outputs something like:
         Selected model: gpt-4o-mini
@@ -422,8 +422,8 @@ def _parse_router_demo_output(output: str, run_id: str = "") -> dict[str, Any]:
     return result
 
 
-def _run_tessera_cmd(args: list[str]) -> str:
-    """Run an tessera CLI command and return output.
+def _run_chuzom_cmd(args: list[str]) -> str:
+    """Run an chuzom CLI command and return output.
 
     Args:
         args: Command arguments (e.g., ["status"], ["last", "--count", "3"])
@@ -433,7 +433,7 @@ def _run_tessera_cmd(args: list[str]) -> str:
     """
     try:
         result = subprocess.run(
-            ["tessera"] + args,
+            ["chuzom"] + args,
             capture_output=True,
             text=True,
             timeout=10,

@@ -1,5 +1,5 @@
 [project]
-name = "tessera-router"
+name = "chuzom-router"
 version = "0.0.2"
 description = "Lightweight signal-driven LLM router for Claude Code, Cursor, Codex, Gemini CLI, and Codex CLI."
 readme = "README.md"
@@ -8,7 +8,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "ypollak2", email = "ypollak2@users.noreply.github.com" },
 ]
-keywords = ["tessera", "llm", "mcp", "router", "ai", "claude-code", "cursor", "codex", "gemini-cli", "model-routing", "mcp-server", "semantic-cache", "signal-router"]
+keywords = ["chuzom", "llm", "mcp", "router", "ai", "claude-code", "cursor", "codex", "gemini-cli", "model-routing", "mcp-server", "semantic-cache", "signal-router"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -70,24 +70,24 @@ semantic = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ypollak2/tessera"
-Repository = "https://github.com/ypollak2/tessera"
-Issues = "https://github.com/ypollak2/tessera/issues"
-Changelog = "https://github.com/ypollak2/tessera/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ypollak2/chuzom"
+Repository = "https://github.com/ypollak2/chuzom"
+Issues = "https://github.com/ypollak2/chuzom/issues"
+Changelog = "https://github.com/ypollak2/chuzom/blob/main/CHANGELOG.md"
 
 [project.scripts]
-tessera = "tessera.cli:main"
-tessera-sse = "tessera.server:main_sse"
-tessera-onboard = "tessera.onboard:main"
-tessera-install-hooks = "tessera.install_hooks:main"
-tessera-quickstart = "tessera.quickstart:main"
+chuzom = "chuzom.cli:main"
+chuzom-sse = "chuzom.server:main_sse"
+chuzom-onboard = "chuzom.onboard:main"
+chuzom-install-hooks = "chuzom.install_hooks:main"
+chuzom-quickstart = "chuzom.quickstart:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tessera"]
+packages = ["src/chuzom"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [

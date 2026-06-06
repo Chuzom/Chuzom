@@ -1,14 +1,14 @@
-<!-- tessera-rules-version: 1 -->
-# Tessera — Trae IDE Routing Rules
+<!-- chuzom-rules-version: 1 -->
+# Chuzom — Trae IDE Routing Rules
 
-> These rules apply when using tessera MCP tools inside Trae IDE (ByteDance).
+> These rules apply when using chuzom MCP tools inside Trae IDE (ByteDance).
 > Trae v1.3.0+ supports MCP via mcpServers config and .rules files.
 
 ---
 
 ## How to Route
 
-Trae loads MCP servers from the mcpServers config block. Once tessera is registered,
+Trae loads MCP servers from the mcpServers config block. Once chuzom is registered,
 call MCP tools by name for any substantive task:
 
 ```

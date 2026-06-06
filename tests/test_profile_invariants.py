@@ -8,7 +8,7 @@ Claude Opus policy violation.
 """
 
 import pytest
-from tessera.profiles import (
+from chuzom.profiles import (
     ROUTING_TABLE,
     RoutingProfile,
     TaskType,

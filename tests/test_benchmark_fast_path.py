@@ -20,13 +20,13 @@ import pytest
 
 
 def _load_auto_route():
-    """Load src/tessera/hooks/auto-route.py as a module."""
+    """Load src/chuzom/hooks/auto-route.py as a module."""
     cached = sys.modules.get("auto_route_under_test")
     if cached is not None:
         return cached
     path = (
         Path(__file__).resolve().parents[1]
-        / "src" / "tessera" / "hooks" / "auto-route.py"
+        / "src" / "chuzom" / "hooks" / "auto-route.py"
     )
     spec = importlib.util.spec_from_file_location("auto_route_under_test", path)
     assert spec and spec.loader, f"Could not load spec for {path}"

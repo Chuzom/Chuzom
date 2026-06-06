@@ -26,7 +26,7 @@ def auto_route():
     src = (
         Path(__file__).resolve().parent.parent
         / "src"
-        / "tessera"
+        / "chuzom"
         / "hooks"
         / "auto-route.py"
     )
@@ -50,14 +50,14 @@ def auto_route():
     ("fix the auto-route classifier", "code"),
     ("fix the classifier", "code"),
     ("fix the migration", "code"),
-    ("fix the tessera", "code"),
+    ("fix the chuzom", "code"),
     ("patch the migration script", "code"),
     ("repair the build", "code"),
     ("resolve the conflict", "code"),
     ("fix this dependency", "code"),
     ("fix a regression", "code"),
     # "for the X" determiner — the actual failing case from xfail
-    ("fix for the tessera and its branch", "code"),
+    ("fix for the chuzom and its branch", "code"),
     ("a fix for the failing migration", "code"),  # noun→verb interpretation
 ])
 def test_fix_verb_classifies_as_code(auto_route, prompt: str, expected: str):
@@ -140,7 +140,7 @@ def test_existing_classifications_preserved(
 # ────────────────────────────────────────────────────────────────────────
 
 def test_live_hook_has_the_fix_pattern_too():
-    """If the Tessera source has the expanded fix pattern, the live
+    """If the Chuzom source has the expanded fix pattern, the live
     llm-router hook used by Claude Code must too. Otherwise users hitting
     the bug locally won't benefit from the fix."""
     live_hook = Path.home() / ".claude" / "hooks" / "llm-router-auto-route.py"

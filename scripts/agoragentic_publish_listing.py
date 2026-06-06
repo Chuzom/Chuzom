@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish tessera's first listing on Agoragentic marketplace."""
+"""Publish chuzom's first listing on Agoragentic marketplace."""
 
 import asyncio
 import json
@@ -9,10 +9,10 @@ import httpx
 
 
 async def publish_listing():
-    """Publish tessera LLM routing service on Agoragentic."""
+    """Publish chuzom LLM routing service on Agoragentic."""
     
     # Load credentials
-    creds_file = Path.home() / ".tessera" / "agoragentic.json"
+    creds_file = Path.home() / ".chuzom" / "agoragentic.json"
     if not creds_file.exists():
         print("❌ Agoragentic not configured. Run: python3 scripts/agoragentic_register.py")
         return
@@ -92,7 +92,7 @@ async def publish_listing():
         print(json.dumps(result, indent=2))
         
         # Save listing info
-        listing_file = Path.home() / ".tessera" / "agoragentic_listing.json"
+        listing_file = Path.home() / ".chuzom" / "agoragentic_listing.json"
         listing_file.write_text(json.dumps(result, indent=2))
         listing_file.chmod(0o600)
         

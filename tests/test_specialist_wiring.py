@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tessera.policy import RoutingPolicy
-from tessera.router import route_and_call
-from tessera.types import LLMResponse, TaskType
+from chuzom.policy import RoutingPolicy
+from chuzom.router import route_and_call
+from chuzom.types import LLMResponse, TaskType
 
 
 def _ok_response(model: str) -> LLMResponse:
@@ -52,17 +52,17 @@ async def test_specialist_attempted_first_when_subject_matches(temp_db) -> None:
         specialists={"code": "openrouter/qwen-coder"},
     )
 
-    with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock):
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock):
-            with patch("tessera.router.get_config") as mock_config:
+    with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock):
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock):
+            with patch("chuzom.router.get_config") as mock_config:
                 config = MagicMock()
-                config.tessera_monthly_budget = 0.0
-                config.tessera_daily_spend_limit = 0.0
+                config.chuzom_monthly_budget = 0.0
+                config.chuzom_daily_spend_limit = 0.0
                 config.available_providers = ["openai", "openrouter"]
                 mock_config.return_value = config
 
                 with patch(
-                    "tessera.router._build_and_filter_chain"
+                    "chuzom.router._build_and_filter_chain"
                 ) as mock_chain:
                     # Chain returned WITHOUT the specialist — the override
                     # must inject it at position 0.
@@ -72,15 +72,15 @@ async def test_specialist_attempted_first_when_subject_matches(temp_db) -> None:
                     ]
 
                     with patch(
-                        "tessera.policy.get_active_policy",
+                        "chuzom.policy.get_active_policy",
                         return_value=policy_with_specialist,
                     ):
                         with patch(
-                            "tessera.router._call_text",
+                            "chuzom.router._call_text",
                             new=AsyncMock(side_effect=capture_call),
                         ):
                             with patch(
-                                "tessera.router.get_tracker"
+                                "chuzom.router.get_tracker"
                             ) as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
@@ -115,30 +115,30 @@ async def test_no_override_when_specialists_empty(temp_db) -> None:
         specialists={},  # empty — no override should happen
     )
 
-    with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock):
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock):
-            with patch("tessera.router.get_config") as mock_config:
+    with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock):
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock):
+            with patch("chuzom.router.get_config") as mock_config:
                 config = MagicMock()
-                config.tessera_monthly_budget = 0.0
-                config.tessera_daily_spend_limit = 0.0
+                config.chuzom_monthly_budget = 0.0
+                config.chuzom_daily_spend_limit = 0.0
                 config.available_providers = ["openai"]
                 mock_config.return_value = config
 
                 with patch(
-                    "tessera.router._build_and_filter_chain"
+                    "chuzom.router._build_and_filter_chain"
                 ) as mock_chain:
                     mock_chain.return_value = ["openai/gpt-4o-mini"]
 
                     with patch(
-                        "tessera.policy.get_active_policy",
+                        "chuzom.policy.get_active_policy",
                         return_value=policy_no_specialist,
                     ):
                         with patch(
-                            "tessera.router._call_text",
+                            "chuzom.router._call_text",
                             new=AsyncMock(side_effect=capture_call),
                         ):
                             with patch(
-                                "tessera.router.get_tracker"
+                                "chuzom.router.get_tracker"
                             ) as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True
@@ -177,30 +177,30 @@ async def test_no_override_when_classification_data_missing_subject(
         specialists={"code": "openrouter/qwen-coder"},
     )
 
-    with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock):
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock):
-            with patch("tessera.router.get_config") as mock_config:
+    with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock):
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock):
+            with patch("chuzom.router.get_config") as mock_config:
                 config = MagicMock()
-                config.tessera_monthly_budget = 0.0
-                config.tessera_daily_spend_limit = 0.0
+                config.chuzom_monthly_budget = 0.0
+                config.chuzom_daily_spend_limit = 0.0
                 config.available_providers = ["openai"]
                 mock_config.return_value = config
 
                 with patch(
-                    "tessera.router._build_and_filter_chain"
+                    "chuzom.router._build_and_filter_chain"
                 ) as mock_chain:
                     mock_chain.return_value = ["openai/gpt-4o-mini"]
 
                     with patch(
-                        "tessera.policy.get_active_policy",
+                        "chuzom.policy.get_active_policy",
                         return_value=policy_with_specialist,
                     ):
                         with patch(
-                            "tessera.router._call_text",
+                            "chuzom.router._call_text",
                             new=AsyncMock(side_effect=capture_call),
                         ):
                             with patch(
-                                "tessera.router.get_tracker"
+                                "chuzom.router.get_tracker"
                             ) as mock_tracker:
                                 tracker = MagicMock()
                                 tracker.is_healthy.return_value = True

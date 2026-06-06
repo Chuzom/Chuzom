@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 
-from tessera.stats import PyPIStats
+from chuzom.stats import PyPIStats
 
 
 class TestPyPIStats:
@@ -18,7 +18,7 @@ class TestPyPIStats:
             }
         }
 
-        with patch("tessera.stats.requests.get") as mock_get:
+        with patch("chuzom.stats.requests.get") as mock_get:
             mock_get.return_value.json.return_value = mock_response
             mock_get.return_value.raise_for_status.return_value = None
 
@@ -32,7 +32,7 @@ class TestPyPIStats:
 
     def test_get_package_stats_error(self):
         """Test error handling when package stats fetch fails."""
-        with patch("tessera.stats.requests.get") as mock_get:
+        with patch("chuzom.stats.requests.get") as mock_get:
             mock_get.side_effect = Exception("Network error")
 
             result = PyPIStats.get_package_stats("nonexistent", period="recent")
@@ -48,11 +48,11 @@ class TestPyPIStats:
             "data": {"last_recent": 500}
         }
 
-        with patch("tessera.stats.PyPIStats.get_package_stats") as mock_get:
+        with patch("chuzom.stats.PyPIStats.get_package_stats") as mock_get:
             def side_effect(package_name, period):
                 if package_name == "llm-routing":
                     return mock_response_llm_routing
-                elif package_name == "claude-code-tessera":
+                elif package_name == "claude-code-chuzom":
                     return mock_response_claude_code
                 return {}
 
@@ -62,7 +62,7 @@ class TestPyPIStats:
 
             assert result["total_downloads"] == 1500
             assert result["packages"]["llm-routing"]["downloads"] == 1000
-            assert result["packages"]["claude-code-tessera"]["downloads"] == 500
+            assert result["packages"]["claude-code-chuzom"]["downloads"] == 500
             assert result["period"] == "recent"
 
     def test_format_stats_text(self):
@@ -76,7 +76,7 @@ class TestPyPIStats:
                     "downloads": 1000,
                     "description": "New package (current)",
                 },
-                "claude-code-tessera": {
+                "claude-code-chuzom": {
                     "downloads": 500,
                     "description": "Legacy package (deprecated)",
                 },
@@ -88,7 +88,7 @@ class TestPyPIStats:
         assert "Combined Download Statistics" in result
         assert "1,500" in result
         assert "llm-routing" in result
-        assert "claude-code-tessera" in result
+        assert "claude-code-chuzom" in result
         assert "66.7%" in result  # 1000/1500
         assert "33.3%" in result  # 500/1500
 
@@ -103,7 +103,7 @@ class TestPyPIStats:
                     "downloads": 1000,
                     "description": "New package (current)",
                 },
-                "claude-code-tessera": {
+                "claude-code-chuzom": {
                     "downloads": 500,
                     "description": "Legacy package (deprecated)",
                 },
@@ -116,7 +116,7 @@ class TestPyPIStats:
         assert "**Total Downloads**: 1,500" in result
         assert "**Period**: recent" in result
         assert "**llm-routing**" in result
-        assert "**claude-code-tessera**" in result
+        assert "**claude-code-chuzom**" in result
 
     def test_format_stats_json(self):
         """Test formatting stats as JSON."""
@@ -150,7 +150,7 @@ class TestPyPIStats:
                     "downloads": 0,
                     "description": "New package",
                 },
-                "claude-code-tessera": {
+                "claude-code-chuzom": {
                     "downloads": 0,
                     "description": "Legacy package",
                 },

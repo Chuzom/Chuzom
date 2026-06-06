@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-from tessera.commands.set_enforce import cmd_set_enforce, _run_set_enforce, _ENFORCE_MODES
+from chuzom.commands.set_enforce import cmd_set_enforce, _run_set_enforce, _ENFORCE_MODES
 
 
 class TestCmdSetEnforce:
@@ -15,19 +15,19 @@ class TestCmdSetEnforce:
 
     def test_cmd_set_enforce_returns_zero(self):
         """cmd_set_enforce should return 0."""
-        with patch("tessera.commands.set_enforce._run_set_enforce"):
+        with patch("chuzom.commands.set_enforce._run_set_enforce"):
             result = cmd_set_enforce([])
         assert result == 0
 
     def test_cmd_set_enforce_with_mode(self):
         """cmd_set_enforce with mode should call _run_set_enforce."""
-        with patch("tessera.commands.set_enforce._run_set_enforce") as mock_run:
+        with patch("chuzom.commands.set_enforce._run_set_enforce") as mock_run:
             cmd_set_enforce(["soft"])
         mock_run.assert_called_once_with("soft")
 
     def test_cmd_set_enforce_no_args(self):
         """cmd_set_enforce with no args should call _run_set_enforce with empty string."""
-        with patch("tessera.commands.set_enforce._run_set_enforce") as mock_run:
+        with patch("chuzom.commands.set_enforce._run_set_enforce") as mock_run:
             cmd_set_enforce([])
         mock_run.assert_called_once_with("")
 
@@ -39,7 +39,7 @@ class TestSetEnforceCommand:
         """set-enforce with invalid mode should show help."""
         _run_set_enforce("invalid")
         captured = capsys.readouterr()
-        assert "Usage: tessera set-enforce" in captured.out
+        assert "Usage: chuzom set-enforce" in captured.out
         assert "smart" in captured.out
         assert "soft" in captured.out
         assert "hard" in captured.out
@@ -49,7 +49,7 @@ class TestSetEnforceCommand:
         """set-enforce with no mode should show help."""
         _run_set_enforce("")
         captured = capsys.readouterr()
-        assert "Usage: tessera set-enforce" in captured.out
+        assert "Usage: chuzom set-enforce" in captured.out
 
     def test_set_enforce_valid_mode_creates_files(self, monkeypatch):
         """set-enforce with valid mode should create config files."""
@@ -60,7 +60,7 @@ class TestSetEnforceCommand:
             _run_set_enforce("soft")
 
             # Check routing.yaml was created
-            routing_yaml = home / ".tessera" / "routing.yaml"
+            routing_yaml = home / ".chuzom" / "routing.yaml"
             assert routing_yaml.exists()
             content = routing_yaml.read_text()
             assert "enforce: soft" in content
@@ -72,7 +72,7 @@ class TestSetEnforceCommand:
             monkeypatch.setattr(Path, "home", lambda: home)
 
             # Create existing routing.yaml
-            routing_yaml = home / ".tessera" / "routing.yaml"
+            routing_yaml = home / ".chuzom" / "routing.yaml"
             routing_yaml.parent.mkdir(parents=True, exist_ok=True)
             routing_yaml.write_text("profile: balanced\nenforce: smart\n")
 
@@ -90,10 +90,10 @@ class TestSetEnforceCommand:
 
             _run_set_enforce("soft")
 
-            env_path = home / ".tessera" / ".env"
+            env_path = home / ".chuzom" / ".env"
             assert env_path.exists()
             content = env_path.read_text()
-            assert "TESSERA_ENFORCE=soft" in content
+            assert "CHUZOM_ENFORCE=soft" in content
 
     def test_set_enforce_updates_existing_env(self, monkeypatch):
         """set-enforce should update existing .env file."""
@@ -102,14 +102,14 @@ class TestSetEnforceCommand:
             monkeypatch.setattr(Path, "home", lambda: home)
 
             # Create existing .env
-            env_path = home / ".tessera" / ".env"
+            env_path = home / ".chuzom" / ".env"
             env_path.parent.mkdir(parents=True, exist_ok=True)
-            env_path.write_text("OPENAI_API_KEY=sk-123\nTESSERA_ENFORCE=smart\n")
+            env_path.write_text("OPENAI_API_KEY=sk-123\nCHUZOM_ENFORCE=smart\n")
 
             _run_set_enforce("hard")
 
             content = env_path.read_text()
-            assert "TESSERA_ENFORCE=hard" in content
+            assert "CHUZOM_ENFORCE=hard" in content
             assert "OPENAI_API_KEY=sk-123" in content
 
     def test_set_enforce_displays_mode_description(self, capsys, monkeypatch):
@@ -130,7 +130,7 @@ class TestSetEnforceIntegration:
 
     def test_cmd_set_enforce_basic(self):
         """cmd_set_enforce should execute and return 0."""
-        with patch("tessera.commands.set_enforce._run_set_enforce"):
+        with patch("chuzom.commands.set_enforce._run_set_enforce"):
             result = cmd_set_enforce(["soft"])
         assert result == 0
 

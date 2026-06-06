@@ -9,7 +9,7 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Awaitable, Callable
 
-from tessera.classifier import (
+from chuzom.classifier import (
     CLASSIFIER_PROMPT_PATH,
     CLASSIFIER_PROMPT_VERSION,
     classify_complexity,

@@ -2,7 +2,7 @@
 
 import time
 
-from tessera.health import HealthTracker, ProviderHealth
+from chuzom.health import HealthTracker, ProviderHealth
 
 
 class TestProviderHealth:

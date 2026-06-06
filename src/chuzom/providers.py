@@ -1,0 +1,319 @@
+"""LiteLLM wrapper for unified LLM API calls.
+
+Provides two entry points for calling any LLM through LiteLLM's unified API:
+- ``call_llm``: Standard request/response (returns full ``LLMResponse``).
+- ``call_llm_stream``: Streaming variant that yields content chunks, ending
+  with a JSON metadata trailer for the caller to parse.
+
+Both functions handle OpenAI reasoning model quirks (temperature=1 requirement),
+apply config defaults, and extract provider-specific features like Perplexity
+citations.
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import AsyncIterator
+
+import litellm
+
+from chuzom.config import get_config
+from chuzom.inference_robustness import (
+    ensure_non_empty_content,
+    extract_content,
+    safe_max_tokens,
+)
+from chuzom.prompt_cache import inject_cache_control
+from chuzom.types import LLMResponse
+
+# LiteLLM emits noisy debug output by default (model mappings, retries, etc.)
+# that clutters MCP server logs. Suppressing it keeps logs focused on routing.
+litellm.suppress_debug_info = True
+
+# Keys allowed in extra_params passed to LiteLLM.  Any key outside this set
+# could redirect the call (api_key, base_url, api_base), leak credentials, or
+# override provider selection.  New legitimate keys should be added here.
+_ALLOWED_EXTRA_PARAMS: frozenset[str] = frozenset({
+    "temperature",
+    "max_tokens",
+    "top_p",
+    "top_k",
+    "stop",
+    "seed",
+    "presence_penalty",
+    "frequency_penalty",
+    "logit_bias",
+    "n",
+    "stream",
+    "logprobs",
+    "top_logprobs",
+    # Provider-specific safe pass-through keys
+    "extra_body",   # used for Perplexity search_recency_filter
+    "thinking",     # used for Anthropic extended thinking
+})
+
+
+async def call_llm(
+    model: str,
+    messages: list[dict[str, str]],
+    *,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    extra_params: dict | None = None,
+) -> LLMResponse:
+    """Call an LLM via LiteLLM and return a standardized response.
+
+    Flow:
+    1. Apply config defaults for temperature and max_tokens if not provided.
+    2. Detect OpenAI reasoning models (o1/o3/o4 series) and force temperature=1,
+       which is the only value these models accept.
+    3. Send the request to LiteLLM's async completion API.
+    4. Extract cost via LiteLLM's built-in cost calculator.
+    5. Extract Perplexity-specific citations if present.
+    6. Return a unified ``LLMResponse`` with all metadata.
+
+    Args:
+        model: LiteLLM model string (e.g. ``"gemini/gemini-2.5-flash"``).
+            Must include the provider prefix for non-OpenAI models.
+        messages: Chat messages in OpenAI format
+            (list of ``{"role": "...", "content": "..."}`` dicts).
+        temperature: Sampling temperature override. Uses ``config.default_temperature``
+            if None. Ignored (forced to 1) for reasoning models.
+        max_tokens: Max output tokens override. Uses ``config.default_max_tokens``
+            if None or 0.
+        extra_params: Provider-specific parameters passed through to LiteLLM
+            (e.g. ``{"top_p": 0.9}``). Merged into the call kwargs.
+
+    Returns:
+        An ``LLMResponse`` containing the generated content, token counts,
+        cost, latency, provider name, and any citations.
+
+    Raises:
+        litellm.exceptions.APIError: On provider API errors (4xx/5xx).
+        asyncio.TimeoutError: If the call exceeds ``config.request_timeout``.
+    """
+    config = get_config()
+    temperature = temperature if temperature is not None else config.default_temperature
+    max_tokens = max_tokens or config.default_max_tokens
+    # Cap max_tokens at the model's known output limit (Plan 07 D.2) —
+    # prevents OpenAI silent truncation and Anthropic 400-errors when
+    # callers pass oversized values. Unknown models bypass the cap.
+    max_tokens = safe_max_tokens(max_tokens, model)
+
+    # O-series reasoning models only accept temperature=1
+    model_name = model.split("/", 1)[-1] if "/" in model else model
+    is_reasoning = model_name.startswith(("o1", "o3", "o4"))
+    if is_reasoning:
+        temperature = 1
+
+    start = time.monotonic()
+
+    # Inject provider-agnostic cache control hints (Anthropic: system message caching)
+    cached_messages = inject_cache_control(messages, model)
+
+    kwargs: dict = {
+        "model": model,
+        "messages": cached_messages,
+        "temperature": temperature,
+        "timeout": config.request_timeout,
+    }
+
+    # 🥷 Backslash-Security: Avoid shell by using safe APIs for LLM calls.
+    # Ollama integration in LiteLLM has a bug where max_tokens causes empty responses.
+    # Workaround: don't pass max_tokens to Ollama models (let them respond naturally).
+    # This is safe since Ollama typically returns reasonable-length responses.
+    if not model.startswith("ollama/"):
+        kwargs["max_tokens"] = max_tokens
+
+    if extra_params:
+        safe = {k: v for k, v in extra_params.items() if k in _ALLOWED_EXTRA_PARAMS}
+        kwargs.update(safe)
+
+    # Plan 07 Cat D.4 — apply registered per-provider quirks so future
+    # provider-specific behaviour (OpenRouter prefix re-prepending, new
+    # reasoning-model temperature constraints, etc.) lands as a registry
+    # entry rather than another inline branch here.
+    from chuzom.profiles import provider_from_model
+    from chuzom.provider_quirks import get_quirk
+    _quirk = get_quirk(provider_from_model(model))
+    kwargs["model"] = _quirk.transform_model_name(kwargs["model"])
+    kwargs = _quirk.transform_request(kwargs)
+
+    response = await litellm.acompletion(**kwargs)
+    elapsed_ms = (time.monotonic() - start) * 1000
+
+    content = extract_content(response.choices[0].message)
+    # Plan 07 D.3: surface empty-content responses as a routing failure
+    # so the router falls through to the next model in the chain instead
+    # of silently returning an empty LLMResponse.
+    content = ensure_non_empty_content(content, model)
+    usage = response.usage
+
+    # LiteLLM provides cost calculation based on its internal pricing tables;
+    # falls back to calibration.cost_for_tokens for models LiteLLM hasn't
+    # catalogued (notably the OpenRouter open-weight pool, which lives in our
+    # _PRICING_PER_M dict via Plan 06 Step 2 but not in LiteLLM's snapshot).
+    #
+    # v10.1 — Unknown-paid-model fallback. If both LiteLLM AND our pricing dict
+    # come up empty for a paid model (e.g. a recently-added OpenRouter model
+    # we haven't priced yet), fall back to a conservative rate so the dashboard
+    # doesn't report $0 for a call that genuinely cost money. Mirrors the
+    # logic in session_spend._estimate_cost so both surfaces agree.
+    _prompt_tokens = int(getattr(response.usage, "prompt_tokens", 0) or 0)
+    _completion_tokens = int(getattr(response.usage, "completion_tokens", 0) or 0)
+    try:
+        cost = litellm.completion_cost(completion_response=response)
+    except Exception:
+        from chuzom.calibration import cost_for_tokens
+        cost = cost_for_tokens(model, _prompt_tokens, _completion_tokens)
+    if cost == 0 and not any(
+        model.startswith(p) for p in ("ollama", "codex", "gemini_cli")
+    ):
+        # Unknown paid model. Bias high so anomaly detection has a signal.
+        # 0.01 USD per 1K output tokens matches session_spend's legacy rate.
+        cost = _completion_tokens * 0.01 / 1000
+
+    # Perplexity models return source citations alongside the response
+    citations: list[str] = []
+    if hasattr(response, "citations"):
+        citations = response.citations or []
+
+    from chuzom.profiles import provider_from_model
+
+    # Anthropic prompt-caching tokens — LiteLLM exposes these on the usage
+    # block when the provider response includes them. Safe defaults for
+    # non-Anthropic providers (which return 0). v9.2.2.
+    cache_creation = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+    cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+
+    return LLMResponse(
+        content=content,
+        model=model,
+        input_tokens=usage.prompt_tokens or 0,
+        output_tokens=usage.completion_tokens or 0,
+        cost_usd=cost,
+        latency_ms=elapsed_ms,
+        provider=provider_from_model(model),
+        citations=citations,
+        cache_creation_input_tokens=cache_creation,
+        cache_read_input_tokens=cache_read,
+    )
+
+
+async def call_llm_stream(
+    model: str,
+    messages: list[dict[str, str]],
+    *,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    extra_params: dict | None = None,
+) -> AsyncIterator[str]:
+    """Stream an LLM response via LiteLLM, yielding content chunks.
+
+    Yields text chunks as they arrive from the provider. After all content
+    chunks, yields a final ``\\n[META]{...}`` trailer line containing a JSON
+    object with model, provider, token counts, cost, and latency. Callers
+    should detect the ``[META]`` prefix to separate content from metadata.
+
+    Unlike ``call_llm``, cost is estimated from token counts rather than
+    calculated from the full response object, because LiteLLM's streaming
+    API doesn't provide a complete response for its cost calculator. Token
+    counts come from the final chunk's usage field (if the provider sends it).
+
+    Args:
+        model: LiteLLM model string (e.g. ``"gemini/gemini-2.5-flash"``).
+        messages: Chat messages in OpenAI format.
+        temperature: Sampling temperature override. Uses config default if None.
+        max_tokens: Max output tokens override. Uses config default if None.
+        extra_params: Provider-specific parameters passed through to LiteLLM.
+
+    Yields:
+        Content text chunks as they arrive, followed by a single
+        ``\\n[META]{...}`` JSON metadata line as the final item.
+    """
+    import json
+
+    config = get_config()
+    temperature = temperature if temperature is not None else config.default_temperature
+    max_tokens = max_tokens or config.default_max_tokens
+    # Cap max_tokens at the model's known output limit (Plan 07 D.2) —
+    # prevents OpenAI silent truncation and Anthropic 400-errors when
+    # callers pass oversized values. Unknown models bypass the cap.
+    max_tokens = safe_max_tokens(max_tokens, model)
+
+    model_name = model.split("/", 1)[-1] if "/" in model else model
+    is_reasoning = model_name.startswith(("o1", "o3", "o4"))
+    if is_reasoning:
+        temperature = 1
+
+    start = time.monotonic()
+
+    # Inject provider-agnostic cache control hints
+    cached_messages = inject_cache_control(messages, model)
+
+    kwargs: dict = {
+        "model": model,
+        "messages": cached_messages,
+        "temperature": temperature,
+        "timeout": config.request_timeout,
+        "stream": True,
+    }
+
+    # 🥷 Backslash-Security: Same Ollama workaround as in call_llm() above.
+    # Ollama + max_tokens causes empty responses in LiteLLM.
+    if not model.startswith("ollama/"):
+        kwargs["max_tokens"] = max_tokens
+
+    if extra_params:
+        safe = {k: v for k, v in extra_params.items() if k in _ALLOWED_EXTRA_PARAMS}
+        kwargs.update(safe)
+
+    # Plan 07 Cat D.4 — same quirk-application as non-streaming call_llm.
+    from chuzom.profiles import provider_from_model
+    from chuzom.provider_quirks import get_quirk
+    _quirk = get_quirk(provider_from_model(model))
+    kwargs["model"] = _quirk.transform_model_name(kwargs["model"])
+    kwargs = _quirk.transform_request(kwargs)
+
+    response = await litellm.acompletion(**kwargs)
+
+    collected_content: list[str] = []
+    input_tokens = 0
+    output_tokens = 0
+
+    async for chunk in response:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if delta and delta.content:
+            collected_content.append(delta.content)
+            yield delta.content
+
+        # The final chunk from most providers carries aggregated usage info
+        if hasattr(chunk, "usage") and chunk.usage:
+            input_tokens = chunk.usage.prompt_tokens or 0
+            output_tokens = chunk.usage.completion_tokens or 0
+
+    elapsed_ms = (time.monotonic() - start) * 1000
+    full_content = "".join(collected_content)
+
+    # Estimate cost from token counts — litellm.completion_cost needs a full
+    # response object which isn't available in streaming mode
+    try:
+        cost = litellm.completion_cost(
+            model=model,
+            prompt=str(messages),
+            completion=full_content,
+        )
+    except Exception:
+        cost = 0.0
+
+    from chuzom.profiles import provider_from_model
+
+    meta = {
+        "model": model,
+        "provider": provider_from_model(model),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": round(cost, 8),
+        "latency_ms": round(elapsed_ms, 1),
+    }
+    yield f"\n[META]{json.dumps(meta)}"

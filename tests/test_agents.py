@@ -1,4 +1,4 @@
-"""Tests for tessera.agents — session lifecycle, budget envelope, rollups."""
+"""Tests for chuzom.agents — session lifecycle, budget envelope, rollups."""
 from __future__ import annotations
 
 import asyncio
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tessera.agents import (
+from chuzom.agents import (
     AgentProfile,
     AgentRegistry,
     BudgetEnvelope,
@@ -14,8 +14,8 @@ from tessera.agents import (
     SessionState,
     SessionStore,
 )
-from tessera.agents.registry import AgentNotFound
-from tessera.agents.session import SessionNotFound, TerminalStateViolation
+from chuzom.agents.registry import AgentNotFound
+from chuzom.agents.session import SessionNotFound, TerminalStateViolation
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -314,8 +314,8 @@ def test_framework_persists_through_lifecycle(store: SessionStore):
 @pytest.fixture
 def isolated_tools(tmp_path, monkeypatch):
     """Wire the tools module to tmp_path SQLite + a minimal registry."""
-    from tessera.lineage import LineageStore
-    from tessera.tools import agents as tool_mod
+    from chuzom.lineage import LineageStore
+    from chuzom.tools import agents as tool_mod
 
     reg = AgentRegistry.from_profiles(
         [
@@ -339,7 +339,7 @@ def isolated_tools(tmp_path, monkeypatch):
 
 
 def test_tool_agent_list(isolated_tools):
-    result = asyncio.run(isolated_tools.tessera_agent_list())
+    result = asyncio.run(isolated_tools.chuzom_agent_list())
     assert len(result["agents"]) == 1
     cr = result["agents"][0]
     assert cr["id"] == "code-reviewer"
@@ -348,7 +348,7 @@ def test_tool_agent_list(isolated_tools):
 
 def test_tool_start_session_with_default_budget(isolated_tools):
     result = asyncio.run(
-        isolated_tools.tessera_agent_start_session(agent_id="code-reviewer")
+        isolated_tools.chuzom_agent_start_session(agent_id="code-reviewer")
     )
     assert "session_id" in result
     assert result["budget_cap_usd"] == 0.50
@@ -356,7 +356,7 @@ def test_tool_start_session_with_default_budget(isolated_tools):
 
 def test_tool_start_session_unknown_agent(isolated_tools):
     result = asyncio.run(
-        isolated_tools.tessera_agent_start_session(agent_id="unknown")
+        isolated_tools.chuzom_agent_start_session(agent_id="unknown")
     )
     assert result["error"] == "agent_not_found"
     assert "code-reviewer" in result["available_agents"]
@@ -364,7 +364,7 @@ def test_tool_start_session_unknown_agent(isolated_tools):
 
 def test_tool_start_session_clamps_to_hard_max(isolated_tools):
     result = asyncio.run(
-        isolated_tools.tessera_agent_start_session(
+        isolated_tools.chuzom_agent_start_session(
             agent_id="code-reviewer", budget_usd=100.0
         )
     )
@@ -373,13 +373,13 @@ def test_tool_start_session_clamps_to_hard_max(isolated_tools):
 
 def test_tool_route_refuses_when_budget_breached(isolated_tools):
     start = asyncio.run(
-        isolated_tools.tessera_agent_start_session(
+        isolated_tools.chuzom_agent_start_session(
             agent_id="code-reviewer", budget_usd=0.10
         )
     )
     sid = start["session_id"]
     refused = asyncio.run(
-        isolated_tools.tessera_agent_route(
+        isolated_tools.chuzom_agent_route(
             session_id=sid, prompt="x", estimated_cost_usd=0.20
         )
     )
@@ -388,11 +388,11 @@ def test_tool_route_refuses_when_budget_breached(isolated_tools):
 
 def test_tool_route_allows_within_budget(isolated_tools):
     start = asyncio.run(
-        isolated_tools.tessera_agent_start_session(agent_id="code-reviewer")
+        isolated_tools.chuzom_agent_start_session(agent_id="code-reviewer")
     )
     sid = start["session_id"]
     ok = asyncio.run(
-        isolated_tools.tessera_agent_route(
+        isolated_tools.chuzom_agent_route(
             session_id=sid, prompt="review src/auth.py", estimated_cost_usd=0.05
         )
     )
@@ -403,20 +403,20 @@ def test_tool_route_allows_within_budget(isolated_tools):
 
 def test_tool_complete_returns_rollup(isolated_tools):
     start = asyncio.run(
-        isolated_tools.tessera_agent_start_session(agent_id="code-reviewer")
+        isolated_tools.chuzom_agent_start_session(agent_id="code-reviewer")
     )
     sid = start["session_id"]
-    done = asyncio.run(isolated_tools.tessera_agent_complete_session(session_id=sid))
+    done = asyncio.run(isolated_tools.chuzom_agent_complete_session(session_id=sid))
     assert done["state"] == "completed"
     assert "rollup" in done
 
 
 def test_tool_check_budget_returns_state(isolated_tools):
     start = asyncio.run(
-        isolated_tools.tessera_agent_start_session(agent_id="code-reviewer")
+        isolated_tools.chuzom_agent_start_session(agent_id="code-reviewer")
     )
     sid = start["session_id"]
-    status = asyncio.run(isolated_tools.tessera_agent_check_budget(session_id=sid))
+    status = asyncio.run(isolated_tools.chuzom_agent_check_budget(session_id=sid))
     assert status["cap_usd"] == 0.50
     assert status["consumed_usd"] == 0.0
     assert status["remaining_usd"] == 0.50

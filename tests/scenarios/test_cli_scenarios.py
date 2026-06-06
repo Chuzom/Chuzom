@@ -1,6 +1,6 @@
 """CLI-driven scenarios — one story per host integration.
 
-Each scenario runs a realistic user journey end-to-end through Tessera's
+Each scenario runs a realistic user journey end-to-end through Chuzom's
 signal layer + decision engine + selector, recording every step. The
 scenarios pass real prompts through real signals (PII, keyword) and
 exercise the real decision engine — they don't mock signal evaluation.
@@ -9,9 +9,9 @@ test infrastructure).
 """
 from __future__ import annotations
 
-from tessera.decisions.engine import Decision, DecisionEngine
-from tessera.signals.keyword import KeywordSignal
-from tessera.signals.pii import PiiSignal
+from chuzom.decisions.engine import Decision, DecisionEngine
+from chuzom.signals.keyword import KeywordSignal
+from chuzom.signals.pii import PiiSignal
 
 from tests.scenarios.core import Scenario
 
@@ -77,7 +77,7 @@ def test_scenario_claude_code_code_refactor(scenario_collector):
         title="Claude Code: code refactor routes to local Ollama",
         cli="claude-code",
         narrative=(
-            "A developer in a Claude Code session asks Tessera to refactor "
+            "A developer in a Claude Code session asks Chuzom to refactor "
             "a nested if-else into early returns. The prompt contains the "
             "word 'refactor' which trips the code keyword signal. The PII "
             "signal stays silent because no secrets are present. The "
@@ -125,7 +125,7 @@ def test_scenario_claude_code_code_refactor(scenario_collector):
 
 def test_scenario_claude_code_pii_forces_local(scenario_collector):
     """The most security-critical scenario: a developer accidentally pastes
-    an OpenAI API key. Tessera's PII signal fires immediately, decision
+    an OpenAI API key. Chuzom's PII signal fires immediately, decision
     engine picks local_only_chain, the prompt never leaves the machine."""
     s = Scenario(
         id="cli-02",
@@ -133,7 +133,7 @@ def test_scenario_claude_code_pii_forces_local(scenario_collector):
         cli="claude-code",
         narrative=(
             "A developer pastes a code snippet that accidentally includes "
-            "an OpenAI API key in a comment. Tessera's PiiSignal detects "
+            "an OpenAI API key in a comment. Chuzom's PiiSignal detects "
             "the secret pattern, force_local_on_pii fires at priority 10 "
             "(highest), the prompt is routed to a local Ollama model and "
             "never reaches any external provider. The matched secret is "
@@ -196,7 +196,7 @@ def test_scenario_cursor_implement_feature(scenario_collector):
         title="Cursor: implement feature → code chain → Ollama → fallback to Codex",
         cli="cursor",
         narrative=(
-            "A developer in Cursor asks Tessera to implement rate limiting "
+            "A developer in Cursor asks Chuzom to implement rate limiting "
             "for an API endpoint. Code signal fires. Ollama is tried first "
             "but the local model times out on the longer prompt; the "
             "selector falls through to the user's Codex subscription "
@@ -212,7 +212,7 @@ def test_scenario_cursor_implement_feature(scenario_collector):
         "Use a sliding window of 100 requests per minute per IP."
     )
     s.user("submitted feature request in Cursor", chars=len(prompt))
-    s.host("Cursor passed prompt to mcp__tessera__llm_code")
+    s.host("Cursor passed prompt to mcp__chuzom__llm_code")
     s.hook("auto-route classified", task_type="code", complexity="moderate")
 
     scores, decision = _evaluate(prompt)

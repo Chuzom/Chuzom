@@ -2,7 +2,7 @@
 
 import pytest
 
-from tessera.quality_feedback import (
+from chuzom.quality_feedback import (
     QUALITY_THRESHOLD,
     ModelQuality,
     get_model_quality,

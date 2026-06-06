@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tessera.commands.status import (
+from chuzom.commands.status import (
     cmd_status,
     _savings_bar,
     _query_routing_period,
@@ -28,7 +28,7 @@ class TestCmdStatus:
                 result = cmd_status([])
         assert result == 0
         captured = capsys.readouterr()
-        assert "tessera status" in captured.out
+        assert "chuzom status" in captured.out
 
     def test_cmd_status_with_invalid_args(self):
         """cmd_status with invalid args should return 0 (ignores extra args)."""
@@ -45,7 +45,7 @@ class TestCmdStatus:
             with patch("os.path.exists", return_value=False):
                 cmd_status([])
         captured = capsys.readouterr()
-        assert "tessera status" in captured.out
+        assert "chuzom status" in captured.out
         assert "Claude Code subscription" in captured.out
 
     def test_cmd_status_no_usage_db(self, capsys):
@@ -233,9 +233,9 @@ class TestStatusIntegration:
             with patch("os.path.exists", return_value=False):
                 cmd_status([])
         captured = capsys.readouterr()
-        assert "tessera update" in captured.out
-        assert "tessera doctor" in captured.out
-        assert "tessera dashboard" in captured.out
+        assert "chuzom update" in captured.out
+        assert "chuzom doctor" in captured.out
+        assert "chuzom dashboard" in captured.out
 
     def test_status_handles_missing_pressure_data(self, capsys):
         """status should handle missing subscription pressure data gracefully."""
@@ -245,6 +245,6 @@ class TestStatusIntegration:
                 with patch("builtins.open", side_effect=FileNotFoundError):
                     cmd_status([])
         captured = capsys.readouterr()
-        assert "tessera status" in captured.out
+        assert "chuzom status" in captured.out
         # Should show the warning about missing data
         assert "no data" in captured.out.lower() or "run" in captured.out.lower()

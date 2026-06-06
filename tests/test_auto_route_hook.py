@@ -11,14 +11,14 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOK_PATH = ROOT / "src" / "tessera" / "hooks" / "auto-route.py"
+HOOK_PATH = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"
 
 
 def _hook_env(home_dir: Path, extra_env: dict[str, str] | None = None) -> dict[str, str]:
     env = os.environ.copy()
     env["HOME"] = str(home_dir)
-    env["TESSERA_DISABLE_LLM_CLASSIFIERS"] = "1"
-    env["TESSERA_DIRECT_EXECUTION"] = "0"  # Disable direct execution — test classification only
+    env["CHUZOM_DISABLE_LLM_CLASSIFIERS"] = "1"
+    env["CHUZOM_DIRECT_EXECUTION"] = "0"  # Disable direct execution — test classification only
     env["OPENAI_API_KEY"] = ""
     env["GEMINI_API_KEY"] = ""
     env["GOOGLE_API_KEY"] = ""
@@ -34,7 +34,7 @@ def run_hook(
     extra_env: dict[str, str] | None = None,
 ) -> dict | None:
     """Run the hook script with a prompt and return parsed output."""
-    with tempfile.TemporaryDirectory(prefix="tessera-hook-test-") as tmp_home:
+    with tempfile.TemporaryDirectory(prefix="chuzom-hook-test-") as tmp_home:
         effective_home = home_dir or Path(tmp_home)
         payload = json.dumps({"prompt": prompt, "session_id": session_id or ""})
         result = subprocess.run(
@@ -56,10 +56,10 @@ def run_hook_with_last_route(
     last_tool: str = "llm_code",
 ) -> dict | None:
     """Run the hook with a pre-seeded last_route file to test context inheritance."""
-    with tempfile.TemporaryDirectory(prefix="tessera-hook-test-") as tmp_home:
+    with tempfile.TemporaryDirectory(prefix="chuzom-hook-test-") as tmp_home:
         home_dir = Path(tmp_home)
         session_id = f"test-session-{int(time.time() * 1000)}"
-        router_dir = home_dir / ".tessera"
+        router_dir = home_dir / ".chuzom"
         router_dir.mkdir(parents=True, exist_ok=True)
         last_route_path = router_dir / f"last_route_{session_id}.json"
         try:
@@ -77,7 +77,7 @@ def run_hook_with_last_route(
 def _extract_hint(output: dict) -> str:
     """Extract routing hint from hook output.
 
-    With TESSERA_DIRECT_EXECUTION=0, always returns hookSpecificOutput format.
+    With CHUZOM_DIRECT_EXECUTION=0, always returns hookSpecificOutput format.
     Falls back to decision:block format if direct execution is somehow active.
 
     v9.3.0 — Tolerates both contextForAgent (Claude Code, high priority) and
@@ -311,7 +311,7 @@ class TestZeroClaudeMode:
         out = run_hook(
             "What kinds of routings can I get?",
             session_id="zero-claude",
-            extra_env={"TESSERA_ZERO_CLAUDE": "true"},
+            extra_env={"CHUZOM_ZERO_CLAUDE": "true"},
         )
         assert out is not None
         assert out["decision"] == "block"
@@ -323,7 +323,7 @@ class TestZeroClaudeMode:
         out = run_hook(
             "great, now explain what kind of routings can I get?",
             session_id="zero-continuation",
-            extra_env={"TESSERA_ZERO_CLAUDE": "true"},
+            extra_env={"CHUZOM_ZERO_CLAUDE": "true"},
         )
         assert out is not None
         assert out["decision"] == "block"
@@ -333,7 +333,7 @@ class TestZeroClaudeMode:
         out = run_hook(
             "claude: review this using the native host agent",
             session_id="zero-explicit",
-            extra_env={"TESSERA_ZERO_CLAUDE": "true"},
+            extra_env={"CHUZOM_ZERO_CLAUDE": "true"},
         )
         assert out is None
 
@@ -341,7 +341,7 @@ class TestZeroClaudeMode:
         out = run_hook(
             "/help",
             session_id="zero-slash",
-            extra_env={"TESSERA_ZERO_CLAUDE": "true"},
+            extra_env={"CHUZOM_ZERO_CLAUDE": "true"},
         )
         assert out is not None
         assert out["decision"] == "block"
@@ -350,12 +350,12 @@ class TestZeroClaudeMode:
         out = run_hook(
             "  \n\t  ",
             session_id="zero-whitespace",
-            extra_env={"TESSERA_ZERO_CLAUDE": "true"},
+            extra_env={"CHUZOM_ZERO_CLAUDE": "true"},
         )
         assert out is None
 
     def test_routing_yaml_enables_strict_mode(self, tmp_path):
-        router_dir = tmp_path / ".tessera"
+        router_dir = tmp_path / ".chuzom"
         router_dir.mkdir()
         (router_dir / "routing.yaml").write_text("enforce: smart\nmode: zero_claude\n")
         out = run_hook(
@@ -420,10 +420,10 @@ class TestShortCodeFollowup:
 
     def test_stale_last_route_not_inherited(self):
         """Expired last_route (>30 min) is not used for context inheritance."""
-        with tempfile.TemporaryDirectory(prefix="tessera-hook-test-") as tmp_home:
+        with tempfile.TemporaryDirectory(prefix="chuzom-hook-test-") as tmp_home:
             home_dir = Path(tmp_home)
             session_id = f"test-stale-{int(time.time() * 1000)}"
-            router_dir = home_dir / ".tessera"
+            router_dir = home_dir / ".chuzom"
             router_dir.mkdir(parents=True, exist_ok=True)
             last_route_path = router_dir / f"last_route_{session_id}.json"
             try:

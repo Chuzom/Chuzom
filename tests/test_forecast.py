@@ -3,12 +3,12 @@
 import pytest
 from datetime import datetime, timedelta
 
-from tessera.forecast import BurnForecast, get_burn_forecast
+from chuzom.forecast import BurnForecast, get_burn_forecast
 
 
 async def _insert_usage_data(provider: str, days: int, cost_per_day: float = 0.01):
     """Helper to insert usage data with specific timestamps."""
-    from tessera import cost
+    from chuzom import cost
 
     db = await cost._get_db()
     try:

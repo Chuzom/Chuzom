@@ -6,12 +6,12 @@
   "version": "0.0.2",
   "plugins": [
     {
-      "name": "tessera",
+      "name": "chuzom",
       "description": "Route every Droid task to the cheapest capable model across 20+ AI providers. Tracks cross-session savings, enforces routing policy, and sends weekly Slack digests.",
       "version": "0.0.2",
       "source": {
         "source": "github",
-        "repo": "ypollak2/tessera"
+        "repo": "ypollak2/chuzom"
       }
     }
   ]

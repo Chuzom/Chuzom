@@ -1,12 +1,12 @@
-"""Tests for tessera sidecar service."""
+"""Tests for chuzom sidecar service."""
 
 
 
 def test_service_modules_exist():
     """Verify service modules are importable."""
-    from tessera.service import app, ClassifyRequest, ClassifyResponse
-    from tessera.service_manager import start_service, stop_service
-    from tessera.hook_client import classify_prompt
+    from chuzom.service import app, ClassifyRequest, ClassifyResponse
+    from chuzom.service_manager import start_service, stop_service
+    from chuzom.hook_client import classify_prompt
     
     assert app is not None
     assert ClassifyRequest is not None
@@ -18,7 +18,7 @@ def test_service_modules_exist():
 
 def test_heuristic_classifier():
     """Test heuristic classification without service."""
-    from tessera.service import _heuristic_classify
+    from chuzom.service import _heuristic_classify
     
     # Query detection
     task_type, score = _heuristic_classify("what does os.path.join do?")
@@ -35,11 +35,11 @@ def test_heuristic_classifier():
 
 def test_infrastructure_detection():
     """Test that infrastructure tools are detected."""
-    from tessera.service import _is_infrastructure
+    from chuzom.service import _is_infrastructure
     
     # Should skip routing
     assert _is_infrastructure("mcp__plugin_serena_serena__read_file")
-    assert _is_infrastructure("mcp__tessera__llm_query")
+    assert _is_infrastructure("mcp__chuzom__llm_query")
     assert _is_infrastructure("Read")
     assert _is_infrastructure("Bash")
     
@@ -49,7 +49,7 @@ def test_infrastructure_detection():
 
 def test_confidence_scoring():
     """Test confidence scoring."""
-    from tessera.service import _score_confidence
+    from chuzom.service import _score_confidence
     
     # High confidence (heuristic score 8+)
     assert _score_confidence("query", "simple", 8) == "high"

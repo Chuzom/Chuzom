@@ -2,9 +2,9 @@
 
 Covers three modules:
 
-* ``tessera.benchmark`` — Protocol + plugin registry contracts.
-* ``tessera.policy_diff`` — head-model prediction and report diffing.
-* ``tessera.benchmark.regression`` — store / load / detect pipeline.
+* ``chuzom.benchmark`` — Protocol + plugin registry contracts.
+* ``chuzom.policy_diff`` — head-model prediction and report diffing.
+* ``chuzom.benchmark.regression`` — store / load / detect pipeline.
 
 The CLI wrappers (``commands/benchmark.py``, ``commands/policy.py``) are
 thin argparse adapters; the substance lives in the modules under test
@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from tessera.benchmark import (
+from chuzom.benchmark import (
     BenchmarkResult,
     Prediction,
     Prompt,
@@ -27,7 +27,7 @@ from tessera.benchmark import (
     list_runners,
     register_runner,
 )
-from tessera.benchmark.regression import (
+from chuzom.benchmark.regression import (
     DEFAULT_DROP_THRESHOLD,
     BenchmarkRunRecord,
     detect_regressions,
@@ -35,15 +35,15 @@ from tessera.benchmark.regression import (
     load_history,
     store_result,
 )
-from tessera.benchmark.runners.routerarena import RouterArenaRunner
-from tessera.policy import RoutingPolicy
-from tessera.policy_diff import (
+from chuzom.benchmark.runners.routerarena import RouterArenaRunner
+from chuzom.policy import RoutingPolicy
+from chuzom.policy_diff import (
     Sample,
     diff_policies,
     format_diff_report,
     predict_head_model,
 )
-from tessera.types import TaskType
+from chuzom.types import TaskType
 
 
 # ── Registry ────────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ def _policy(name: str, *, workhorses: list[str], specialists: dict[str, str] | N
 
 
 class _FakeManager:
-    """In-memory PolicyManager double for tests — avoids touching ~/.tessera."""
+    """In-memory PolicyManager double for tests — avoids touching ~/.chuzom."""
 
     def __init__(self, policies: dict[str, RoutingPolicy]) -> None:
         self._policies = policies
@@ -382,7 +382,7 @@ class TestRegressionStorage:
                 version=ver, policy="standard", benchmark="routerarena",
                 split="sub_10", score=score, n_samples=10,
             )
-        from tessera.benchmark.regression import build_report
+        from chuzom.benchmark.regression import build_report
         report = await build_report(
             policy="standard", benchmark="routerarena", split="sub_10",
         )

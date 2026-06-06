@@ -2,14 +2,14 @@
 
 Pre-v9.4.0 behaviour:
     `cc-usage-track.py` (PostToolUse[Agent]) wrote to a separate orphan DB,
-    ``~/.tessera/llm_usage.db``, with a stub schema (no baseline_model /
+    ``~/.chuzom/llm_usage.db``, with a stub schema (no baseline_model /
     potential_cost_usd / saved_usd columns). The dashboard never read that
     DB, so every Agent subagent call was effectively invisible to savings
     metrics — even though it's exactly the kind of call we want to credit
     against the subscription quota.
 
 Fix:
-    The hook now writes to the canonical ``~/.tessera/usage.db`` with the
+    The hook now writes to the canonical ``~/.chuzom/usage.db`` with the
     full schema, populating baseline_model + potential_cost_usd + saved_usd.
     Since subscription calls have cost_usd = 0, saved_usd equals the full
     counterfactual API cost.
@@ -33,7 +33,7 @@ def _load_hook():
     hook_path = (
         Path(__file__).parent.parent
         / "src"
-        / "tessera"
+        / "chuzom"
         / "hooks"
         / "cc-usage-track.py"
     )
@@ -45,9 +45,9 @@ def _load_hook():
 
 @pytest.fixture
 def temp_home(tmp_path, monkeypatch):
-    """Redirect ~/.tessera into a temp dir so the hook can't touch real data."""
+    """Redirect ~/.chuzom into a temp dir so the hook can't touch real data."""
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    (tmp_path / ".tessera").mkdir()
+    (tmp_path / ".chuzom").mkdir()
     return tmp_path
 
 
@@ -89,8 +89,8 @@ def test_hook_writes_to_canonical_usage_db(temp_home):
     """The hook must write to usage.db, NOT the orphan llm_usage.db."""
     _run_hook_with_payload(_agent_payload(), temp_home)
 
-    canonical = temp_home / ".tessera" / "usage.db"
-    orphan = temp_home / ".tessera" / "llm_usage.db"
+    canonical = temp_home / ".chuzom" / "usage.db"
+    orphan = temp_home / ".chuzom" / "llm_usage.db"
 
     assert canonical.exists(), "must write to usage.db"
     assert not orphan.exists(), "must NOT write to orphan llm_usage.db"
@@ -100,7 +100,7 @@ def test_hook_populates_baseline_and_savings(temp_home):
     """INSERT must populate baseline_model, potential_cost_usd, saved_usd."""
     _run_hook_with_payload(_agent_payload(subagent_type="Explore"), temp_home)
 
-    row = _select_row(temp_home / ".tessera" / "usage.db")
+    row = _select_row(temp_home / ".chuzom" / "usage.db")
     assert row is not None
     assert row["baseline_model"], "baseline_model must not be NULL/empty"
     assert row["potential_cost_usd"] > 0.0, "Explore call has tokens — baseline > 0"
@@ -111,7 +111,7 @@ def test_subscription_cost_is_zero(temp_home):
     """Claude Code is flat-rate — cost_usd must stay 0.0, savings equals baseline."""
     _run_hook_with_payload(_agent_payload(), temp_home)
 
-    row = _select_row(temp_home / ".tessera" / "usage.db")
+    row = _select_row(temp_home / ".chuzom" / "usage.db")
     assert row["cost_usd"] == 0.0
     assert row["saved_usd"] == row["potential_cost_usd"]
 
@@ -119,21 +119,21 @@ def test_subscription_cost_is_zero(temp_home):
 def test_explore_subagent_uses_haiku_baseline(temp_home):
     """Explore / general-purpose subagents are credited against Haiku."""
     _run_hook_with_payload(_agent_payload(subagent_type="Explore"), temp_home)
-    row = _select_row(temp_home / ".tessera" / "usage.db")
+    row = _select_row(temp_home / ".chuzom" / "usage.db")
     assert "haiku" in row["baseline_model"].lower()
 
 
 def test_default_subagent_uses_sonnet_baseline(temp_home):
     """Code/Plan/architect subagents are credited against Sonnet."""
     _run_hook_with_payload(_agent_payload(subagent_type="code-reviewer"), temp_home)
-    row = _select_row(temp_home / ".tessera" / "usage.db")
+    row = _select_row(temp_home / ".chuzom" / "usage.db")
     assert "sonnet" in row["baseline_model"].lower()
 
 
 def test_provider_is_cc(temp_home):
     """All CC-tracker rows must carry provider='cc' so the dashboard can group them."""
     _run_hook_with_payload(_agent_payload(), temp_home)
-    row = _select_row(temp_home / ".tessera" / "usage.db")
+    row = _select_row(temp_home / ".chuzom" / "usage.db")
     assert row["provider"] == "cc"
 
 
@@ -147,7 +147,7 @@ def test_non_agent_tool_is_ignored(temp_home):
     }
     _run_hook_with_payload(payload, temp_home)
 
-    canonical = temp_home / ".tessera" / "usage.db"
+    canonical = temp_home / ".chuzom" / "usage.db"
     # Either file doesn't exist OR has no usage rows
     if canonical.exists():
         conn = sqlite3.connect(str(canonical))

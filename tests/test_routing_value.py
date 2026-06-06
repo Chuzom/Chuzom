@@ -14,15 +14,15 @@ import time
 from unittest.mock import patch
 
 
-from tessera.health import ProviderHealth, HealthTracker, RATE_LIMIT_COOLDOWN_SECONDS
-from tessera.profiles import (
+from chuzom.health import ProviderHealth, HealthTracker, RATE_LIMIT_COOLDOWN_SECONDS
+from chuzom.profiles import (
     COMPLEXITY_TO_PROFILE,
     reorder_for_pressure,
     get_model_chain,
     provider_from_model,
 )
-from tessera.router import _reorder_for_agent_context
-from tessera.types import Complexity, RoutingProfile, TaskType
+from chuzom.router import _reorder_for_agent_context
+from chuzom.types import Complexity, RoutingProfile, TaskType
 
 
 class TestComplexityToProfileMapping:
@@ -196,7 +196,7 @@ class TestPressureBasedReordering:
             "openai/gpt-4o",
             "gemini/gemini-2.5-flash",
         ]
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
             result = reorder_for_pressure(chain, pressure=0.50, profile=RoutingProfile.BALANCED)
         assert result[0] == "anthropic/claude-sonnet-4-6"
 
@@ -207,7 +207,7 @@ class TestPressureBasedReordering:
             "openai/gpt-4o",
             "gemini/gemini-2.5-flash",   # cheap
         ]
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
             result = reorder_for_pressure(chain, pressure=0.90, profile=RoutingProfile.BALANCED)
         # Claude should NOT be first
         assert result[0] != "anthropic/claude-sonnet-4-6"
@@ -221,7 +221,7 @@ class TestPressureBasedReordering:
             "openai/gpt-4o",
             "gemini/gemini-2.5-flash",
         ]
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
             result = reorder_for_pressure(chain, pressure=0.99, profile=RoutingProfile.BALANCED)
         assert "anthropic/claude-opus-4-6" not in result
 
@@ -233,14 +233,14 @@ class TestPressureBasedReordering:
             "gemini/gemini-2.5-flash",
             "codex/gpt-5.4",
         ]
-        with patch("tessera.codex_agent.is_codex_available", return_value=True):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=True):
             result = reorder_for_pressure(chain, pressure=0.90, profile=RoutingProfile.BALANCED)
         assert result[0] == "codex/gpt-5.4"
 
     def test_at_critical_pressure_claude_haiku_removed_even_in_budget(self):
         """At ≥99% pressure, Haiku is removed from BUDGET chains too — quota is quota."""
         chain = ["anthropic/claude-haiku-4-5-20251001", "gemini/gemini-2.5-flash"]
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
             result = reorder_for_pressure(chain, pressure=0.99, profile=RoutingProfile.BUDGET)
         # Haiku is a Claude model and is excluded at the hard cap
         assert "anthropic/claude-haiku-4-5-20251001" not in result
@@ -257,7 +257,7 @@ class TestCircuitBreaker:
 
     def test_healthy_provider_is_healthy_by_default(self):
         health = ProviderHealth()
-        with patch("tessera.health.get_config") as mock_config:
+        with patch("chuzom.health.get_config") as mock_config:
             mock_config.return_value.health_failure_threshold = 2
             mock_config.return_value.health_cooldown_seconds = 30
             assert health.is_healthy() is True
@@ -266,7 +266,7 @@ class TestCircuitBreaker:
         health = ProviderHealth()
         health.record_failure()
         health.record_failure()
-        with patch("tessera.health.get_config") as mock_config:
+        with patch("chuzom.health.get_config") as mock_config:
             mock_config.return_value.health_failure_threshold = 2
             mock_config.return_value.health_cooldown_seconds = 30
             assert health.is_healthy() is False
@@ -275,7 +275,7 @@ class TestCircuitBreaker:
         health = ProviderHealth()
         health.record_failure()
         health.record_success()
-        with patch("tessera.health.get_config") as mock_config:
+        with patch("chuzom.health.get_config") as mock_config:
             mock_config.return_value.health_failure_threshold = 2
             mock_config.return_value.health_cooldown_seconds = 30
             assert health.is_healthy() is True
@@ -301,7 +301,7 @@ class TestCircuitBreaker:
     def test_health_tracker_isolates_providers(self):
         """Failures on one provider don't affect other providers' health."""
         tracker = HealthTracker()
-        with patch("tessera.health.get_config") as mock_config:
+        with patch("chuzom.health.get_config") as mock_config:
             mock_config.return_value.health_failure_threshold = 2
             mock_config.return_value.health_cooldown_seconds = 30
             tracker.record_failure("openai")
@@ -319,7 +319,7 @@ class TestCircuitBreaker:
 
     def test_status_string_for_healthy_provider(self):
         health = ProviderHealth()
-        with patch("tessera.health.get_config") as mock_config:
+        with patch("chuzom.health.get_config") as mock_config:
             mock_config.return_value.health_failure_threshold = 2
             mock_config.return_value.health_cooldown_seconds = 30
             assert health.status == "healthy"
@@ -328,7 +328,7 @@ class TestCircuitBreaker:
         health = ProviderHealth()
         health.record_failure()
         health.record_failure()
-        with patch("tessera.health.get_config") as mock_config:
+        with patch("chuzom.health.get_config") as mock_config:
             mock_config.return_value.health_failure_threshold = 2
             mock_config.return_value.health_cooldown_seconds = 30
             assert "failures=2" in health.status

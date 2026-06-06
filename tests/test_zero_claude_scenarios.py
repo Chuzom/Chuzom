@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOK_PATH = ROOT / "src" / "tessera" / "hooks" / "auto-route.py"
+HOOK_PATH = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"
 
 
 class _OllamaHandler(BaseHTTPRequestHandler):
@@ -60,7 +60,7 @@ def _run_zero_claude_hook(
     extra_payload: dict | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> dict | None:
-    router_dir = home_dir / ".tessera"
+    router_dir = home_dir / ".chuzom"
     router_dir.mkdir(exist_ok=True)
     (router_dir / "routing.yaml").write_text("enforce: smart\nmode: zero_claude\n")
 
@@ -73,7 +73,7 @@ def _run_zero_claude_hook(
         {
             "HOME": str(home_dir),
             "PYTHONPATH": str(ROOT / "src"),
-            "TESSERA_DISABLE_LLM_CLASSIFIERS": "1",
+            "CHUZOM_DISABLE_LLM_CLASSIFIERS": "1",
             "OLLAMA_BUDGET_MODELS": "scenario-model",
             "OPENAI_API_KEY": "",
             "GEMINI_API_KEY": "",
@@ -104,7 +104,7 @@ def test_simple_prompt_completes_via_external_direct_execution(
     out = _run_zero_claude_hook(
         "What is the quick definition of a REST API?",
         tmp_path,
-        extra_env={"TESSERA_OLLAMA_URL": endpoint},
+        extra_env={"CHUZOM_OLLAMA_URL": endpoint},
     )
 
     assert out is not None
@@ -126,7 +126,7 @@ def test_tool_task_fails_closed_when_external_agent_is_unavailable(tmp_path: Pat
     out = _run_zero_claude_hook(
         "Fix the bug in src/router.py and run its tests.",
         tmp_path,
-        extra_env={"TESSERA_OLLAMA_URL": "http://127.0.0.1:1"},
+        extra_env={"CHUZOM_OLLAMA_URL": "http://127.0.0.1:1"},
     )
 
     assert out is not None
@@ -140,7 +140,7 @@ def test_direct_failure_does_not_emit_a_native_route_instruction(tmp_path: Path)
     out = _run_zero_claude_hook(
         "What is the quick definition of a REST API?",
         tmp_path,
-        extra_env={"TESSERA_OLLAMA_URL": "http://127.0.0.1:1"},
+        extra_env={"CHUZOM_OLLAMA_URL": "http://127.0.0.1:1"},
     )
 
     assert out is not None

@@ -1,13 +1,13 @@
-# Tessera v0.0.2 — agent profile definitions
+# Chuzom v0.0.2 — agent profile definitions
 #
-# Each profile tells Tessera HOW to route on behalf of one type of agent.
+# Each profile tells Chuzom HOW to route on behalf of one type of agent.
 # Profiles are pure data: tier preference, signal boosts, preferred chain,
 # budget envelope. The agent runtime (Claude Code subagents, Agno, Hermes,
 # LangGraph, CrewAI, etc.) is responsible for the loop itself.
 #
 # Schema:
 #   id                  — stable identifier; agent runtimes pass this string
-#   description         — surfaced in tessera_agent_list
+#   description         — surfaced in chuzom_agent_list
 #   routing_profile:
 #     tier_preference   — ordered list: local | cheap | mid | premium
 #     signal_boosts     — {signal_name: multiplier} applied to signal scores

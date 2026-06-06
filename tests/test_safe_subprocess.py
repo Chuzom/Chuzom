@@ -11,7 +11,7 @@ class TestEnvironmentFiltering:
 
     def test_get_safe_env_removes_secrets(self):
         """get_safe_env removes common AI provider secret patterns."""
-        from tessera.safe_subprocess import get_safe_env
+        from chuzom.safe_subprocess import get_safe_env
         
         # Add test secrets to os.environ
         os.environ["TEST_OPENAI_API_KEY"] = "sk-123"
@@ -32,7 +32,7 @@ class TestEnvironmentFiltering:
 
     def test_is_sensitive_var_case_insensitive(self):
         """_is_sensitive_var is case-insensitive."""
-        from tessera.safe_subprocess import _is_sensitive_var
+        from chuzom.safe_subprocess import _is_sensitive_var
         assert _is_sensitive_var("openai_api_key") is True
         assert _is_sensitive_var("OPENAI_API_KEY") is True
 
@@ -44,7 +44,7 @@ class TestSubprocessSafety:
     async def test_async_exec_filters_env(self):
         """safe_subprocess_exec filters environment when running commands."""
         import sys
-        from tessera.safe_subprocess import safe_subprocess_exec
+        from chuzom.safe_subprocess import safe_subprocess_exec
 
         # Add a test API key
         os.environ["TEST_OPENAI_API_KEY"] = "secret-value"
@@ -67,7 +67,7 @@ class TestSubprocessSafety:
     def test_sync_run_filters_env(self):
         """safe_subprocess_run filters environment when running commands."""
         import sys
-        from tessera.safe_subprocess import safe_subprocess_run
+        from chuzom.safe_subprocess import safe_subprocess_run
 
         # Add a test API key
         os.environ["TEST_ANTHROPIC_API_KEY"] = "secret-value"

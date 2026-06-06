@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from tessera.response_validation import (
+from chuzom.response_validation import (
     LLMResponse,
     ResponseValidationError,
     StreamingResponse,

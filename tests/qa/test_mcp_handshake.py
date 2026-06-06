@@ -1,12 +1,12 @@
 """Live MCP stdio handshake tests — proves the server speaks the protocol.
 
-We spawn the Tessera MCP server as a subprocess and drive it via stdio
+We spawn the Chuzom MCP server as a subprocess and drive it via stdio
 using the official MCP Python SDK client. This is the only test surface
 that exercises the entire MCP protocol layer end-to-end without needing
 a real host CLI (Claude Code, Cursor, etc.) to be installed and
 restarted.
 
-If these tests pass, ANY MCP-compliant host can connect to Tessera. The
+If these tests pass, ANY MCP-compliant host can connect to Chuzom. The
 remaining host-specific risk (config-file location, restart behavior)
 is structural and covered by tests/integration/.
 
@@ -42,13 +42,13 @@ requires_mcp_client = pytest.mark.skipif(
 
 
 def _server_command() -> tuple[str, list[str]]:
-    """Pick the most reliable way to launch the tessera server.
+    """Pick the most reliable way to launch the chuzom server.
 
-    Prefer `python -m tessera.server` over the `tessera` shim — it avoids
+    Prefer `python -m chuzom.server` over the `chuzom` shim — it avoids
     PATH ambiguity when multiple Pythons are installed and works in any
-    venv that has tessera importable.
+    venv that has chuzom importable.
     """
-    return sys.executable, ["-m", "tessera.server"]
+    return sys.executable, ["-m", "chuzom.server"]
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ def _server_command() -> tuple[str, list[str]]:
 # ────────────────────────────────────────────────────────────────────────
 
 async def _list_tools_via_stdio() -> list[str]:
-    """Connect to a fresh tessera subprocess, run initialize + tools/list,
+    """Connect to a fresh chuzom subprocess, run initialize + tools/list,
     return tool names. Handles cleanup on every exit path."""
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -89,8 +89,8 @@ def test_mcp_initialize_succeeds():
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 result = await session.initialize()
-                assert result.serverInfo.name == "tessera", (
-                    f"Expected serverInfo.name='tessera', got {result.serverInfo.name!r}"
+                assert result.serverInfo.name == "chuzom", (
+                    f"Expected serverInfo.name='chuzom', got {result.serverInfo.name!r}"
                 )
 
     asyncio.run(asyncio.wait_for(run(), timeout=30))
@@ -114,7 +114,7 @@ def test_mcp_tools_include_text_tools():
     }
     missing = expected - set(tools)
     assert not missing, (
-        f"Tessera MCP server is missing text tools: {missing}. "
+        f"Chuzom MCP server is missing text tools: {missing}. "
         f"Got: {sorted(t for t in tools if t.startswith('llm_'))[:10]}..."
     )
 
@@ -134,12 +134,12 @@ def test_mcp_tools_include_agent_tools():
     wasn't called in server.py (a real gap I closed during this work)."""
     tools = asyncio.run(asyncio.wait_for(_list_tools_via_stdio(), timeout=30))
     expected = {
-        "tessera_agent_list",
-        "tessera_agent_start_session",
-        "tessera_agent_check_budget",
-        "tessera_agent_route",
-        "tessera_agent_complete_session",
-        "tessera_agent_lineage",
+        "chuzom_agent_list",
+        "chuzom_agent_start_session",
+        "chuzom_agent_check_budget",
+        "chuzom_agent_route",
+        "chuzom_agent_complete_session",
+        "chuzom_agent_lineage",
     }
     missing = expected - set(tools)
     assert not missing, (
@@ -220,7 +220,7 @@ def test_mcp_initialize_negotiates_protocol_version():
 
 @requires_mcp_client
 def test_mcp_call_agent_list_tool_returns_structured_result():
-    """End-to-end: call tessera_agent_list via MCP and verify the response
+    """End-to-end: call chuzom_agent_list via MCP and verify the response
     is a structured payload (proves the tool actually executes through
     the protocol, not just registers)."""
     async def run():
@@ -232,14 +232,14 @@ def test_mcp_call_agent_list_tool_returns_structured_result():
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                result = await session.call_tool("tessera_agent_list", arguments={})
+                result = await session.call_tool("chuzom_agent_list", arguments={})
                 return result
 
     result = asyncio.run(asyncio.wait_for(run(), timeout=30))
     assert result is not None
     # MCP returns either content items or structuredContent — check both
     assert result.content or result.structuredContent, (
-        "tessera_agent_list returned empty result"
+        "chuzom_agent_list returned empty result"
     )
 
 

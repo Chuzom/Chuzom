@@ -1,20 +1,20 @@
 {
-  "name": "tessera",
+  "name": "chuzom",
   "version": "0.0.2",
   "description": "Route every Droid task to the cheapest capable model across 20+ AI providers. Tracks cross-session savings, enforces routing policy, and sends weekly Slack digests.",
   "author": {
     "name": "ypollak2",
     "url": "https://github.com/ypollak2"
   },
-  "homepage": "https://github.com/ypollak2/tessera",
-  "repository": "https://github.com/ypollak2/tessera",
+  "homepage": "https://github.com/ypollak2/chuzom",
+  "repository": "https://github.com/ypollak2/chuzom",
   "license": "MIT",
   "skills": "skills/",
   "mcpServers": "mcp.json",
   "interface": {
     "displayName": "LLM Router",
     "shortDescription": "Smart LLM routing \u2014 cheapest capable model, every task",
-    "longDescription": "tessera is an MCP server that automatically routes prompts to the best-fit model from 20+ providers. Simple questions go to Gemini Flash or Haiku ($0.001); complex reasoning goes to o3 or GPT-4o only when needed. Tracks savings across sessions. Works with Factory Droid, Claude Code, Codex CLI, and GitHub Copilot.",
+    "longDescription": "chuzom is an MCP server that automatically routes prompts to the best-fit model from 20+ providers. Simple questions go to Gemini Flash or Haiku ($0.001); complex reasoning goes to o3 or GPT-4o only when needed. Tracks savings across sessions. Works with Factory Droid, Claude Code, Codex CLI, and GitHub Copilot.",
     "developerName": "ypollak2",
     "category": "Developer Tools",
     "capabilities": [
@@ -27,7 +27,7 @@
       "policy-engine"
     ],
     "defaultPrompt": [
-      "How much have I saved with tessera this week?",
+      "How much have I saved with chuzom this week?",
       "Route this task to the best model",
       "Show my routing policy"
     ],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.input_validation import (
+from chuzom.input_validation import (
     ValidationError,
     validate_complexity,
     validate_max_tokens,
@@ -12,7 +12,7 @@ from tessera.input_validation import (
     validate_task_type,
     validate_temperature,
 )
-from tessera.types import Complexity, TaskType
+from chuzom.types import Complexity, TaskType
 
 
 class TestTaskTypeValidation:

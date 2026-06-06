@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tessera.providers import call_llm_stream
+from chuzom.providers import call_llm_stream
 
 
 class MockDelta:
@@ -53,9 +53,9 @@ class TestCallLlmStream:
             return _mock_stream(*chunks)
 
         with (
-            patch("tessera.providers.litellm.acompletion", side_effect=mock_acompletion),
-            patch("tessera.providers.get_config") as mock_config,
-            patch("tessera.providers.litellm.completion_cost", return_value=0.001),
+            patch("chuzom.providers.litellm.acompletion", side_effect=mock_acompletion),
+            patch("chuzom.providers.get_config") as mock_config,
+            patch("chuzom.providers.litellm.completion_cost", return_value=0.001),
         ):
             mock_config.return_value.default_temperature = 0.7
             mock_config.return_value.default_max_tokens = 4096
@@ -93,9 +93,9 @@ class TestCallLlmStream:
             return _mock_stream(*chunks)
 
         with (
-            patch("tessera.providers.litellm.acompletion", side_effect=mock_acompletion),
-            patch("tessera.providers.get_config") as mock_config,
-            patch("tessera.providers.litellm.completion_cost", return_value=0.0),
+            patch("chuzom.providers.litellm.acompletion", side_effect=mock_acompletion),
+            patch("chuzom.providers.get_config") as mock_config,
+            patch("chuzom.providers.litellm.completion_cost", return_value=0.0),
         ):
             mock_config.return_value.default_temperature = 0.7
             mock_config.return_value.default_max_tokens = 4096
@@ -116,9 +116,9 @@ class TestCallLlmStream:
             return _mock_stream()
 
         with (
-            patch("tessera.providers.litellm.acompletion", side_effect=mock_acompletion),
-            patch("tessera.providers.get_config") as mock_config,
-            patch("tessera.providers.litellm.completion_cost", return_value=0.0),
+            patch("chuzom.providers.litellm.acompletion", side_effect=mock_acompletion),
+            patch("chuzom.providers.get_config") as mock_config,
+            patch("chuzom.providers.litellm.completion_cost", return_value=0.0),
         ):
             mock_config.return_value.default_temperature = 0.7
             mock_config.return_value.default_max_tokens = 4096
@@ -143,9 +143,9 @@ class TestCallLlmStream:
             return _mock_stream(*chunks)
 
         with (
-            patch("tessera.providers.litellm.acompletion", side_effect=mock_acompletion),
-            patch("tessera.providers.get_config") as mock_config,
-            patch("tessera.providers.litellm.completion_cost", side_effect=Exception("no cost data")),
+            patch("chuzom.providers.litellm.acompletion", side_effect=mock_acompletion),
+            patch("chuzom.providers.get_config") as mock_config,
+            patch("chuzom.providers.litellm.completion_cost", side_effect=Exception("no cost data")),
         ):
             mock_config.return_value.default_temperature = 0.7
             mock_config.return_value.default_max_tokens = 4096

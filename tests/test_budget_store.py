@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tessera.budget_store import (
+from chuzom.budget_store import (
     get_cap,
     get_caps,
     remove_cap,
@@ -20,8 +20,8 @@ from tessera.budget_store import (
 def isolated_budgets(tmp_path, monkeypatch):
     """Redirect budgets.json to a tmp path for every test."""
     fake_file = tmp_path / "budgets.json"
-    monkeypatch.setattr("tessera.budget_store._BUDGETS_FILE", fake_file)
-    monkeypatch.setattr("tessera.budget_store._ROUTER_DIR", tmp_path)
+    monkeypatch.setattr("chuzom.budget_store._BUDGETS_FILE", fake_file)
+    monkeypatch.setattr("chuzom.budget_store._ROUTER_DIR", tmp_path)
     yield fake_file
 
 
@@ -87,8 +87,8 @@ class TestSetCap:
         """Verify atomic write: tmp file is cleaned up after rename."""
         caps = {"openai": 20.0}
         target = tmp_path / "budgets.json"
-        with patch("tessera.budget_store._BUDGETS_FILE", target), \
-             patch("tessera.budget_store._ROUTER_DIR", tmp_path):
+        with patch("chuzom.budget_store._BUDGETS_FILE", target), \
+             patch("chuzom.budget_store._ROUTER_DIR", tmp_path):
             _write_atomic(caps)
         assert target.exists()
         tmp = target.with_suffix(".json.tmp")
@@ -131,13 +131,13 @@ class TestGetCap:
 
 class TestBudgetIntegration:
     def test_store_cap_overrides_env_var(self, monkeypatch):
-        """budget_store cap must take priority over TESSERA_BUDGET_OPENAI env var."""
-        monkeypatch.setenv("TESSERA_BUDGET_OPENAI", "5.0")
+        """budget_store cap must take priority over CHUZOM_BUDGET_OPENAI env var."""
+        monkeypatch.setenv("CHUZOM_BUDGET_OPENAI", "5.0")
         set_cap("openai", 30.0)
 
-        from tessera.budget import _get_cap
-        from tessera.config import get_config
-        import tessera.config as _cfg
+        from chuzom.budget import _get_cap
+        from chuzom.config import get_config
+        import chuzom.config as _cfg
         _cfg._config = None  # force reload
         cfg = get_config()
         result = _get_cap("openai", cfg)
@@ -145,10 +145,10 @@ class TestBudgetIntegration:
 
     def test_env_var_used_when_no_store_cap(self, monkeypatch):
         """When no budget_store cap, env var cap should be returned."""
-        monkeypatch.setenv("TESSERA_BUDGET_OPENAI", "7.5")
-        from tessera.budget import _get_cap
-        from tessera.config import get_config
-        import tessera.config as _cfg
+        monkeypatch.setenv("CHUZOM_BUDGET_OPENAI", "7.5")
+        from chuzom.budget import _get_cap
+        from chuzom.config import get_config
+        import chuzom.config as _cfg
         _cfg._config = None
         cfg = get_config()
         result = _get_cap("openai", cfg)

@@ -13,19 +13,19 @@ from pathlib import Path
 
 import pytest
 
-from tessera.agents import (
+from chuzom.agents import (
     BudgetExceeded,
     SessionState,
     SessionStore,
 )
-from tessera.lineage import (
+from chuzom.lineage import (
     Inversion,
     LineageStore,
     Tier,
     detect_inversion,
     make_record,
 )
-from tessera.signals.pii import PiiSignal
+from chuzom.signals.pii import PiiSignal
 
 
 # ────────────────────────────────────────────────────────────────────────

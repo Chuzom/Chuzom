@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.hooks.agent_loop import execute_tool, _resolve_path
+from chuzom.hooks.agent_loop import execute_tool, _resolve_path
 
 
 # ── Path Safety ──────────────────────────────────────────────────────────────

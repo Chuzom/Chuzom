@@ -3,8 +3,8 @@
 
 import pytest
 
-from tessera import cost
-from tessera.types import LLMResponse, RoutingProfile, TaskType
+from chuzom import cost
+from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
 
 @pytest.mark.asyncio
@@ -34,14 +34,14 @@ async def test_empty_usage(temp_db):
 
 @pytest.mark.asyncio
 async def test_log_usage_rejects_stub_shapes_when_not_allowed(temp_db, monkeypatch):
-    """Regression: unisolated tests must not pollute ~/.tessera/usage.db.
+    """Regression: unisolated tests must not pollute ~/.chuzom/usage.db.
 
     The guard in log_usage rejects LLMResponse instances matching the exact
     synthetic shape used in test fixtures (100/50/$0.003, 100/100/$0.001)
-    unless TESSERA_ALLOW_STUBS=1. The temp_db fixture sets that env var,
+    unless CHUZOM_ALLOW_STUBS=1. The temp_db fixture sets that env var,
     so we must explicitly unset it here to exercise the guard.
     """
-    monkeypatch.delenv("TESSERA_ALLOW_STUBS", raising=False)
+    monkeypatch.delenv("CHUZOM_ALLOW_STUBS", raising=False)
 
     for in_t, out_t, cost_v in [(100, 50, 0.003), (100, 100, 0.001), (100, 50, 0.001), (100, 100, 0.003)]:
         resp = LLMResponse(
@@ -61,7 +61,7 @@ async def test_log_usage_rejects_stub_shapes_when_not_allowed(temp_db, monkeypat
 
 @pytest.mark.asyncio
 async def test_log_usage_allows_stub_shapes_in_temp_db(temp_db):
-    """Stub shapes are allowed when TESSERA_ALLOW_STUBS=1 (set by temp_db)."""
+    """Stub shapes are allowed when CHUZOM_ALLOW_STUBS=1 (set by temp_db)."""
     resp = LLMResponse(
         content="ok",
         model="openai/gpt-4o-mini",
@@ -81,7 +81,7 @@ async def test_log_usage_allows_stub_shapes_in_temp_db(temp_db):
 @pytest.mark.asyncio
 async def test_log_usage_allows_real_shapes_when_guard_active(temp_db, monkeypatch):
     """Real (non-stub) token shapes pass the guard even without the override."""
-    monkeypatch.delenv("TESSERA_ALLOW_STUBS", raising=False)
+    monkeypatch.delenv("CHUZOM_ALLOW_STUBS", raising=False)
 
     resp = LLMResponse(
         content="real response",
@@ -121,7 +121,7 @@ async def test_multiple_entries(temp_db):
 @pytest.mark.asyncio
 async def test_migration_idempotent(temp_db):
     """Running _get_db() twice on the same DB must not raise OperationalError."""
-    import tessera.config as _cfg
+    import chuzom.config as _cfg
     _cfg._config = None  # force reload with temp_db env vars
     # First open — creates schema + runs migrations
     db1 = await cost._get_db()
@@ -135,7 +135,7 @@ async def test_migration_idempotent(temp_db):
 @pytest.mark.asyncio
 async def test_column_exists_helper(temp_db):
     """_column_exists returns True for existing columns, False for missing ones."""
-    import tessera.config as _cfg
+    import chuzom.config as _cfg
     _cfg._config = None
     db = await cost._get_db()
     assert await cost._column_exists(db, "usage", "cost_usd") is True
@@ -147,7 +147,7 @@ async def test_column_exists_helper(temp_db):
 @pytest.mark.asyncio
 async def test_column_exists_rejects_sql_injection(temp_db):
     """_column_exists rejects malicious table names to prevent SQL injection."""
-    import tessera.config as _cfg
+    import chuzom.config as _cfg
     _cfg._config = None
     db = await cost._get_db()
     
@@ -277,14 +277,14 @@ async def test_today_filter_uses_localtime(temp_db):
     # Read the actual session-end.py to verify the fix is in place
     from pathlib import Path
     project_root = Path(__file__).parent.parent
-    session_end_path = project_root / "src" / "tessera" / "hooks" / "session-end.py"
+    session_end_path = project_root / "src" / "chuzom" / "hooks" / "session-end.py"
     with open(session_end_path, 'r') as f:
         content = f.read()
         assert expected_today_where in content, \
             "session-end.py should use localtime in _PERIODS for 'today'"
 
     # Also verify in cost.py
-    cost_path = project_root / "src" / "tessera" / "cost.py"
+    cost_path = project_root / "src" / "chuzom" / "cost.py"
     with open(cost_path, 'r') as f:
         content = f.read()
         # Should have multiple occurrences in get_usage_summary, get_daily_claude_tokens, etc.

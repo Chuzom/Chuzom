@@ -34,12 +34,12 @@ import pytest
 
 FRAMEWORKS = [
     # (module_name, adapter_class_name, expected_name, expected_available_flag)
-    ("tessera.frameworks.hermes",            "HermesAdapter",            "hermes",            "HERMES_AVAILABLE"),
-    ("tessera.frameworks.langgraph",         "LangGraphAdapter",         "langgraph",         "LANGGRAPH_AVAILABLE"),
-    ("tessera.frameworks.crewai",            "CrewAIAdapter",            "crewai",            "CREWAI_AVAILABLE"),
-    ("tessera.frameworks.openai_agents",     "OpenAIAgentsAdapter",      "openai-agents",     "OPENAI_AGENTS_AVAILABLE"),
-    ("tessera.frameworks.claude_agent_sdk",  "ClaudeAgentSdkAdapter",    "claude-agent-sdk",  "CLAUDE_AGENT_SDK_AVAILABLE"),
-    ("tessera.frameworks.pydantic_ai",       "PydanticAiAdapter",        "pydantic-ai",       "PYDANTIC_AI_AVAILABLE"),
+    ("chuzom.frameworks.hermes",            "HermesAdapter",            "hermes",            "HERMES_AVAILABLE"),
+    ("chuzom.frameworks.langgraph",         "LangGraphAdapter",         "langgraph",         "LANGGRAPH_AVAILABLE"),
+    ("chuzom.frameworks.crewai",            "CrewAIAdapter",            "crewai",            "CREWAI_AVAILABLE"),
+    ("chuzom.frameworks.openai_agents",     "OpenAIAgentsAdapter",      "openai-agents",     "OPENAI_AGENTS_AVAILABLE"),
+    ("chuzom.frameworks.claude_agent_sdk",  "ClaudeAgentSdkAdapter",    "claude-agent-sdk",  "CLAUDE_AGENT_SDK_AVAILABLE"),
+    ("chuzom.frameworks.pydantic_ai",       "PydanticAiAdapter",        "pydantic-ai",       "PYDANTIC_AI_AVAILABLE"),
 ]
 
 
@@ -211,7 +211,7 @@ def test_detect_agent_id_on_bare_object_returns_none(
 
 def test_crewai_detect_agent_id_reads_role():
     """CrewAI agents have `.role`, not `.name` — adapter-specific behavior."""
-    from tessera.frameworks.crewai import CrewAIAdapter
+    from chuzom.frameworks.crewai import CrewAIAdapter
 
     @dataclass
     class _CrewAgent:
@@ -224,7 +224,7 @@ def test_crewai_detect_agent_id_reads_role():
 
 def test_openai_agents_detect_agent_id_reads_name():
     """OpenAI Agents SDK uses `.name` on Agent objects."""
-    from tessera.frameworks.openai_agents import OpenAIAgentsAdapter
+    from chuzom.frameworks.openai_agents import OpenAIAgentsAdapter
 
     adapter = OpenAIAgentsAdapter()
     result = adapter.detect_agent_id(_FakeAgent(name="researcher"))
@@ -233,7 +233,7 @@ def test_openai_agents_detect_agent_id_reads_name():
 
 def test_pydantic_ai_detect_agent_id_reads_name():
     """Pydantic AI Agent objects have `.name`."""
-    from tessera.frameworks.pydantic_ai import PydanticAiAdapter
+    from chuzom.frameworks.pydantic_ai import PydanticAiAdapter
 
     adapter = PydanticAiAdapter()
     result = adapter.detect_agent_id(_FakeAgent(name="analyzer"))
@@ -328,7 +328,7 @@ def test_lineage_accepts_framework_slug(
     tmp_path
 ):
     """LineageStore.by_framework(slug) must work for every advertised slug."""
-    from tessera.lineage import LineageStore, make_record
+    from chuzom.lineage import LineageStore, make_record
 
     store = LineageStore(db_path=tmp_path / "lineage.db")
     rec = make_record(
@@ -361,7 +361,7 @@ def test_session_store_accepts_framework_slug(
     tmp_path
 ):
     """SessionStore.create(framework=slug) must work for every adapter."""
-    from tessera.agents import SessionStore
+    from chuzom.agents import SessionStore
 
     store = SessionStore(db_path=tmp_path / "s.db")
     s = store.create(agent_id="x", budget_usd=1.0, framework=expected_name)

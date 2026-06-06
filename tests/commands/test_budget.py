@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tessera.commands.budget import cmd_budget, _run_budget
+from chuzom.commands.budget import cmd_budget, _run_budget
 
 
 class TestCmdBudget:
@@ -14,31 +14,31 @@ class TestCmdBudget:
 
     def test_cmd_budget_returns_zero(self):
         """cmd_budget should return 0."""
-        with patch("tessera.commands.budget._run_budget"):
+        with patch("chuzom.commands.budget._run_budget"):
             result = cmd_budget([])
         assert result == 0
 
     def test_cmd_budget_with_list_subcommand(self):
         """cmd_budget with 'list' should call _run_budget."""
-        with patch("tessera.commands.budget._run_budget") as mock_run:
+        with patch("chuzom.commands.budget._run_budget") as mock_run:
             cmd_budget(["list"])
         mock_run.assert_called_once_with("list", [])
 
     def test_cmd_budget_with_set_subcommand(self):
         """cmd_budget with 'set' should call _run_budget."""
-        with patch("tessera.commands.budget._run_budget") as mock_run:
+        with patch("chuzom.commands.budget._run_budget") as mock_run:
             cmd_budget(["set", "openai", "50.00"])
         mock_run.assert_called_once_with("set", ["openai", "50.00"])
 
     def test_cmd_budget_with_remove_subcommand(self):
         """cmd_budget with 'remove' should call _run_budget."""
-        with patch("tessera.commands.budget._run_budget") as mock_run:
+        with patch("chuzom.commands.budget._run_budget") as mock_run:
             cmd_budget(["remove", "openai"])
         mock_run.assert_called_once_with("remove", ["openai"])
 
     def test_cmd_budget_no_args_defaults_to_list(self):
         """cmd_budget with no args should call _run_budget with 'list'."""
-        with patch("tessera.commands.budget._run_budget") as mock_run:
+        with patch("chuzom.commands.budget._run_budget") as mock_run:
             cmd_budget([])
         mock_run.assert_called_once_with("list", [])
 
@@ -48,8 +48,8 @@ class TestBudgetList:
 
     def test_budget_list_displays_header(self, capsys):
         """budget list should display header."""
-        with patch("tessera.budget.get_all_budget_states") as mock_states:
-            with patch("tessera.budget_store.list_caps") as mock_caps:
+        with patch("chuzom.budget.get_all_budget_states") as mock_states:
+            with patch("chuzom.budget_store.list_caps") as mock_caps:
                 # Mock empty budget state
                 mock_states.return_value = {}
                 mock_caps.return_value = {}
@@ -57,15 +57,15 @@ class TestBudgetList:
                 _run_budget("list", [])
 
         captured = capsys.readouterr()
-        assert "[tessera] Budget Caps" in captured.out
+        assert "[chuzom] Budget Caps" in captured.out
         assert "Provider" in captured.out
         assert "Spend" in captured.out
         assert "Cap" in captured.out
 
     def test_budget_list_with_providers(self, capsys):
         """budget list should display provider information."""
-        with patch("tessera.budget.get_all_budget_states") as mock_states:
-            with patch("tessera.budget_store.list_caps") as mock_caps:
+        with patch("chuzom.budget.get_all_budget_states") as mock_states:
+            with patch("chuzom.budget_store.list_caps") as mock_caps:
                 # Create mock budget states
                 state_openai = MagicMock()
                 state_openai.spend_usd = 15.50
@@ -93,8 +93,8 @@ class TestBudgetList:
 
     def test_budget_list_with_uncapped_providers(self, capsys):
         """budget list should show alert for uncapped providers."""
-        with patch("tessera.budget.get_all_budget_states") as mock_states:
-            with patch("tessera.budget_store.list_caps") as mock_caps:
+        with patch("chuzom.budget.get_all_budget_states") as mock_states:
+            with patch("chuzom.budget_store.list_caps") as mock_caps:
                 state_openai = MagicMock()
                 state_openai.spend_usd = 5.0
                 state_openai.cap_usd = 0.0
@@ -107,7 +107,7 @@ class TestBudgetList:
 
         captured = capsys.readouterr()
         assert "No cap set for: openai" in captured.out
-        assert "Set one: tessera budget set" in captured.out
+        assert "Set one: chuzom budget set" in captured.out
 
 
 class TestBudgetSet:
@@ -133,8 +133,8 @@ class TestBudgetSet:
 
     def test_budget_set_valid_amount(self, capsys):
         """budget set with valid amount should set the cap."""
-        with patch("tessera.budget_store.set_cap") as mock_set:
-            with patch("tessera.budget.invalidate_cache") as mock_inv:
+        with patch("chuzom.budget_store.set_cap") as mock_set:
+            with patch("chuzom.budget.invalidate_cache") as mock_inv:
                 _run_budget("set", ["openai", "50.00"])
 
         mock_set.assert_called_once_with("openai", 50.0)
@@ -147,7 +147,7 @@ class TestBudgetSet:
 
     def test_budget_set_invalid_provider(self, capsys):
         """budget set with invalid provider should show error."""
-        with patch("tessera.budget_store.set_cap") as mock_set:
+        with patch("chuzom.budget_store.set_cap") as mock_set:
             mock_set.side_effect = ValueError("Unknown provider")
             with pytest.raises(SystemExit) as exc_info:
                 _run_budget("set", ["invalid", "50.00"])
@@ -165,8 +165,8 @@ class TestBudgetRemove:
 
     def test_budget_remove_existing_cap(self, capsys):
         """budget remove with existing cap should remove it."""
-        with patch("tessera.budget_store.remove_cap") as mock_remove:
-            with patch("tessera.budget.invalidate_cache") as mock_inv:
+        with patch("chuzom.budget_store.remove_cap") as mock_remove:
+            with patch("chuzom.budget.invalidate_cache") as mock_inv:
                 mock_remove.return_value = True
                 _run_budget("remove", ["openai"])
 
@@ -178,8 +178,8 @@ class TestBudgetRemove:
 
     def test_budget_remove_nonexistent_cap(self, capsys):
         """budget remove with nonexistent cap should show warning."""
-        with patch("tessera.budget_store.remove_cap") as mock_remove:
-            with patch("tessera.budget.invalidate_cache"):
+        with patch("chuzom.budget_store.remove_cap") as mock_remove:
+            with patch("chuzom.budget.invalidate_cache"):
                 mock_remove.return_value = False
                 _run_budget("remove", ["openai"])
 
@@ -192,14 +192,14 @@ class TestBudgetIntegration:
 
     def test_cmd_budget_command_basic(self):
         """cmd_budget should execute and return 0."""
-        with patch("tessera.commands.budget._run_budget"):
+        with patch("chuzom.commands.budget._run_budget"):
             result = cmd_budget(["list"])
         assert result == 0
 
     def test_cmd_budget_set_integration(self):
         """cmd_budget set should dispatch correctly."""
-        with patch("tessera.budget_store.set_cap") as mock_set:
-            with patch("tessera.budget.invalidate_cache"):
+        with patch("chuzom.budget_store.set_cap") as mock_set:
+            with patch("chuzom.budget.invalidate_cache"):
                 result = cmd_budget(["set", "openai", "100.00"])
 
         assert result == 0

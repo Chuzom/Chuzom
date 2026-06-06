@@ -15,7 +15,7 @@ from unittest import mock
 
 import pytest
 
-from tessera.monitoring.periodic import (
+from chuzom.monitoring.periodic import (
     analyze_session_trends,
     cleanup_old_snapshots,
     format_trend_summary,
@@ -75,12 +75,12 @@ async def test_take_session_snapshot_basic(sample_decisions, sample_corrections)
     start = datetime(2026, 4, 17, 14, 30, tzinfo=timezone.utc)
     end = datetime(2026, 4, 17, 14, 32, tzinfo=timezone.utc)
 
-    with mock.patch("tessera.monitoring.periodic.fetch_session_decisions") as mock_fetch:
-        with mock.patch("tessera.monitoring.periodic.fetch_session_corrections") as mock_corr:
-            with mock.patch("tessera.monitoring.periodic.analyze_facts") as mock_facts:
-                with mock.patch("tessera.monitoring.periodic.analyze_gaps") as mock_gaps:
-                    with mock.patch("tessera.monitoring.periodic.classify_root_causes") as mock_causes:
-                        with mock.patch("tessera.monitoring.periodic.generate_actions") as mock_actions:
+    with mock.patch("chuzom.monitoring.periodic.fetch_session_decisions") as mock_fetch:
+        with mock.patch("chuzom.monitoring.periodic.fetch_session_corrections") as mock_corr:
+            with mock.patch("chuzom.monitoring.periodic.analyze_facts") as mock_facts:
+                with mock.patch("chuzom.monitoring.periodic.analyze_gaps") as mock_gaps:
+                    with mock.patch("chuzom.monitoring.periodic.classify_root_causes") as mock_causes:
+                        with mock.patch("chuzom.monitoring.periodic.generate_actions") as mock_actions:
                             mock_fetch.return_value = sample_decisions
                             mock_corr.return_value = sample_corrections
                             mock_facts.return_value = {
@@ -114,7 +114,7 @@ async def test_take_session_snapshot_basic(sample_decisions, sample_corrections)
 def test_save_session_snapshot(tmp_path, monkeypatch):
     """Test snapshot file persistence."""
     monkeypatch.setattr(
-        "tessera.monitoring.periodic.SNAPSHOT_DIR",
+        "chuzom.monitoring.periodic.SNAPSHOT_DIR",
         tmp_path / "snapshots",
     )
 
@@ -148,7 +148,7 @@ def test_save_session_snapshot(tmp_path, monkeypatch):
 def test_load_session_snapshots_empty(tmp_path, monkeypatch):
     """Test loading snapshots when none exist."""
     monkeypatch.setattr(
-        "tessera.monitoring.periodic.SNAPSHOT_DIR",
+        "chuzom.monitoring.periodic.SNAPSHOT_DIR",
         tmp_path / "snapshots",
     )
 
@@ -162,7 +162,7 @@ def test_load_session_snapshots_multiple(tmp_path, monkeypatch):
     snapshot_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(
-        "tessera.monitoring.periodic.SNAPSHOT_DIR",
+        "chuzom.monitoring.periodic.SNAPSHOT_DIR",
         snapshot_dir,
     )
 
@@ -343,7 +343,7 @@ def test_get_current_snapshot_with_existing(tmp_path, monkeypatch):
     snapshot_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(
-        "tessera.monitoring.periodic.SNAPSHOT_DIR",
+        "chuzom.monitoring.periodic.SNAPSHOT_DIR",
         snapshot_dir,
     )
 
@@ -367,7 +367,7 @@ def test_get_current_snapshot_with_existing(tmp_path, monkeypatch):
 def test_get_current_snapshot_empty(tmp_path, monkeypatch):
     """Test retrieving current snapshot when none exist."""
     monkeypatch.setattr(
-        "tessera.monitoring.periodic.SNAPSHOT_DIR",
+        "chuzom.monitoring.periodic.SNAPSHOT_DIR",
         tmp_path / "snapshots",
     )
 
@@ -388,7 +388,7 @@ def test_cleanup_old_snapshots(tmp_path, monkeypatch):
     snapshot_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(
-        "tessera.monitoring.periodic.SNAPSHOT_DIR",
+        "chuzom.monitoring.periodic.SNAPSHOT_DIR",
         snapshot_dir,
     )
 

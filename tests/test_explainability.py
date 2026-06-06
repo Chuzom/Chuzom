@@ -6,13 +6,13 @@ import os
 from dataclasses import replace
 from unittest.mock import patch
 
-from tessera.tools.text import (
+from chuzom.tools.text import (
     _get_explain_mode,
     _routing_explanation,
     _savings_info,
     _format_response,
 )
-from tessera.types import LLMResponse
+from chuzom.types import LLMResponse
 
 
 def _make_response(**overrides) -> LLMResponse:
@@ -41,24 +41,24 @@ def _make_response(**overrides) -> LLMResponse:
 class TestExplainMode:
     def test_default_is_footer(self):
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("TESSERA_EXPLAIN", None)
+            os.environ.pop("CHUZOM_EXPLAIN", None)
             mode = _get_explain_mode()
             assert mode == "footer"
 
     def test_legacy_1_maps_to_header(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "1"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "1"}):
             assert _get_explain_mode() == "header"
 
     def test_explicit_off(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "off"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "off"}):
             assert _get_explain_mode() == "off"
 
     def test_explicit_verbose(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "verbose"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "verbose"}):
             assert _get_explain_mode() == "verbose"
 
     def test_explicit_footer(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "footer"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "footer"}):
             assert _get_explain_mode() == "footer"
 
 
@@ -102,43 +102,43 @@ class TestSavingsInfo:
 
 class TestRoutingExplanation:
     def test_off_returns_empty(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "off"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "off"}):
             resp = _make_response()
             assert _routing_explanation(resp, "query") == ""
 
     def test_footer_contains_model_name(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "footer"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "footer"}):
             resp = _make_response(model="gemini/gemini-2.5-flash")
             result = _routing_explanation(resp, "query")
             assert "gemini-2.5-flash" in result
 
     def test_footer_contains_cost(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "footer"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "footer"}):
             resp = _make_response(cost_usd=0.00035)
             result = _routing_explanation(resp, "query")
             assert "$0.00035" in result
 
     def test_footer_contains_complexity(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "footer"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "footer"}):
             resp = _make_response(complexity="simple")
             result = _routing_explanation(resp, "query")
             assert "simple" in result
 
     def test_footer_starts_with_separator(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "footer"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "footer"}):
             resp = _make_response()
             result = _routing_explanation(resp, "query")
             assert result.startswith("\n─────")
 
     def test_header_uses_brackets(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "header"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "header"}):
             resp = _make_response()
             result = _routing_explanation(resp, "query")
             assert result.startswith("[→")
             assert result.rstrip().endswith("]")
 
     def test_verbose_shows_chain(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "verbose"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "verbose"}):
             resp = _make_response(
                 chain_attempts=["ollama/qwen3.5:latest", "gemini/gemini-2.5-flash"],
             )
@@ -149,14 +149,14 @@ class TestRoutingExplanation:
             assert "[✓]" in result
 
     def test_verbose_shows_confidence(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "verbose"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "verbose"}):
             resp = _make_response(confidence=0.94, classification_method="heuristic")
             result = _routing_explanation(resp, "query")
             assert "94%" in result
             assert "heuristic" in result
 
     def test_verbose_shows_savings(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "verbose"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "verbose"}):
             resp = _make_response(model="gemini/gemini-2.5-flash", cost_usd=0.0002)
             result = _routing_explanation(resp, "query")
             assert "cheaper" in result
@@ -169,20 +169,20 @@ class TestRoutingExplanation:
 class TestFormatResponse:
     def test_footer_appears_by_default(self):
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("TESSERA_EXPLAIN", None)
+            os.environ.pop("CHUZOM_EXPLAIN", None)
             resp = _make_response()
             result = _format_response(resp, "query")
             assert "─────" in result
             assert "gemini-2.5-flash" in result
 
     def test_off_suppresses_footer(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "off"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "off"}):
             resp = _make_response()
             result = _format_response(resp, "query")
             assert "─────" not in result
 
     def test_header_places_above_content(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "header"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "header"}):
             resp = _make_response()
             result = _format_response(resp, "query")
             lines = result.split("\n")
@@ -190,7 +190,7 @@ class TestFormatResponse:
             assert lines[0].startswith("[→")
 
     def test_footer_places_after_content(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "footer"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "footer"}):
             resp = _make_response(content="Hello world")
             result = _format_response(resp, "query")
             content_idx = result.index("Hello world")
@@ -198,7 +198,7 @@ class TestFormatResponse:
             assert separator_idx > content_idx
 
     def test_all_tasks_have_explanation(self):
-        with patch.dict(os.environ, {"TESSERA_EXPLAIN": "footer"}):
+        with patch.dict(os.environ, {"CHUZOM_EXPLAIN": "footer"}):
             resp = _make_response()
             for task in ["query", "code", "analyze", "generate", "research"]:
                 result = _format_response(resp, task)

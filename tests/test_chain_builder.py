@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.types import ModelCapability, ProviderTier, RoutingProfile, TaskType
+from chuzom.types import ModelCapability, ProviderTier, RoutingProfile, TaskType
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ class TestBuildChainStatic:
     @pytest.mark.asyncio
     async def test_returns_chain_with_fallback_to_static(self):
         """Test that build_chain always returns a chain (dynamic or static fallback)."""
-        from tessera.chain_builder import build_chain
+        from chuzom.chain_builder import build_chain
         result = await build_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
         assert isinstance(result, list)
         assert len(result) > 0
@@ -40,9 +40,9 @@ class TestBuildChainStatic:
     @pytest.mark.asyncio
     async def test_falls_back_to_static_on_exception(self):
         """Dynamic chain failure must fall back to static, never raise."""
-        from tessera.chain_builder import build_chain
+        from chuzom.chain_builder import build_chain
         mock_error = RuntimeError("boom")
-        with patch("tessera.chain_builder._build_dynamic_chain",
+        with patch("chuzom.chain_builder._build_dynamic_chain",
                    side_effect=mock_error):
             result = await build_chain(TaskType.CODE, "simple",
                                        RoutingProfile.BUDGET)
@@ -55,8 +55,8 @@ class TestBuildChainStatic:
 class TestBuildDynamicChain:
     """Regression tests for the dict.values() bug (iterating dict yields keys, not caps)."""
 
-    _DISCOVER_PATCH = "tessera.discover.discover_available_models"
-    _SCORE_PATCH = "tessera.scorer.score_all_models"
+    _DISCOVER_PATCH = "chuzom.discover.discover_available_models"
+    _SCORE_PATCH = "chuzom.scorer.score_all_models"
 
     @pytest.mark.asyncio
     async def test_dict_values_not_keys_are_iterated(self):
@@ -65,8 +65,8 @@ class TestBuildDynamicChain:
         Without the fix, iterating over the dict yields string keys, and accessing
         cap.task_types raises AttributeError: 'str' has no attribute 'task_types'.
         """
-        from tessera.chain_builder import _build_dynamic_chain
-        from tessera.types import ScoredModel
+        from chuzom.chain_builder import _build_dynamic_chain
+        from chuzom.types import ScoredModel
 
         fake_scored = [
             ScoredModel(
@@ -81,9 +81,9 @@ class TestBuildDynamicChain:
         ]
 
         with (
-            patch("tessera.discover.discover_available_models",
+            patch("chuzom.discover.discover_available_models",
                   new_callable=AsyncMock, return_value=_FAKE_CAPS),
-            patch("tessera.scorer.score_all_models",
+            patch("chuzom.scorer.score_all_models",
                   new_callable=AsyncMock, return_value=fake_scored),
         ):
             # This should NOT raise AttributeError: 'str' has no attribute 'task_types'
@@ -94,8 +94,8 @@ class TestBuildDynamicChain:
 
     @pytest.mark.asyncio
     async def test_empty_discovery_falls_back_to_static(self):
-        from tessera.chain_builder import _build_dynamic_chain
-        with patch("tessera.discover.discover_available_models",
+        from chuzom.chain_builder import _build_dynamic_chain
+        with patch("chuzom.discover.discover_available_models",
                    new_callable=AsyncMock, return_value={}):
             result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
         assert isinstance(result, list)
@@ -104,8 +104,8 @@ class TestBuildDynamicChain:
     @pytest.mark.asyncio
     async def test_local_models_precede_paid_in_chain(self):
         """Free-first invariant: LOCAL tier models must appear before paid-API models."""
-        from tessera.chain_builder import _build_dynamic_chain
-        from tessera.types import ScoredModel
+        from chuzom.chain_builder import _build_dynamic_chain
+        from chuzom.types import ScoredModel
 
         # Paid model scores higher but local should still come first
         fake_scored = [
@@ -130,9 +130,9 @@ class TestBuildDynamicChain:
         ]
 
         with (
-            patch("tessera.discover.discover_available_models",
+            patch("chuzom.discover.discover_available_models",
                   new_callable=AsyncMock, return_value=_FAKE_CAPS),
-            patch("tessera.scorer.score_all_models",
+            patch("chuzom.scorer.score_all_models",
                   new_callable=AsyncMock, return_value=fake_scored),
         ):
             result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
@@ -142,8 +142,8 @@ class TestBuildDynamicChain:
     @pytest.mark.asyncio
     async def test_fallback_caps_are_list_not_dict(self):
         """Regression: when no task_caps match, fallback must be list[ModelCapability] not dict."""
-        from tessera.chain_builder import _build_dynamic_chain
-        from tessera.types import ScoredModel
+        from chuzom.chain_builder import _build_dynamic_chain
+        from chuzom.types import ScoredModel
 
         # Caps with task type that doesn't match requested task
         no_match_caps = {
@@ -168,9 +168,9 @@ class TestBuildDynamicChain:
         ]
 
         with (
-            patch("tessera.discover.discover_available_models",
+            patch("chuzom.discover.discover_available_models",
                   new_callable=AsyncMock, return_value=no_match_caps),
-            patch("tessera.scorer.score_all_models",
+            patch("chuzom.scorer.score_all_models",
                   new_callable=AsyncMock, return_value=fake_scored),
         ):
             # Without the fix, task_caps fallback would be a dict and scorer would
@@ -182,8 +182,8 @@ class TestBuildDynamicChain:
     @pytest.mark.asyncio
     async def test_deduplicates_dynamic_and_static_models(self):
         """Merged chains should keep first occurrence only, preserving order."""
-        from tessera.chain_builder import _build_dynamic_chain
-        from tessera.types import ScoredModel
+        from chuzom.chain_builder import _build_dynamic_chain
+        from chuzom.types import ScoredModel
 
         fake_scored = [
             ScoredModel(
@@ -207,11 +207,11 @@ class TestBuildDynamicChain:
         ]
 
         with (
-            patch("tessera.discover.discover_available_models",
+            patch("chuzom.discover.discover_available_models",
                   new_callable=AsyncMock, return_value=_FAKE_CAPS),
-            patch("tessera.scorer.score_all_models",
+            patch("chuzom.scorer.score_all_models",
                   new_callable=AsyncMock, return_value=fake_scored),
-            patch("tessera.chain_builder._static_chain",
+            patch("chuzom.chain_builder._static_chain",
                   return_value=["ollama/qwen3:32b", "openai/gpt-4o", "gemini/gemini-2.5-flash"]),
         ):
             result = await _build_dynamic_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
@@ -232,7 +232,7 @@ class TestDiscoverCacheCorruption:
         """ValueError from ProviderTier(unknown_value) must be caught, not propagate."""
         import json
         import time
-        from tessera.discover import _load_cache
+        from chuzom.discover import _load_cache
 
         cache_file = tmp_path / "discovery.json"
         cache_file.write_text(json.dumps({
@@ -251,7 +251,7 @@ class TestDiscoverCacheCorruption:
             },
         }))
 
-        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+        with patch("chuzom.discover._DISCOVERY_CACHE", cache_file):
             result = _load_cache(ttl=3600)
 
         assert result is None, "corrupted cache should return None, not raise ValueError"
@@ -260,7 +260,7 @@ class TestDiscoverCacheCorruption:
         """KeyError from missing model_id must be caught, not propagate."""
         import json
         import time
-        from tessera.discover import _load_cache
+        from chuzom.discover import _load_cache
 
         cache_file = tmp_path / "discovery.json"
         cache_file.write_text(json.dumps({
@@ -275,7 +275,7 @@ class TestDiscoverCacheCorruption:
             },
         }))
 
-        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+        with patch("chuzom.discover._DISCOVERY_CACHE", cache_file):
             result = _load_cache(ttl=3600)
 
         assert result is None
@@ -284,7 +284,7 @@ class TestDiscoverCacheCorruption:
         """ValueError from TaskType(unknown_value) must be caught."""
         import json
         import time
-        from tessera.discover import _load_cache
+        from chuzom.discover import _load_cache
 
         cache_file = tmp_path / "discovery.json"
         cache_file.write_text(json.dumps({
@@ -303,7 +303,7 @@ class TestDiscoverCacheCorruption:
             },
         }))
 
-        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+        with patch("chuzom.discover._DISCOVERY_CACHE", cache_file):
             result = _load_cache(ttl=3600)
 
         assert result is None
@@ -312,7 +312,7 @@ class TestDiscoverCacheCorruption:
         """Sanity check: a well-formed cache should load without errors."""
         import json
         import time
-        from tessera.discover import _load_cache
+        from chuzom.discover import _load_cache
 
         cache_file = tmp_path / "discovery.json"
         cache_file.write_text(json.dumps({
@@ -331,7 +331,7 @@ class TestDiscoverCacheCorruption:
             },
         }))
 
-        with patch("tessera.discover._DISCOVERY_CACHE", cache_file):
+        with patch("chuzom.discover._DISCOVERY_CACHE", cache_file):
             result = _load_cache(ttl=3600)
 
         assert result is not None
@@ -345,9 +345,9 @@ class TestEndToEndDynamicRouting:
 
     @pytest.mark.asyncio
     async def test_dynamic_enabled_uses_scored_chain(self):
-        """When TESSERA_DYNAMIC=true, build_chain returns scored model IDs."""
-        from tessera.chain_builder import build_chain
-        from tessera.types import ScoredModel
+        """When CHUZOM_DYNAMIC=true, build_chain returns scored model IDs."""
+        from chuzom.chain_builder import build_chain
+        from chuzom.types import ScoredModel
 
         fake_scored = [
             ScoredModel(
@@ -371,9 +371,9 @@ class TestEndToEndDynamicRouting:
         ]
 
         with (
-            patch("tessera.discover.discover_available_models",
+            patch("chuzom.discover.discover_available_models",
                   new_callable=AsyncMock, return_value=_FAKE_CAPS),
-            patch("tessera.scorer.score_all_models",
+            patch("chuzom.scorer.score_all_models",
                   new_callable=AsyncMock, return_value=fake_scored),
         ):
             result = await build_chain(TaskType.CODE, "moderate", RoutingProfile.BALANCED)
@@ -384,9 +384,9 @@ class TestEndToEndDynamicRouting:
     @pytest.mark.asyncio
     async def test_dynamic_chain_never_empty(self):
         """Even with zero discovered models, build_chain returns a non-empty static fallback."""
-        from tessera.chain_builder import build_chain
+        from chuzom.chain_builder import build_chain
 
-        with patch("tessera.discover.discover_available_models",
+        with patch("chuzom.discover.discover_available_models",
                    new_callable=AsyncMock, return_value={}):
             result = await build_chain(TaskType.CODE, "simple", RoutingProfile.BUDGET)
 

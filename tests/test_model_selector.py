@@ -4,8 +4,8 @@ from __future__ import annotations
 
 
 import pytest
-from tessera.model_selector import select_model, _downshift_amount
-from tessera.types import (
+from chuzom.model_selector import select_model, _downshift_amount
+from chuzom.types import (
     ClassificationResult, Complexity, QualityMode, TaskType,
 )
 

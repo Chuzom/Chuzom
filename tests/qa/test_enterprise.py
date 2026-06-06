@@ -5,24 +5,24 @@ from pathlib import Path
 
 import pytest
 
-from tessera.enterprise.audit import (
+from chuzom.enterprise.audit import (
     AuditEvent,
     AuditEventType,
     AuditLog,
     TamperDetected,
 )
-from tessera.enterprise.identity import (
+from chuzom.enterprise.identity import (
     IdentityConflict,
     IdentityNotFound,
     IdentityStore,
     InvalidToken,
 )
-from tessera.enterprise.quotas import (
+from chuzom.enterprise.quotas import (
     QuotaExceeded,
     QuotaPolicy,
     QuotaTracker,
 )
-from tessera.enterprise.rbac import (
+from chuzom.enterprise.rbac import (
     Permission,
     PermissionDenied,
     Role,
@@ -30,7 +30,7 @@ from tessera.enterprise.rbac import (
     permissions_for_role,
     require_permission,
 )
-from tessera.enterprise.redaction import (
+from chuzom.enterprise.redaction import (
     RedactionPolicy,
     redact_prompt,
 )
@@ -315,7 +315,7 @@ def test_audit_export_cef_emits_one_line_per_event(audit: AuditLog):
     lines = [ln for ln in cef.splitlines() if ln]
     assert len(lines) == 3
     for line in lines:
-        assert line.startswith("CEF:0|Tessera|")
+        assert line.startswith("CEF:0|Chuzom|")
 
 
 def test_audit_export_json_round_trip(audit: AuditLog):

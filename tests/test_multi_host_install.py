@@ -28,56 +28,56 @@ def _patch_home(monkeypatch, tmp_path):
 
 class TestMergeJsonMcpBlock:
     def test_creates_new_file(self, tmp_path):
-        from tessera.cli import _merge_json_mcp_block
+        from chuzom.cli import _merge_json_mcp_block
 
         config = tmp_path / "config.json"
-        actions = _merge_json_mcp_block(config, "tessera", {"command": "uvx"})
+        actions = _merge_json_mcp_block(config, "chuzom", {"command": "uvx"})
         assert config.exists()
         data = json.loads(config.read_text())
-        assert data["mcpServers"]["tessera"] == {"command": "uvx"}
+        assert data["mcpServers"]["chuzom"] == {"command": "uvx"}
         assert any("Added" in a for a in actions)
 
     def test_merges_into_existing_file(self, tmp_path):
-        from tessera.cli import _merge_json_mcp_block
+        from chuzom.cli import _merge_json_mcp_block
 
         config = tmp_path / "config.json"
         config.write_text(json.dumps({"mcpServers": {"other": {}}}))
-        _merge_json_mcp_block(config, "tessera", {"command": "uvx"})
+        _merge_json_mcp_block(config, "chuzom", {"command": "uvx"})
         data = json.loads(config.read_text())
         assert "other" in data["mcpServers"]
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
     def test_idempotent_second_call(self, tmp_path):
-        from tessera.cli import _merge_json_mcp_block
+        from chuzom.cli import _merge_json_mcp_block
 
         config = tmp_path / "config.json"
-        _merge_json_mcp_block(config, "tessera", {"command": "uvx"})
-        actions2 = _merge_json_mcp_block(config, "tessera", {"command": "uvx"})
+        _merge_json_mcp_block(config, "chuzom", {"command": "uvx"})
+        actions2 = _merge_json_mcp_block(config, "chuzom", {"command": "uvx"})
         assert any("skipped" in a for a in actions2)
 
 
 class TestAppendRoutingRules:
     def test_creates_new_file(self, tmp_path):
-        from tessera.cli import _append_routing_rules
+        from chuzom.cli import _append_routing_rules
 
         dest = tmp_path / "instructions.md"
         actions = _append_routing_rules(dest, "opencode-rules.md")
         assert dest.exists()
-        assert "tessera" in dest.read_text().lower()
+        assert "chuzom" in dest.read_text().lower()
         assert any("Created" in a for a in actions)
 
     def test_appends_to_existing_file(self, tmp_path):
-        from tessera.cli import _append_routing_rules
+        from chuzom.cli import _append_routing_rules
 
         dest = tmp_path / "instructions.md"
         dest.write_text("# Existing instructions\n")
         _append_routing_rules(dest, "opencode-rules.md")
         content = dest.read_text()
         assert "# Existing instructions" in content
-        assert "tessera" in content.lower()
+        assert "chuzom" in content.lower()
 
     def test_idempotent_second_call(self, tmp_path):
-        from tessera.cli import _append_routing_rules
+        from chuzom.cli import _append_routing_rules
 
         dest = tmp_path / "instructions.md"
         _append_routing_rules(dest, "opencode-rules.md")
@@ -91,7 +91,7 @@ class TestAppendRoutingRules:
 
 class TestInstallOpenCode:
     def test_writes_mcp_config(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_opencode_files
+        from chuzom.cli import _install_opencode_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_opencode_files()
@@ -99,20 +99,20 @@ class TestInstallOpenCode:
         config = tmp_path / ".config" / "opencode" / "config.json"
         assert config.exists()
         data = json.loads(config.read_text())
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
     def test_writes_routing_rules(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_opencode_files
+        from chuzom.cli import _install_opencode_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_opencode_files()
 
         instructions = tmp_path / ".config" / "opencode" / "instructions.md"
         assert instructions.exists()
-        assert "tessera" in instructions.read_text().lower()
+        assert "chuzom" in instructions.read_text().lower()
 
     def test_returns_action_list(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_opencode_files
+        from chuzom.cli import _install_opencode_files
         _patch_home(monkeypatch, tmp_path)
 
         actions = _install_opencode_files()
@@ -120,7 +120,7 @@ class TestInstallOpenCode:
         assert len(actions) > 0
 
     def test_idempotent_second_run(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_opencode_files
+        from chuzom.cli import _install_opencode_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_opencode_files()
@@ -135,7 +135,7 @@ class TestInstallOpenCode:
 
 class TestInstallGeminiCli:
     def test_writes_settings_json(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_gemini_cli_files
+        from chuzom.cli import _install_gemini_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_gemini_cli_files()
@@ -143,42 +143,42 @@ class TestInstallGeminiCli:
         settings = tmp_path / ".gemini" / "settings.json"
         assert settings.exists()
         data = json.loads(settings.read_text())
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
     def test_creates_extension_manifest(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_gemini_cli_files
+        from chuzom.cli import _install_gemini_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_gemini_cli_files()
 
-        manifest = tmp_path / ".gemini" / "extensions" / "tessera" / "gemini-extension.json"
+        manifest = tmp_path / ".gemini" / "extensions" / "chuzom" / "gemini-extension.json"
         assert manifest.exists()
         data = json.loads(manifest.read_text())
-        assert data["name"] == "tessera"
+        assert data["name"] == "chuzom"
 
     def test_creates_hooks_json(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_gemini_cli_files
+        from chuzom.cli import _install_gemini_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_gemini_cli_files()
 
-        hooks = tmp_path / ".gemini" / "extensions" / "tessera" / "hooks" / "hooks.json"
+        hooks = tmp_path / ".gemini" / "extensions" / "chuzom" / "hooks" / "hooks.json"
         assert hooks.exists()
         data = json.loads(hooks.read_text())
         assert "PostToolUse" in data["hooks"]
 
     def test_writes_routing_rules(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_gemini_cli_files
+        from chuzom.cli import _install_gemini_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_gemini_cli_files()
 
-        instructions = tmp_path / ".gemini" / "extensions" / "tessera" / "INSTRUCTIONS.md"
+        instructions = tmp_path / ".gemini" / "extensions" / "chuzom" / "INSTRUCTIONS.md"
         assert instructions.exists()
-        assert "tessera" in instructions.read_text().lower()
+        assert "chuzom" in instructions.read_text().lower()
 
     def test_idempotent_second_run(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_gemini_cli_files
+        from chuzom.cli import _install_gemini_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_gemini_cli_files()
@@ -193,7 +193,7 @@ class TestInstallGeminiCli:
 
 class TestInstallCopilotCli:
     def test_writes_mcp_config(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_copilot_cli_files
+        from chuzom.cli import _install_copilot_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_copilot_cli_files()
@@ -201,10 +201,10 @@ class TestInstallCopilotCli:
         mcp = tmp_path / ".config" / "gh" / "copilot" / "mcp.json"
         assert mcp.exists()
         data = json.loads(mcp.read_text())
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
     def test_writes_routing_rules(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_copilot_cli_files
+        from chuzom.cli import _install_copilot_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_copilot_cli_files()
@@ -213,7 +213,7 @@ class TestInstallCopilotCli:
         assert instructions.exists()
 
     def test_idempotent(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_copilot_cli_files
+        from chuzom.cli import _install_copilot_cli_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_copilot_cli_files()
@@ -228,7 +228,7 @@ class TestInstallCopilotCli:
 
 class TestInstallOpenclaw:
     def test_writes_mcp_config(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_openclaw_files
+        from chuzom.cli import _install_openclaw_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_openclaw_files()
@@ -236,10 +236,10 @@ class TestInstallOpenclaw:
         mcp = tmp_path / ".openclaw" / "mcp.json"
         assert mcp.exists()
         data = json.loads(mcp.read_text())
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
     def test_writes_routing_rules(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_openclaw_files
+        from chuzom.cli import _install_openclaw_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_openclaw_files()
@@ -248,7 +248,7 @@ class TestInstallOpenclaw:
         assert instructions.exists()
 
     def test_idempotent(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_openclaw_files
+        from chuzom.cli import _install_openclaw_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_openclaw_files()
@@ -262,7 +262,7 @@ class TestInstallOpenclaw:
 
 class TestInstallTrae:
     def test_writes_mcp_config(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_trae_files
+        from chuzom.cli import _install_trae_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_trae_files()
@@ -271,10 +271,10 @@ class TestInstallTrae:
         mcp_files = list(tmp_path.rglob("mcp.json"))
         assert len(mcp_files) >= 1
         data = json.loads(mcp_files[0].read_text())
-        assert "tessera" in data["mcpServers"]
+        assert "chuzom" in data["mcpServers"]
 
     def test_returns_action_list(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_trae_files
+        from chuzom.cli import _install_trae_files
         _patch_home(monkeypatch, tmp_path)
 
         actions = _install_trae_files()
@@ -282,7 +282,7 @@ class TestInstallTrae:
         assert len(actions) > 0
 
     def test_idempotent(self, monkeypatch, tmp_path):
-        from tessera.cli import _install_trae_files
+        from chuzom.cli import _install_trae_files
         _patch_home(monkeypatch, tmp_path)
 
         _install_trae_files()
@@ -304,7 +304,7 @@ class TestFactoryDroidManifest:
         import pathlib
         manifest = pathlib.Path(__file__).parent.parent / ".factory-plugin" / "plugin.json"
         data = json.loads(manifest.read_text())
-        assert data["name"] == "tessera"
+        assert data["name"] == "chuzom"
         assert "version" in data
         assert "mcpServers" in data or "skills" in data
 
@@ -336,8 +336,8 @@ class TestRulesFileContent:
     ])
     def test_rules_file_exists(self, rules_file):
         import pathlib
-        p = pathlib.Path(__file__).parent.parent / "src" / "tessera" / "rules" / rules_file
-        assert p.exists(), f"{rules_file} must exist in src/tessera/rules/"
+        p = pathlib.Path(__file__).parent.parent / "src" / "chuzom" / "rules" / rules_file
+        assert p.exists(), f"{rules_file} must exist in src/chuzom/rules/"
 
     @pytest.mark.parametrize("rules_file", [
         "opencode-rules.md",
@@ -348,7 +348,7 @@ class TestRulesFileContent:
     ])
     def test_has_llm_auto_guidance(self, rules_file):
         import pathlib
-        p = pathlib.Path(__file__).parent.parent / "src" / "tessera" / "rules" / rules_file
+        p = pathlib.Path(__file__).parent.parent / "src" / "chuzom" / "rules" / rules_file
         content = p.read_text()
         assert "llm_auto" in content, f"{rules_file} must mention llm_auto"
 
@@ -359,11 +359,11 @@ class TestRulesFileContent:
         "openclaw-rules.md",
         "trae-rules.md",
         "codex-rules.md",
-        "tessera.md",
+        "chuzom.md",
     ])
     def test_has_token_efficient_section(self, rules_file):
         import pathlib
-        p = pathlib.Path(__file__).parent.parent / "src" / "tessera" / "rules" / rules_file
+        p = pathlib.Path(__file__).parent.parent / "src" / "chuzom" / "rules" / rules_file
         content = p.read_text()
         assert "Token-Efficient" in content or "preamble" in content.lower(), \
             f"{rules_file} must have token-efficient response guidance"

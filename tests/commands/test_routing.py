@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 # Mock structlog before importing routing
 sys.modules["structlog"] = MagicMock()
 
-from tessera.commands.routing import cmd_routing, _run_routing  # noqa: E402
+from chuzom.commands.routing import cmd_routing, _run_routing  # noqa: E402
 
 
 class TestCmdRouting:
@@ -16,13 +16,13 @@ class TestCmdRouting:
 
     def test_cmd_routing_returns_zero(self):
         """cmd_routing should return 0."""
-        with patch("tessera.commands.routing._run_routing"):
+        with patch("chuzom.commands.routing._run_routing"):
             result = cmd_routing([])
         assert result == 0
 
     def test_cmd_routing_ignores_args(self):
         """cmd_routing should ignore arguments."""
-        with patch("tessera.commands.routing._run_routing") as mock_run:
+        with patch("chuzom.commands.routing._run_routing") as mock_run:
             cmd_routing(["ignored", "args"])
         mock_run.assert_called_once()
 
@@ -32,11 +32,11 @@ class TestRunRouting:
 
     def test_run_routing_displays_header(self, capsys):
         """_run_routing should display main header."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config") as mock_cfg:
                     mock_cfg.return_value = MagicMock(openai_api_key=None, gemini_api_key=None, ollama_base_url=None)
-                    with patch("tessera.claude_usage.get_claude_pressure", return_value=0.5):
+                    with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.5):
                         _run_routing()
         captured = capsys.readouterr()
         assert "LLM Router" in captured.out
@@ -44,11 +44,11 @@ class TestRunRouting:
 
     def test_run_routing_shows_providers_section(self, capsys):
         """_run_routing should show providers section."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=True):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.codex_agent.is_codex_available", return_value=True):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config") as mock_cfg:
                     mock_cfg.return_value = MagicMock(openai_api_key=None, gemini_api_key=None, ollama_base_url=None)
-                    with patch("tessera.claude_usage.get_claude_pressure", return_value=0.5):
+                    with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.5):
                         _run_routing()
         captured = capsys.readouterr()
         assert "Available Providers" in captured.out
@@ -56,11 +56,11 @@ class TestRunRouting:
 
     def test_run_routing_shows_claude_quota(self, capsys):
         """_run_routing should display Claude quota pressure."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config") as mock_cfg:
                     mock_cfg.return_value = MagicMock(openai_api_key=None, gemini_api_key=None, ollama_base_url=None)
-                    with patch("tessera.claude_usage.get_claude_pressure", return_value=0.5):
+                    with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.5):
                         _run_routing()
         captured = capsys.readouterr()
         assert "Claude Subscription Quota" in captured.out
@@ -68,21 +68,21 @@ class TestRunRouting:
 
     def test_run_routing_shows_routing_chains(self, capsys):
         """_run_routing should show sample routing chains."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config") as mock_cfg:
                     mock_cfg.return_value = MagicMock(openai_api_key=None, gemini_api_key=None, ollama_base_url=None)
-                    with patch("tessera.claude_usage.get_claude_pressure", return_value=0.5):
+                    with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.5):
                         _run_routing()
         captured = capsys.readouterr()
         assert "Sample Routing Chains" in captured.out
 
     def test_run_routing_handles_missing_config(self, capsys):
         """_run_routing should gracefully handle missing config."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config", side_effect=Exception("Config error")):
-                    with patch("tessera.claude_usage.get_claude_pressure", return_value=0.5):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config", side_effect=Exception("Config error")):
+                    with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.5):
                         _run_routing()
         captured = capsys.readouterr()
         # Should not crash even with exception
@@ -90,22 +90,22 @@ class TestRunRouting:
 
     def test_run_routing_handles_missing_pressure(self, capsys):
         """_run_routing should handle missing Claude pressure gracefully."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config") as mock_cfg:
                     mock_cfg.return_value = MagicMock(openai_api_key=None, gemini_api_key=None, ollama_base_url=None)
-                    with patch("tessera.claude_usage.get_claude_pressure", side_effect=Exception("Pressure error")):
+                    with patch("chuzom.claude_usage.get_claude_pressure", side_effect=Exception("Pressure error")):
                         _run_routing()
         captured = capsys.readouterr()
         assert "(unavailable)" in captured.out
 
     def test_run_routing_displays_pressure_indicators(self, capsys):
         """_run_routing should show correct pressure indicator."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config") as mock_cfg:
                     mock_cfg.return_value = MagicMock(openai_api_key=None, gemini_api_key=None, ollama_base_url=None)
-                    with patch("tessera.claude_usage.get_claude_pressure", return_value=0.2):
+                    with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.2):
                         _run_routing()
         captured = capsys.readouterr()
         assert "Available" in captured.out or "Pressure:" in captured.out
@@ -116,16 +116,16 @@ class TestRoutingIntegration:
 
     def test_cmd_routing_basic(self):
         """cmd_routing should execute and return 0."""
-        with patch("tessera.commands.routing._run_routing"):
+        with patch("chuzom.commands.routing._run_routing"):
             result = cmd_routing([])
         assert result == 0
 
     def test_run_routing_completes_without_error(self):
         """_run_routing should complete without raising exceptions."""
-        with patch("tessera.codex_agent.is_codex_available", return_value=False):
-            with patch("tessera.gemini_cli_agent.is_gemini_cli_available", return_value=False):
-                with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.gemini_cli_agent.is_gemini_cli_available", return_value=False):
+                with patch("chuzom.config.get_config") as mock_cfg:
                     mock_cfg.return_value = MagicMock(openai_api_key=None, gemini_api_key=None, ollama_base_url=None)
-                    with patch("tessera.claude_usage.get_claude_pressure", return_value=0.5):
+                    with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.5):
                         # Should not raise
                         _run_routing()

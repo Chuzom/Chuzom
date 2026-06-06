@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate an asciinema v2 .cast file for the tessera demo SVG."""
+"""Generate an asciinema v2 .cast file for the chuzom demo SVG."""
 
 import json
 import sys
@@ -21,7 +21,7 @@ HEIGHT = 44
 
 DEMO_LINES = [
     "",
-    f"{B}tessera demo{R}  — how smart routing handles your prompts",
+    f"{B}chuzom demo{R}  — how smart routing handles your prompts",
     "",
     f"  Active config: Claude Code subscription",
     f"  {D}(no routing history yet — showing examples){R}",
@@ -39,8 +39,8 @@ DEMO_LINES = [
     "",
     f"  {B}Savings vs always-Opus:{R}  {G}$0.105 → $0.091  (13% cheaper){R}",
     "",
-    f"  {Y}→{R} Run {B}tessera status{R} for cumulative savings.",
-    f"  {Y}→{R} Run {B}tessera dashboard{R} to see live routing decisions.",
+    f"  {Y}→{R} Run {B}chuzom status{R} for cumulative savings.",
+    f"  {Y}→{R} Run {B}chuzom dashboard{R} to see live routing decisions.",
     "",
 ]
 
@@ -49,7 +49,7 @@ SEP = "─" * 62
 STATUS_LINES = [
     "",
     SEP,
-    f"  {B}tessera status{R}",
+    f"  {B}chuzom status{R}",
     SEP,
     "",
     f"  {B}Claude Code subscription{R}  (2m ago)",
@@ -72,9 +72,9 @@ STATUS_LINES = [
     f"    {'gpt-4o-mini':<34}  206×  $0.2000",
     "",
     f"  {B}Subcommands{R}",
-    f"    {B}tessera update{R}     — update hooks to latest version",
-    f"    {B}tessera doctor{R}     — full health check",
-    f"    {B}tessera dashboard{R}  — web dashboard (localhost:7337)",
+    f"    {B}chuzom update{R}     — update hooks to latest version",
+    f"    {B}chuzom doctor{R}     — full health check",
+    f"    {B}chuzom dashboard{R}  — web dashboard (localhost:7337)",
     SEP,
     "",
 ]
@@ -101,16 +101,16 @@ def build_cast(out_path: Path) -> None:
         for line in lines:
             emit(line + "\r\n", gap)
 
-    # ── tessera demo ───────────────────────────────────────────────────────
-    type_cmd("tessera demo")
+    # ── chuzom demo ───────────────────────────────────────────────────────
+    type_cmd("chuzom demo")
     emit("", 0.1)
     print_lines(DEMO_LINES, gap=0.035)
 
     # pause before next command
     emit("", 1.8)
 
-    # ── tessera status ─────────────────────────────────────────────────────
-    type_cmd("tessera status")
+    # ── chuzom status ─────────────────────────────────────────────────────
+    type_cmd("chuzom status")
     emit("", 0.1)
     print_lines(STATUS_LINES, gap=0.04)
 
@@ -122,7 +122,7 @@ def build_cast(out_path: Path) -> None:
         "version": 2,
         "width": WIDTH,
         "height": HEIGHT,
-        "title": "tessera — smart model routing for Claude Code",
+        "title": "chuzom — smart model routing for Claude Code",
         "env": {"TERM": "xterm-256color", "SHELL": "/bin/zsh"},
     }
 

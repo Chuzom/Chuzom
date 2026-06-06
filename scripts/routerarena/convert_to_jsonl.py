@@ -17,7 +17,7 @@ import pandas as pd
 from pathlib import Path
 
 SRC = '/tmp/routerarena_sub10.parquet'
-DST = Path.home() / '.tessera' / 'data' / 'routerarena' / 'sub_10_letters.jsonl'
+DST = Path.home() / '.chuzom' / 'data' / 'routerarena' / 'sub_10_letters.jsonl'
 
 SKIP_DATASETS = {'LiveCodeBench', 'NarrativeQA'}
 

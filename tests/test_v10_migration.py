@@ -8,7 +8,7 @@ Two regressions matter most for v9.x users upgrading to v10:
    invariant* so a future bandit refactor cannot silently break the
    fresh-install case.
 
-2. **``TESSERA_BANDIT=off`` opts back into the v9.x deterministic
+2. **``CHUZOM_BANDIT=off`` opts back into the v9.x deterministic
    chain order** for users who need byte-identical reproduction (A/B tests
    against v9 baselines, deterministic CI fixtures).
 """
@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import random
 
-from tessera.bandit import DEFAULT_EPSILON, EpsilonGreedyBandit
-from tessera.telemetry import ModelStats
+from chuzom.bandit import DEFAULT_EPSILON, EpsilonGreedyBandit
+from chuzom.telemetry import ModelStats
 
 
 # ── Cold-start invariant ────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ class TestColdStartInvariant:
         async def _empty(*a, **k):
             return []
 
-        monkeypatch.setattr("tessera.bandit.aggregate_stats", _empty)
+        monkeypatch.setattr("chuzom.bandit.aggregate_stats", _empty)
         bandit = EpsilonGreedyBandit()
         chain = ["ollama/qwen", "openai/gpt-4o", "anthropic/sonnet", "openai/o3"]
         out = await bandit.reorder(chain, profile="balanced", subject="code")
@@ -46,7 +46,7 @@ class TestColdStartInvariant:
 
     async def test_under_min_samples_returns_input_unchanged(self, monkeypatch):
         """Each candidate has SOME data but not enough — still preserve order."""
-        from tessera.telemetry import MIN_SAMPLES_FOR_SIGNAL
+        from chuzom.telemetry import MIN_SAMPLES_FOR_SIGNAL
         thin = [
             ModelStats(model="ollama/qwen", n_samples=MIN_SAMPLES_FOR_SIGNAL - 1,
                        success_rate=0.99, avg_cost=0, avg_latency_ms=400),
@@ -55,18 +55,18 @@ class TestColdStartInvariant:
         async def _stub(*a, **k):
             return thin
 
-        monkeypatch.setattr("tessera.bandit.aggregate_stats", _stub)
+        monkeypatch.setattr("chuzom.bandit.aggregate_stats", _stub)
         bandit = EpsilonGreedyBandit()
         chain = ["openai/gpt-4o", "ollama/qwen", "anthropic/sonnet"]
         out = await bandit.reorder(chain, profile="balanced", subject="code")
         assert out == chain
 
 
-# ── TESSERA_BANDIT env opt-out ───────────────────────────────────────────
+# ── CHUZOM_BANDIT env opt-out ───────────────────────────────────────────
 
 
 class TestBanditEnvOptOut:
-    """``TESSERA_BANDIT=off|0|false|no`` must short-circuit the reorder
+    """``CHUZOM_BANDIT=off|0|false|no`` must short-circuit the reorder
     entirely. The env-check lives in :func:`router.route_and_call` so the
     bandit module isn't even imported on the hot path."""
 
@@ -83,14 +83,14 @@ class TestBanditEnvOptOut:
             assert v.lower() in OFF_VALUES
 
     async def test_router_skips_bandit_when_env_set(self, monkeypatch):
-        """The router consults ``TESSERA_BANDIT`` before calling the bandit;
+        """The router consults ``CHUZOM_BANDIT`` before calling the bandit;
         with the env var set to ``off`` the bandit must never be invoked.
 
         This is a smoke test against the actual code path — we patch
         :func:`bandit.reorder` to record invocations and assert the recorder
         was *not* called.
         """
-        monkeypatch.setenv("TESSERA_BANDIT", "off")
+        monkeypatch.setenv("CHUZOM_BANDIT", "off")
 
         invocations: list[tuple] = []
 
@@ -99,7 +99,7 @@ class TestBanditEnvOptOut:
             return list(candidates)
 
         monkeypatch.setattr(
-            "tessera.bandit.EpsilonGreedyBandit.reorder", _spy_reorder
+            "chuzom.bandit.EpsilonGreedyBandit.reorder", _spy_reorder
         )
 
         # Re-import router so the os.environ read inside route_and_call
@@ -107,7 +107,7 @@ class TestBanditEnvOptOut:
         # directly because its full execution path needs real config + LLM.)
         # Instead we test the gating expression directly.
         import os
-        _off = os.environ.get("TESSERA_BANDIT", "on").lower() in {"off", "0", "false", "no"}
+        _off = os.environ.get("CHUZOM_BANDIT", "on").lower() in {"off", "0", "false", "no"}
         assert _off, "env_var not picked up by os.environ"
         # The behaviour gate is `not _off` — i.e. when off, bandit is skipped.
         # Since invocations stays empty, the gate works as documented.
@@ -122,9 +122,9 @@ class TestBanditDefaultOn:
     explicit, not implicit. Regression guard for the default."""
 
     def test_no_env_var_means_bandit_on(self, monkeypatch):
-        monkeypatch.delenv("TESSERA_BANDIT", raising=False)
+        monkeypatch.delenv("CHUZOM_BANDIT", raising=False)
         import os
-        _off = os.environ.get("TESSERA_BANDIT", "on").lower() in {"off", "0", "false", "no"}
+        _off = os.environ.get("CHUZOM_BANDIT", "on").lower() in {"off", "0", "false", "no"}
         assert not _off, "default behaviour must be bandit-on"
 
     def test_default_epsilon_unchanged_from_v9(self):
@@ -153,7 +153,7 @@ class TestBanditExploitWithTelemetry:
         async def _stub(*a, **k):
             return stats
 
-        monkeypatch.setattr("tessera.bandit.aggregate_stats", _stub)
+        monkeypatch.setattr("chuzom.bandit.aggregate_stats", _stub)
         # ε=0 → pure exploit
         bandit = EpsilonGreedyBandit(epsilon=0.0, rng=random.Random(0))
         chain = ["openai/gpt-4o", "ollama/qwen"]

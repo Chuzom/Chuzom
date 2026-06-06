@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 PACKAGE_NAME="llm-routing"
-REPO="ypollak2/tessera"
+REPO="ypollak2/chuzom"
 MAX_RETRIES=3
 
 log_info() {
@@ -53,7 +53,7 @@ rollback() {
         .codex-plugin/marketplace.json \
         .factory-plugin/plugin.json \
         .factory-plugin/marketplace.json \
-        src/tessera/__init__.py \
+        src/chuzom/__init__.py \
         CHANGELOG.md
     git commit -m "rollback: revert v${current_version} due to release failure" || true
     git push || true

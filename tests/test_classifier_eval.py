@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from tessera.classifier import (
+from chuzom.classifier import (
     CLASSIFIER_PROMPT_PATH,
     CLASSIFIER_PROMPT_VERSION,
     CLASSIFIER_SYSTEM_PROMPT,
 )
-from tessera.types import ClassificationResult, Complexity, TaskType
+from chuzom.types import ClassificationResult, Complexity, TaskType
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "eval_classifier.py"

@@ -2,7 +2,7 @@
 
 A QA suite isn't complete without exercising the developer experience:
 do errors tell you how to fix them, do defaults make sense, does
-`tessera doctor` correctly diagnose problems? Each test below is a
+`chuzom doctor` correctly diagnose problems? Each test below is a
 documented UX guarantee.
 """
 from __future__ import annotations
@@ -10,10 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 
 
-from tessera.agents import BudgetExceeded, SessionStore
-from tessera.agents.budget import BudgetEnvelope
-from tessera.agents.registry import AgentNotFound, AgentRegistry
-from tessera.agents.session import SessionNotFound, TerminalStateViolation
+from chuzom.agents import BudgetExceeded, SessionStore
+from chuzom.agents.budget import BudgetEnvelope
+from chuzom.agents.registry import AgentNotFound, AgentRegistry
+from chuzom.agents.session import SessionNotFound, TerminalStateViolation
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -46,17 +46,17 @@ def test_agent_not_found_lists_available_agents():
     user can immediately retry with a valid agent_id."""
     import asyncio
 
-    from tessera.tools import agents as tool_mod
+    from chuzom.tools import agents as tool_mod
 
     reg = AgentRegistry.from_profiles([])  # empty
     tool_mod.reset_singletons_for_test(registry=reg)
     try:
         result = asyncio.run(
-            tool_mod.tessera_agent_start_session(agent_id="unknown")
+            tool_mod.chuzom_agent_start_session(agent_id="unknown")
         )
         assert result["error"] == "agent_not_found"
         assert "available_agents" in result, (
-            "tessera_agent_start_session error must include available_agents"
+            "chuzom_agent_start_session error must include available_agents"
         )
     finally:
         tool_mod.reset_singletons_for_test()
@@ -66,8 +66,8 @@ def test_invalid_budget_error_returns_structured_response():
     """Budget validation surfaces via structured response, not exception."""
     import asyncio
 
-    from tessera.agents import AgentProfile
-    from tessera.tools import agents as tool_mod
+    from chuzom.agents import AgentProfile
+    from chuzom.tools import agents as tool_mod
 
     reg = AgentRegistry.from_profiles([AgentProfile(
         id="x", description="t",
@@ -76,7 +76,7 @@ def test_invalid_budget_error_returns_structured_response():
     tool_mod.reset_singletons_for_test(registry=reg)
     try:
         result = asyncio.run(
-            tool_mod.tessera_agent_start_session(agent_id="x", budget_usd=-1.0)
+            tool_mod.chuzom_agent_start_session(agent_id="x", budget_usd=-1.0)
         )
         assert result["error"] == "invalid_budget"
         assert "requested_usd" in result
@@ -88,14 +88,14 @@ def test_session_not_found_in_route_returns_structured_error():
     """Routing against an unknown session returns error dict, not exception."""
     import asyncio
 
-    from tessera.tools import agents as tool_mod
+    from chuzom.tools import agents as tool_mod
 
     tool_mod.reset_singletons_for_test(
         session_store=SessionStore(),  # empty store
     )
     try:
         result = asyncio.run(
-            tool_mod.tessera_agent_route(
+            tool_mod.chuzom_agent_route(
                 session_id="nonexistent", prompt="x", estimated_cost_usd=0.01
             )
         )
@@ -110,8 +110,8 @@ def test_budget_would_exceed_error_includes_remaining(tmp_path: Path):
     so they can downsize the next call."""
     import asyncio
 
-    from tessera.agents import AgentProfile
-    from tessera.tools import agents as tool_mod
+    from chuzom.agents import AgentProfile
+    from chuzom.tools import agents as tool_mod
 
     reg = AgentRegistry.from_profiles([AgentProfile(
         id="x", description="t",
@@ -121,11 +121,11 @@ def test_budget_would_exceed_error_includes_remaining(tmp_path: Path):
     tool_mod.reset_singletons_for_test(registry=reg, session_store=store)
     try:
         start = asyncio.run(
-            tool_mod.tessera_agent_start_session(agent_id="x")
+            tool_mod.chuzom_agent_start_session(agent_id="x")
         )
         sid = start["session_id"]
         refused = asyncio.run(
-            tool_mod.tessera_agent_route(
+            tool_mod.chuzom_agent_route(
                 session_id=sid, prompt="x", estimated_cost_usd=0.20
             )
         )
@@ -148,7 +148,7 @@ def test_budget_envelope_default_consumed_is_zero():
 
 def test_agent_profile_default_budget_under_one_dollar():
     """Sensible default — agents shouldn't have unbounded spend by default."""
-    from tessera.agents import AgentProfile
+    from chuzom.agents import AgentProfile
 
     profile = AgentProfile(id="x", description="t")
     assert profile.default_budget_usd <= 1.0
@@ -156,7 +156,7 @@ def test_agent_profile_default_budget_under_one_dollar():
 
 def test_agent_profile_hard_max_at_most_few_dollars():
     """Hard max shouldn't allow individual sessions to bankrupt the user."""
-    from tessera.agents import AgentProfile
+    from chuzom.agents import AgentProfile
 
     profile = AgentProfile(id="x", description="t")
     assert profile.hard_max_budget_usd <= 5.0
@@ -197,15 +197,15 @@ def test_every_exception_class_has_a_docstring():
 
 
 def test_every_agent_mcp_tool_has_a_docstring():
-    from tessera.tools import agents as tool_mod
+    from chuzom.tools import agents as tool_mod
 
     for name in (
-        "tessera_agent_list",
-        "tessera_agent_start_session",
-        "tessera_agent_check_budget",
-        "tessera_agent_route",
-        "tessera_agent_complete_session",
-        "tessera_agent_lineage",
+        "chuzom_agent_list",
+        "chuzom_agent_start_session",
+        "chuzom_agent_check_budget",
+        "chuzom_agent_route",
+        "chuzom_agent_complete_session",
+        "chuzom_agent_lineage",
     ):
         func = getattr(tool_mod, name)
         assert func.__doc__, f"{name} missing docstring"
@@ -214,9 +214,9 @@ def test_every_agent_mcp_tool_has_a_docstring():
 def test_agent_mcp_tool_docstrings_describe_args():
     """Each tool's docstring should describe its arguments so the MCP
     client can render meaningful help to the user."""
-    from tessera.tools import agents as tool_mod
+    from chuzom.tools import agents as tool_mod
 
-    func = tool_mod.tessera_agent_start_session
+    func = tool_mod.chuzom_agent_start_session
     doc = func.__doc__ or ""
     assert "agent_id" in doc
     assert "budget_usd" in doc
@@ -224,9 +224,9 @@ def test_agent_mcp_tool_docstrings_describe_args():
 
 def test_agent_mcp_tool_docstrings_describe_return_shape():
     """Each tool should document what it returns so callers can parse it."""
-    from tessera.tools import agents as tool_mod
+    from chuzom.tools import agents as tool_mod
 
-    func = tool_mod.tessera_agent_start_session
+    func = tool_mod.chuzom_agent_start_session
     doc = func.__doc__ or ""
     assert "Returns" in doc or "session_id" in doc
 
@@ -235,16 +235,16 @@ def test_agent_mcp_tool_docstrings_describe_return_shape():
 # Help text references the right binary
 # ────────────────────────────────────────────────────────────────────────
 
-def test_pyproject_advertises_tessera_binary():
-    """The shipped entry-point binary must be `tessera`, not legacy names."""
+def test_pyproject_advertises_chuzom_binary():
+    """The shipped entry-point binary must be `chuzom`, not legacy names."""
     import tomllib
 
     ROOT = Path(__file__).resolve().parent.parent.parent
     data = tomllib.loads((ROOT / "pyproject.toml").read_text())
     scripts = data["project"].get("scripts", {})
-    assert "tessera" in scripts, "pyproject scripts must expose `tessera` binary"
+    assert "chuzom" in scripts, "pyproject scripts must expose `chuzom` binary"
     # Sanity-check the entrypoint resolves
-    target = scripts["tessera"]
+    target = scripts["chuzom"]
     module_path, func_name = target.split(":")
     import importlib
 

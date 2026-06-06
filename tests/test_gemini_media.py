@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tessera.media import generate_image_gemini, generate_video_gemini
+from chuzom.media import generate_image_gemini, generate_video_gemini
 
 
 def _mock_config():
@@ -36,8 +36,8 @@ class TestGenerateImageGemini:
         )
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
         ):
             result = await generate_image_gemini("a cat in space")
 
@@ -54,8 +54,8 @@ class TestGenerateImageGemini:
         )
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
         ):
             result = await generate_image_gemini("sunset", model="imagen-3-fast")
 
@@ -67,8 +67,8 @@ class TestGenerateImageGemini:
         mock_client.post.return_value = _mock_response({"predictions": []})
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
         ):
             result = await generate_image_gemini("nothing")
 
@@ -82,8 +82,8 @@ class TestGenerateImageGemini:
         )
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
         ):
             await generate_image_gemini("test", size="1792x1024")
 
@@ -108,8 +108,8 @@ class TestGenerateVideoGemini:
         mock_client.get.return_value = poll_resp
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             result = await generate_video_gemini("a dancing cat")
@@ -132,8 +132,8 @@ class TestGenerateVideoGemini:
         mock_client.get.return_value = poll_resp
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             result = await generate_video_gemini("test", duration=10)
@@ -148,8 +148,8 @@ class TestGenerateVideoGemini:
         mock_client.post.return_value = submit_resp
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
         ):
             result = await generate_video_gemini("test")
 
@@ -170,8 +170,8 @@ class TestGenerateVideoGemini:
         mock_client.get.side_effect = [not_done, not_done, done]
 
         with (
-            patch("tessera.media.get_config", return_value=_mock_config()),
-            patch("tessera.media._get_client", return_value=mock_client),
+            patch("chuzom.media.get_config", return_value=_mock_config()),
+            patch("chuzom.media._get_client", return_value=mock_client),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             result = await generate_video_gemini("test")

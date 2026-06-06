@@ -4,12 +4,12 @@ from unittest.mock import patch
 
 import pytest
 
-from tessera.orchestrator import (
+from chuzom.orchestrator import (
     PIPELINE_TEMPLATES,
     auto_orchestrate,
     run_pipeline,
 )
-from tessera.types import PipelineStep, TaskType
+from chuzom.types import PipelineStep, TaskType
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def mock_route(mock_litellm_response):
     async def _route(task_type, prompt, **kwargs):
         nonlocal call_count
         call_count += 1
-        from tessera.types import LLMResponse
+        from chuzom.types import LLMResponse
         return LLMResponse(
             content=f"Step {call_count} result for {task_type.value}",
             model="openai/gpt-4o",
@@ -31,7 +31,7 @@ def mock_route(mock_litellm_response):
             provider="openai",
         )
 
-    with patch("tessera.orchestrator.route_and_call", side_effect=_route) as mock:
+    with patch("chuzom.orchestrator.route_and_call", side_effect=_route) as mock:
         yield mock
 
 
@@ -105,7 +105,7 @@ class TestAutoOrchestrate:
         async def _route(task_type, prompt, **kwargs):
             nonlocal call_count
             call_count += 1
-            from tessera.types import LLMResponse
+            from chuzom.types import LLMResponse
             # First call is decomposition, return JSON
             content = decompose_result if call_count == 1 else f"Result {call_count}"
             return LLMResponse(
@@ -118,7 +118,7 @@ class TestAutoOrchestrate:
                 provider="openai",
             )
 
-        with patch("tessera.orchestrator.route_and_call", side_effect=_route):
+        with patch("chuzom.orchestrator.route_and_call", side_effect=_route):
             result = await auto_orchestrate("Tell me about AI")
 
         # 1 decomposition + 2 pipeline steps = 3 total

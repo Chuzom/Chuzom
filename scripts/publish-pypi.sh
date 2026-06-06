@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publish tessera to PyPI with automatic credential extraction from ~/.pypirc
+# Publish chuzom to PyPI with automatic credential extraction from ~/.pypirc
 #
 # Usage:
 #   ./scripts/publish-pypi.sh              # Build and publish
@@ -65,14 +65,14 @@ echo "🏗️  Building distribution..."
 rm -rf dist/
 uv build > /dev/null 2>&1
 
-if [[ ! -f "dist/claude_code_tessera-${VERSION}-py3-none-any.whl" ]]; then
+if [[ ! -f "dist/claude_code_chuzom-${VERSION}-py3-none-any.whl" ]]; then
     echo "❌ Error: Build failed or wheel not found"
     exit 1
 fi
 
 echo "✅ Built successfully"
-echo "   - dist/claude_code_tessera-${VERSION}-py3-none-any.whl"
-echo "   - dist/claude_code_tessera-${VERSION}.tar.gz"
+echo "   - dist/claude_code_chuzom-${VERSION}-py3-none-any.whl"
+echo "   - dist/claude_code_chuzom-${VERSION}.tar.gz"
 
 # Publish
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -88,4 +88,4 @@ uv publish --token "$PYPI_TOKEN"
 
 echo ""
 echo "✅ Published successfully!"
-echo "   PyPI: https://pypi.org/project/claude-code-tessera/$VERSION/"
+echo "   PyPI: https://pypi.org/project/claude-code-chuzom/$VERSION/"

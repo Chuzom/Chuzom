@@ -13,7 +13,7 @@ import pytest
 
 class TestOrgPolicyLoad:
     def test_no_file_returns_default_permissive_policy(self, tmp_path):
-        from tessera.policy import load_org_policy
+        from chuzom.policy import load_org_policy
 
         policy = load_org_policy(tmp_path / "nonexistent.yaml")
         assert policy.block_providers == []
@@ -22,7 +22,7 @@ class TestOrgPolicyLoad:
         assert policy.source == "default"
 
     def test_load_block_providers(self, tmp_path):
-        from tessera.policy import load_org_policy
+        from chuzom.policy import load_org_policy
 
         p = tmp_path / "org-policy.yaml"
         p.write_text("block_providers:\n  - openai\n  - anthropic\n")
@@ -31,7 +31,7 @@ class TestOrgPolicyLoad:
         assert "anthropic" in policy.block_providers
 
     def test_load_block_and_allow_models(self, tmp_path):
-        from tessera.policy import load_org_policy
+        from chuzom.policy import load_org_policy
 
         p = tmp_path / "org-policy.yaml"
         p.write_text(
@@ -43,7 +43,7 @@ class TestOrgPolicyLoad:
         assert "ollama/*" in policy.allow_models
 
     def test_load_task_caps(self, tmp_path):
-        from tessera.policy import load_org_policy
+        from chuzom.policy import load_org_policy
 
         p = tmp_path / "org-policy.yaml"
         p.write_text("task_caps:\n  code: 0.50\n  _total: 5.00\n")
@@ -52,7 +52,7 @@ class TestOrgPolicyLoad:
         assert policy.task_caps["_total"] == 5.00
 
     def test_invalid_yaml_returns_default(self, tmp_path):
-        from tessera.policy import load_org_policy
+        from chuzom.policy import load_org_policy
 
         p = tmp_path / "org-policy.yaml"
         p.write_text("not: valid: yaml: [[[")
@@ -62,7 +62,7 @@ class TestOrgPolicyLoad:
 
 class TestApplyPolicy:
     def test_no_restrictions_passes_all(self):
-        from tessera.policy import OrgPolicy, apply_policy
+        from chuzom.policy import OrgPolicy, apply_policy
 
         models = ["openai/gpt-4o", "anthropic/claude-haiku-4-5-20251001", "ollama/llama3"]
         policy = OrgPolicy()
@@ -71,7 +71,7 @@ class TestApplyPolicy:
         assert blocked == []
 
     def test_block_provider_removes_all_its_models(self):
-        from tessera.policy import OrgPolicy, apply_policy
+        from chuzom.policy import OrgPolicy, apply_policy
 
         models = ["openai/gpt-4o", "openai/gpt-4o-mini", "ollama/llama3"]
         policy = OrgPolicy(block_providers=["openai"])
@@ -81,7 +81,7 @@ class TestApplyPolicy:
         assert len(blocked) == 2
 
     def test_block_model_by_exact_name(self):
-        from tessera.policy import OrgPolicy, apply_policy
+        from chuzom.policy import OrgPolicy, apply_policy
 
         models = ["openai/gpt-4o", "openai/gpt-4o-mini", "ollama/llama3"]
         policy = OrgPolicy(block_models=["openai/gpt-4o"])
@@ -90,7 +90,7 @@ class TestApplyPolicy:
         assert "openai/gpt-4o-mini" in allowed
 
     def test_block_model_by_glob(self):
-        from tessera.policy import OrgPolicy, apply_policy
+        from chuzom.policy import OrgPolicy, apply_policy
 
         models = ["openai/gpt-4o", "openai/gpt-4o-mini", "ollama/llama3"]
         policy = OrgPolicy(block_models=["openai/*"])
@@ -99,7 +99,7 @@ class TestApplyPolicy:
         assert len(blocked) == 2
 
     def test_allow_list_restricts_to_listed_only(self):
-        from tessera.policy import OrgPolicy, apply_policy
+        from chuzom.policy import OrgPolicy, apply_policy
 
         models = ["openai/gpt-4o", "ollama/llama3", "gemini/gemini-2.5-flash"]
         policy = OrgPolicy(allow_models=["ollama/*"])
@@ -107,7 +107,7 @@ class TestApplyPolicy:
         assert allowed == ["ollama/llama3"]
 
     def test_allow_overrides_block_for_same_model(self):
-        from tessera.policy import OrgPolicy, apply_policy
+        from chuzom.policy import OrgPolicy, apply_policy
 
         # block all openai/* but explicitly allow gpt-4o-mini
         models = ["openai/gpt-4o", "openai/gpt-4o-mini", "ollama/llama3"]
@@ -122,7 +122,7 @@ class TestApplyPolicy:
 
 class TestRepoCfgModelFields:
     def test_block_models_parsed_from_yaml(self, tmp_path):
-        from tessera.repo_config import _dict_to_config
+        from chuzom.repo_config import _dict_to_config
 
         cfg = _dict_to_config(
             {"block_models": ["openai/gpt-4o"], "allow_models": ["ollama/*"]},
@@ -132,7 +132,7 @@ class TestRepoCfgModelFields:
         assert "ollama/*" in cfg.allow_models
 
     def test_merge_combines_block_model_lists(self):
-        from tessera.repo_config import RepoConfig, _merge
+        from chuzom.repo_config import RepoConfig, _merge
 
         base = RepoConfig(block_models=["openai/gpt-4o"])
         override = RepoConfig(block_models=["anthropic/claude-opus-4-6"])
@@ -143,18 +143,18 @@ class TestRepoCfgModelFields:
 
 class TestPolicySummary:
     def test_no_file_shows_permissive_message(self, tmp_path):
-        from tessera.policy import OrgPolicy, policy_summary
+        from chuzom.policy import OrgPolicy, policy_summary
 
         summary = policy_summary(OrgPolicy())
         assert "No org policy" in summary or "All providers" in summary
 
     def test_policy_with_blocks_shows_details(self, tmp_path):
-        from tessera.policy import OrgPolicy, policy_summary
+        from chuzom.policy import OrgPolicy, policy_summary
 
         org = OrgPolicy(
             block_providers=["openai"],
             block_models=["anthropic/claude-opus-4-6"],
-            source="/etc/tessera/policy.yaml",
+            source="/etc/chuzom/policy.yaml",
         )
         summary = policy_summary(org)
         assert "openai" in summary
@@ -164,7 +164,7 @@ class TestPolicySummary:
 class TestLlmPolicyTool:
     @pytest.mark.asyncio
     async def test_returns_policy_header(self, mock_env):
-        from tessera.tools.admin import llm_policy
+        from chuzom.tools.admin import llm_policy
 
         result = await llm_policy()
         assert "Policy" in result
@@ -178,16 +178,16 @@ class TestLlmPolicyTool:
 class TestFormatDigest:
     @pytest.mark.asyncio
     async def test_digest_contains_period_label(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.digest import format_digest
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.digest import format_digest
 
         result = await format_digest("week")
         assert "week" in result.lower() or "Digest" in result
 
     @pytest.mark.asyncio
     async def test_digest_shows_dividers(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.digest import format_digest
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.digest import format_digest
 
         result = await format_digest("today")
         assert "─" in result
@@ -196,8 +196,8 @@ class TestFormatDigest:
 class TestDetectSpendSpike:
     @pytest.mark.asyncio
     async def test_no_spike_on_empty_db(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.digest import detect_spend_spike
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.digest import detect_spend_spike
 
         is_spike, today, avg = await detect_spend_spike()
         assert not is_spike
@@ -209,7 +209,7 @@ class TestDetectSpendSpike:
         """Spike fires when today >= multiplier * 7-day average."""
 
         # Patch the DB query to return controlled values
-        with patch("tessera.digest._get_db") as mock_db:
+        with patch("chuzom.digest._get_db") as mock_db:
             # today = 10, 7-day total = 7 → avg = 1 → spike at 2x
             conn = AsyncMock()
             conn.execute = AsyncMock()
@@ -227,8 +227,8 @@ class TestDetectSpendSpike:
 class TestSimulateWithoutRouting:
     @pytest.mark.asyncio
     async def test_empty_db_returns_zeros(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.digest import simulate_without_routing
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.digest import simulate_without_routing
 
         actual, baseline, pct = await simulate_without_routing("week")
         assert actual == 0.0
@@ -239,7 +239,7 @@ class TestSimulateWithoutRouting:
 class TestSendToWebhook:
     @pytest.mark.asyncio
     async def test_no_url_returns_error(self):
-        from tessera.digest import send_to_webhook
+        from chuzom.digest import send_to_webhook
 
         ok, msg = await send_to_webhook("", "test digest")
         assert not ok
@@ -247,21 +247,21 @@ class TestSendToWebhook:
 
     @pytest.mark.asyncio
     async def test_payload_format_slack(self):
-        from tessera.digest import _build_payload
+        from chuzom.digest import _build_payload
 
         payload = _build_payload("https://hooks.slack.com/T12/B12/xxx", "hello")
         assert "blocks" in payload
 
     @pytest.mark.asyncio
     async def test_payload_format_discord(self):
-        from tessera.digest import _build_payload
+        from chuzom.digest import _build_payload
 
         payload = _build_payload("https://discord.com/api/webhooks/123/abc", "hello")
         assert "content" in payload
 
     @pytest.mark.asyncio
     async def test_payload_format_generic(self):
-        from tessera.digest import _build_payload
+        from chuzom.digest import _build_payload
 
         payload = _build_payload("https://my-server.com/webhook", "hello")
         assert "text" in payload
@@ -270,21 +270,21 @@ class TestSendToWebhook:
 class TestLlmDigestTool:
     @pytest.mark.asyncio
     async def test_digest_tool_no_send_returns_formatted(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.tools.admin import llm_digest
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.tools.admin import llm_digest
 
         result = await llm_digest(period="week", send=False)
         assert "Digest" in result or "─" in result
 
     @pytest.mark.asyncio
     async def test_digest_tool_send_without_url_shows_hint(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        monkeypatch.delenv("TESSERA_WEBHOOK_URL", raising=False)
-        monkeypatch.delenv("TESSERA_TEAM_ENDPOINT", raising=False)
-        from tessera.tools.admin import llm_digest
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        monkeypatch.delenv("CHUZOM_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("CHUZOM_TEAM_ENDPOINT", raising=False)
+        from chuzom.tools.admin import llm_digest
 
         result = await llm_digest(period="week", send=True)
-        assert "TESSERA_WEBHOOK_URL" in result
+        assert "CHUZOM_WEBHOOK_URL" in result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -294,8 +294,8 @@ class TestLlmDigestTool:
 class TestGetBenchmarkStats:
     @pytest.mark.asyncio
     async def test_empty_db_returns_empty_dict(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.community import get_benchmark_stats
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.community import get_benchmark_stats
 
         stats = await get_benchmark_stats()
         assert isinstance(stats, dict)
@@ -304,7 +304,7 @@ class TestGetBenchmarkStats:
     async def test_stats_structure(self, mock_env, tmp_path, monkeypatch):
         """Stats dict has expected keys when data exists."""
         import aiosqlite
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
 
         # Seed routing_decisions with one row
         db = await aiosqlite.connect(str(tmp_path / "test.db"))
@@ -328,7 +328,7 @@ class TestGetBenchmarkStats:
         await db.commit()
         await db.close()
 
-        from tessera.community import get_benchmark_stats
+        from chuzom.community import get_benchmark_stats
         stats = await get_benchmark_stats()
         if "code" in stats:
             s = stats["code"]
@@ -339,21 +339,21 @@ class TestGetBenchmarkStats:
 
 class TestGetConfidenceStr:
     def test_few_calls_shows_insufficient_message(self):
-        from tessera.community import get_confidence_str
+        from chuzom.community import get_confidence_str
 
         stats = {"code": {"total": 3, "rated": 0, "accuracy_pct": None}}
         result = get_confidence_str(stats, "code")
         assert "too few" in result
 
     def test_no_rated_calls_suggests_rating(self):
-        from tessera.community import get_confidence_str
+        from chuzom.community import get_confidence_str
 
         stats = {"code": {"total": 20, "rated": 0, "accuracy_pct": None}}
         result = get_confidence_str(stats, "code")
         assert "llm_rate" in result or "rate" in result.lower()
 
     def test_accuracy_shown_when_rated(self):
-        from tessera.community import get_confidence_str
+        from chuzom.community import get_confidence_str
 
         stats = {"code": {"total": 50, "rated": 30, "accuracy_pct": 93.3}}
         result = get_confidence_str(stats, "code")
@@ -363,13 +363,13 @@ class TestGetConfidenceStr:
 
 class TestFormatBenchmarkReport:
     def test_empty_stats_shows_no_data_message(self):
-        from tessera.community import format_benchmark_report
+        from chuzom.community import format_benchmark_report
 
         result = format_benchmark_report({})
         assert "No routing decisions" in result
 
     def test_report_contains_task_types(self):
-        from tessera.community import format_benchmark_report
+        from chuzom.community import format_benchmark_report
 
         stats = {
             "code":  {"total": 100, "rated": 50, "good": 45, "bad": 5, "accuracy_pct": 90.0, "top_model": "ollama/qwen3"},
@@ -384,8 +384,8 @@ class TestFormatBenchmarkReport:
 class TestLlmBenchmarkTool:
     @pytest.mark.asyncio
     async def test_tool_returns_report(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        from tessera.tools.admin import llm_benchmark
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        from chuzom.tools.admin import llm_benchmark
 
         result = await llm_benchmark()
         assert isinstance(result, str)
@@ -393,9 +393,9 @@ class TestLlmBenchmarkTool:
 
     @pytest.mark.asyncio
     async def test_community_flag_triggers_export(self, mock_env, tmp_path, monkeypatch):
-        monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
-        monkeypatch.setenv("TESSERA_COMMUNITY", "true")
-        from tessera.tools.admin import llm_benchmark
+        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
+        monkeypatch.setenv("CHUZOM_COMMUNITY", "true")
+        from chuzom.tools.admin import llm_benchmark
 
         result = await llm_benchmark()
         assert "export" in result.lower() or "Community" in result
@@ -404,10 +404,10 @@ class TestLlmBenchmarkTool:
 class TestNewToolsRegistered:
     def test_policy_digest_benchmark_registered(self, monkeypatch):
         # These tools are only registered when slim=off (not in routing tier)
-        monkeypatch.setenv("TESSERA_SLIM", "off")
+        monkeypatch.setenv("CHUZOM_SLIM", "off")
         # Re-import to pick up slim=off
         import importlib
-        from tessera import server as _srv
+        from chuzom import server as _srv
         importlib.reload(_srv)
         tools = {t.name for t in _srv.mcp._tool_manager.list_tools()}
         assert "llm_policy"    in tools

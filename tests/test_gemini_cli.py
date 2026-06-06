@@ -4,14 +4,14 @@ from unittest.mock import patch
 
 import pytest
 
-from tessera.gemini_cli_agent import (
+from chuzom.gemini_cli_agent import (
     GEMINI_MODELS,
     GeminiCLIResult,
     find_gemini_binary,
     is_gemini_cli_available,
     run_gemini_cli,
 )
-from tessera.gemini_cli_quota import (
+from chuzom.gemini_cli_quota import (
     get_gemini_pressure,
     get_gemini_quota_status,
     log_gemini_request,
@@ -43,7 +43,7 @@ class TestGeminiCLIAgent:
     async def test_run_gemini_cli_not_found(self):
         """Test subprocess call when binary is missing."""
         # Override find_gemini_binary to return None
-        with patch("tessera.gemini_cli_agent.find_gemini_binary", return_value=None):
+        with patch("chuzom.gemini_cli_agent.find_gemini_binary", return_value=None):
             result = await run_gemini_cli("test prompt")
             assert isinstance(result, GeminiCLIResult)
             assert result.exit_code == 1
@@ -107,14 +107,14 @@ class TestGeminiCLIIntegration:
     @pytest.mark.asyncio
     async def test_gemini_models_in_routing(self):
         """Test Gemini models can be imported by router."""
-        from tessera.router import GEMINI_MODELS as router_gemini_models
-        from tessera.gemini_cli_agent import GEMINI_MODELS as agent_gemini_models
+        from chuzom.router import GEMINI_MODELS as router_gemini_models
+        from chuzom.gemini_cli_agent import GEMINI_MODELS as agent_gemini_models
 
         assert router_gemini_models == agent_gemini_models
 
     def test_gemini_cli_in_profiles(self):
         """Test Gemini CLI models are in free models list."""
-        from tessera.profiles import _FREE_EXTERNAL_MODELS
+        from chuzom.profiles import _FREE_EXTERNAL_MODELS
 
         # Check at least one Gemini CLI model is marked as free
         gemini_models = [m for m in _FREE_EXTERNAL_MODELS if "gemini_cli" in m]
@@ -123,6 +123,6 @@ class TestGeminiCLIIntegration:
     @pytest.mark.asyncio
     async def test_gemini_cli_tool_registration(self):
         """Test Gemini CLI tool can be imported."""
-        from tessera.tools.gemini_cli import llm_gemini
+        from chuzom.tools.gemini_cli import llm_gemini
 
         assert callable(llm_gemini)

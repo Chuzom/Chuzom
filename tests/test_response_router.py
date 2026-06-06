@@ -2,7 +2,7 @@
 
 import pytest
 
-from tessera.response_router import ResponseRouter, ResponseSection
+from chuzom.response_router import ResponseRouter, ResponseSection
 
 
 class TestResponseParsing:

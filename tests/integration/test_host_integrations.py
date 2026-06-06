@@ -1,8 +1,8 @@
 """Integration tests — every supported host gets full validation.
 
 What this suite proves for each host:
-    1. The config artifact Tessera ships is structurally valid.
-    2. Required fields are present and reference Tessera (not llm-router).
+    1. The config artifact Chuzom ships is structurally valid.
+    2. Required fields are present and reference Chuzom (not llm-router).
     3. Python adapters install + uninstall idempotently and don't clobber
        coexisting MCP servers in the same config file.
     4. The version in every manifest matches pyproject.toml.
@@ -93,7 +93,7 @@ def test_plugin_manifest_version_matches_pyproject(
 
 @pytest.mark.parametrize("label,path", _plugin_files(), ids=lambda x: x if isinstance(x, str) else "")
 def test_plugin_manifest_has_no_legacy_brand_references(label: str, path: Path):
-    """Every reference must be 'tessera', never 'llm-router' / 'llm_router' /
+    """Every reference must be 'chuzom', never 'llm-router' / 'llm_router' /
     'LLM_ROUTER_' env vars. The rebrand must be complete."""
     raw = path.read_text()
     legacy = re.findall(r"llm[-_]router|LLM_ROUTER_", raw)
@@ -118,7 +118,7 @@ def test_plugin_manifest_has_name_and_description(label: str, path: Path):
 # Rules files — every per-host markdown
 # ────────────────────────────────────────────────────────────────────────
 
-RULES_DIR = ROOT / "src" / "tessera" / "rules"
+RULES_DIR = ROOT / "src" / "chuzom" / "rules"
 
 
 def _rules_files() -> list[Path]:
@@ -144,9 +144,9 @@ def test_rules_file_starts_with_markdown_header(path: Path):
 
 @pytest.mark.parametrize("path", _rules_files(), ids=lambda p: p.name)
 def test_rules_file_has_no_legacy_brand_references(path: Path):
-    """Rules files MUST reference tessera, not llm-router.
+    """Rules files MUST reference chuzom, not llm-router.
 
-    Tessera is the new brand. Legacy refs would confuse end users about
+    Chuzom is the new brand. Legacy refs would confuse end users about
     which router actually fires.
     """
     raw = path.read_text()
@@ -158,10 +158,10 @@ def test_rules_file_has_no_legacy_brand_references(path: Path):
 
 
 @pytest.mark.parametrize("path", _rules_files(), ids=lambda p: p.name)
-def test_rules_file_mentions_at_least_one_tessera_tool(path: Path):
-    """Rules should tell the user about at least one Tessera MCP tool."""
+def test_rules_file_mentions_at_least_one_chuzom_tool(path: Path):
+    """Rules should tell the user about at least one Chuzom MCP tool."""
     raw = path.read_text().lower()
-    tools = ["llm_query", "llm_research", "llm_analyze", "llm_code", "llm_generate", "tessera_agent"]
+    tools = ["llm_query", "llm_research", "llm_analyze", "llm_code", "llm_generate", "chuzom_agent"]
     if not any(t in raw for t in tools):
         pytest.skip(
             f"{path.name} doesn't mention tools — may be a high-level host overview"
@@ -174,35 +174,35 @@ def test_rules_file_mentions_at_least_one_tessera_tool(path: Path):
 
 def test_cursor_adapter_writes_valid_config(tmp_path):
     """CursorAdapter.install creates ~/.cursor/mcp.json with the expected schema."""
-    from tessera.hosts.cursor import CursorAdapter
+    from chuzom.hosts.cursor import CursorAdapter
 
     adapter = CursorAdapter(config_path=tmp_path / "mcp.json")
-    written_path = adapter.install(server_command=["tessera"])
+    written_path = adapter.install(server_command=["chuzom"])
 
     assert written_path.exists(), "install() must create the config file"
     config = _read_json(written_path)
     assert "mcpServers" in config
-    assert "tessera" in config["mcpServers"]
-    entry = config["mcpServers"]["tessera"]
-    assert entry["command"] == "tessera"
+    assert "chuzom" in config["mcpServers"]
+    entry = config["mcpServers"]["chuzom"]
+    assert entry["command"] == "chuzom"
     assert entry["args"] == []
 
 
 def test_cursor_adapter_install_is_idempotent(tmp_path):
     """Two installs in a row must produce the same config (no duplicates)."""
-    from tessera.hosts.cursor import CursorAdapter
+    from chuzom.hosts.cursor import CursorAdapter
 
     adapter = CursorAdapter(config_path=tmp_path / "mcp.json")
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     first = _read_json(tmp_path / "mcp.json")
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     second = _read_json(tmp_path / "mcp.json")
     assert first == second
 
 
 def test_cursor_adapter_preserves_other_mcp_servers(tmp_path):
-    """Tessera install must NOT clobber unrelated MCP servers in the same file."""
-    from tessera.hosts.cursor import CursorAdapter
+    """Chuzom install must NOT clobber unrelated MCP servers in the same file."""
+    from chuzom.hosts.cursor import CursorAdapter
 
     pre_existing = {
         "mcpServers": {
@@ -214,32 +214,32 @@ def test_cursor_adapter_preserves_other_mcp_servers(tmp_path):
     cfg.write_text(json.dumps(pre_existing))
 
     adapter = CursorAdapter(config_path=cfg)
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     after = _read_json(cfg)
     assert "other-server" in after["mcpServers"]
     assert "another-one" in after["mcpServers"]
-    assert "tessera" in after["mcpServers"]
+    assert "chuzom" in after["mcpServers"]
 
 
-def test_cursor_adapter_uninstall_removes_only_tessera(tmp_path):
-    from tessera.hosts.cursor import CursorAdapter
+def test_cursor_adapter_uninstall_removes_only_chuzom(tmp_path):
+    from chuzom.hosts.cursor import CursorAdapter
 
     cfg = tmp_path / "mcp.json"
     cfg.write_text(json.dumps({
         "mcpServers": {
             "other-server": {"command": "other"},
-            "tessera": {"command": "tessera"},
+            "chuzom": {"command": "chuzom"},
         }
     }))
     adapter = CursorAdapter(config_path=cfg)
     adapter.uninstall()
     after = _read_json(cfg)
-    assert "tessera" not in after["mcpServers"]
+    assert "chuzom" not in after["mcpServers"]
     assert "other-server" in after["mcpServers"]
 
 
 def test_cursor_adapter_uninstall_on_missing_config_is_noop(tmp_path):
-    from tessera.hosts.cursor import CursorAdapter
+    from chuzom.hosts.cursor import CursorAdapter
 
     adapter = CursorAdapter(config_path=tmp_path / "nonexistent.json")
     result = adapter.uninstall()
@@ -247,11 +247,11 @@ def test_cursor_adapter_uninstall_on_missing_config_is_noop(tmp_path):
 
 
 def test_cursor_adapter_is_installed_check(tmp_path):
-    from tessera.hosts.cursor import CursorAdapter
+    from chuzom.hosts.cursor import CursorAdapter
 
     adapter = CursorAdapter(config_path=tmp_path / "mcp.json")
     assert not adapter.is_installed()
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     assert adapter.is_installed()
     adapter.uninstall()
     assert not adapter.is_installed()
@@ -259,61 +259,61 @@ def test_cursor_adapter_is_installed_check(tmp_path):
 
 def test_cursor_adapter_recovers_from_corrupt_config(tmp_path):
     """If mcp.json is invalid JSON, install should overwrite it cleanly."""
-    from tessera.hosts.cursor import CursorAdapter
+    from chuzom.hosts.cursor import CursorAdapter
 
     cfg = tmp_path / "mcp.json"
     cfg.write_text("{ this is not valid json [[[")
     adapter = CursorAdapter(config_path=cfg)
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     after = _read_json(cfg)
-    assert "tessera" in after["mcpServers"]
+    assert "chuzom" in after["mcpServers"]
 
 
 def test_gemini_cli_adapter_writes_valid_config(tmp_path):
-    from tessera.hosts.gemini_cli import GeminiCliAdapter
+    from chuzom.hosts.gemini_cli import GeminiCliAdapter
 
     adapter = GeminiCliAdapter(config_path=tmp_path / "mcp_servers.json")
-    written = adapter.install(server_command=["tessera", "--stdio"])
+    written = adapter.install(server_command=["chuzom", "--stdio"])
     config = _read_json(written)
     assert "mcpServers" in config
-    assert config["mcpServers"]["tessera"]["command"] == "tessera"
-    assert config["mcpServers"]["tessera"]["args"] == ["--stdio"]
+    assert config["mcpServers"]["chuzom"]["command"] == "chuzom"
+    assert config["mcpServers"]["chuzom"]["args"] == ["--stdio"]
 
 
 def test_gemini_cli_adapter_install_is_idempotent(tmp_path):
-    from tessera.hosts.gemini_cli import GeminiCliAdapter
+    from chuzom.hosts.gemini_cli import GeminiCliAdapter
 
     adapter = GeminiCliAdapter(config_path=tmp_path / "mcp_servers.json")
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     first = _read_json(tmp_path / "mcp_servers.json")
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     second = _read_json(tmp_path / "mcp_servers.json")
     assert first == second
 
 
 def test_gemini_cli_adapter_preserves_other_servers(tmp_path):
-    from tessera.hosts.gemini_cli import GeminiCliAdapter
+    from chuzom.hosts.gemini_cli import GeminiCliAdapter
 
     cfg = tmp_path / "mcp_servers.json"
     cfg.write_text(json.dumps({
         "mcpServers": {"existing": {"command": "x"}},
     }))
     adapter = GeminiCliAdapter(config_path=cfg)
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     after = _read_json(cfg)
     assert "existing" in after["mcpServers"]
-    assert "tessera" in after["mcpServers"]
+    assert "chuzom" in after["mcpServers"]
 
 
 def test_gemini_cli_adapter_uninstall_idempotent(tmp_path):
-    from tessera.hosts.gemini_cli import GeminiCliAdapter
+    from chuzom.hosts.gemini_cli import GeminiCliAdapter
 
     adapter = GeminiCliAdapter(config_path=tmp_path / "mcp_servers.json")
-    adapter.install(server_command=["tessera"])
+    adapter.install(server_command=["chuzom"])
     adapter.uninstall()
     adapter.uninstall()  # second time on empty must not crash
     after = _read_json(tmp_path / "mcp_servers.json")
-    assert "tessera" not in after.get("mcpServers", {})
+    assert "chuzom" not in after.get("mcpServers", {})
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ CLI_INSTALL_HOSTS = [
 
 @pytest.mark.parametrize("host", CLI_INSTALL_HOSTS)
 def test_cli_install_host_has_rules_or_plugin(host: str):
-    """Every host advertised in tessera install --host <X> must have either
+    """Every host advertised in chuzom install --host <X> must have either
     a plugin directory or a *-rules.md file backing it."""
     rules_candidates = [
         RULES_DIR / f"{host}-rules.md",
@@ -362,12 +362,12 @@ EXPECTED_TOOL_GROUPS = {
     "routing": ["llm_classify", "llm_route"],
     "text": ["llm_query", "llm_research", "llm_analyze", "llm_code", "llm_generate"],
     "agents": [
-        "tessera_agent_list",
-        "tessera_agent_start_session",
-        "tessera_agent_route",
-        "tessera_agent_check_budget",
-        "tessera_agent_complete_session",
-        "tessera_agent_lineage",
+        "chuzom_agent_list",
+        "chuzom_agent_start_session",
+        "chuzom_agent_route",
+        "chuzom_agent_check_budget",
+        "chuzom_agent_complete_session",
+        "chuzom_agent_lineage",
     ],
 }
 
@@ -384,17 +384,17 @@ def test_tools_module_exposes_expected_callables(
     canonical names so the FastMCP server can wire them by reference."""
     import importlib
 
-    mod = importlib.import_module(f"tessera.tools.{module_name}")
+    mod = importlib.import_module(f"chuzom.tools.{module_name}")
     for name in expected_tools:
         assert hasattr(mod, name), (
-            f"tessera.tools.{module_name}.{name} missing — "
+            f"chuzom.tools.{module_name}.{name} missing — "
             f"MCP server registration will fail"
         )
 
 
 def test_tools_agents_register_function_exists():
     """tools/agents.py.register(mcp) wires all 6 agent tools at server start."""
-    from tessera.tools import agents
+    from chuzom.tools import agents
 
     assert callable(agents.register), "tools/agents.py must expose register(mcp)"
 
@@ -420,7 +420,7 @@ def test_framework_adapter_has_protocol_shape(framework: str):
     FrameworkAdapter protocol shape (name + 3 methods)."""
     import importlib
 
-    mod = importlib.import_module(f"tessera.frameworks.{framework}")
+    mod = importlib.import_module(f"chuzom.frameworks.{framework}")
     # Find the Adapter class (capitalized framework name + Adapter suffix)
     candidates = [
         attr for attr in dir(mod)
@@ -442,7 +442,7 @@ def test_framework_adapter_has_protocol_shape(framework: str):
 def test_framework_adapter_is_available_is_callable(framework: str):
     import importlib
 
-    mod = importlib.import_module(f"tessera.frameworks.{framework}")
+    mod = importlib.import_module(f"chuzom.frameworks.{framework}")
     candidates = [
         attr for attr in dir(mod)
         if attr.endswith("Adapter") and not attr.startswith("_")
@@ -475,26 +475,26 @@ def test_all_plugin_versions_match():
 
 
 def test_main_rules_file_exists():
-    """tessera.md is the canonical Claude Code rules file."""
-    assert (RULES_DIR / "tessera.md").exists(), (
-        "src/tessera/rules/tessera.md must exist — Claude Code installs reference it"
+    """chuzom.md is the canonical Claude Code rules file."""
+    assert (RULES_DIR / "chuzom.md").exists(), (
+        "src/chuzom/rules/chuzom.md must exist — Claude Code installs reference it"
     )
 
 
 def test_main_rules_file_has_version_marker():
-    """tessera.md should start with an HTML comment carrying a version marker."""
-    content = (RULES_DIR / "tessera.md").read_text()
+    """chuzom.md should start with an HTML comment carrying a version marker."""
+    content = (RULES_DIR / "chuzom.md").read_text()
     first_line = content.split("\n", 1)[0]
-    assert "tessera-rules-version" in first_line, (
-        f"tessera.md first line should be a version marker, got: {first_line!r}"
+    assert "chuzom-rules-version" in first_line, (
+        f"chuzom.md first line should be a version marker, got: {first_line!r}"
     )
 
 
-def test_dotrules_file_references_tessera():
-    """The repo-root .rules file is for Trae IDE; must reference tessera."""
+def test_dotrules_file_references_chuzom():
+    """The repo-root .rules file is for Trae IDE; must reference chuzom."""
     dotrules = ROOT / ".rules"
     if not dotrules.exists():
         pytest.skip(".rules file not shipped at root")
     content = dotrules.read_text()
-    assert "tessera" in content.lower(), ".rules must reference tessera brand"
+    assert "chuzom" in content.lower(), ".rules must reference chuzom brand"
     assert "llm-router" not in content.lower(), ".rules must not reference legacy brand"

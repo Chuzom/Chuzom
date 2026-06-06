@@ -1,6 +1,6 @@
 """Tests for response compression (Phase 2 — Token-Savior)."""
 
-from tessera.compression.response_compressor import ResponseCompressor, compress_response
+from chuzom.compression.response_compressor import ResponseCompressor, compress_response
 
 
 class TestCompressionResult:
@@ -8,7 +8,7 @@ class TestCompressionResult:
 
     def test_tokens_saved_calculation(self):
         """Test that tokens_saved correctly calculates the difference."""
-        from tessera.compression.response_compressor import CompressionResult
+        from chuzom.compression.response_compressor import CompressionResult
 
         result = CompressionResult(
             original_tokens=100,
@@ -21,7 +21,7 @@ class TestCompressionResult:
 
     def test_tokens_saved_zero(self):
         """Test tokens_saved when no compression occurred."""
-        from tessera.compression.response_compressor import CompressionResult
+        from chuzom.compression.response_compressor import CompressionResult
 
         result = CompressionResult(
             original_tokens=100,

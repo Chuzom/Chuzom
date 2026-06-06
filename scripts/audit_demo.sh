@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "  tessera v5.3 Audit Demo"
+echo "  chuzom v5.3 Audit Demo"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 

@@ -6,7 +6,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from tessera.caveman import CavemanIntensity, get_caveman_prompt, should_use_caveman
+from chuzom.caveman import CavemanIntensity, get_caveman_prompt, should_use_caveman
 
 
 def test_caveman_intensity_enum():

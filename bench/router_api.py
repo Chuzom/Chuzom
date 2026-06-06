@@ -5,9 +5,9 @@ chosen, the response text, token usage, cost, and latency. Routers are
 plug-in: drop a new class in, register it in the runner's REGISTRY, and it
 competes head-to-head on the same corpus.
 
-This is intentionally NOT tied to Tessera internals — a LiteLLM router, an
+This is intentionally NOT tied to Chuzom internals — a LiteLLM router, an
 OpenRouter API call, or a third-party gateway can all be wrapped as a
-Router and benchmarked alongside Tessera.
+Router and benchmarked alongside Chuzom.
 """
 from __future__ import annotations
 

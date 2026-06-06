@@ -13,18 +13,18 @@ import pytest
 class TestHeliconeHeaders:
     def test_returns_empty_without_api_key(self, monkeypatch):
         monkeypatch.delenv("HELICONE_API_KEY", raising=False)
-        from tessera.integrations.helicone import get_helicone_headers
+        from chuzom.integrations.helicone import get_helicone_headers
         assert get_helicone_headers(task_type="code", model="gpt-4o") == {}
 
     def test_returns_auth_header_with_key(self, monkeypatch):
         monkeypatch.setenv("HELICONE_API_KEY", "sk-helicone-test")
-        from tessera.integrations.helicone import get_helicone_headers
+        from chuzom.integrations.helicone import get_helicone_headers
         headers = get_helicone_headers()
         assert headers["Helicone-Auth"] == "Bearer sk-helicone-test"
 
     def test_includes_routing_properties(self, monkeypatch):
         monkeypatch.setenv("HELICONE_API_KEY", "sk-helicone-test")
-        from tessera.integrations.helicone import get_helicone_headers
+        from chuzom.integrations.helicone import get_helicone_headers
         headers = get_helicone_headers(
             task_type="code", model="ollama/qwen3:32b",
             complexity="moderate", profile="balanced",
@@ -36,19 +36,19 @@ class TestHeliconeHeaders:
 
     def test_omits_empty_properties(self, monkeypatch):
         monkeypatch.setenv("HELICONE_API_KEY", "sk-helicone-test")
-        from tessera.integrations.helicone import get_helicone_headers
+        from chuzom.integrations.helicone import get_helicone_headers
         headers = get_helicone_headers()
         assert "Helicone-Property-Router-Task-Type" not in headers
         assert "Helicone-Property-Router-Model" not in headers
 
     def test_is_helicone_enabled_true(self, monkeypatch):
         monkeypatch.setenv("HELICONE_API_KEY", "sk-test")
-        from tessera.integrations.helicone import is_helicone_enabled
+        from chuzom.integrations.helicone import is_helicone_enabled
         assert is_helicone_enabled() is True
 
     def test_is_helicone_enabled_false(self, monkeypatch):
         monkeypatch.delenv("HELICONE_API_KEY", raising=False)
-        from tessera.integrations.helicone import is_helicone_enabled
+        from chuzom.integrations.helicone import is_helicone_enabled
         assert is_helicone_enabled() is False
 
 
@@ -56,22 +56,22 @@ class TestHeliconeSpendPull:
     @pytest.mark.asyncio
     async def test_returns_empty_without_key(self, monkeypatch):
         monkeypatch.delenv("HELICONE_API_KEY", raising=False)
-        from tessera.integrations.helicone import get_helicone_spend
+        from chuzom.integrations.helicone import get_helicone_spend
         result = await get_helicone_spend()
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_pull_disabled(self, monkeypatch):
         monkeypatch.setenv("HELICONE_API_KEY", "sk-test")
-        monkeypatch.delenv("TESSERA_HELICONE_PULL", raising=False)
-        from tessera.integrations.helicone import get_helicone_spend
+        monkeypatch.delenv("CHUZOM_HELICONE_PULL", raising=False)
+        from chuzom.integrations.helicone import get_helicone_spend
         result = await get_helicone_spend()
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_parses_helicone_response(self, monkeypatch):
         monkeypatch.setenv("HELICONE_API_KEY", "sk-test")
-        monkeypatch.setenv("TESSERA_HELICONE_PULL", "true")
+        monkeypatch.setenv("CHUZOM_HELICONE_PULL", "true")
 
         fake_response = json.dumps({
             "data": [
@@ -86,7 +86,7 @@ class TestHeliconeSpendPull:
         mock_resp.read.return_value = fake_response
 
         with patch("urllib.request.urlopen", return_value=mock_resp):
-            from tessera.integrations import helicone as _hm
+            from chuzom.integrations import helicone as _hm
             import importlib
             importlib.reload(_hm)
             result = await _hm.get_helicone_spend()
@@ -97,9 +97,9 @@ class TestHeliconeSpendPull:
     @pytest.mark.asyncio
     async def test_returns_empty_on_network_error(self, monkeypatch):
         monkeypatch.setenv("HELICONE_API_KEY", "sk-test")
-        monkeypatch.setenv("TESSERA_HELICONE_PULL", "true")
+        monkeypatch.setenv("CHUZOM_HELICONE_PULL", "true")
         with patch("urllib.request.urlopen", side_effect=OSError("timeout")):
-            from tessera.integrations.helicone import get_helicone_spend
+            from chuzom.integrations.helicone import get_helicone_spend
             result = await get_helicone_spend()
         assert result == {}
 
@@ -108,33 +108,33 @@ class TestHeliconeSpendPull:
 
 class TestLiteLLMBudget:
     def test_not_enabled_without_db_path(self, monkeypatch):
-        monkeypatch.delenv("TESSERA_LITELLM_BUDGET_DB", raising=False)
-        from tessera.integrations.litellm_budget import is_litellm_budget_enabled
+        monkeypatch.delenv("CHUZOM_LITELLM_BUDGET_DB", raising=False)
+        from chuzom.integrations.litellm_budget import is_litellm_budget_enabled
         assert is_litellm_budget_enabled() is False
 
     def test_not_enabled_when_path_missing(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("TESSERA_LITELLM_BUDGET_DB", str(tmp_path / "nonexistent.db"))
-        from tessera.integrations.litellm_budget import is_litellm_budget_enabled
+        monkeypatch.setenv("CHUZOM_LITELLM_BUDGET_DB", str(tmp_path / "nonexistent.db"))
+        from chuzom.integrations.litellm_budget import is_litellm_budget_enabled
         assert is_litellm_budget_enabled() is False
 
     def test_enabled_when_db_exists(self, monkeypatch, tmp_path):
         db = tmp_path / "litellm.db"
         db.touch()
-        monkeypatch.setenv("TESSERA_LITELLM_BUDGET_DB", str(db))
-        from tessera.integrations.litellm_budget import is_litellm_budget_enabled
+        monkeypatch.setenv("CHUZOM_LITELLM_BUDGET_DB", str(db))
+        from chuzom.integrations.litellm_budget import is_litellm_budget_enabled
         assert is_litellm_budget_enabled() is True
 
     @pytest.mark.asyncio
     async def test_returns_empty_without_config(self, monkeypatch):
-        monkeypatch.delenv("TESSERA_LITELLM_BUDGET_DB", raising=False)
-        from tessera.integrations.litellm_budget import get_litellm_spend
+        monkeypatch.delenv("CHUZOM_LITELLM_BUDGET_DB", raising=False)
+        from chuzom.integrations.litellm_budget import get_litellm_spend
         result = await get_litellm_spend()
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_missing_db(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("TESSERA_LITELLM_BUDGET_DB", str(tmp_path / "missing.db"))
-        from tessera.integrations.litellm_budget import get_litellm_spend
+        monkeypatch.setenv("CHUZOM_LITELLM_BUDGET_DB", str(tmp_path / "missing.db"))
+        from chuzom.integrations.litellm_budget import get_litellm_spend
         result = await get_litellm_spend()
         assert result == {}
 
@@ -160,8 +160,8 @@ class TestLiteLLMBudget:
             """)
             await db.commit()
 
-        monkeypatch.setenv("TESSERA_LITELLM_BUDGET_DB", str(db_path))
-        from tessera.integrations.litellm_budget import get_litellm_spend
+        monkeypatch.setenv("CHUZOM_LITELLM_BUDGET_DB", str(db_path))
+        from chuzom.integrations.litellm_budget import get_litellm_spend
         result = await get_litellm_spend()
 
         assert result.get("openai", 0) == pytest.approx(2.80, abs=0.01)
@@ -172,7 +172,7 @@ class TestLiteLLMBudget:
         """When DB exists but is corrupt, should return empty dict not raise."""
         db_path = tmp_path / "corrupt.db"
         db_path.write_bytes(b"this is not a sqlite database")
-        monkeypatch.setenv("TESSERA_LITELLM_BUDGET_DB", str(db_path))
-        from tessera.integrations.litellm_budget import get_litellm_spend
+        monkeypatch.setenv("CHUZOM_LITELLM_BUDGET_DB", str(db_path))
+        from chuzom.integrations.litellm_budget import get_litellm_spend
         result = await get_litellm_spend()
         assert result == {}

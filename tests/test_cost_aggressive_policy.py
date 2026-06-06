@@ -2,12 +2,12 @@
 
 Three surfaces covered:
 
-* :mod:`tessera.config` — OpenRouter API key wiring (env, available_providers,
+* :mod:`chuzom.config` — OpenRouter API key wiring (env, available_providers,
   text_providers).
-* :mod:`tessera.provider_quirks` — OpenRouterQuirks ``max_tokens`` cap added
+* :mod:`chuzom.provider_quirks` — OpenRouterQuirks ``max_tokens`` cap added
   on top of the Plan 07 D.4 prefix rename.
-* :mod:`tessera.calibration` — OpenRouter open-weight workhorse pricing.
-* :mod:`tessera.policies.cost_aggressive` — the new policy YAML.
+* :mod:`chuzom.calibration` — OpenRouter open-weight workhorse pricing.
+* :mod:`chuzom.policies.cost_aggressive` — the new policy YAML.
 
 We don't run live OpenRouter calls here (that needs network + a real API
 key); the test surface pins the static contracts so the policy and pricing
@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import pytest
 
-from tessera.calibration import cost_for_tokens
-from tessera.policy import PolicyManager
-from tessera.provider_quirks import OpenRouterQuirks
+from chuzom.calibration import cost_for_tokens
+from chuzom.policy import PolicyManager
+from chuzom.provider_quirks import OpenRouterQuirks
 
 
 # ── Config wiring ──────────────────────────────────────────────────────────
@@ -32,9 +32,9 @@ class TestOpenRouterConfig:
     def test_openrouter_key_makes_provider_available(self, monkeypatch):
         """Setting OPENROUTER_API_KEY surfaces ``openrouter`` in available_providers."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-router")
-        import tessera.config as config_module
+        import chuzom.config as config_module
         config_module._config = None
-        from tessera.config import get_config
+        from chuzom.config import get_config
         cfg = get_config()
         assert "openrouter" in cfg.available_providers
         assert "openrouter" in cfg.text_providers
@@ -50,9 +50,9 @@ class TestOpenRouterConfig:
         actually tests.
         """
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        import tessera.config as config_module
+        import chuzom.config as config_module
         config_module._config = None
-        from tessera.config import get_config
+        from chuzom.config import get_config
         cfg = get_config()
         monkeypatch.setattr(cfg, "openrouter_api_key", "")
         assert "openrouter" not in cfg.available_providers
@@ -204,13 +204,13 @@ class TestRouterArenaTunedPolicy:
 class TestRouterArenaTunedAlias:
     """v10.0.0 deprecation — ``routerarena_tuned`` is a backward-compat alias.
 
-    Existing user configs setting ``TESSERA_POLICY=routerarena_tuned`` must
+    Existing user configs setting ``CHUZOM_POLICY=routerarena_tuned`` must
     continue to load a policy with byte-identical workhorses / specialists /
     chains as the new ``cost_aggressive``. Slated for removal in v11.
     """
 
     def test_alias_loads(self):
-        from tessera.policy import PolicyManager
+        from chuzom.policy import PolicyManager
         # Clear cache between loads so we test the on-disk content, not the
         # cached object from a prior test.
         mgr = PolicyManager()
@@ -225,7 +225,7 @@ class TestRouterArenaTunedAlias:
     def test_alias_keeps_old_name_for_identity(self):
         """The alias keeps ``name: routerarena_tuned`` so users can
         introspect ``get_active_policy().name`` and see what they set."""
-        from tessera.policy import PolicyManager
+        from chuzom.policy import PolicyManager
         mgr = PolicyManager()
         old = mgr.load_policy("routerarena_tuned")
         assert old.name == "routerarena_tuned"

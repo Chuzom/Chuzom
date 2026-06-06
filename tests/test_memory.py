@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from tessera.memory.profiles import (
+from chuzom.memory.profiles import (
     LearnedRoute,
     build_learned_profile,
     fetch_corrections_history,
@@ -25,7 +25,7 @@ class TestFetchCorrectionsHistory:
     def test_fetch_no_db(self, monkeypatch):
         """Test behavior when database doesn't exist."""
         monkeypatch.setattr(
-            "tessera.memory.profiles.DB_PATH",
+            "chuzom.memory.profiles.DB_PATH",
             Path("/nonexistent/usage.db")
         )
         history = fetch_corrections_history()
@@ -57,7 +57,7 @@ class TestFetchCorrectionsHistory:
         conn.close()
 
         # Monkeypatch to use temp db
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_db = mp.DB_PATH
         mp.DB_PATH = db_path
 
@@ -104,7 +104,7 @@ class TestBuildLearnedProfile:
         conn.commit()
         conn.close()
 
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_db = mp.DB_PATH
         mp.DB_PATH = db_path
 
@@ -140,7 +140,7 @@ class TestBuildLearnedProfile:
         conn.commit()
         conn.close()
 
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_db = mp.DB_PATH
         mp.DB_PATH = db_path
 
@@ -189,7 +189,7 @@ class TestBuildLearnedProfile:
         conn.commit()
         conn.close()
 
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_db = mp.DB_PATH
         mp.DB_PATH = db_path
 
@@ -209,7 +209,7 @@ class TestSaveAndLoadLearnedProfile:
 
     def test_save_empty_profile(self, temp_router_dir):
         """Test saving empty profile."""
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_file = mp.LEARNED_ROUTES_FILE
         mp.LEARNED_ROUTES_FILE = temp_router_dir / "learned_routes.json"
 
@@ -223,7 +223,7 @@ class TestSaveAndLoadLearnedProfile:
 
     def test_save_and_load_profile(self, temp_router_dir):
         """Test round-trip persistence."""
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_file = mp.LEARNED_ROUTES_FILE
         mp.LEARNED_ROUTES_FILE = temp_router_dir / "learned_routes.json"
 
@@ -257,7 +257,7 @@ class TestSaveAndLoadLearnedProfile:
 
     def test_load_nonexistent_file(self, temp_router_dir):
         """Test loading when file doesn't exist."""
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_file = mp.LEARNED_ROUTES_FILE
         mp.LEARNED_ROUTES_FILE = temp_router_dir / "nonexistent.json"
 
@@ -269,7 +269,7 @@ class TestSaveAndLoadLearnedProfile:
 
     def test_load_invalid_json(self, temp_router_dir):
         """Test loading corrupted JSON file."""
-        import tessera.memory.profiles as mp
+        import chuzom.memory.profiles as mp
         original_file = mp.LEARNED_ROUTES_FILE
         learned_file = temp_router_dir / "learned_routes.json"
         mp.LEARNED_ROUTES_FILE = learned_file

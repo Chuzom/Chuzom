@@ -2,7 +2,7 @@
 
 import textwrap
 
-from tessera.code_context import (
+from chuzom.code_context import (
     Symbol,
     _build_progressive_context,
     _fallback_parse,

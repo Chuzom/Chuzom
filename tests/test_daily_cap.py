@@ -6,18 +6,18 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tessera.types import BudgetExceededError, TaskType
+from chuzom.types import BudgetExceededError, TaskType
 
 
 @pytest.fixture
 def _patch_routing(mock_env, monkeypatch, tmp_path):
     """Minimal routing patches: tmp DB, no Codex, no compaction, no caches."""
-    monkeypatch.setenv("TESSERA_DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     # Reset config singleton so it reads the new env vars
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
-    monkeypatch.setattr("tessera.router.is_codex_available", lambda: False)
+    monkeypatch.setattr("chuzom.router.is_codex_available", lambda: False)
 
 
 @pytest.mark.requires_api_keys
@@ -25,48 +25,48 @@ class TestDailySpendCap:
     @pytest.mark.asyncio
     async def test_blocks_when_daily_limit_exceeded(self, _patch_routing, monkeypatch):
         """route_and_call raises BudgetExceededError when daily spend >= limit."""
-        monkeypatch.setenv("TESSERA_DAILY_SPEND_LIMIT", "0.10")
+        monkeypatch.setenv("CHUZOM_DAILY_SPEND_LIMIT", "0.10")
 
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.15):
-            with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
-                from tessera.router import route_and_call
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.15):
+            with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
+                from chuzom.router import route_and_call
                 with pytest.raises(BudgetExceededError, match="Daily spend limit"):
                     await route_and_call(TaskType.QUERY, "hello")
 
     @pytest.mark.asyncio
     async def test_passes_when_below_daily_limit(self, _patch_routing, monkeypatch):
         """route_and_call proceeds normally when daily spend < limit."""
-        from tessera.types import LLMResponse
-        monkeypatch.setenv("TESSERA_DAILY_SPEND_LIMIT", "1.00")
+        from chuzom.types import LLMResponse
+        monkeypatch.setenv("CHUZOM_DAILY_SPEND_LIMIT", "1.00")
 
         mock_resp = LLMResponse(
             content="ok", model="openai/gpt-4o", input_tokens=10,
             output_tokens=5, cost_usd=0.001, latency_ms=100, provider="openai",
         )
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.05):
-            with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
-                with patch("tessera.router._call_text", new_callable=AsyncMock, return_value=mock_resp):
-                    with patch("tessera.cost.log_usage", new_callable=AsyncMock):
-                        from tessera.router import route_and_call
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.05):
+            with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
+                with patch("chuzom.router._call_text", new_callable=AsyncMock, return_value=mock_resp):
+                    with patch("chuzom.cost.log_usage", new_callable=AsyncMock):
+                        from chuzom.router import route_and_call
                         result = await route_and_call(TaskType.QUERY, "hello")
                         assert result.content == "ok"
 
     @pytest.mark.asyncio
     async def test_disabled_when_limit_is_zero(self, _patch_routing, monkeypatch):
-        """Daily cap is disabled when TESSERA_DAILY_SPEND_LIMIT=0 (default)."""
-        from tessera.types import LLMResponse
-        monkeypatch.setenv("TESSERA_DAILY_SPEND_LIMIT", "0")
+        """Daily cap is disabled when CHUZOM_DAILY_SPEND_LIMIT=0 (default)."""
+        from chuzom.types import LLMResponse
+        monkeypatch.setenv("CHUZOM_DAILY_SPEND_LIMIT", "0")
 
         mock_resp = LLMResponse(
             content="ok", model="openai/gpt-4o", input_tokens=10,
             output_tokens=5, cost_usd=0.001, latency_ms=100, provider="openai",
         )
         # get_daily_spend should NOT be called when limit is 0
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock, return_value=999.0) as mock_daily:
-            with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
-                with patch("tessera.router._call_text", new_callable=AsyncMock, return_value=mock_resp):
-                    with patch("tessera.cost.log_usage", new_callable=AsyncMock):
-                        from tessera.router import route_and_call
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock, return_value=999.0) as mock_daily:
+            with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
+                with patch("chuzom.router._call_text", new_callable=AsyncMock, return_value=mock_resp):
+                    with patch("chuzom.cost.log_usage", new_callable=AsyncMock):
+                        from chuzom.router import route_and_call
                         result = await route_and_call(TaskType.QUERY, "hello")
                         assert result.content == "ok"
                         mock_daily.assert_not_called()
@@ -74,12 +74,12 @@ class TestDailySpendCap:
     @pytest.mark.asyncio
     async def test_daily_checked_before_monthly(self, _patch_routing, monkeypatch):
         """Daily cap is checked first — monthly budget not queried when daily blocks."""
-        monkeypatch.setenv("TESSERA_DAILY_SPEND_LIMIT", "0.01")
-        monkeypatch.setenv("TESSERA_MONTHLY_BUDGET", "100.00")
+        monkeypatch.setenv("CHUZOM_DAILY_SPEND_LIMIT", "0.01")
+        monkeypatch.setenv("CHUZOM_MONTHLY_BUDGET", "100.00")
 
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.50) as mock_daily:
-            with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0) as mock_monthly:
-                from tessera.router import route_and_call
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.50) as mock_daily:
+            with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0) as mock_monthly:
+                from chuzom.router import route_and_call
                 with pytest.raises(BudgetExceededError, match="Daily spend limit"):
                     await route_and_call(TaskType.QUERY, "hello")
                 mock_daily.assert_called_once()
@@ -90,11 +90,11 @@ class TestDailySpendCap:
     @pytest.mark.asyncio
     async def test_error_message_contains_reset_info(self, _patch_routing, monkeypatch):
         """Error message tells the user when the cap resets."""
-        monkeypatch.setenv("TESSERA_DAILY_SPEND_LIMIT", "0.05")
+        monkeypatch.setenv("CHUZOM_DAILY_SPEND_LIMIT", "0.05")
 
-        with patch("tessera.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.10):
-            with patch("tessera.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
-                from tessera.router import route_and_call
+        with patch("chuzom.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.10):
+            with patch("chuzom.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0):
+                from chuzom.router import route_and_call
                 with pytest.raises(BudgetExceededError) as exc_info:
                     await route_and_call(TaskType.QUERY, "hello")
                 msg = str(exc_info.value)

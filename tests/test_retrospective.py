@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from tessera.retrospective import (
+from chuzom.retrospective import (
     analyze_facts,
     analyze_gaps,
     build_retrospective,
@@ -102,7 +102,7 @@ def test_get_session_window_with_valid_file(tmp_path, monkeypatch):
     session_file.write_text(str(ts))
 
     monkeypatch.setattr(
-        "tessera.retrospective.SESSION_START_FILE", session_file
+        "chuzom.retrospective.SESSION_START_FILE", session_file
     )
 
     start, end = get_session_window()
@@ -115,7 +115,7 @@ def test_get_session_window_fallback(tmp_path, monkeypatch):
     """Test session window detection falls back to 2 hours if file missing."""
     fake_file = tmp_path / "nonexistent.txt"
     monkeypatch.setattr(
-        "tessera.retrospective.SESSION_START_FILE", fake_file
+        "chuzom.retrospective.SESSION_START_FILE", fake_file
     )
 
     start, end = get_session_window()

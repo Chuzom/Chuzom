@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from tessera.hooks.direct_executor import (
+from chuzom.hooks.direct_executor import (
     ModelSpec,
     execute_chain,
     quality_ok,
@@ -50,7 +50,7 @@ class TestExecuteChain:
             ModelSpec("claude", "claude-opus-4-6", quota_cost=3.0),
             ModelSpec("ollama", "qwen3.5"),
         ]
-        with patch("tessera.hooks.direct_executor.call_ollama", return_value=("test response here", {})):
+        with patch("chuzom.hooks.direct_executor.call_ollama", return_value=("test response here", {})):
             result = execute_chain("hello", chain, "query")
         assert result is not None
         assert result.model.provider == "ollama"
@@ -61,8 +61,8 @@ class TestExecuteChain:
             ModelSpec("ollama", "qwen3.5"),
             ModelSpec("gemini", "gemini-2.5-flash"),
         ]
-        with patch("tessera.hooks.direct_executor.call_ollama", return_value=(None, {})), \
-             patch("tessera.hooks.direct_executor.call_gemini", return_value=(None, {})):
+        with patch("chuzom.hooks.direct_executor.call_ollama", return_value=(None, {})), \
+             patch("chuzom.hooks.direct_executor.call_gemini", return_value=(None, {})):
             result = execute_chain("hello", chain, "query")
         assert result is None
 
@@ -78,8 +78,8 @@ class TestExecuteChain:
             ModelSpec("ollama", "qwen3.5"),
             ModelSpec("gemini", "gemini-2.5-flash"),
         ]
-        with patch("tessera.hooks.direct_executor.call_ollama", return_value=("ollama says hi", {})), \
-             patch("tessera.hooks.direct_executor.call_gemini", return_value=("gemini says hi", {})):
+        with patch("chuzom.hooks.direct_executor.call_ollama", return_value=("ollama says hi", {})), \
+             patch("chuzom.hooks.direct_executor.call_gemini", return_value=("gemini says hi", {})):
             result = execute_chain("hello", chain, "query")
         assert result.model.provider == "ollama"
         assert result.text == "ollama says hi"
@@ -90,14 +90,14 @@ class TestExecuteChain:
             ModelSpec("ollama", "qwen3.5"),
             ModelSpec("gemini", "gemini-2.5-flash"),
         ]
-        with patch("tessera.hooks.direct_executor.call_ollama", return_value=("ok", {})), \
-             patch("tessera.hooks.direct_executor.call_gemini", return_value=("Berlin is the capital of Germany.", {})):
+        with patch("chuzom.hooks.direct_executor.call_ollama", return_value=("ok", {})), \
+             patch("chuzom.hooks.direct_executor.call_gemini", return_value=("Berlin is the capital of Germany.", {})):
             result = execute_chain("hello", chain, "query")
         assert result.model.provider == "gemini"
 
     def test_result_has_latency(self):
         chain = [ModelSpec("ollama", "qwen3.5")]
-        with patch("tessera.hooks.direct_executor.call_ollama", return_value=("test response here", {})):
+        with patch("chuzom.hooks.direct_executor.call_ollama", return_value=("test response here", {})):
             result = execute_chain("hello", chain, "query")
         assert result.latency_ms >= 0
 

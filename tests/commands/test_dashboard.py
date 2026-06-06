@@ -11,7 +11,7 @@ class TestDashboardPortValidation:
 
     def test_invalid_port_exits(self):
         """Dashboard should exit with error for invalid port."""
-        from tessera.commands.dashboard import cmd_dashboard
+        from chuzom.commands.dashboard import cmd_dashboard
         
         with pytest.raises(SystemExit) as exc_info:
             cmd_dashboard(["--port", "not_a_number"])
@@ -19,7 +19,7 @@ class TestDashboardPortValidation:
 
     def test_invalid_port_prints_error(self, capsys):
         """Dashboard should print error message for invalid port."""
-        from tessera.commands.dashboard import cmd_dashboard
+        from chuzom.commands.dashboard import cmd_dashboard
         
         try:
             cmd_dashboard(["--port", "invalid_port"])
@@ -32,7 +32,7 @@ class TestDashboardPortValidation:
     def test_port_flag_parsing(self):
         """Dashboard should correctly extract port value from flags."""
         # Test the port parsing logic by checking that invalid port causes error
-        from tessera.commands.dashboard import cmd_dashboard
+        from chuzom.commands.dashboard import cmd_dashboard
         
         with pytest.raises(SystemExit):
             cmd_dashboard(["--port", "abc123"])
@@ -43,20 +43,20 @@ class TestDashboardCommandStructure:
 
     def test_cmd_dashboard_exists(self):
         """cmd_dashboard function should exist and be callable."""
-        from tessera.commands.dashboard import cmd_dashboard
+        from chuzom.commands.dashboard import cmd_dashboard
         
         assert callable(cmd_dashboard)
 
     def test_cmd_dashboard_takes_args(self, monkeypatch):
         """cmd_dashboard should accept a list of arguments."""
-        from tessera.commands.dashboard import cmd_dashboard
+        from chuzom.commands.dashboard import cmd_dashboard
 
         # Mock the run function to avoid blocking the test
         async def mock_run(port):
             return None
 
         # Patch the server run function
-        monkeypatch.setattr("tessera.dashboard.server.run", mock_run)
+        monkeypatch.setattr("chuzom.dashboard.server.run", mock_run)
 
         # Should handle empty args
         result = cmd_dashboard([])

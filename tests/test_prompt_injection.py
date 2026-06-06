@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from tessera.prompt_injection import (
+from chuzom.prompt_injection import (
     _is_injection_attempt,
     detect_injections_in_batch,
     wrap_prompt_with_boundaries,

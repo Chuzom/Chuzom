@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tessera import cost
+from chuzom import cost
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -19,9 +19,9 @@ def savings_db(tmp_path, monkeypatch):
     log_path = tmp_path / "savings_log.jsonl"
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("TESSERA_DB_PATH", str(db_path))
+    monkeypatch.setenv("CHUZOM_DB_PATH", str(db_path))
     # Reset config singleton so it reads the new env vars
-    import tessera.config as config_module
+    import chuzom.config as config_module
     config_module._config = None
     monkeypatch.setattr(cost, "SAVINGS_LOG_PATH", log_path)
     return db_path, log_path
@@ -50,8 +50,8 @@ class TestSavingsStatsHostColumn:
 
         # Verify host is stored — query savings_stats directly
         import aiosqlite
-        from tessera.config import get_config
-        db = await aiosqlite.connect(str(get_config().tessera_db_path))
+        from chuzom.config import get_config
+        db = await aiosqlite.connect(str(get_config().chuzom_db_path))
         try:
             cursor = await db.execute("SELECT host FROM savings_stats LIMIT 1")
             row = await cursor.fetchone()
@@ -78,8 +78,8 @@ class TestSavingsStatsHostColumn:
         assert imported == 1
 
         import aiosqlite
-        from tessera.config import get_config
-        db = await aiosqlite.connect(str(get_config().tessera_db_path))
+        from chuzom.config import get_config
+        db = await aiosqlite.connect(str(get_config().chuzom_db_path))
         try:
             cursor = await db.execute("SELECT host FROM savings_stats LIMIT 1")
             row = await cursor.fetchone()
@@ -128,7 +128,7 @@ class TestImportWiringInAdminTools:
         assert initial["tasks_routed"] == 0
 
         # llm_savings should trigger the import
-        from tessera.tools.admin import llm_savings
+        from chuzom.tools.admin import llm_savings
         result = await llm_savings()
 
         assert "Savings" in result  # tool returned output
@@ -146,13 +146,13 @@ class TestImportWiringInAdminTools:
         }
         log_path.write_text(json.dumps(entry) + "\n")
 
-        import tessera.tools.admin as admin
+        import chuzom.tools.admin as admin
         monkeypatch.setattr(admin, "is_codex_available", lambda: True)
         result = await admin.llm_usage("all")
 
         assert "Usage Dashboard" in result
         assert "native turns not metered" in result
-        assert "Session spend counts tessera tool calls only" in result
+        assert "Session spend counts chuzom tool calls only" in result
         assert log_path.read_text() == ""
 
 
@@ -161,7 +161,7 @@ class TestImportWiringInAdminTools:
 
 class TestLlmAutoRegistered:
     def test_llm_auto_in_server_tools(self):
-        from tessera.server import mcp
+        from chuzom.server import mcp
         names = {t.name for t in mcp._tool_manager.list_tools()}
         assert "llm_auto" in names
 
@@ -181,7 +181,7 @@ class TestLlmAutoSavingsEnvelope:
                 session_id=f"s{i}",
             )
 
-        from tessera.cost import get_lifetime_savings_summary
+        from chuzom.cost import get_lifetime_savings_summary
         summary = await get_lifetime_savings_summary(days=0)
         assert summary["tasks_routed"] == 5
         # 5 % 5 == 0, so a savings message would be shown
@@ -192,7 +192,7 @@ class TestLlmAutoSavingsEnvelope:
         for i in range(3):
             await cost.log_savings("query", 0.03, 0.001, "flash", f"s{i}")
 
-        from tessera.cost import get_lifetime_savings_summary
+        from chuzom.cost import get_lifetime_savings_summary
         summary = await get_lifetime_savings_summary(days=0)
         assert summary["tasks_routed"] % 5 != 0
 
@@ -202,29 +202,29 @@ class TestLlmAutoSavingsEnvelope:
 
 class TestInstallHost:
     def test_install_host_codex(self, capsys):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
         _install_host("codex")
         out = capsys.readouterr().out
         assert "Codex CLI" in out
         # --host codex writes files; check for write confirmation or skipped marker
-        assert "tessera" in out.lower() or "config" in out.lower()
+        assert "chuzom" in out.lower() or "config" in out.lower()
 
     def test_install_host_desktop(self, capsys):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
         _install_host("desktop")
         out = capsys.readouterr().out
         assert "Claude Desktop" in out
         assert "claude_desktop_config.json" in out
 
     def test_install_host_copilot(self, capsys):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
         _install_host("copilot")
         out = capsys.readouterr().out
         assert "Copilot" in out
         assert "mcp.json" in out
 
     def test_install_host_all(self, capsys):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
         _install_host("all")
         out = capsys.readouterr().out
         assert "Codex CLI" in out
@@ -232,7 +232,7 @@ class TestInstallHost:
         assert "Copilot" in out
 
     def test_install_host_unknown(self, capsys):
-        from tessera.cli import _install_host
+        from chuzom.cli import _install_host
         _install_host("nonexistent")
         out = capsys.readouterr().out
         assert "Unknown host" in out
@@ -240,16 +240,16 @@ class TestInstallHost:
 
 class TestInstallHostRulesFilesExist:
     def test_codex_rules_exists(self):
-        from tessera import __file__ as pkg_init
+        from chuzom import __file__ as pkg_init
         rules = Path(pkg_init).parent / "rules" / "codex-rules.md"
         assert rules.exists(), f"codex-rules.md not found at {rules}"
 
     def test_desktop_rules_exists(self):
-        from tessera import __file__ as pkg_init
+        from chuzom import __file__ as pkg_init
         rules = Path(pkg_init).parent / "rules" / "desktop-rules.md"
         assert rules.exists(), f"desktop-rules.md not found at {rules}"
 
     def test_copilot_rules_exists(self):
-        from tessera import __file__ as pkg_init
+        from chuzom import __file__ as pkg_init
         rules = Path(pkg_init).parent / "rules" / "copilot-rules.md"
         assert rules.exists(), f"copilot-rules.md not found at {rules}"

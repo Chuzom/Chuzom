@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from tessera.commands.team import cmd_team, _run_team, _run_team_setup
+from chuzom.commands.team import cmd_team, _run_team, _run_team_setup
 
 
 class TestCmdTeam:
@@ -15,37 +15,37 @@ class TestCmdTeam:
 
     def test_cmd_team_returns_zero(self):
         """cmd_team should return 0."""
-        with patch("tessera.commands.team._run_team"):
+        with patch("chuzom.commands.team._run_team"):
             result = cmd_team([])
         assert result == 0
 
     def test_cmd_team_with_report_subcommand(self):
         """cmd_team with 'report' should call _run_team."""
-        with patch("tessera.commands.team._run_team") as mock_run:
+        with patch("chuzom.commands.team._run_team") as mock_run:
             cmd_team(["report"])
         mock_run.assert_called_once_with("report", [])
 
     def test_cmd_team_with_push_subcommand(self):
         """cmd_team with 'push' should call _run_team."""
-        with patch("tessera.commands.team._run_team") as mock_run:
+        with patch("chuzom.commands.team._run_team") as mock_run:
             cmd_team(["push"])
         mock_run.assert_called_once_with("push", [])
 
     def test_cmd_team_with_setup_subcommand(self):
         """cmd_team with 'setup' should call _run_team."""
-        with patch("tessera.commands.team._run_team") as mock_run:
+        with patch("chuzom.commands.team._run_team") as mock_run:
             cmd_team(["setup"])
         mock_run.assert_called_once_with("setup", [])
 
     def test_cmd_team_no_args_defaults_to_report(self):
         """cmd_team with no args should call _run_team with 'report'."""
-        with patch("tessera.commands.team._run_team") as mock_run:
+        with patch("chuzom.commands.team._run_team") as mock_run:
             cmd_team([])
         mock_run.assert_called_once_with("report", [])
 
     def test_cmd_team_with_period_flag(self):
         """cmd_team with period should pass it as flag."""
-        with patch("tessera.commands.team._run_team") as mock_run:
+        with patch("chuzom.commands.team._run_team") as mock_run:
             cmd_team(["report", "month"])
         mock_run.assert_called_once_with("report", ["month"])
 
@@ -55,10 +55,10 @@ class TestTeamReport:
 
     def test_team_report_displays_header(self, capsys):
         """team report should display header with user and project."""
-        with patch("tessera.team.build_team_report") as mock_report:
-            with patch("tessera.team.get_user_id") as mock_user:
-                with patch("tessera.team.get_project_id") as mock_proj:
-                    with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.team.build_team_report") as mock_report:
+            with patch("chuzom.team.get_user_id") as mock_user:
+                with patch("chuzom.team.get_project_id") as mock_proj:
+                    with patch("chuzom.config.get_config") as mock_cfg:
                         report = {
                             "total_calls": 0,
                             "saved_usd": 0.0,
@@ -70,23 +70,23 @@ class TestTeamReport:
                         mock_user.return_value = "user@example.com"
                         mock_proj.return_value = "my-project"
                         mock_cfg.return_value = MagicMock(
-                            tessera_user_id=None,
-                            tessera_team_endpoint=None,
-                            tessera_team_chat_id=None,
+                            chuzom_user_id=None,
+                            chuzom_team_endpoint=None,
+                            chuzom_team_chat_id=None,
                         )
                         _run_team("report", [])
 
         captured = capsys.readouterr()
-        assert "[tessera] Team Report" in captured.out
+        assert "[chuzom] Team Report" in captured.out
         assert "user@example.com" in captured.out
         assert "my-project" in captured.out
 
     def test_team_report_no_data(self, capsys):
         """team report with no data should display message."""
-        with patch("tessera.team.build_team_report") as mock_report:
-            with patch("tessera.team.get_user_id") as mock_user:
-                with patch("tessera.team.get_project_id") as mock_proj:
-                    with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.team.build_team_report") as mock_report:
+            with patch("chuzom.team.get_user_id") as mock_user:
+                with patch("chuzom.team.get_project_id") as mock_proj:
+                    with patch("chuzom.config.get_config") as mock_cfg:
                         report = {
                             "total_calls": 0,
                             "saved_usd": 0.0,
@@ -97,9 +97,9 @@ class TestTeamReport:
                         mock_user.return_value = "user@example.com"
                         mock_proj.return_value = "my-project"
                         mock_cfg.return_value = MagicMock(
-                            tessera_user_id=None,
-                            tessera_team_endpoint=None,
-                            tessera_team_chat_id=None,
+                            chuzom_user_id=None,
+                            chuzom_team_endpoint=None,
+                            chuzom_team_chat_id=None,
                         )
                         _run_team("report", [])
 
@@ -108,10 +108,10 @@ class TestTeamReport:
 
     def test_team_report_with_data(self, capsys):
         """team report with data should display stats."""
-        with patch("tessera.team.build_team_report") as mock_report:
-            with patch("tessera.team.get_user_id") as mock_user:
-                with patch("tessera.team.get_project_id") as mock_proj:
-                    with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.team.build_team_report") as mock_report:
+            with patch("chuzom.team.get_user_id") as mock_user:
+                with patch("chuzom.team.get_project_id") as mock_proj:
+                    with patch("chuzom.config.get_config") as mock_cfg:
                         report = {
                             "total_calls": 100,
                             "saved_usd": 2.5,
@@ -126,9 +126,9 @@ class TestTeamReport:
                         mock_user.return_value = "user@example.com"
                         mock_proj.return_value = "my-project"
                         mock_cfg.return_value = MagicMock(
-                            tessera_user_id=None,
-                            tessera_team_endpoint=None,
-                            tessera_team_chat_id=None,
+                            chuzom_user_id=None,
+                            chuzom_team_endpoint=None,
+                            chuzom_team_chat_id=None,
                         )
                         _run_team("report", [])
 
@@ -154,7 +154,7 @@ class TestTeamSetup:
             _run_team_setup(config)
 
             # Should not create any files
-            assert not (home / ".tessera" / "routing.yaml").exists()
+            assert not (home / ".chuzom" / "routing.yaml").exists()
 
     def test_team_setup_with_url(self, monkeypatch):
         """team setup with URL should save configuration."""
@@ -170,7 +170,7 @@ class TestTeamSetup:
             _run_team_setup(config)
 
             # Should create routing.yaml with endpoint
-            routing_yaml = home / ".tessera" / "routing.yaml"
+            routing_yaml = home / ".chuzom" / "routing.yaml"
             assert routing_yaml.exists()
             content = routing_yaml.read_text()
             assert "team_endpoint: https://hooks.slack.com" in content
@@ -188,7 +188,7 @@ class TestTeamSetup:
             config = MagicMock()
             _run_team_setup(config)
 
-            routing_yaml = home / ".tessera" / "routing.yaml"
+            routing_yaml = home / ".chuzom" / "routing.yaml"
             content = routing_yaml.read_text()
             assert "team_endpoint:" in content
             assert "team_chat_id: -1001234567890" in content
@@ -199,10 +199,10 @@ class TestTeamIntegration:
 
     def test_team_report_with_period(self, capsys):
         """team report should accept period parameter."""
-        with patch("tessera.team.build_team_report") as mock_report:
-            with patch("tessera.team.get_user_id") as mock_user:
-                with patch("tessera.team.get_project_id") as mock_proj:
-                    with patch("tessera.config.get_config") as mock_cfg:
+        with patch("chuzom.team.build_team_report") as mock_report:
+            with patch("chuzom.team.get_user_id") as mock_user:
+                with patch("chuzom.team.get_project_id") as mock_proj:
+                    with patch("chuzom.config.get_config") as mock_cfg:
                         report = {
                             "total_calls": 0,
                             "saved_usd": 0.0,
@@ -213,9 +213,9 @@ class TestTeamIntegration:
                         mock_user.return_value = "user@example.com"
                         mock_proj.return_value = "my-project"
                         mock_cfg.return_value = MagicMock(
-                            tessera_user_id=None,
-                            tessera_team_endpoint=None,
-                            tessera_team_chat_id=None,
+                            chuzom_user_id=None,
+                            chuzom_team_endpoint=None,
+                            chuzom_team_chat_id=None,
                         )
                         _run_team("report", ["month"])
 
@@ -226,6 +226,6 @@ class TestTeamIntegration:
 
     def test_cmd_team_command_basic(self):
         """cmd_team should execute and return 0."""
-        with patch("tessera.commands.team._run_team"):
+        with patch("chuzom.commands.team._run_team"):
             result = cmd_team(["report"])
         assert result == 0

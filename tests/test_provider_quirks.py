@@ -9,7 +9,7 @@ here.
 
 from __future__ import annotations
 
-from tessera.provider_quirks import (
+from chuzom.provider_quirks import (
     IdentityQuirk,
     OllamaQuirks,
     OpenAIReasoningQuirks,
@@ -203,7 +203,7 @@ class TestRegistry:
             assert "newprov" in registered_providers()
         finally:
             # Tidy up so the registry doesn't leak into other tests.
-            from tessera.provider_quirks import _REGISTRY
+            from chuzom.provider_quirks import _REGISTRY
             _REGISTRY.pop("newprov", None)
 
 
@@ -222,8 +222,8 @@ class TestProvidersIntegration:
         """If the import disappears, the quirk layer silently turns off."""
         from pathlib import Path
 
-        src = (Path(__file__).parent.parent / "src" / "tessera" / "providers.py").read_text()
-        assert "from tessera.provider_quirks import get_quirk" in src
+        src = (Path(__file__).parent.parent / "src" / "chuzom" / "providers.py").read_text()
+        assert "from chuzom.provider_quirks import get_quirk" in src
         assert "_quirk.transform_request(kwargs)" in src
         # Both the sync and streaming call sites must apply the hook.
         assert src.count("_quirk.transform_request(kwargs)") >= 2
