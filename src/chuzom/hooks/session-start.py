@@ -155,8 +155,20 @@ def _render_welcome(is_subscription: bool) -> str:
 
     now = datetime.now().strftime("%a %b %d · %H:%M")
     mode = _mode_label(is_subscription)
+
+    # Painterly Chuzom banner — Chhuzom is the Bhutanese river confluence
+    # where Paro Chhu + Thimphu Chhu meet to form Wang Chhu; three stupas
+    # (Bhutanese, Tibetan, Nepali) guard the junction. See chuzom.banner.
+    try:
+        from chuzom.banner import render_banner
+        painting = render_banner()
+    except Exception:
+        # Defensive: never let a banner failure block the SessionStart hook.
+        painting = f"{_CHUZOM_LOGO} — routing intelligence online"
+
     lines = [
-        f"{_CHUZOM_LOGO} — routing intelligence online",
+        painting,
+        "",
         _WELCOME_DIVIDER,
         f"   mode    → {mode}",
         f"   opened  → {now}",
