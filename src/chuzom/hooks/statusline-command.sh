@@ -103,13 +103,52 @@ esac
 parts=()
 
 # ── 🤖 Claude subscription usage ─────────────────────────────────────────────
+# Live updates: fire a background refresh when usage.json gets older than
+# CHUZOM_USAGE_TTL_SEC seconds (default 300 = 5 minutes). The statusline
+# renders whatever's currently on disk; the next render after the
+# background refresh completes picks up fresh percentages without
+# blocking the current draw.
+#
+# The refresh script (chuzom-usage-refresh.py) talks to claude.ai via
+# AppleScript / Playwright; we fire it nohup'd + stdout/stderr suppressed
+# so a refresh failure can't bleed into the statusline output.
+CHUZOM_USAGE_TTL_SEC="${CHUZOM_USAGE_TTL_SEC:-300}"
+REFRESH_SCRIPT="$HOME/.claude/hooks/chuzom-usage-refresh.py"
+if [ -f "$USAGE_JSON" ] && [ -x "$REFRESH_SCRIPT" ]; then
+    file_age_s=$(python3 -c "
+import json, time
+try:
+    d = json.load(open('$USAGE_JSON'))
+    print(int(time.time() - d.get('updated_at', 0)))
+except Exception:
+    print(99999)
+" 2>/dev/null)
+    if [ -n "$file_age_s" ] && [ "$file_age_s" -gt "$CHUZOM_USAGE_TTL_SEC" ]; then
+        # Background refresh — fire & forget; statusline keeps drawing.
+        # The flock keeps us from launching parallel refreshes when the
+        # statusline re-renders before the first one finishes.
+        (
+            flock -n 9 || exit 0
+            "$REFRESH_SCRIPT" >/dev/null 2>&1 &
+        ) 9>"$STATE_DIR/.usage-refresh.lock" </dev/null >/dev/null 2>&1 &
+        disown 2>/dev/null || true
+    fi
+fi
+
 if [ -f "$USAGE_JSON" ]; then
     session_pct=$(python3 -c "import json; d=json.load(open('$USAGE_JSON')); print(f\"{d.get('session_pct',0):.0f}\")" 2>/dev/null)
     weekly_pct=$(python3 -c "import json; d=json.load(open('$USAGE_JSON')); print(f\"{d.get('weekly_pct',0):.0f}\")" 2>/dev/null)
     if [ -n "$session_pct" ] && [ "$session_pct" != "0" ]; then
         s_color=$(_pct_color "$session_pct")
         w_color=$(_pct_color "$weekly_pct")
-        parts+=("🤖 ${s_color}${session_pct}%${_RESET}${_DIM}/5h${_RESET} ${w_color}${weekly_pct}%${_RESET}${_DIM}/wk${_RESET}")
+        # Append a ° marker when the displayed numbers are stale beyond
+        # the TTL — gives the user a visual cue that a refresh is in
+        # flight (or that the refresh chain is broken).
+        stale_marker=""
+        if [ -n "$file_age_s" ] && [ "$file_age_s" -gt "$CHUZOM_USAGE_TTL_SEC" ]; then
+            stale_marker="${_DIM}°${_RESET}"
+        fi
+        parts+=("🤖 ${s_color}${session_pct}%${_RESET}${_DIM}/5h${_RESET} ${w_color}${weekly_pct}%${_RESET}${_DIM}/wk${_RESET}${stale_marker}")
     fi
 fi
 
