@@ -43,8 +43,21 @@ def _price(model: str, in_tok: int, out_tok: int) -> float:
 
 
 async def _call_litellm(model: str, prompt: str) -> tuple[str, int, int]:
-    """Run one chat completion via litellm; return (text, input_tok, output_tok)."""
+    """Run one chat completion via litellm; return (text, input_tok, output_tok).
+
+    Raises ``EmptyResponseError`` on whitespace-only / missing content so the
+    cascade in :class:`ChuzomRouter` / :class:`StaticChainRouter` treats it
+    the same as a provider exception — matching what the production router
+    does at ``chuzom.providers._call_text`` (see Plan 07 §D.3 in
+    ``inference_robustness.ensure_non_empty_content``).
+
+    Before this fix the bench accepted ``""`` as a successful response —
+    that's what produced the 3-of-5 empty-response rows in
+    ``bench/results/20260606-150229.md``. The router would have cascaded;
+    the bench simulation did not.
+    """
     import litellm  # lazy import — harness tests use FakeRouter and never reach this
+    from chuzom.inference_robustness import ensure_non_empty_content
 
     response = await litellm.acompletion(
         model=model,
@@ -56,6 +69,10 @@ async def _call_litellm(model: str, prompt: str) -> tuple[str, int, int]:
     usage = getattr(response, "usage", None)
     in_tok = getattr(usage, "prompt_tokens", 0) if usage else 0
     out_tok = getattr(usage, "completion_tokens", 0) if usage else 0
+    # Mirror the production check so an empty completion triggers fallback.
+    # EmptyResponseError(RuntimeError) bubbles up to the chain loop, which
+    # already catches Exception and continues to the next model.
+    text = ensure_non_empty_content(text, model)
     return text, in_tok, out_tok
 
 

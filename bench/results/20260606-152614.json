@@ -1,0 +1,436 @@
+[
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "chuzom",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "Paris",
+    "input_tokens": 28,
+    "output_tokens": 181,
+    "cost_usd": 0.0,
+    "latency_ms": 23147,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ],
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "Paris",
+    "input_tokens": 28,
+    "output_tokens": 181,
+    "cost_usd": 0.0,
+    "latency_ms": 13734,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 2810,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-01",
+    "difficulty": "easy",
+    "category": "factual",
+    "router_name": "static-chain",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "Paris",
+    "input_tokens": 28,
+    "output_tokens": 181,
+    "cost_usd": 0.0,
+    "latency_ms": 13703,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "static_chain",
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "chuzom",
+    "model_chosen": "<exhausted>",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 40148,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ]
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 38374,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: EmptyResponseError: Model 'ollama/qwen3.5:latest' returned empty content. Router will try the next model in the fallback chain.",
+    "judge_model": "",
+    "error": "EmptyResponseError: Model 'ollama/qwen3.5:latest' returned empty content. Router will try the next model in the fallback chain.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 2406,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-02",
+    "difficulty": "easy",
+    "category": "conversion",
+    "router_name": "static-chain",
+    "model_chosen": "<exhausted>",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 42232,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "static_chain"
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "chuzom",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "366",
+    "input_tokens": 31,
+    "output_tokens": 261,
+    "cost_usd": 0.0,
+    "latency_ms": 19341,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ],
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "366",
+    "input_tokens": 31,
+    "output_tokens": 261,
+    "cost_usd": 0.0,
+    "latency_ms": 19484,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 1792,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-03",
+    "difficulty": "easy",
+    "category": "arithmetic",
+    "router_name": "static-chain",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "366",
+    "input_tokens": 31,
+    "output_tokens": 261,
+    "cost_usd": 0.0,
+    "latency_ms": 19338,
+    "judge_score": 5,
+    "judge_kind": "objective",
+    "judge_rationale": "matched 1/1 expected substrings, length ok",
+    "judge_model": "",
+    "error": "",
+    "notes": {
+      "strategy": "static_chain",
+      "fallback_count": 0
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "chuzom",
+    "model_chosen": "<exhausted>",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 39654,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ]
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 37885,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: EmptyResponseError: Model 'ollama/qwen3.5:latest' returned empty content. Router will try the next model in the fallback chain.",
+    "judge_model": "",
+    "error": "EmptyResponseError: Model 'ollama/qwen3.5:latest' returned empty content. Router will try the next model in the fallback chain.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 1792,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-04",
+    "difficulty": "easy",
+    "category": "simple_code",
+    "router_name": "static-chain",
+    "model_chosen": "<exhausted>",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 41676,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "static_chain"
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "chuzom",
+    "model_chosen": "<exhausted>",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 39698,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "chain": [
+        "ollama/qwen3.5:latest",
+        "google/gemini-1.5-flash-8b",
+        "openai/gpt-4o-mini"
+      ]
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "always-cheap",
+    "model_chosen": "ollama/qwen3.5:latest",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 38236,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: EmptyResponseError: Model 'ollama/qwen3.5:latest' returned empty content. Router will try the next model in the fallback chain.",
+    "judge_model": "",
+    "error": "EmptyResponseError: Model 'ollama/qwen3.5:latest' returned empty content. Router will try the next model in the fallback chain.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "ollama/qwen3.5:latest"
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "always-premium",
+    "model_chosen": "openai/gpt-4o",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 1768,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "fixed",
+      "model": "openai/gpt-4o"
+    }
+  },
+  {
+    "corpus_id": "easy-05",
+    "difficulty": "easy",
+    "category": "extraction",
+    "router_name": "static-chain",
+    "model_chosen": "<exhausted>",
+    "response": "",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 41739,
+    "judge_score": 1,
+    "judge_kind": "objective",
+    "judge_rationale": "router error: RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "judge_model": "",
+    "error": "RateLimitError: litellm.RateLimitError: RateLimitError: OpenAIException - Your account is not active, please check your billing details on our website.",
+    "notes": {
+      "strategy": "static_chain"
+    }
+  }
+]
