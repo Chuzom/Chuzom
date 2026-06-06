@@ -206,7 +206,7 @@ def test_render_markdown_has_all_sections(tmp_path):
     data = collect(lineage_store=store, since_seconds=None)
     md = render_markdown(data)
     for section in (
-        "# Chuzom Session Summary",
+        "# Chuzom · Session Summary",
         "## Headline",
         "## Tier distribution",
         "## Providers",

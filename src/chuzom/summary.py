@@ -41,6 +41,18 @@ _TIER_COLOR = {
     Tier.UNKNOWN.value: "white",
 }
 
+# Chuzom brand identity — used across both the terminal dashboard and the
+# markdown export so the surface feels like one product, not two skins.
+_CHUZOM_WORDMARK = "⚡ C H U Z O M ⚡"
+_CHUZOM_TAGLINE = "routing intelligence · cost savings · safety telemetry"
+_CHUZOM_PANEL_PREFIX = "◆ Chuzom · "
+_CHUZOM_LOGO_ASCII = r"""
+   ___ _  _ _   _ _____ ___  __  __
+  / __| || | | | |_  / / _ \|  \/  |
+ | (__| __ | |_| |/ /_| (_) | |\/| |
+  \___|_||_|\___//___|\___/|_|  |_|
+"""
+
 
 @dataclass
 class SessionSummaryData:
@@ -335,14 +347,24 @@ def render(data: SessionSummaryData, *, console=None) -> None:
     if console is None:
         console = Console()
 
-    # ── STATUS BANNER — health glyph + service identifier ──────────────
-    status_text = Text.assemble(
+    # ── STATUS BANNER — wordmark + tagline + health glyph ─────────────
+    # Three-line banner so the dashboard's identity is unmistakable: a
+    # rendered wordmark on top, the product tagline in the middle, and the
+    # live health glyph + duration anchoring the bottom.
+    wordmark_line = Text(_CHUZOM_WORDMARK, style="bold bright_blue")
+    tagline_line = Text(_CHUZOM_TAGLINE, style="dim italic")
+    status_line = Text.assemble(
         (f"{data.health}  ", ""),
-        ("CHUZOM", "bold bright_blue"),
-        ("  ·  session observability dashboard", "dim"),
+        ("Session Summary", "bold white"),
+        ("  ·  ", "dim"),
+        (_fmt_duration(data.duration_seconds), "dim"),
     )
     status_banner = Panel(
-        Align.center(status_text),
+        Group(
+            Align.center(wordmark_line),
+            Align.center(tagline_line),
+            Align.center(status_line),
+        ),
         border_style="bright_blue",
         box=box.HEAVY,
         padding=(0, 2),
@@ -369,7 +391,7 @@ def render(data: SessionSummaryData, *, console=None) -> None:
     )
     headline = Panel(
         Group(headline_text, spend_line, decisions_line),
-        title="◆ Session Summary",
+        title=f"{_CHUZOM_PANEL_PREFIX}Headline",
         border_style="bright_blue",
         padding=(1, 2),
     )
@@ -380,7 +402,8 @@ def render(data: SessionSummaryData, *, console=None) -> None:
                           style="cyan")
         spark_panel = Panel(
             Align.center(spark_text, vertical="middle"),
-            title=f"Spend over time  ({len(data.cost_sparkline)} buckets)",
+            title=f"{_CHUZOM_PANEL_PREFIX}Spend over time  "
+                  f"({len(data.cost_sparkline)} buckets)",
             border_style="cyan",
             padding=(0, 2),
         )
@@ -409,7 +432,8 @@ def render(data: SessionSummaryData, *, console=None) -> None:
             Text(tier, style=color),
             str(n), _fmt_cost(cost), bar,
         )
-    tier_panel = Panel(tier_table, title="◆ Tier distribution",
+    tier_panel = Panel(tier_table,
+                       title=f"{_CHUZOM_PANEL_PREFIX}Tier distribution",
                        border_style="green", padding=(0, 1))
 
     # ── PROVIDERS ─────────────────────────────────────────────────────
@@ -426,7 +450,8 @@ def render(data: SessionSummaryData, *, console=None) -> None:
             str(count),
             _fmt_cost(data.provider_costs.get(provider, 0.0)),
         )
-    provider_panel = Panel(provider_table, title="◆ Providers",
+    provider_panel = Panel(provider_table,
+                           title=f"{_CHUZOM_PANEL_PREFIX}Providers",
                            border_style="cyan", padding=(0, 1))
 
     # ── INVERSIONS ────────────────────────────────────────────────────
@@ -474,7 +499,7 @@ def render(data: SessionSummaryData, *, console=None) -> None:
     ))
     inversions_panel = Panel(
         Group(*inv_lines),
-        title="◆ Routing health (inversions)",
+        title=f"{_CHUZOM_PANEL_PREFIX}Routing health (inversions)",
         border_style=rate_color, padding=(0, 1),
     )
 
@@ -487,7 +512,8 @@ def render(data: SessionSummaryData, *, console=None) -> None:
     )
     safety_panel = Panel(
         Text(safety_msg, style=safety_color),
-        title="◆ Safety", border_style=safety_color, padding=(0, 1),
+        title=f"{_CHUZOM_PANEL_PREFIX}Safety",
+        border_style=safety_color, padding=(0, 1),
     )
 
     # ── AGENTS ────────────────────────────────────────────────────────
@@ -508,7 +534,8 @@ def render(data: SessionSummaryData, *, console=None) -> None:
                 _fmt_cost(sess.get("total_cost_usd", 0.0)),
                 sess.get("state", "?"),
             )
-        agent_panel = Panel(agent_table, title="◆ Agent sessions",
+        agent_panel = Panel(agent_table,
+                            title=f"{_CHUZOM_PANEL_PREFIX}Agent sessions",
                             border_style="magenta", padding=(0, 1))
 
     # ── TOP ROUTES ────────────────────────────────────────────────────
@@ -520,7 +547,8 @@ def render(data: SessionSummaryData, *, console=None) -> None:
     for task, tier, count in data.top_routes[:6]:
         color = _TIER_COLOR.get(tier, "white")
         routes_table.add_row(task, Text(tier, style=color), str(count))
-    routes_panel = Panel(routes_table, title="◆ Top routes",
+    routes_panel = Panel(routes_table,
+                         title=f"{_CHUZOM_PANEL_PREFIX}Top routes",
                          border_style="bright_black", padding=(0, 1))
 
     # ── PUNCHLINE ─────────────────────────────────────────────────────
@@ -547,7 +575,7 @@ def render(data: SessionSummaryData, *, console=None) -> None:
     punchline_panel = Panel(
         Text(punchline, style="bold bright_white"),
         border_style="bright_blue",
-        title="◆ One-line",
+        title=f"{_CHUZOM_PANEL_PREFIX}One-line",
         padding=(0, 2),
     )
 
@@ -568,10 +596,23 @@ def render(data: SessionSummaryData, *, console=None) -> None:
         )
         latency_panel = Panel(
             Group(lat_summary, Text(""), hist_text),
-            title="◆ Latency distribution",
+            title=f"{_CHUZOM_PANEL_PREFIX}Latency distribution",
             border_style="cyan",
             padding=(0, 1),
         )
+
+    # ── SIGNATURE — sign-off line for brand consistency ───────────────
+    # Keeps the dashboard feeling like one product, not a stack of tables.
+    # Dim style so it never competes with the data above it.
+    signature = Align.center(
+        Text.assemble(
+            (_CHUZOM_WORDMARK, "dim bright_blue"),
+            ("   ·   ", "dim"),
+            ("`chuzom summary --markdown` to share  ·  "
+             "`chuzom summary --watch` for live mode",
+             "dim italic"),
+        )
+    )
 
     # ── ASSEMBLE ──────────────────────────────────────────────────────
     console.print()
@@ -588,12 +629,27 @@ def render(data: SessionSummaryData, *, console=None) -> None:
         console.print(agent_panel)
     console.print(routes_panel)
     console.print(punchline_panel)
+    console.print(signature)
     console.print()
 
 
 def render_markdown(data: SessionSummaryData) -> str:
-    """Alternative renderer for `chuzom summary --markdown` / sharing."""
-    out = ["# Chuzom Session Summary\n"]
+    """Alternative renderer for `chuzom summary --markdown` / sharing.
+
+    Leads with the Chuzom ASCII wordmark in a code block so the export feels
+    like the terminal dashboard rather than a generic table dump.
+    """
+    out = [
+        "```",
+        _CHUZOM_LOGO_ASCII.strip("\n"),
+        "```",
+        "",
+        "# Chuzom · Session Summary",
+        "",
+        f"> _{_CHUZOM_TAGLINE}_  ·  health {data.health}  ·  "
+        f"{_fmt_duration(data.duration_seconds)}",
+        "",
+    ]
 
     out.append("## Headline\n")
     out.append(
@@ -677,6 +733,12 @@ def render_markdown(data: SessionSummaryData) -> str:
             out.append(f"| `{task}` | `{tier}` | {count} |")
         out.append("")
 
+    out.append("---")
+    out.append(
+        f"_{_CHUZOM_WORDMARK}  ·  generated by `chuzom summary` — "
+        f"run with `--watch` for live mode, `--since-hours N` for a wider window._"
+    )
+
     return "\n".join(out)
 
 
@@ -740,8 +802,8 @@ def cli_summary(
     data = collect(since_seconds=since_hours * 3600, limit=limit)
     if data.total_decisions == 0:
         print(
-            "No routing decisions recorded in the last "
-            f"{since_hours:.0f}h. Use Chuzom for a bit, then re-run "
+            f"{_CHUZOM_WORDMARK}  ·  no routing decisions in the last "
+            f"{since_hours:.0f}h.\nRoute a few prompts, then re-run "
             "`chuzom summary`."
         )
         return 0

@@ -131,6 +131,42 @@ BANNER_API_KEYS = """
 BANNER = BANNER_SUBSCRIPTION if _CC_MODE else BANNER_API_KEYS
 
 
+_CHUZOM_LOGO = "⚡ Chuzom"
+_WELCOME_DIVIDER = "─" * 60
+
+
+def _mode_label(is_subscription: bool) -> str:
+    """One-word mode label for the welcome line: zero-claude / subscription / api-keys."""
+    if _zero_claude_enabled():
+        return "zero-claude (strict — external routes or block)"
+    if is_subscription or _CC_MODE:
+        return "subscription (Claude OAuth pressure cascade)"
+    return "api-keys (Ollama → Codex → paid providers)"
+
+
+def _render_welcome(is_subscription: bool) -> str:
+    """Multi-line greeting printed to stderr at session start.
+
+    Renders under Claude Code's 'SessionStart:startup hook success:' header,
+    so each line lands inside a labeled status block in the UI. Kept short
+    enough that it doesn't dominate the session-open scroll.
+    """
+    from datetime import datetime
+
+    now = datetime.now().strftime("%a %b %d · %H:%M")
+    mode = _mode_label(is_subscription)
+    lines = [
+        f"{_CHUZOM_LOGO} — routing intelligence online",
+        _WELCOME_DIVIDER,
+        f"   mode    → {mode}",
+        f"   opened  → {now}",
+        "   chain   → Ollama · Codex · Gemini Flash · GPT-4o · Perplexity",
+        "   tip     → run `chuzom summary` to see what this session saved",
+        _WELCOME_DIVIDER,
+    ]
+    return "\n".join(lines)
+
+
 def _zero_claude_enabled() -> bool:
     """Return True when prompt hooks are configured to block native turns."""
     env_value = os.environ.get("CHUZOM_ZERO_CLAUDE", "").strip().lower()
@@ -658,8 +694,10 @@ def main() -> None:
     # Runs as a detached subprocess so the session start is never blocked.
     _maybe_refresh_benchmarks_bg()
 
-    # Visible UI signal — Claude Code surfaces stderr as "SessionStart:startup hook success: <msg>".
-    print("⚡ chuzom routing active — subscription mode", file=sys.stderr)
+    # Visible UI signal — Claude Code surfaces stderr as
+    # "SessionStart:startup hook success: <msg>". Multi-line greeting renders
+    # under that header so the user sees a real Chuzom welcome on session open.
+    print(_render_welcome(is_subscription), file=sys.stderr)
 
     print(json.dumps({
         "hookSpecificOutput": {
