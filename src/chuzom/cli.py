@@ -679,6 +679,15 @@ def main() -> None:
     elif args and args[0] == "benchmark":
         from chuzom.commands.benchmark import cmd_benchmark
         sys.exit(cmd_benchmark(args[1:]))
+    elif args and args[0] == "test-delta":
+        from chuzom.test_delta import main as _td_main
+        sys.exit(_td_main(args[1:]))
+    elif args and args[0] == "migrate":
+        from chuzom.commands.migrate import main as _migrate_main
+        sys.exit(_migrate_main(args[1:]))
+    elif args and args[0] == "team-sync":
+        from chuzom.commands.team_sync import main as _team_sync_main
+        sys.exit(_team_sync_main(args[1:]))
     elif args and args[0] == "policy":
         from chuzom.commands.policy import cmd_policy
         sys.exit(cmd_policy(args[1:]))
