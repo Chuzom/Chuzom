@@ -423,8 +423,21 @@ def _resolve_profile(
                 c = Complexity.MODERATE
         else:
             # Fast heuristic — no API call, no latency.
+            #
+            # The thresholds were tightened after a session showed 0/31 prompts
+            # classifying as simple even though 80% of user prompts that day
+            # were under 150 chars: callers (including Claude Code) wrap the
+            # user's prompt for ``llm_query`` and the wrapped form crosses the
+            # 300-char line, dragging "simple" into "moderate" and routing
+            # everything to Sonnet/GPT-4o instead of Haiku/Flash.
+            #
+            # Simple/moderate boundary raised to 600 — covers the wrapped
+            # short prompts. Complex boundary lowered from 3000 to 2000 since
+            # genuine reasoning prompts in a coding session are rarely > 2k
+            # chars. Operators who need the legacy behaviour can pass
+            # ``complexity_hint`` explicitly.
             n = len(prompt)
-            c = Complexity.SIMPLE if n < 300 else (Complexity.COMPLEX if n > 3000 else Complexity.MODERATE)
+            c = Complexity.SIMPLE if n < 600 else (Complexity.COMPLEX if n > 2000 else Complexity.MODERATE)
         if c == Complexity.DEEP_REASONING:
             use_thinking = True
         resolved = _COMPLEXITY_TO_PROFILE.get(c, config.chuzom_profile)
