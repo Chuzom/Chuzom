@@ -9,8 +9,103 @@ from mcp.server.fastmcp import Context
 
 from chuzom.config import get_config
 from chuzom.cost import log_compression_stat
+from chuzom.response_router import route_response
 from chuzom.router import route_and_call
 from chuzom.types import LLMResponse, RoutingProfile, TaskType
+
+
+def _read_hook_complexity_hint(max_age_sec: float = 120.0) -> str | None:
+    """Return the complexity classified by the auto-route hook, or None.
+
+    The hook writes ``~/.chuzom/last_classification.json`` on every
+    UserPromptSubmit. MCP tools read it here so the hook's verdict
+    survives the boundary into the MCP server — without this, the
+    router falls back to a length heuristic on the wrapped prompt
+    (which has grown past the short-prompt boundary) and routes
+    everything to the moderate tier even when the user's prompt was
+    obviously simple.
+
+    Stale entries (older than ``max_age_sec``) are ignored. Two reasons:
+
+    * A second user prompt arrives before the previous tool call
+      finishes — fresh classification should win, not the prior one.
+    * Cross-session reuse: the same file is shared by every session
+      on this machine; we only trust it for the most recent turn.
+    """
+    import json
+    from pathlib import Path
+    import time
+
+    path = Path.home() / ".chuzom" / "last_classification.json"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    issued_at = data.get("issued_at")
+    if not isinstance(issued_at, (int, float)):
+        return None
+    if time.time() - issued_at > max_age_sec:
+        return None
+    complexity = data.get("complexity")
+    if complexity not in ("simple", "moderate", "complex", "deep_reasoning"):
+        return None
+    return complexity
+
+
+def _effective_complexity(caller_hint: str | None,
+                          floor: str | None = None) -> str | None:
+    """Pick the best complexity hint: caller arg > hook verdict > floor.
+
+    Each MCP tool has its own ``complexity`` keyword. If the caller
+    passed one explicitly, that wins (they know what they want). If
+    they didn't, fall back to the hook's last classification. If neither
+    exists, use ``floor`` (e.g. ``llm_analyze`` floors at ``moderate``
+    because pure-simple analysis isn't a real task).
+    """
+    if caller_hint:
+        return caller_hint
+    hook_hint = _read_hook_complexity_hint()
+    if hook_hint:
+        return hook_hint
+    return floor
+
+
+async def _apply_response_router(formatted: str) -> str:
+    """Pipe the MCP tool's response through chuzom.response_router.
+
+    The response router parses the text into critical sections (code
+    blocks, file paths, tool invocations, headers) and explanation
+    paragraphs, then routes the explanations through a cheaper model.
+    Critical sections are preserved verbatim so codegen / instructions
+    don't get rewritten in lossy ways.
+
+    Two reasons this is a hot saver:
+
+    * The MCP tool's response goes into Claude (Opus 4.7) for further
+      reasoning. Every token in that response is a token Opus has to
+      *process* — shrinking explanations directly reduces Opus's
+      context-window cost.
+    * Repeated turns compound: a 50% smaller llm_query reply means 50%
+      fewer Opus tokens to read every subsequent turn until compaction.
+
+    Disabled by default? No — ``CHUZOM_RESPONSE_ROUTER`` defaults to
+    "on". MIN_TOKENS (default 300) gates the optimisation so short
+    responses skip the overhead. Failure-safe: ``route_response``
+    returns the original string on any internal error.
+    """
+    if not formatted:
+        return formatted
+    try:
+        return await route_response(formatted)
+    except Exception:
+        # Never let response-routing failures mask the underlying tool
+        # response — the user is owed an answer even if the optimiser
+        # falls over.
+        return formatted
 
 
 def _cache_result(
@@ -321,16 +416,17 @@ async def llm_query(
         max_tokens: Maximum output tokens.
         context: Optional conversation context to help the model understand the broader task.
     """
+    effective = _effective_complexity(complexity)
     resp = await route_and_call(
         TaskType.QUERY, prompt,
-        complexity_hint=complexity,
+        complexity_hint=effective,
         model_override=model, system_prompt=system_prompt,
         temperature=temperature, max_tokens=max_tokens, ctx=ctx,
         caller_context=context,
     )
-    _cache_result(prompt, resp, "query", complexity)
-    _record_quality(resp, "query", complexity)
-    return _format_response(resp, "query")
+    _cache_result(prompt, resp, "query", effective)
+    _record_quality(resp, "query", effective)
+    return await _apply_response_router(_format_response(resp, "query"))
 
 
 async def llm_research(
@@ -375,7 +471,7 @@ async def llm_research(
             "Escalated to PREMIUM non-web model (results may be stale). "
             "Set PERPLEXITY_API_KEY for live web search."
         )
-    return result
+    return await _apply_response_router(result)
 
 
 async def llm_generate(
@@ -401,15 +497,16 @@ async def llm_generate(
         max_tokens: Maximum output tokens.
         context: Optional conversation context to help the model understand the broader task.
     """
+    effective = _effective_complexity(complexity)
     resp = await route_and_call(
         TaskType.GENERATE, prompt,
-        complexity_hint=complexity,
+        complexity_hint=effective,
         system_prompt=system_prompt, temperature=temperature,
         max_tokens=max_tokens, ctx=ctx, caller_context=context,
     )
-    _cache_result(prompt, resp, "generate", complexity)
-    _record_quality(resp, "generate", complexity)
-    return _format_response(resp, "generate")
+    _cache_result(prompt, resp, "generate", effective)
+    _record_quality(resp, "generate", effective)
+    return await _apply_response_router(_format_response(resp, "generate"))
 
 
 async def llm_analyze(
@@ -434,8 +531,11 @@ async def llm_analyze(
         context: Optional conversation context to help the model understand the broader task.
     """
     # Analysis is never trivially simple — floor at moderate so Haiku is never
-    # chosen for a task that inherently requires reasoning.
-    effective_complexity = complexity or "moderate"
+    # chosen for a task that inherently requires reasoning. The hook's hint
+    # is allowed to raise (moderate → complex) but not lower below moderate.
+    effective_complexity = _effective_complexity(complexity, floor="moderate")
+    if effective_complexity == "simple":
+        effective_complexity = "moderate"
     resp = await route_and_call(
         TaskType.ANALYZE, prompt,
         complexity_hint=effective_complexity,
@@ -444,7 +544,7 @@ async def llm_analyze(
     )
     _cache_result(prompt, resp, "analyze", effective_complexity)
     _record_quality(resp, "analyze", effective_complexity)
-    return _format_response(resp, "analyze")
+    return await _apply_response_router(_format_response(resp, "analyze"))
 
 
 async def llm_code(
@@ -468,15 +568,23 @@ async def llm_code(
         max_tokens: Maximum output tokens.
         context: Optional conversation context to help the model understand the broader task.
     """
+    effective = _effective_complexity(complexity)
     resp = await route_and_call(
         TaskType.CODE, prompt,
-        complexity_hint=complexity,
+        complexity_hint=effective,
         system_prompt=system_prompt, temperature=0.2,
         max_tokens=max_tokens, ctx=ctx, caller_context=context,
     )
-    _cache_result(prompt, resp, "code", complexity)
-    _record_quality(resp, "code", complexity)
-    return _format_response(resp, "code")
+    _cache_result(prompt, resp, "code", effective)
+    _record_quality(resp, "code", effective)
+    # llm_code responses include code blocks (marked critical by the
+    # response router and preserved verbatim) plus surrounding prose.
+    # The prose explains "why this implementation works"; routing it
+    # through a cheaper model risks losing the rationale a downstream
+    # caller may rely on. Users who want llm_code prose compressed too
+    # can set CHUZOM_RESPONSE_ROUTER=on (default) — it's already on; we
+    # rely on the router's CRITICAL_PATTERNS to preserve code blocks.
+    return await _apply_response_router(_format_response(resp, "code"))
 
 
 async def llm_edit(

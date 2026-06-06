@@ -1436,6 +1436,21 @@ _CONTINUATION_RE = re.compile(
     r"stop|skip|cancel)\s*[!?.]*$",
     re.IGNORECASE,
 )
+
+# Short follow-up prompts that the strict single-word CONTINUATION_RE
+# misses: "ok do it", "yes continue with 3", "now do the next one".
+# These are conversational follow-ups that presume the current session's
+# context — routing them spends quota classifying something Claude
+# already has full context for. Only fires when the prompt is short AND
+# starts with an acknowledgment / discourse marker, so genuine new
+# tasks (regardless of prefix) still route normally.
+_SHORT_FOLLOWUP_PREFIX = re.compile(
+    r"^\s*(?:ok(?:ay)?|yes|yeah|yep|sure|alright|right|cool|nice|"
+    r"let'?s|let me|go|continue|next|now|then|and then|"
+    r"more|keep going|carry on|please)\b(?:[,\s.!?]|$)",
+    re.IGNORECASE,
+)
+_SHORT_FOLLOWUP_MAX_CHARS = 80
 _NEGATIVE_RE = re.compile(
     r"^(?:no|nope|n|stop|skip|cancel|wait|nevermind|never mind)\s*[!?.]*$",
     re.IGNORECASE,
@@ -1522,6 +1537,21 @@ def _load_last_route(session_id: str) -> dict | None:
         return None
 
 
+def _is_short_followup(prompt: str) -> bool:
+    """Return True for short conversational follow-ups beyond the existing
+    single-word CONTINUATION_RE.
+
+    Catches the pattern "ok do that" / "yes, continue with 3" / "now do
+    the next one" — multi-word but unmistakably a follow-up to the
+    current turn's context. The size cap + acknowledgment-prefix
+    requirement keeps genuine new tasks from being silently bypassed.
+    """
+    stripped = prompt.strip()
+    if len(stripped) > _SHORT_FOLLOWUP_MAX_CHARS:
+        return False
+    return bool(_SHORT_FOLLOWUP_PREFIX.match(stripped))
+
+
 def _is_continuation(prompt: str) -> bool:
     """Return True if the prompt looks like a continuation of the prior task.
 
@@ -1531,6 +1561,8 @@ def _is_continuation(prompt: str) -> bool:
     """
     stripped = prompt.strip()
     if _CONTINUATION_RE.match(stripped):
+        return True
+    if _is_short_followup(stripped):
         return True
     
     # Catch only short, context-dependent conversational starters. Words such
@@ -2310,6 +2342,31 @@ def main() -> None:
             )
         except OSError:
             pass
+
+    # ── Last-classification sidecar (gap 1: hook verdict survives MCP boundary) ──
+    #
+    # The MCP llm_* tools have no way to discover the session_id of the
+    # invoking prompt, so the per-session pending_route_*.json isn't
+    # reachable from inside the MCP server. We mirror the hook's
+    # classification verdict into a process-wide
+    # ``~/.chuzom/last_classification.json``. Tools read it on entry
+    # and pass its ``complexity`` as the ``complexity_hint`` to
+    # ``route_and_call`` — which then beats the length-based auto-
+    # heuristic. Stale entries (>120s) are ignored so an old verdict
+    # can't leak into a new turn.
+    try:
+        _write_json_atomic(
+            _ROUTER_DIR / "last_classification.json",
+            {
+                "task_type": task_type,
+                "complexity": complexity,
+                "method": method,
+                "issued_at": time.time(),
+                "session_id": session_id,
+            },
+        )
+    except OSError:
+        pass
 
     # ── Append mid-session trend indicator for visibility ────────────────────────
     trend_indicator = ""
