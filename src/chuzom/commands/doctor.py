@@ -206,6 +206,177 @@ def _run_doctor_host(host: str) -> None:
             print(_red(f"  {len(issues)} issue(s) found for {h}"))
 
 
+def _check_savings_posture() -> list[str]:
+    """Return rendered status lines for each quota-savings configuration check.
+
+    Each line is one of ``_ok`` / ``_warn`` / ``_fail`` with a short
+    actionable suggestion so the user knows exactly what env var or
+    setting to flip. We check seven things in order of leverage:
+
+    1. **OpenRouter key** — biggest unlock. Single key gives access to
+       deepseek-v4-flash, qwen3-235b, claude-sonnet-4 via OpenRouter,
+       which the ``cost_aggressive`` policy is wired for.
+    2. **DeepSeek key** — direct access to deepseek-chat /
+       deepseek-reasoner. Optional but unlocks the cheapest non-local
+       reasoning tier when OpenRouter isn't set.
+    3. **Sidecar pre-execution** — ``CHUZOM_SIDECAR_PREFETCH=1`` lets
+       the hook answer introspection prompts without any tool calls.
+    4. **Response router** — ``CHUZOM_RESPONSE_ROUTER=on`` (default on)
+       compresses explanations in MCP tool responses before Claude reads
+       them. Warn if explicitly disabled.
+    5. **Enforcement mode** — strict / hard mode actually blocks
+       bypasses; smart is the safe default. Off / shadow is a foot-gun.
+    6. **Hook hint freshness** — the auto-route hook should be writing
+       ``~/.chuzom/last_classification.json`` on every prompt. A stale
+       file (> 1h) means the hook isn't firing.
+    7. **Today's simple-share** — if any routing happened today, what
+       fraction was classified ``simple``? Pre-fix this was 0%; healthy
+       posture is > 30% on a chat-heavy session, > 50% on info-gathering.
+
+    Failures here are advisory — they're rendered but don't append to
+    the doctor's ``issues`` list, since "Chuzom works" and "Chuzom is
+    optimally configured" are different bars.
+    """
+    import sqlite3
+    import time
+    from pathlib import Path
+
+    lines: list[str] = []
+
+    # 1. OpenRouter key — single biggest unlock.
+    if os.environ.get("OPENROUTER_API_KEY"):
+        lines.append(_ok("OPENROUTER_API_KEY set — full leaderboard pool reachable"))
+    elif (Path.home() / ".chuzom" / "openrouter-routerarena.env").exists():
+        lines.append(_warn(
+            "OPENROUTER_API_KEY stored at ~/.chuzom/openrouter-routerarena.env "
+            "but NOT loaded into env. Source the file before benchmark runs."
+        ))
+    else:
+        lines.append(_warn(
+            "OPENROUTER_API_KEY not set — deepseek-v4-flash / qwen3-235b / "
+            "qwen3-coder-next unreachable. One key unlocks the leaderboard pool."
+        ))
+
+    # 2. DeepSeek key (direct).
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        lines.append(_ok("DEEPSEEK_API_KEY set — direct deepseek-chat reachable"))
+    else:
+        lines.append(_warn(
+            "DEEPSEEK_API_KEY not set — direct deepseek-chat unreachable "
+            "(OpenRouter can still route there if its key is set)."
+        ))
+
+    # 3. Sidecar pre-execution.
+    sidecar_value = os.environ.get("CHUZOM_SIDECAR_PREFETCH", "").strip().lower()
+    if sidecar_value in {"1", "true", "yes", "on"}:
+        lines.append(_ok("CHUZOM_SIDECAR_PREFETCH=on — introspection prompts pre-executed"))
+    else:
+        lines.append(_warn(
+            "CHUZOM_SIDECAR_PREFETCH not set — introspection prompts ('show me "
+            "my routing today', 'git status') still go through llm_query + tool "
+            "calls. Set =1 to let the hook pre-execute and inject the result."
+        ))
+
+    # 4. Response router.
+    rr_value = os.environ.get("CHUZOM_RESPONSE_ROUTER", "on").strip().lower()
+    if rr_value == "off":
+        lines.append(_warn(
+            "CHUZOM_RESPONSE_ROUTER=off — MCP responses go to Claude unchanged. "
+            "Default is on; you've explicitly disabled it."
+        ))
+    else:
+        lines.append(_ok(
+            f"CHUZOM_RESPONSE_ROUTER={rr_value or 'on'} — explanations compressed "
+            "before they hit Claude's context"
+        ))
+
+    # 5. Enforcement mode.
+    enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower()
+    if enforce in {"off", "shadow"}:
+        lines.append(_warn(
+            f"CHUZOM_ENFORCE={enforce} — route directives are advisory only. "
+            "Claude can bypass without consequence; quota savings are best-effort."
+        ))
+    elif enforce in {"hard", "strict"}:
+        lines.append(_ok(
+            f"CHUZOM_ENFORCE={enforce} — bypasses are blocked"
+        ))
+    else:
+        # Default / smart.
+        lines.append(_ok("CHUZOM_ENFORCE=smart (default) — write tools blocked until route honored"))
+
+    # 6. Hook hint freshness.
+    hint_path = Path.home() / ".chuzom" / "last_classification.json"
+    if hint_path.exists():
+        try:
+            age = time.time() - hint_path.stat().st_mtime
+        except OSError:
+            age = None
+        if age is None:
+            lines.append(_warn("last_classification.json unreadable"))
+        elif age < 3600:
+            lines.append(_ok(
+                f"last_classification.json fresh ({int(age)}s) — hook hint bridge active"
+            ))
+        else:
+            mins = int(age // 60)
+            lines.append(_warn(
+                f"last_classification.json is {mins}m old — auto-route hook may "
+                "not be firing. Check ~/.chuzom/auto-route-debug.log for INVOCATION lines."
+            ))
+    else:
+        lines.append(_warn(
+            "~/.chuzom/last_classification.json missing — hook hint bridge "
+            "has not run yet. Send any prompt to create it."
+        ))
+
+    # 7. Today's simple-share — the smoking-gun metric from the
+    # earlier diagnostic. Pre-fix: 0/31 simple today. Healthy: > 30%.
+    db = Path.home() / ".chuzom" / "usage.db"
+    if db.is_file():
+        try:
+            conn = sqlite3.connect(str(db))
+            row = conn.execute(
+                "SELECT "
+                "  SUM(CASE WHEN complexity='simple' THEN 1 ELSE 0 END), "
+                "  COUNT(*) "
+                "FROM routing_decisions "
+                "WHERE date(timestamp,'localtime')=date('now','localtime') "
+                "  AND COALESCE(reason_code,'') != 'sidecar_backfill'"
+            ).fetchone()
+            conn.close()
+            simple_n, total_n = (row[0] or 0), (row[1] or 0)
+        except sqlite3.Error:
+            simple_n, total_n = 0, 0
+        if total_n == 0:
+            lines.append(_warn(
+                "No routing decisions today yet — nothing to measure. "
+                "Trigger a few llm_* tool calls and re-run."
+            ))
+        else:
+            share = 100.0 * simple_n / total_n
+            if share >= 30.0:
+                lines.append(_ok(
+                    f"Today's simple-share: {simple_n}/{total_n} ({share:.1f}%) — "
+                    "boundary fix is firing"
+                ))
+            elif share > 0.0:
+                lines.append(_warn(
+                    f"Today's simple-share: {simple_n}/{total_n} ({share:.1f}%) — "
+                    "below 30% target. Most prompts still classifying as moderate; "
+                    "check classifier."
+                ))
+            else:
+                lines.append(_warn(
+                    f"Today's simple-share: 0/{total_n} — boundary fix isn't reaching "
+                    "the router. Verify auto-route hook is installed with today's source."
+                ))
+    else:
+        lines.append(_warn("~/.chuzom/usage.db missing — no telemetry to score"))
+
+    return lines
+
+
 def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
     """Comprehensive health check — verify every component is wired up.
 
@@ -511,6 +682,18 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
             print(_ok(f"chuzom {v}"))
         except Exception:
             print(_warn("could not determine installed version"))
+
+    # ── 10. Quota savings posture ─────────────────────────────────────────
+    # Verifies the features that drive cost-savings in a live session are
+    # actually wired up. Each finding suggests a concrete env var or
+    # config change so the operator can close the gap.
+    print(f"\n{_bold('  Quota savings posture')}")
+    _savings_warnings = _check_savings_posture()
+    for line in _savings_warnings:
+        print(line)
+    # Posture warnings are advisory — surface them in the summary but
+    # don't fail the doctor. The user wanted to *see* whether config is
+    # optimal, not be blocked by it.
 
     # ── Summary ────────────────────────────────────────────────────────────
     print()
