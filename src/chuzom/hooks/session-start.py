@@ -208,7 +208,8 @@ def _select_banner(is_subscription: bool) -> str:
 def _reset_session_stats() -> None:
     """Write current timestamp and a fresh UUID as session identifiers.
     Also resets session_spend.json so per-session cost tracking starts clean.
-    Initialize prompt_sequence counter for per-prompt quota audit trail."""
+    Initialize prompt_sequence counter for per-prompt quota audit trail.
+    Initialize routing lineage tracking (new decisions only)."""
     os.makedirs(STATE_DIR, exist_ok=True)
     try:
         with open(SESSION_START_FILE, "w") as f:
@@ -245,6 +246,13 @@ def _reset_session_stats() -> None:
         os.replace(tmp, SESSION_SPEND_FILE)
     except OSError:
         pass
+
+    # Initialize routing lineage tracking (v10.2.0)
+    try:
+        from chuzom.hooks.lineage_integration import init_session_lineage
+        init_session_lineage()
+    except Exception:
+        pass  # Gracefully skip if lineage system not available
 
 
 def _reset_stale_health() -> None:

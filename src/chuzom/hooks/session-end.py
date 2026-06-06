@@ -1644,11 +1644,22 @@ def main() -> None:
                 session_id = f.read().strip()
         except Exception:
             pass
-        
+
         if session_id:
             quota_timeline = _render_quota_timeline(session_id, DB_PATH)
             if quota_timeline:
                 summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + quota_timeline + "\n" + "  " + "═" * (WIDTH - 2)
+    except Exception:
+        pass  # Graceful failure — never break session-end
+
+    # ── Add routing efficiency report (v10.2.0) ──────────────────────────────────
+    # Shows model usage, token distribution, and detects wasteful routing patterns.
+    try:
+        from chuzom.hooks.lineage_integration import format_routing_section
+
+        routing_section = format_routing_section()
+        if routing_section:
+            summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + routing_section + "  " + "═" * (WIDTH - 2)
     except Exception:
         pass  # Graceful failure — never break session-end
 
