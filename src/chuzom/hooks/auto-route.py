@@ -463,6 +463,70 @@ def _is_content_generation_task(prompt: str) -> bool:
     return False
 
 
+# ── Introspection fast-path ──────────────────────────────────────────────────
+#
+# Prompts that ask Chuzom about its OWN local state ("show me my routing
+# distribution today", "list my recent commits", "how many sidecars are in
+# ~/.chuzom") need read-only Bash + SQL — they CAN'T be answered by any
+# routed LLM (the cheap model has no access to ``~/.chuzom/usage.db``).
+# Without this guard the classifier coerces "show me" into the generic
+# ``query`` bucket, the enforcer blocks Bash, and the user can't reach
+# their own data.
+#
+# Patterns intentionally narrow — they must imply the user is asking
+# about LOCAL state, not external knowledge:
+#
+# * Possessive markers: "my", "our", "the local", "this session's"
+# * Explicit local references: ~/.chuzom, usage.db, routing_decisions, etc.
+# * Tool-introspection verbs paired with self-referential targets
+
+_INTROSPECT_POSSESSIVE = re.compile(
+    r"\b(my|our|this session'?s|today'?s|recent|last|current)\b",
+    re.IGNORECASE,
+)
+_INTROSPECT_VERBS = re.compile(
+    r"\b(show me|list|how many|what'?s in|count|tally|summarise|summarize|"
+    r"dump|inspect|tell me about|let me see|give me|what did i)\b",
+    re.IGNORECASE,
+)
+_INTROSPECT_LOCAL_TARGETS = re.compile(
+    # Use ``(?<!\w)/(?!\w)`` style so underscore-suffixed identifiers like
+    # ``routing_decisions`` match via ``routing`` — ``\b`` treats
+    # underscore as a word character and would otherwise miss them.
+    # Singular ``route`` covered alongside ``routes`` / ``routing``.
+    r"(?<!\w)("
+    r"routing(?:_decisions)?|routes?|routings|decisions|"
+    r"usage\.?db|sidecars?|lineage(?:\.db)?|enforcement[\s.]?log|"
+    r"chuzom|hooks?|migrations?|policies?|policy file|"
+    r"git|commits?|branches?|status|diff"
+    r")(?!\w)",
+    re.IGNORECASE,
+)
+_INTROSPECT_PATH = re.compile(r"~/\.chuzom|\.chuzom/|usage\.db|lineage\.db")
+
+
+def _is_introspection_task(prompt: str) -> bool:
+    """Return True when the prompt asks about LOCAL Chuzom / project state.
+
+    Requires two independent signals so generic "show me X" prompts about
+    external knowledge ("show me a Python example of decorators") still
+    route normally. Either of:
+
+    * An introspection verb + local target keyword
+      ("show me the routing decisions", "list my hooks")
+    * A direct path reference (``~/.chuzom``, ``usage.db``) — strong enough
+      on its own; nobody asks the cloud about a path they didn't type
+    * A possessive + local target
+      ("my recent commits", "today's routings")
+    """
+    if _INTROSPECT_PATH.search(prompt):
+        return True
+    has_verb = bool(_INTROSPECT_VERBS.search(prompt))
+    has_target = bool(_INTROSPECT_LOCAL_TARGETS.search(prompt))
+    has_possessive = bool(_INTROSPECT_POSSESSIVE.search(prompt))
+    return (has_verb and has_target) or (has_possessive and has_target)
+
+
 # ── Benchmark prompt fast-paths (Plan 07 Phase 3 C) ───────────────────────────
 #
 # Templated benchmark prompts (RouterArena, MMLU, HELM, etc.) have stable
@@ -1114,6 +1178,19 @@ def classify_prompt(text: str) -> dict | None:
             "complexity": classify_complexity(text, "generate"),
             "method": "content-generation-fast-path",
             "suggestion": "content-generation-decomposition",
+        }
+
+    # Introspection fast-path: questions about LOCAL Chuzom / project
+    # state need read-only Bash + SQL — they're impossible to satisfy by
+    # routing to an LLM that has no access to ``~/.chuzom``. We still
+    # emit the classification (visible in the route indicator + logged
+    # for telemetry) but enforce-route.py recognises ``task_type ==
+    # introspect`` and lets native tools through without enforcement.
+    if _is_introspection_task(stripped):
+        return {
+            "task_type": "introspect",
+            "complexity": "simple",
+            "method": "introspection-fast-path",
         }
 
     # Benchmark prompt fast-path (Plan 07 Phase 3 C): RouterArena / MMLU /
@@ -2218,6 +2295,13 @@ def main() -> None:
                     "task_type": task_type,
                     "complexity": complexity,
                     "requested_complexity": requested_complexity,  # Original before pressure downgrade
+                    # Propagate classification method so enforce-route.py can
+                    # treat weak-confidence routes as suggestions instead of
+                    # hard blocks. ``heuristic-weak`` means the classifier
+                    # scored positive but below the strong-confidence
+                    # threshold — enforcing as hard would block legitimate
+                    # local work the classifier didn't recognise.
+                    "method": method,
                     "issued_at": _now,
                     "expires_at": _now + _PENDING_ROUTE_TTL_SEC,
                     "turn_id": int(_now),  # proxy for turn — clears when next prompt arrives

@@ -72,16 +72,20 @@ class TaskType(str, Enum):
 
     Text tasks (QUERY through CODE) are routed through LiteLLM.
     Media tasks (IMAGE, VIDEO, AUDIO) are routed through provider-specific APIs.
+    INTROSPECT short-circuits routing entirely — those prompts are about
+    the host's OWN local state and need read-only Bash + SQL against
+    ``~/.chuzom/*``, not an LLM call.
     """
 
-    QUERY = "query"         # Factual lookups, simple questions
-    RESEARCH = "research"   # Web-augmented research (Perplexity, etc.)
-    GENERATE = "generate"   # Content generation, writing, brainstorming
-    ANALYZE = "analyze"     # Deep analysis, comparison, evaluation
-    CODE = "code"           # Code generation, refactoring, debugging
-    IMAGE = "image"         # Image generation (DALL-E, Flux, Imagen, etc.)
-    VIDEO = "video"         # Video generation (Runway, Kling, Veo, etc.)
-    AUDIO = "audio"         # Audio/TTS generation (ElevenLabs, OpenAI TTS)
+    QUERY = "query"           # Factual lookups, simple questions
+    RESEARCH = "research"     # Web-augmented research (Perplexity, etc.)
+    GENERATE = "generate"     # Content generation, writing, brainstorming
+    ANALYZE = "analyze"       # Deep analysis, comparison, evaluation
+    CODE = "code"             # Code generation, refactoring, debugging
+    INTROSPECT = "introspect"  # Local-state queries — no LLM call, native tools only
+    IMAGE = "image"           # Image generation (DALL-E, Flux, Imagen, etc.)
+    VIDEO = "video"           # Video generation (Runway, Kling, Veo, etc.)
+    AUDIO = "audio"           # Audio/TTS generation (ElevenLabs, OpenAI TTS)
 
 
 class RoutingProfile(str, Enum):

@@ -476,6 +476,23 @@ def main() -> None:
         sys.exit(0)
 
     pending = _read_pending(session_id)
+    # introspect task type: the user is asking about LOCAL Chuzom state
+    # (routing decisions, hooks, ~/.chuzom files). No LLM has access to
+    # that data — enforcing the route would trap the user behind a
+    # block they can't satisfy. Exit cleanly so native tools work.
+    if pending is not None and pending.get("task_type") == "introspect":
+        sys.exit(0)
+    # heuristic-weak: classifier scored positive but below the strong-
+    # confidence threshold. Enforcing the route at full strength on a
+    # low-confidence guess hard-blocks legitimate local work the
+    # classifier didn't recognise. Downgrade to "soft" so users still
+    # see the route suggestion + the violation gets logged, but native
+    # tools aren't blocked. Strong heuristic / Ollama / API stay hard.
+    if pending is not None and pending.get("method") == "heuristic-weak":
+        if enforce in ("hard", "smart"):
+            enforce = "soft"
+        # Override CHUZOM_ENFORCE=strict only as far as soft, NOT off —
+        # the operator chose strict so they still want a visible log line.
     if pending is None:
         sys.exit(0)  # No routing directive was issued
     pending = _downgrade_pending_for_pressure(pending)
