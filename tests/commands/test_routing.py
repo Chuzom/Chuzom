@@ -39,7 +39,7 @@ class TestRunRouting:
                     with patch("chuzom.claude_usage.get_claude_pressure", return_value=0.5):
                         _run_routing()
         captured = capsys.readouterr()
-        assert "LLM Router" in captured.out
+        assert "Chuzom" in captured.out
         assert "Current Routing Configuration" in captured.out
 
     def test_run_routing_shows_providers_section(self, capsys):
@@ -86,7 +86,7 @@ class TestRunRouting:
                         _run_routing()
         captured = capsys.readouterr()
         # Should not crash even with exception
-        assert "LLM Router" in captured.out
+        assert "Chuzom" in captured.out
 
     def test_run_routing_handles_missing_pressure(self, capsys):
         """_run_routing should handle missing Claude pressure gracefully."""

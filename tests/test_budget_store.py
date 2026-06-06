@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -12,17 +13,31 @@ from chuzom.budget_store import (
     get_caps,
     remove_cap,
     set_cap,
-    _write_atomic,
 )
+from chuzom.storage import storage_service as global_storage_service
+from chuzom.storage.service import StorageService
 
 
 @pytest.fixture(autouse=True)
-def isolated_budgets(tmp_path, monkeypatch):
-    """Redirect budgets.json to a tmp path for every test."""
-    fake_file = tmp_path / "budgets.json"
-    monkeypatch.setattr("chuzom.budget_store._BUDGETS_FILE", fake_file)
-    monkeypatch.setattr("chuzom.budget_store._ROUTER_DIR", tmp_path)
-    yield fake_file
+def isolated_budgets(monkeypatch):
+    """Isolate StorageService to a temporary directory for each test."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_chuzom_dir = Path(tmpdir) / ".chuzom"
+        temp_chuzom_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create isolated StorageService and patch the global singleton
+        isolated_service = StorageService(router_dir=temp_chuzom_dir)
+        monkeypatch.setattr(
+            "chuzom.storage.storage_service",
+            isolated_service,
+        )
+        monkeypatch.setattr(
+            "chuzom.budget_store.storage_service",
+            isolated_service,
+        )
+
+        budgets_file = temp_chuzom_dir / "budgets.json"
+        yield budgets_file
 
 
 # ── get_caps ──────────────────────────────────────────────────────────────────
@@ -82,17 +97,6 @@ class TestSetCap:
         set_cap("openai", 20.0)
         data = json.loads(isolated_budgets.read_text())
         assert data["openai"] == pytest.approx(20.0)
-
-    def test_atomic_write_uses_tmp_file(self, tmp_path):
-        """Verify atomic write: tmp file is cleaned up after rename."""
-        caps = {"openai": 20.0}
-        target = tmp_path / "budgets.json"
-        with patch("chuzom.budget_store._BUDGETS_FILE", target), \
-             patch("chuzom.budget_store._ROUTER_DIR", tmp_path):
-            _write_atomic(caps)
-        assert target.exists()
-        tmp = target.with_suffix(".json.tmp")
-        assert not tmp.exists(), "tmp file should be cleaned up after atomic replace"
 
 
 # ── remove_cap ────────────────────────────────────────────────────────────────

@@ -1420,8 +1420,39 @@ def _collect_report_data(
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
+def _flush_session_spend_from_mcp() -> None:
+    """Signal MCP server to flush in-memory session spend to disk.
+
+    SAVINGS fix: The MCP server holds SessionSpend in memory and updates
+    session_spend.json in real-time. But if the last routed call happens
+    just before session-end, there can be a brief window where the file
+    is stale. This function requests a flush to ensure the file reflects
+    all calls made in this session.
+
+    Implementation: Create a flag file; wait briefly for MCP to react;
+    then read the freshly-flushed file.
+    """
+    try:
+        flush_flag = os.path.join(STATE_DIR, "session_spend_flush_request.txt")
+        with open(flush_flag, "w") as f:
+            f.write(str(time.time()))
+        time.sleep(0.2)  # Brief delay for MCP server to react
+        # Remove flag (cleanup)
+        try:
+            os.remove(flush_flag)
+        except OSError:
+            pass
+    except Exception:
+        pass  # Graceful failure — session-end always continues
+
+
 def _read_session_spend() -> dict | None:
-    """Read the real-time session spend file if it exists."""
+    """Read the real-time session spend file if it exists.
+
+    SAVINGS fix: Call _flush_session_spend_from_mcp() first to ensure
+    the file contains the latest in-memory state from MCP server.
+    """
+    _flush_session_spend_from_mcp()  # Ensure file is up-to-date
     try:
         with open(SESSION_SPEND_FILE) as f:
             return json.load(f)

@@ -31,6 +31,7 @@ from typing import Any
 
 from chuzom.config import get_config
 from chuzom.types import BudgetState, LOCAL_PROVIDERS
+from chuzom.routing_hints import detect_spend_anomaly, log_routing_decision
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
 # Per-provider cache: {provider: (BudgetState, cached_at)}
@@ -136,6 +137,54 @@ def invalidate_cache(provider: str | None = None) -> None:
         _cache.clear()
     else:
         _cache.pop(provider, None)
+
+
+async def check_spend_anomaly(
+    user_id: str, current_spend: float, daily_avg: float, monthly_cap: float
+) -> tuple[str, str]:
+    """Routing Point 3.4: Check if spending pattern is anomalous.
+
+    Compares current spend to historical baseline and cap to detect unusual
+    spikes. Routes semantic analysis to llm_query for intelligent alerting.
+
+    Args:
+        user_id:       User or team identifier
+        current_spend: Amount spent so far this period (USD)
+        daily_avg:     Historical daily average (USD/day)
+        monthly_cap:   Monthly budget cap (USD)
+
+    Returns:
+        (alert_level, reasoning) tuple. alert_level ∈ {normal, warning, critical}.
+    """
+    try:
+        alert_level, reasoning = await detect_spend_anomaly(
+            user_id=user_id,
+            current_spend=current_spend,
+            daily_avg=daily_avg,
+            monthly_cap=monthly_cap,
+        )
+        log_routing_decision(
+            routing_point="spend_anomaly_detection",
+            decision=alert_level,
+            reasoning=reasoning,
+            metadata={
+                "user_id": user_id,
+                "spend": current_spend,
+                "cap": monthly_cap,
+            },
+        )
+    except Exception as e:
+        # Graceful degradation: simple thresholds
+        alert_level = "critical" if (current_spend / monthly_cap) > 0.9 else "normal"
+        reasoning = f"local-fallback: {e}"
+        log_routing_decision(
+            routing_point="spend_anomaly_detection",
+            decision="degraded",
+            reasoning=reasoning,
+            metadata={"user_id": user_id},
+        )
+
+    return alert_level, reasoning
 
 
 # ── Internal ──────────────────────────────────────────────────────────────────

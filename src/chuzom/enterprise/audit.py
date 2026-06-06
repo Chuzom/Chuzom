@@ -16,6 +16,7 @@ own filters.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -24,6 +25,8 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from chuzom.routing_hints import classify_audit_severity, log_routing_decision
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -186,6 +189,65 @@ class AuditLog:
         )
         self._conn.commit()
         return filled
+
+    def append_with_auto_severity(
+        self, event: AuditEvent, use_routing: bool = True
+    ) -> AuditEvent:
+        """Append an event with automatically classified severity.
+
+        Routing Point 3.2: Uses llm_query to determine if this event should
+        be severity=info/warn/critical based on context. Falls back to
+        event.severity (default "info") if routing unavailable.
+
+        Args:
+            event:        The audit event (severity field ignored)
+            use_routing:  If False, skip routing and use event.severity
+
+        Returns:
+            The persisted event with severity auto-classified.
+        """
+        if use_routing:
+            try:
+                severity, reasoning = asyncio.run(
+                    classify_audit_severity(
+                        event_type=event.type,
+                        resource=event.resource,
+                        actor_id=event.actor_id,
+                        detail=event.detail,
+                    )
+                )
+                log_routing_decision(
+                    routing_point="audit_severity_classification",
+                    decision=severity,
+                    reasoning=reasoning,
+                    metadata={"event_type": event.type, "resource": event.resource},
+                )
+            except Exception as e:
+                # Graceful degradation: use event.severity
+                severity = event.severity
+                log_routing_decision(
+                    routing_point="audit_severity_classification",
+                    decision="degraded",
+                    reasoning=f"Routing unavailable: {e}",
+                    metadata={"event_type": event.type},
+                )
+        else:
+            severity = event.severity
+
+        # Create event with auto-classified severity
+        event_with_severity = AuditEvent(
+            type=event.type,
+            actor_id=event.actor_id,
+            actor_email=event.actor_email,
+            org_id=event.org_id,
+            resource=event.resource,
+            action=event.action,
+            detail=event.detail,
+            severity=severity,
+            id=event.id,
+            timestamp=event.timestamp,
+        )
+        return self.append(event_with_severity)
 
     def _latest_hash(self) -> str:
         row = self._conn.execute(

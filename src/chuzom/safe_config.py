@@ -20,8 +20,11 @@ it detects which providers are currently configured (from any source) and
 generates a YAML template for the user to fill in.
 """
 
+import asyncio
 from pathlib import Path
 from typing import Any
+
+from chuzom.routing_hints import detect_sensitive_content_semantic, log_routing_decision
 
 try:
     import yaml
@@ -112,3 +115,48 @@ chuzom_claude_subscription: {str(discovered.get('chuzom_claude_subscription', Fa
         with open(path, "w", encoding="utf-8") as f:
             f.write(template)
         path.chmod(0o600)  # Read/write by user only
+
+
+async def detect_sensitive_content(
+    text: str, detected_patterns: list[str] | None = None
+) -> tuple[bool, str]:
+    """Routing Point 3.5: Semantic PII/secret detection via llm_query.
+
+    Uses LLM reasoning to go beyond regex-based detection, reducing false
+    positives on legitimate code/data that looks like credentials but isn't.
+
+    Args:
+        text:                Text to check for sensitive data
+        detected_patterns:   List of regex matches (for context)
+
+    Returns:
+        (contains_sensitive, reasoning) tuple.
+    """
+    detected_patterns = detected_patterns or []
+
+    try:
+        contains_sensitive, reasoning = await detect_sensitive_content_semantic(
+            text=text,
+            detected_patterns=detected_patterns,
+        )
+        log_routing_decision(
+            routing_point="pii_secret_detection",
+            decision="blocked" if contains_sensitive else "allowed",
+            reasoning=reasoning,
+            metadata={
+                "text_length": len(text),
+                "pattern_count": len(detected_patterns),
+            },
+        )
+    except Exception as e:
+        # Conservative fallback: block if patterns found
+        contains_sensitive = len(detected_patterns) > 0
+        reasoning = f"local-fallback (routing unavailable): {e}"
+        log_routing_decision(
+            routing_point="pii_secret_detection",
+            decision="blocked" if contains_sensitive else "allowed",
+            reasoning=reasoning,
+            metadata={"pattern_count": len(detected_patterns)},
+        )
+
+    return contains_sensitive, reasoning

@@ -16,6 +16,7 @@ Configuration is organized into five sections:
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 import urllib.request
@@ -25,6 +26,7 @@ from typing import Literal
 from pydantic_settings import BaseSettings
 
 from chuzom.types import QualityMode, RoutingProfile, Tier
+from chuzom.routing_hints import validate_config_upgrade, log_routing_decision
 
 # ── Ollama reachability cache ─────────────────────────────────────────────────
 # Checked at most once per TTL to avoid a network call on every routing
@@ -465,3 +467,49 @@ def get_config() -> RouterConfig:
     if _config.chuzom_claude_subscription:
         os.environ.pop("ANTHROPIC_API_KEY", None)
     return _config
+
+
+async def validate_config_migration(
+    old_version: int, new_version: int, old_keys: set[str], new_keys: set[str]
+) -> tuple[bool, str]:
+    """Routing Point 3.3: Validate config version migration safely.
+
+    Detects breaking changes, suggests migration path, warns about data loss.
+
+    Args:
+        old_version: Current config version
+        new_version: Target config version
+        old_keys:    Keys in current config
+        new_keys:    Keys expected in new version
+
+    Returns:
+        (can_upgrade, reasoning) tuple.
+    """
+    try:
+        can_upgrade, reasoning = await validate_config_upgrade(
+            old_version=old_version,
+            new_version=new_version,
+            old_keys=old_keys,
+            new_keys=new_keys,
+        )
+        log_routing_decision(
+            routing_point="config_migration_validation",
+            decision="approved" if can_upgrade else "requires-manual-review",
+            reasoning=reasoning,
+            metadata={
+                "from_version": old_version,
+                "to_version": new_version,
+                "keys_lost": len(old_keys - new_keys),
+            },
+        )
+    except Exception as e:
+        can_upgrade = False
+        reasoning = f"manual-review-required: {e}"
+        log_routing_decision(
+            routing_point="config_migration_validation",
+            decision="degraded",
+            reasoning=reasoning,
+            metadata={"from_version": old_version, "to_version": new_version},
+        )
+
+    return can_upgrade, reasoning

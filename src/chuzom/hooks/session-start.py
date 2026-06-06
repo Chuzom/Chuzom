@@ -218,6 +218,8 @@ def _reset_session_stats() -> None:
     except OSError:
         pass
     # Reset real-time spend tracker so session-end shows this session only
+    # IMPORTANT: Include ALL fields from SessionSpend.get_summary() to ensure
+    # proper isolation between sessions (v8.8.0: added savings tracking fields)
     try:
         fresh = {
             "total_usd": 0.0,
@@ -227,11 +229,19 @@ def _reset_session_stats() -> None:
             "top_model": None,
             "per_model": {},
             "per_tool": {},
-            "prompt_sequence": 0,  # Counter for per-prompt audit trail
+            "prompt_sequence": 0,
+            # v8.8.0: Token reclamation & savings fields (must be reset per session)
+            "tokens_reclaimed": 0,
+            "opus_equivalent_usd": 0.0,
+            "net_savings_usd": 0.0,
+            "extension_minutes": 0.0,
+            "gate_pass_rate": 100.0,
+            "gates_passed": 0,
+            "gates_failed": 0,
         }
         tmp = SESSION_SPEND_FILE + ".tmp"
         with open(tmp, "w") as f:
-            json.dump(fresh, f)
+            json.dump(fresh, f, indent=2)
         os.replace(tmp, SESSION_SPEND_FILE)
     except OSError:
         pass
