@@ -568,6 +568,14 @@ def main() -> None:
     elif args and args[0] == "status":
         from chuzom.commands.status import cmd_status
         cmd_status(args[1:])
+    elif args and args[0] == "welcome":
+        # Print the painterly Chuzom banner on demand. Use this from your
+        # shell rc (e.g., `claude` wrapper function in ~/.zshrc) to put the
+        # welcome in your terminal scrollback before Claude Code's TUI takes
+        # over — Claude Code's SessionStart hooks cannot surface output to
+        # the user's terminal directly.
+        from chuzom.commands.welcome import cmd_welcome
+        sys.exit(cmd_welcome(args[1:]))
     elif args and args[0] == "routing":
         from chuzom.commands.routing import cmd_routing
         cmd_routing(args[1:])
