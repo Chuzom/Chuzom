@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.1.1 — Stop misrouting display-intent prompts to llm_code
+
+> **Patch release.** Targets the most common "Chuzom appears stuck" experience: trivial follow-ups like `show me the report` issued after code-heavy turns were being classified `code/moderate` via `code-context-inherit`, then forced through `mcp__chuzom__llm_code` — an external LLM that can't read local files. The tool would spin for 2-4 minutes before the user cancelled. No actual hang; just a misroute taking the slow path that couldn't help anyway. Full analysis in [`STUCK_PATTERNS_ANALYSIS.md`](./STUCK_PATTERNS_ANALYSIS.md).
+
+### Added
+- **Display-intent override** (`auto-route.py`) — `_DISPLAY_INTENT_RE` matches short prompts (≤100 chars) starting with `show`/`display`/`view`/`read`/`cat`/`print`/`list`/`open`/`see` followed by a display target (`the/my/this/<file>.md/report/file/output/log/diff/...`). Such prompts always route to `llm_query` regardless of inherited context, tagged `intent-override-display` for telemetry. Does **not** save to `last_route` so subsequent genuine code follow-ups still inherit the prior code context correctly.
+- **`STUCK_PATTERNS_ANALYSIS.md`** — comprehensive 4-mode taxonomy of perceived "stuck" events across Claude Code CLI, VS Code/JetBrains extensions, Cursor/Windsurf, and Claude.ai web. Includes evidence trail from `auto-route-debug.log` + the d4cd6a72 session transcript, defense-gap matrix, prioritised fix list, and an instrumentation patch proposal for catching the next one.
+- **`tests/test_display_intent_override.py`** — 41 cases covering positive matches, negative matches against real code-generation prompts (`show me a function that…`), length-cap behaviour, and source-integration smoke check that asserts the override branch remains wired.
+
+### Changed
+- **Continuation bypass narrowed to strict acks** (`auto-route.py`) — the early UserPromptSubmit bypass at `chuzom-auto-route.py:1988` now triggers only on strict `_CONTINUATION_RE` matches (single-word `yes`/`ok`/`go ahead`/etc.), not the broader `_is_short_followup` union. Multi-word directives like `please go ahead and do the change` after a code task now fall through to the classification block instead of silently exiting with no output. Behaviour change: prompts starting with `please`/`now`/`let's` no longer bypass — they're routed normally.
+- **Classification branch order** (`auto-route.py`) — `_is_short_code_followup` is now checked **before** `_is_continuation` so short follow-ups after code tasks get the specific `code-context-inherit` telemetry tag instead of the generic `context-inherit`. Routing destination is functionally identical; observability is sharper.
+- **`LineageStore` exported from `chuzom.lineage`** — adds `LineageStore` to `chuzom/lineage/__init__.py`'s `__all__` so `chuzom.tools.agents` (and the 5 QA-suite test modules) can import it without `ImportError`. Class existed in `lineage_store.py`; export was missing.
+- **Live-hook tests find the renamed file** (`tests/test_auto_route_fix_verb.py`) — `_find_live_hook()` helper checks `~/.claude/hooks/chuzom-auto-route.py` first, falls back to legacy `llm-router-auto-route.py`. Resolves post-rebrand test drift where v0.0.2 fix-pattern assertions still pointed at the pre-rebrand binary path.
+
+### Fixed
+- **Silent hook exit on multi-word follow-ups** — `test_short_followup_after_code_inherits_code` was failing because the broad bypass swallowed prompts like `please go ahead and do the change now`. Now correctly emits the `code-context-inherit` routing directive.
+- **Perceived 2-4 minute hangs on display-intent prompts** — the misroute path is closed at the classifier. `show me the report` after a code-heavy session now routes to `llm_query` (cheap, fast) instead of `llm_code` (slow external LLM that can't help).
+
+### Internal
+- 41 new regression tests in `test_display_intent_override.py`; 198/198 passing across `test_auto_route_*` + `test_display_intent_override` + `tests/lineage/` suites.
+
+---
+
 ## v0.1.0 — Stability promise + first benchmark numbers + brand sweep
 
 > **First stable-shape release.** The 0.0.x phase shipped fast and broke things on the way; 0.1.0 commits to:
