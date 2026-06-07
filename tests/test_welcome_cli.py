@@ -18,7 +18,6 @@ shell-wrapper integration.
 from __future__ import annotations
 
 import io
-import sys
 from contextlib import redirect_stdout
 
 import pytest
