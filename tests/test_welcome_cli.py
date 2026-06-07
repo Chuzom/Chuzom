@@ -43,7 +43,14 @@ def test_welcome_default_prints_painterly_banner() -> None:
     out = buf.getvalue()
 
     assert rc == 0
-    assert "CHUZOM" in out, "wordmark missing from full painterly banner"
+    # The painterly wordmark spaces letters apart (`C  H  U  Z  O  M`).
+    # Strip ANSI and whitespace to check the brand letters appear in order.
+    import re
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", out)
+    plain_squashed = re.sub(r"\s+", "", plain).upper()
+    assert "CHUZOM" in plain_squashed, (
+        "wordmark missing from full painterly banner"
+    )
     # The painterly art uses 24-bit truecolor — expect many ESC sequences.
     esc = "\x1b["
     assert out.count(esc) > 50, (
