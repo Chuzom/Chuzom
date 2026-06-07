@@ -420,7 +420,7 @@ _SELF_REFERENCE_RE = re.compile(
     r"|MANDATORY[\s_-]+ROUTE"
     r"|CHUZOM_ENFORCE"
     r"|chuzom[-_](?:enforce|auto-route|hook|session-start|session-end|agent-route|subagent-start|router|status-bar)"
-    r"|chuzom.{0,80}(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped|self-reference)"
+    r"|chuzom.{0,80}(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped|self-reference|welcome|banner|render|hook|install|show|display|session-start|ascii|greeting|visible|invisible|hidden|see)"
     r"|(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped).{0,80}chuzom"
     r")",
     re.IGNORECASE | re.DOTALL,
@@ -2316,6 +2316,23 @@ def main() -> None:
                     f"model={_direct_result.model.provider}/{_direct_result.model.model} "
                     f"latency={_direct_result.latency_ms}ms"
                 )
+                # Visible UI signal — Claude Code surfaces stderr from
+                # UserPromptSubmit hooks under "UserPromptSubmit:hook success:",
+                # giving the user a real-time view of which model handled each
+                # routed turn. The data was already in additionalContext, but
+                # additionalContext goes to Claude, not the user's session UI.
+                # Opt-out: CHUZOM_ROUTE_BANNER=off (env var).
+                if os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower() not in ("0", "off", "false", "no"):
+                    try:
+                        _latency_s = _direct_result.latency_ms / 1000.0
+                        print(
+                            f"🎯 routed → {_direct_result.model.provider}/{_direct_result.model.model} "
+                            f"· {task_type}/{complexity} · {_latency_s:.1f}s",
+                            file=sys.stderr,
+                        )
+                    except Exception:
+                        # Never let UI presentation block the routing decision.
+                        pass
                 # Persist savings — fire-and-forget; helper swallows all errors.
                 # Without this call, sessions that route exclusively to DIRECT
                 # providers (Ollama, Gemini, OpenAI) show $0.00 saved in the
