@@ -58,12 +58,12 @@ def _cmd_status(args: argparse.Namespace) -> int:
         print(f"     {version}")
     if report.missing_down:
         print()
-        print(f"Missing down() (rollback will fail for these):")
+        print("Missing down() (rollback will fail for these):")
         for version in report.missing_down:
             print(f"     {version}")
     if report.drifted:
         print()
-        print(f"⚠ Drifted (source changed since apply):")
+        print("⚠ Drifted (source changed since apply):")
         for version in report.drifted:
             print(f"     {version}")
     return 0

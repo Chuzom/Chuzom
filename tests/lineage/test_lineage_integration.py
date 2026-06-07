@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import tempfile
 
-import pytest
 
 from chuzom.lineage.decision_logger import log_routing_decision
 from chuzom.lineage.lineage_query import LineageQuery
@@ -164,8 +163,8 @@ class TestEndToEndLineageTracking:
             assert len(wasteful) == 10, "Should detect all 10 wasteful operations"
             assert all(w["selected_model"] == "claude-opus-4-7" for w in wasteful)
 
-            # Calculate cost difference
-            cheap_cost = 50 * 0.00006
+            # Calculate cost difference: 10 expensive opus calls vs the cheaper
+            # haiku model that should have handled the same simple tasks.
             expensive_cost = 10 * 0.003
             wasted = expensive_cost - (10 * 0.00006)
 

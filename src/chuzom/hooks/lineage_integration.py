@@ -8,7 +8,6 @@ Provides utilities for SessionStart and SessionEnd hooks to:
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 

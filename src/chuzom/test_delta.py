@@ -37,7 +37,6 @@ import sys
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
 
 DEFAULT_DB_PATH = Path.home() / ".chuzom" / "usage.db"
 SNAPSHOT_DIR = Path.home() / ".chuzom" / "test_delta"

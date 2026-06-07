@@ -14,7 +14,6 @@ from chuzom.budget_store import (
     remove_cap,
     set_cap,
 )
-from chuzom.storage import storage_service as global_storage_service
 from chuzom.storage.service import StorageService
 
 

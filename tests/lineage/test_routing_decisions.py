@@ -10,11 +10,10 @@ Verifies that:
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
 
 import pytest
 
-from chuzom.lineage.decision_logger import RoutingDecision, log_routing_decision
+from chuzom.lineage.decision_logger import log_routing_decision
 from chuzom.lineage.lineage_query import LineageQuery
 from chuzom.lineage.lineage_store import LineageStore
 from chuzom.lineage.report_generator import format_decision, generate_routing_report

@@ -12,7 +12,6 @@ Each decision logs:
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any

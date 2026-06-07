@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from chuzom.streaming_judge import StreamingJudge, StreamingJudgeVerdict
+from chuzom.streaming_judge import StreamingJudge
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────

@@ -20,7 +20,6 @@ it detects which providers are currently configured (from any source) and
 generates a YAML template for the user to fill in.
 """
 
-import asyncio
 from pathlib import Path
 from typing import Any
 

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import random
 
-import pytest
 
 from chuzom.judge_cascade import (
     JUDGE_DISABLED,

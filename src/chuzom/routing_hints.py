@@ -12,7 +12,6 @@ Failures gracefully degrade to simple local validation.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 

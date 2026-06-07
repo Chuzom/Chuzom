@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from chuzom.session_spend import SessionSpend, reset_session_spend
+from chuzom.session_spend import reset_session_spend
 
 
 @pytest.fixture

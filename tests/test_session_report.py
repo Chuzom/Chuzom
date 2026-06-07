@@ -589,5 +589,6 @@ class TestEnhancedDashboard:
                 None, None, False,
                 session_start=session_start - 120,
             )
-        # Should contain either enhanced sparkline or fallback
-        assert "LLM Router" in output
+        # Should contain either enhanced sparkline or fallback.
+        # Post-rebrand: dashboard header reads "⚡ Chuzom" (was "LLM Router").
+        assert "Chuzom" in output

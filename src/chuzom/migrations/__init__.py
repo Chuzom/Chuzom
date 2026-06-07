@@ -41,7 +41,7 @@ import sqlite3
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 __all__ = [
     "Migration",
@@ -233,7 +233,6 @@ def status(connection: sqlite3.Connection,
     ledger = _read_ledger(connection)
 
     applied = list(ledger.values())
-    discovered_versions = {str(m.version) for m in discovered}
     pending = [str(m.version) for m in discovered if str(m.version) not in ledger]
 
     missing_down: list[str] = []

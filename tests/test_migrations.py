@@ -16,9 +16,7 @@ import pytest
 
 from chuzom.migrations import (
     apply,
-    compute_checksum,
     discover,
-    ensure_ledger,
     rollback,
     status,
 )
@@ -218,7 +216,6 @@ def test_status_detects_drift_after_edit(tmp_path):
 
 def test_shipped_001_creates_and_rolls_back_chuzom_health(tmp_path):
     """The actual versions/001 must up/down cleanly on a fresh DB."""
-    import chuzom.migrations as m
 
     db = tmp_path / "test.db"
     conn = sqlite3.connect(db)

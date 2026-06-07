@@ -6,7 +6,6 @@ import json
 import pytest
 
 from chuzom.storage.adapters.sqlite_adapter import SqliteAdapter
-from chuzom.storage.models import AuditEvent
 
 
 @pytest.mark.unit
@@ -15,8 +14,8 @@ class TestSqliteAdapter:
 
     def test_create_schema_idempotent(self, chuzom_paths):
         """Schema creation succeeds on first and subsequent calls."""
-        adapter1 = SqliteAdapter(chuzom_paths["audit_db"])
-        adapter2 = SqliteAdapter(chuzom_paths["audit_db"])
+        SqliteAdapter(chuzom_paths["audit_db"])
+        SqliteAdapter(chuzom_paths["audit_db"])
 
         # Both should succeed without errors
         assert chuzom_paths["audit_db"].exists()

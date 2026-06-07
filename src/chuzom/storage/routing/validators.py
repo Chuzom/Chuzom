@@ -5,7 +5,6 @@ These validators wrap the routing_hints functions and integrate with adapters.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from chuzom.routing_hints import (

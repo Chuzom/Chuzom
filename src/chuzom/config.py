@@ -16,7 +16,6 @@ Configuration is organized into five sections:
 
 from __future__ import annotations
 
-import asyncio
 import threading
 import time
 import urllib.request

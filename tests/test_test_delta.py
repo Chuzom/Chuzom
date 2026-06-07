@@ -21,7 +21,6 @@ import pytest
 from chuzom.test_delta import (
     OPUS_INPUT_PER_M,
     OPUS_OUTPUT_PER_M,
-    Snapshot,
     diff,
     load_snapshot,
     save_snapshot,
@@ -96,7 +95,7 @@ def test_snapshot_save_load_roundtrip(tmp_path):
         ("2026-06-06 17:00", "query", "simple", "gemini-flash", 10, 20, 0.001, None),
     ])
     snap = snapshot(db)
-    path = save_snapshot(snap, root=tmp_path / "snaps")
+    save_snapshot(snap, root=tmp_path / "snaps")
     loaded = load_snapshot(snap.id, root=tmp_path / "snaps")
     assert loaded.routing.rows == 1
     assert loaded.routing.by_tier.get("simple") == 1
