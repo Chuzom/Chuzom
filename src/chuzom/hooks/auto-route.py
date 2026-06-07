@@ -405,6 +405,27 @@ SKIP_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# ── Self-Reference Bypass ────────────────────────────────────────────────────
+# When the user is debugging chuzom itself, routing creates a circular
+# dependency: the broken router blocks the tools needed to repair it.
+# Match prompts that reference chuzom internals (paths, log files, hook
+# names, env vars) OR mention chuzom near a debugging-context word.
+# A match exits the hook cleanly — no pending state, no banner, no block.
+_SELF_REFERENCE_RE = re.compile(
+    r"(?:"
+    r"\.chuzom[/\\]"
+    r"|enforcement\.log"
+    r"|auto-route-debug"
+    r"|pending_route_"
+    r"|MANDATORY[\s_-]+ROUTE"
+    r"|CHUZOM_ENFORCE"
+    r"|chuzom[-_](?:enforce|auto-route|hook|session-start|session-end|agent-route|subagent-start|router|status-bar)"
+    r"|chuzom.{0,80}(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped|self-reference)"
+    r"|(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped).{0,80}chuzom"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
 # ── Build Task Patterns (code fast-path) ─────────────────────────────────────
 #
 # When a prompt clearly asks for write/edit/fix/implement work, we can skip the
@@ -1919,6 +1940,13 @@ def main() -> None:
     prompt = hook_input.get("prompt", "")
     _debug_log(f"[INVOCATION {invocation_id:.3f}] prompt_len={len(prompt)} session_id={hook_input.get('session_id', 'unknown')[:8]}")
     if not prompt.strip():
+        sys.exit(0)
+
+    # Self-reference bypass: skip routing when the user is debugging chuzom
+    # itself, to avoid the circular dependency where chuzom blocks its own
+    # repair. See _SELF_REFERENCE_RE above for the match criteria.
+    if _SELF_REFERENCE_RE.search(prompt):
+        _debug_log(f"[INVOCATION {invocation_id:.3f}] SELF_REFERENCE_BYPASS — chuzom-debug prompt, skipping routing")
         sys.exit(0)
 
     session_id = hook_input.get("session_id", "")

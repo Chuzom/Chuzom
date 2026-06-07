@@ -107,6 +107,7 @@ async def safe_subprocess_exec(
     try:
         proc = await asyncio.create_subprocess_exec(
             *args,
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
             cwd=cwd,
