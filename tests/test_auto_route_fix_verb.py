@@ -139,28 +139,48 @@ def test_existing_classifications_preserved(
 # Live hook sync check — the live llm-router hook must carry the same fix
 # ────────────────────────────────────────────────────────────────────────
 
+def _find_live_hook() -> Path | None:
+    """Locate the installed auto-route hook regardless of binary rebrand.
+
+    Post-chuzom rebrand the hook is ``chuzom-auto-route.py``. The legacy
+    ``llm-router-auto-route.py`` path is checked second for backwards
+    compatibility with environments that haven't migrated. First existing
+    file wins.
+    """
+    candidates = [
+        Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py",
+        Path.home() / ".claude" / "hooks" / "llm-router-auto-route.py",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
 def test_live_hook_has_the_fix_pattern_too():
     """If the Chuzom source has the expanded fix pattern, the live
-    llm-router hook used by Claude Code must too. Otherwise users hitting
+    auto-route hook used by Claude Code must too. Otherwise users hitting
     the bug locally won't benefit from the fix."""
-    live_hook = Path.home() / ".claude" / "hooks" / "llm-router-auto-route.py"
-    if not live_hook.exists():
-        pytest.skip("Live llm-router hook not installed locally")
+    live_hook = _find_live_hook()
+    if live_hook is None:
+        pytest.skip("No live auto-route hook installed locally")
 
     content = live_hook.read_text()
     assert "fix|patch|repair|resolve" in content, (
-        "Live llm-router hook missing the v0.0.2 fix-verb expansion. "
-        "Re-apply the fix or it'll keep blocking implementation prompts."
+        f"Live auto-route hook ({live_hook.name}) missing the v0.0.2 "
+        "fix-verb expansion. Re-install from chuzom source so the live hook "
+        "carries the same classifier patterns."
     )
 
 
 def test_live_hook_has_the_qa_topic_terms_too():
-    live_hook = Path.home() / ".claude" / "hooks" / "llm-router-auto-route.py"
-    if not live_hook.exists():
-        pytest.skip("Live llm-router hook not installed locally")
+    live_hook = _find_live_hook()
+    if live_hook is None:
+        pytest.skip("No live auto-route hook installed locally")
 
     content = live_hook.read_text()
     # New terms added in v0.0.2 to code topic
     assert "non[- ]functional" in content or "non-functional" in content, (
-        "Live llm-router hook missing the v0.0.2 QA-topic expansion."
+        f"Live auto-route hook ({live_hook.name}) missing the v0.0.2 "
+        "QA-topic expansion. Re-install from chuzom source."
     )

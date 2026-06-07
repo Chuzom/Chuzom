@@ -1456,6 +1456,26 @@ _NEGATIVE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# v6.12: Display/read-intent override. Short prompts that explicitly ask to
+# *see* something must not inherit a `code` classification from prior context.
+# Without this guard, "show me the report" after a code-heavy turn gets
+# code-context-inherit → llm_code → external LLM that cannot read local files,
+# which the user perceives as a 2-4 minute hang (see STUCK_PATTERNS_ANALYSIS.md).
+# Matches an explicit display verb plus a display target (the/my/this/that/it,
+# a known file extension, or a common artefact noun). Capped at 100 chars to
+# avoid catching genuine code-generation requests phrased descriptively.
+_DISPLAY_INTENT_MAX_CHARS = 100
+_DISPLAY_INTENT_RE = re.compile(
+    r"^\s*(?:show|display|view|read|see|cat|print|list|open)\s+"
+    r"(?:me\s+|us\s+)?"
+    r"(?:the\s+|my\s+|all\s+|that\s+|this\s+|it\b|"
+    r"\S+\.(?:md|txt|json|yaml|yml|log|csv|html|sh|py|js|ts|sql|toml)\b|"
+    r"(?:report|file|files|output|log|logs|results?|content|data|"
+    r"status|diff|changes|summary|table|chart|graph|"
+    r"history|memory|notes?|docs?|spec|specs|readme))",
+    re.IGNORECASE,
+)
+
 
 def _pending_state_path(session_id: str) -> Path:
     return _ROUTER_DIR / f"pending_route_{session_id}.json"
@@ -1965,11 +1985,18 @@ def main() -> None:
     # If no directive is pending, this prevents routing noise for conversation.
     # Kill-switch: CHUZOM_DISABLE_CONTINUATION_BYPASS=1 forces every turn
     # through the classifier (useful when the heuristic regresses).
-    if not zero_claude and session_id and _is_continuation(prompt):
+    #
+    # v6.13: Bypass ONLY on strict-ack continuations (_CONTINUATION_RE), NOT
+    # on the broader _is_short_followup union. "please go ahead and do the
+    # change" after a code task is a directive that should reach the
+    # code-context-inherit branch — not silently bypass to the host agent.
+    # Prior behaviour swallowed such prompts (test_short_followup_after_code_inherits_code).
+    if (not zero_claude and session_id
+            and _CONTINUATION_RE.match(prompt.strip())):
         if os.environ.get("CHUZOM_DISABLE_CONTINUATION_BYPASS", "").lower() in ("1", "true", "yes", "on"):
             _debug_log(f"[INVOCATION {invocation_id:.3f}] CONTINUATION: bypass disabled via env, routing instead")
         else:
-            _debug_log(f"[INVOCATION {invocation_id:.3f}] CONTINUATION: bypass to host agent")
+            _debug_log(f"[INVOCATION {invocation_id:.3f}] CONTINUATION: bypass to host agent (strict ack)")
             sys.exit(0)
 
     previous_unrouted = _consume_unresolved_pending(session_id) if session_id else None
@@ -2008,7 +2035,35 @@ def main() -> None:
     # ── Context-Aware Routing (v2.5) ─────────────────────────────────────────
     # Short continuation prompts inherit the prior turn's route — instant, free.
     last_route = _load_last_route(session_id) if session_id else None
-    if last_route and _is_continuation(prompt):
+
+    # v6.12: Intent-shift override — display/read verbs always route to
+    # llm_query regardless of inherited context. Prevents the misroute
+    # documented in STUCK_PATTERNS_ANALYSIS.md (§2 mode 1). Deliberately does
+    # NOT call _save_last_route so a subsequent genuine code follow-up still
+    # inherits the prior code context.
+    if (len(prompt) <= _DISPLAY_INTENT_MAX_CHARS
+            and _DISPLAY_INTENT_RE.match(prompt)):
+        task_type  = "query"
+        complexity = "simple"
+        tool       = "llm_query"
+        method     = "intent-override-display"
+    elif last_route and _is_short_code_followup(prompt, last_route):
+        # v6.13: Check code-context-inherit BEFORE generic context-inherit so
+        # short follow-ups after code tasks get the specific telemetry label.
+        # Negative continuations (no/stop/skip) still downgrade to query —
+        # the same way they did under the generic branch.
+        if _NEGATIVE_RE.match(prompt.strip()):
+            task_type  = "query"
+            complexity = "simple"
+            tool       = "llm_query"
+            method     = "context-inherit-negative"
+        else:
+            task_type  = last_route["task_type"]
+            complexity = last_route["complexity"]
+            tool       = last_route["tool"]
+            method     = "code-context-inherit"
+        # Don't save — preserve original code context for subsequent turns.
+    elif last_route and _is_continuation(prompt):
         task_type  = last_route["task_type"]
         complexity = last_route["complexity"]
         tool       = last_route["tool"]
@@ -2018,13 +2073,6 @@ def main() -> None:
             complexity = "simple"
             tool       = "llm_query"
         method = "context-inherit"
-    elif last_route and _is_short_code_followup(prompt, last_route):
-        # Short follow-ups after code tasks inherit code classification.
-        # Don't save — preserve original code context for subsequent turns.
-        task_type  = last_route["task_type"]
-        complexity = last_route["complexity"]
-        tool       = last_route["tool"]
-        method     = "code-context-inherit"
     else:
         result = classify_prompt(prompt)
         if result is None:

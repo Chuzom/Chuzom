@@ -14,10 +14,12 @@ from __future__ import annotations
 
 from chuzom.lineage.decision_logger import log_routing_decision
 from chuzom.lineage.lineage_query import LineageQuery
+from chuzom.lineage.lineage_store import LineageStore
 from chuzom.lineage.report_generator import generate_routing_report
 
 __all__ = [
     "log_routing_decision",
     "LineageQuery",
+    "LineageStore",
     "generate_routing_report",
 ]
