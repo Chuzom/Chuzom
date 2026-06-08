@@ -374,6 +374,38 @@ class CostBudgetExceeded(BudgetExceededError):
         self.cap = float(cap)
 
 
+class WallClockExceeded(TimeoutError):
+    """Raised when a routed turn exceeds ``max_wall_clock_seconds``.
+
+    Track-3 agent-safety (T3-S2): an agent-driven turn must be allowed
+    to fail loudly rather than burn provider time indefinitely. When
+    ``route_and_call(max_wall_clock_seconds=$T)`` is set and the call
+    has not returned within $T seconds, the router cancels the
+    in-flight ``_dispatch_model_loop``, releases its budget
+    reservation, writes a timeout audit row, and raises this
+    exception.
+
+    Subclasses ``TimeoutError`` so callers using a generic
+    ``try/except TimeoutError`` get the right behaviour without
+    importing a chuzom-specific class. The ``cap_seconds`` and
+    ``elapsed_seconds`` attributes carry the bounds the caller needs
+    to render an actionable error.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        cap_seconds: float,
+        elapsed_seconds: float | None = None,
+    ):
+        super().__init__(message)
+        self.cap_seconds = float(cap_seconds)
+        self.elapsed_seconds = (
+            float(elapsed_seconds) if elapsed_seconds is not None else None
+        )
+
+
 @dataclass(frozen=True)
 class LLMResponse:
     """Unified response from any LLM or media generation call.

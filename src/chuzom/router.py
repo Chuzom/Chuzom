@@ -35,7 +35,7 @@ from chuzom.health import get_tracker
 from chuzom.profiles import get_model_chain, provider_from_model
 from chuzom.receipt_store import compute_receipt, store_receipt
 from chuzom.tracing import set_span_attributes, traced_span
-from chuzom.types import BudgetExceededError, Complexity, CostBudgetExceeded, LLMResponse, RoutingProfile, TaskType
+from chuzom.types import BudgetExceededError, Complexity, CostBudgetExceeded, LLMResponse, RoutingProfile, TaskType, WallClockExceeded
 
 # Foundational routing rule: complexity always determines the profile.
 # This mapping is the single source of truth — every call through route_and_call
@@ -1374,6 +1374,7 @@ async def route_and_call(
     caller_context: str | None = None,
     identity: TurnIdentity | None = None,
     max_cost_per_task: float | None = None,
+    max_wall_clock_seconds: float | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -1414,6 +1415,16 @@ async def route_and_call(
         caller_context: Optional context string from the MCP tool caller
             (e.g. recent conversation summary). Injected alongside session
             buffer and persistent history into the LLM messages.
+        max_wall_clock_seconds: Track-3 agent-safety wall-clock cap. When
+            provided, the dispatch loop runs inside an ``asyncio.wait_for``
+            shield of ``max_wall_clock_seconds``; on timeout the budget
+            reservation is released, an audit row with
+            ``action="timeout"`` is written, and ``WallClockExceeded``
+            (a ``TimeoutError`` subclass carrying ``cap_seconds``) is
+            raised. Use on agent workloads that must abort rather than
+            burn provider time indefinitely. The cap covers the full
+            chain walk including emergency fallback — a per-model
+            timeout is not applied here.
         max_cost_per_task: Tier-2 / Track-3 agent-safety hard cap. When
             provided, the router computes a projected cost for each
             candidate model before dispatch (input + estimated output
@@ -1791,7 +1802,11 @@ async def route_and_call(
 
         # Dispatch through the extracted model loop, which handles both primary
         # and emergency BUDGET fallback chains atomically.
-        response = await _dispatch_model_loop(
+        # T3-S2: optional wall-clock cap. ``asyncio.wait_for`` is used (not
+        # ``asyncio.timeout``) for Python 3.10 compatibility — the project
+        # supports 3.10+. On timeout, release the budget reservation, write
+        # a timeout audit row, and raise WallClockExceeded.
+        _dispatch_coro = _dispatch_model_loop(
             models_to_try=models_to_try,
             task_type=task_type,
             profile=profile,
@@ -1814,6 +1829,46 @@ async def route_and_call(
             max_cost_per_task=max_cost_per_task,
             effective_complexity=effective_complexity,
         )
+        if max_wall_clock_seconds is not None and max_wall_clock_seconds > 0:
+            import time as _t
+            _wall_clock_started = _t.monotonic()
+            try:
+                response = await asyncio.wait_for(
+                    _dispatch_coro, timeout=max_wall_clock_seconds
+                )
+            except asyncio.TimeoutError as _to_err:
+                elapsed = _t.monotonic() - _wall_clock_started
+                async with _budget_lock:
+                    _pending_spend = max(0.0, _pending_spend - _reservation)
+                # Best-effort timeout audit row; never let audit failures
+                # mask the timeout we're already raising.
+                try:
+                    audit_routing_turn(
+                        identity=identity,
+                        task_type=str(task_type),
+                        complexity=effective_complexity,
+                        model="(timeout)",
+                        provider="(timeout)",
+                        cost_usd=0.0,
+                        cached=False,
+                        detail_extras={
+                            "correlation_id": correlation_id,
+                            "outcome": "wall_clock_exceeded",
+                            "cap_seconds": max_wall_clock_seconds,
+                            "elapsed_seconds": elapsed,
+                        },
+                    )
+                except Exception as _audit_err:
+                    log.warning("audit_timeout_write_failed", error=str(_audit_err))
+                raise WallClockExceeded(
+                    f"Routed turn exceeded max_wall_clock_seconds="
+                    f"{max_wall_clock_seconds:.3f}s "
+                    f"(elapsed ~{elapsed:.3f}s) before any model returned.",
+                    cap_seconds=max_wall_clock_seconds,
+                    elapsed_seconds=elapsed,
+                ) from _to_err
+        else:
+            response = await _dispatch_coro
         async with _budget_lock:
             _pending_spend = max(0.0, _pending_spend - _reservation)
         audit_routing_turn(
