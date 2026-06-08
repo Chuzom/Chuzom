@@ -354,6 +354,26 @@ class BudgetExceededError(RuntimeError):
     """
 
 
+class CostBudgetExceeded(BudgetExceededError):
+    """Raised when the projected per-turn cost would exceed ``max_cost_per_task``.
+
+    Tier-2 / Track-3 agent-safety: ``route_and_call(max_cost_per_task=$X)``
+    asks the router to refuse any model whose projected cost for this turn
+    would exceed ``$X``. The router walks the chain skipping over-budget
+    candidates; if no model in the chain fits the cap, this exception is
+    raised before any provider is contacted.
+
+    The ``projected_cost`` and ``cap`` attributes carry the offending
+    numbers so callers can render an actionable error (the cheapest
+    candidate the chain offered, vs. what the caller allowed).
+    """
+
+    def __init__(self, message: str, *, projected_cost: float, cap: float):
+        super().__init__(message)
+        self.projected_cost = float(projected_cost)
+        self.cap = float(cap)
+
+
 @dataclass(frozen=True)
 class LLMResponse:
     """Unified response from any LLM or media generation call.

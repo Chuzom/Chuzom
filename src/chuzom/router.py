@@ -35,7 +35,7 @@ from chuzom.health import get_tracker
 from chuzom.profiles import get_model_chain, provider_from_model
 from chuzom.receipt_store import compute_receipt, store_receipt
 from chuzom.tracing import set_span_attributes, traced_span
-from chuzom.types import BudgetExceededError, Complexity, LLMResponse, RoutingProfile, TaskType
+from chuzom.types import BudgetExceededError, Complexity, CostBudgetExceeded, LLMResponse, RoutingProfile, TaskType
 
 # Foundational routing rule: complexity always determines the profile.
 # This mapping is the single source of truth — every call through route_and_call
@@ -720,6 +720,7 @@ async def _dispatch_model_loop(
     route_log: Any,
     _reservation: float,
     effective_complexity: str,
+    max_cost_per_task: float | None = None,
 ) -> LLMResponse:
     """Execute the main model dispatch loop with primary + emergency fallback chains.
 
@@ -761,6 +762,11 @@ async def _dispatch_model_loop(
     last_error: Exception | None = None
     chain_errors: list[tuple[str, str]] = []  # (model, error_summary) for diagnostics
     chain_attempts: list[str] = []  # models tried, for explainability
+    # T3-S1: track candidates skipped because their projected cost would
+    # exceed ``max_cost_per_task``. If the whole chain is skipped this way,
+    # raise CostBudgetExceeded with the cheapest projection so the caller
+    # knows what cap would have let the turn run.
+    cost_skipped: list[tuple[str, float]] = []  # (model, projected_cost)
 
     for attempt, model in enumerate(models_to_try, start=1):
         provider = provider_from_model(model)
@@ -776,6 +782,41 @@ async def _dispatch_model_loop(
                 model=model,
             )
             continue
+
+        # T3-S1: per-candidate cost cap. Project this model's cost using
+        # ``session_spend._estimate_cost(model, input_tokens, output_tokens)``
+        # — the same primitive the global reservation uses, so the cap is
+        # apples-to-apples with the budget reservation accounting. Skip
+        # over-budget candidates; if no model fits, raise after the loop.
+        if max_cost_per_task is not None and max_cost_per_task > 0:
+            try:
+                from chuzom.session_spend import _estimate_cost as _est_per_model
+                est_in = max(1, len(prompt) // 4)
+                est_out = max_tokens if isinstance(max_tokens, int) and max_tokens > 0 else 500
+                projected = _est_per_model(model, est_in, est_out)
+            except Exception as _err:
+                # Cost estimator is best-effort. If it can't price this
+                # model (unknown id, etc.) we err on the safe side and
+                # treat as over-budget — better to fall through to a
+                # known-priced model than to run a call we cannot bound.
+                log.debug("cost_estimator_unknown_model", model=model, error=str(_err))
+                projected = float("inf")
+
+            if projected > max_cost_per_task:
+                await _notify(
+                    ctx,
+                    "info",
+                    f"💰 skipping {model} — projected ${projected:.4f} > cap ${max_cost_per_task:.4f}",
+                )
+                route_log.info(
+                    "model_cost_skip",
+                    correlation_id=correlation_id,
+                    model=model,
+                    projected_cost=projected,
+                    max_cost_per_task=max_cost_per_task,
+                )
+                cost_skipped.append((model, projected))
+                continue
 
         # Quality feedback: skip models with poor track record for this task pattern
         try:
@@ -1203,6 +1244,22 @@ async def _dispatch_model_loop(
                     log.info("Skipping unhealthy provider in emergency fallback: %s", provider)
                     continue
 
+                # T3-S1: apply the per-turn cost cap to the emergency
+                # chain too — a tighter cap that can't be met by any
+                # provider must still raise rather than bypass via
+                # fallback. Same projection helper as the primary loop.
+                if max_cost_per_task is not None and max_cost_per_task > 0:
+                    try:
+                        from chuzom.session_spend import _estimate_cost as _est_per_model_eb
+                        est_in_eb = max(1, len(prompt) // 4)
+                        est_out_eb = max_tokens if isinstance(max_tokens, int) and max_tokens > 0 else 500
+                        projected_eb = _est_per_model_eb(model, est_in_eb, est_out_eb)
+                    except Exception:
+                        projected_eb = float("inf")
+                    if projected_eb > max_cost_per_task:
+                        cost_skipped.append((model, projected_eb))
+                        continue
+
                 try:
                     await _notify(ctx, "info", f"⏳ {model_name} (emergency fallback) working...")
 
@@ -1272,6 +1329,24 @@ async def _dispatch_model_loop(
     async with _budget_lock:
         _pending_spend = max(0.0, _pending_spend - _reservation)
     release_tokens("anthropic", 500)
+
+    # T3-S1: if the chain was exhausted *because* every candidate's
+    # projected cost exceeded ``max_cost_per_task`` (no actual provider
+    # errors, no successes), raise CostBudgetExceeded with the cheapest
+    # projection so the caller knows what cap would have let the turn
+    # run. This precedes the generic RuntimeError so the caller catches
+    # the specific cost-cap signal.
+    if max_cost_per_task is not None and cost_skipped and not chain_attempts:
+        cheapest_model, cheapest_cost = min(cost_skipped, key=lambda kv: kv[1])
+        raise CostBudgetExceeded(
+            f"Per-task cost cap exceeded: cheapest available model "
+            f"{cheapest_model} would cost ~${cheapest_cost:.4f}, cap is "
+            f"${max_cost_per_task:.4f}. Raise max_cost_per_task or "
+            f"allow a cheaper model in the chain.",
+            projected_cost=cheapest_cost,
+            cap=max_cost_per_task,
+        )
+
     # Build diagnostic chain summary showing every model that was tried
     chain_summary = ""
     if chain_errors:
@@ -1298,6 +1373,7 @@ async def route_and_call(
     classification_data: dict | None = None,
     caller_context: str | None = None,
     identity: TurnIdentity | None = None,
+    max_cost_per_task: float | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -1338,6 +1414,16 @@ async def route_and_call(
         caller_context: Optional context string from the MCP tool caller
             (e.g. recent conversation summary). Injected alongside session
             buffer and persistent history into the LLM messages.
+        max_cost_per_task: Tier-2 / Track-3 agent-safety hard cap. When
+            provided, the router computes a projected cost for each
+            candidate model before dispatch (input + estimated output
+            tokens × per-model rate) and **skips** any model whose
+            projected cost would exceed this cap. If no model in the
+            chain fits, ``CostBudgetExceeded`` is raised before any
+            provider is contacted, so the caller pays nothing for the
+            denial. Use this on agent workloads where a single turn
+            should not be allowed to spend more than $X regardless of
+            what the routing chain would otherwise pick.
         identity: Tier-1 audit attribution (``user_id`` + ``user_email`` +
             ``org_id``). When ``None`` (the default), the routing path
             resolves identity from the operator's env via
@@ -1725,6 +1811,7 @@ async def route_and_call(
             route_span=route_span,
             route_log=route_log,
             _reservation=_reservation,
+            max_cost_per_task=max_cost_per_task,
             effective_complexity=effective_complexity,
         )
         async with _budget_lock:
