@@ -1829,46 +1829,82 @@ async def route_and_call(
             max_cost_per_task=max_cost_per_task,
             effective_complexity=effective_complexity,
         )
-        if max_wall_clock_seconds is not None and max_wall_clock_seconds > 0:
-            import time as _t
-            _wall_clock_started = _t.monotonic()
-            try:
+        # T3-S2 + T3-M1: combined timeout + cancel handling. Both failure
+        # modes share the same cleanup contract — release the budget
+        # reservation under _budget_lock, write a best-effort cleanup
+        # audit row, and raise the appropriate exception type. Done in
+        # one try/except so a future maintainer can't accidentally add
+        # a cleanup branch in one and forget the other.
+        import time as _t
+        _dispatch_started = _t.monotonic()
+        try:
+            if max_wall_clock_seconds is not None and max_wall_clock_seconds > 0:
                 response = await asyncio.wait_for(
                     _dispatch_coro, timeout=max_wall_clock_seconds
                 )
-            except asyncio.TimeoutError as _to_err:
-                elapsed = _t.monotonic() - _wall_clock_started
-                async with _budget_lock:
-                    _pending_spend = max(0.0, _pending_spend - _reservation)
-                # Best-effort timeout audit row; never let audit failures
-                # mask the timeout we're already raising.
-                try:
-                    audit_routing_turn(
-                        identity=identity,
-                        task_type=str(task_type),
-                        complexity=effective_complexity,
-                        model="(timeout)",
-                        provider="(timeout)",
-                        cost_usd=0.0,
-                        cached=False,
-                        detail_extras={
-                            "correlation_id": correlation_id,
-                            "outcome": "wall_clock_exceeded",
-                            "cap_seconds": max_wall_clock_seconds,
-                            "elapsed_seconds": elapsed,
-                        },
-                    )
-                except Exception as _audit_err:
-                    log.warning("audit_timeout_write_failed", error=str(_audit_err))
-                raise WallClockExceeded(
-                    f"Routed turn exceeded max_wall_clock_seconds="
-                    f"{max_wall_clock_seconds:.3f}s "
-                    f"(elapsed ~{elapsed:.3f}s) before any model returned.",
-                    cap_seconds=max_wall_clock_seconds,
-                    elapsed_seconds=elapsed,
-                ) from _to_err
-        else:
-            response = await _dispatch_coro
+            else:
+                response = await _dispatch_coro
+        except asyncio.CancelledError as _cancel_err:
+            # T3-M1: external cancellation (parent agent killed, host
+            # client disconnected, supervisor pulled the plug). The
+            # routing path must release its budget reservation and
+            # leave a cancel breadcrumb in the audit chain BEFORE
+            # propagating the cancel — otherwise a cancelled turn
+            # leaks _pending_spend forever and disappears from the
+            # audit. Re-raise so the asyncio cancellation chain
+            # remains intact.
+            elapsed = _t.monotonic() - _dispatch_started
+            async with _budget_lock:
+                _pending_spend = max(0.0, _pending_spend - _reservation)
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=effective_complexity,
+                    model="(cancelled)",
+                    provider="(cancelled)",
+                    cost_usd=0.0,
+                    cached=False,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "cancelled",
+                        "elapsed_seconds": elapsed,
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_cancel_write_failed", error=str(_audit_err))
+            raise
+        except asyncio.TimeoutError as _to_err:
+            elapsed = _t.monotonic() - _dispatch_started
+            async with _budget_lock:
+                _pending_spend = max(0.0, _pending_spend - _reservation)
+            # Best-effort timeout audit row; never let audit failures
+            # mask the timeout we're already raising.
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=effective_complexity,
+                    model="(timeout)",
+                    provider="(timeout)",
+                    cost_usd=0.0,
+                    cached=False,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "wall_clock_exceeded",
+                        "cap_seconds": max_wall_clock_seconds,
+                        "elapsed_seconds": elapsed,
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_timeout_write_failed", error=str(_audit_err))
+            raise WallClockExceeded(
+                f"Routed turn exceeded max_wall_clock_seconds="
+                f"{max_wall_clock_seconds:.3f}s "
+                f"(elapsed ~{elapsed:.3f}s) before any model returned.",
+                cap_seconds=max_wall_clock_seconds,
+                elapsed_seconds=elapsed,
+            ) from _to_err
         async with _budget_lock:
             _pending_spend = max(0.0, _pending_spend - _reservation)
         audit_routing_turn(
