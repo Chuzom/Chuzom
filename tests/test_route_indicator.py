@@ -46,8 +46,8 @@ def test_direct_success_directive_includes_fully_resolved_prefix() -> None:
     # The prefix uses the same model_label format ROUTING NOTICE already
     # has — keep them aligned so the directive and the metadata footer
     # never disagree.
-    assert "f\"→ chuzom: {model_label} · {task_type}/{complexity}" in src, (
-        "route_prefix format drifted from `→ chuzom: <model> · <task>/<complexity> · <latency>`"
+    assert "f\"🎯 chuzom → {model_label} · {task_type}/{complexity}" in src, (
+        "route_prefix format drifted from `🎯 chuzom → <model> · <task>/<complexity> · <latency>`"
     )
     assert "Begin your reply to the user with this exact line" in src, (
         "directive instructing Claude to prepend the route prefix was removed"
@@ -66,7 +66,7 @@ def test_mandatory_route_directive_uses_placeholder_for_model() -> None:
     assert "USER-VISIBLE ROUTE INDICATOR" in src, (
         "MANDATORY-ROUTE directive removed from auto-route.py"
     )
-    assert "→ chuzom: <model> ·" in src, (
+    assert "🎯 chuzom → <model> ·" in src, (
         "MANDATORY-ROUTE prefix template missing — Claude won't have a "
         "format to follow"
     )
@@ -133,7 +133,7 @@ def test_format_echo_context_renders_real_data() -> None:
         )
 
     ctx = format_echo_context(result, "query", "simple")
-    expected_prefix = "→ chuzom: gemini/gemini-2.5-flash · query/simple · 1.5s"
+    expected_prefix = "🎯 chuzom → gemini/gemini-2.5-flash · query/simple · 1.5s"
     assert expected_prefix in ctx, (
         f"rendered echo context did not contain the resolved route prefix.\n"
         f"  expected line: {expected_prefix!r}\n"
@@ -142,14 +142,14 @@ def test_format_echo_context_renders_real_data() -> None:
 
 
 def test_no_double_prefix_across_paths() -> None:
-    """Both paths use the same ``→ chuzom:`` marker so the user sees one
+    """Both paths use the same ``🎯 chuzom →`` marker so the user sees one
     consistent format. Source-level assertion that the marker is used in
     BOTH files (otherwise we'd ship inconsistent indicators on different
     routing paths).
     """
     rf = _RESPONSE_FORMATTER.read_text()
     ar = _AUTO_ROUTE.read_text()
-    marker = "→ chuzom:"
+    marker = "🎯 chuzom →"
     assert rf.count(marker) >= 1, (
         f"response_formatter.py is missing the `{marker}` indicator marker"
     )

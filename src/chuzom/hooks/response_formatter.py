@@ -53,7 +53,7 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
     tokens = f"{result.input_tokens + result.output_tokens} tokens" if result.input_tokens + result.output_tokens > 0 else "0 tokens used"
     metadata = f"[{model_label}] {tier} | {task_type}/{complexity} | {latency} | {tokens}"
 
-    route_prefix = f"→ chuzom: {model_label} · {task_type}/{complexity} · {latency}"
+    route_prefix = f"🎯 chuzom → {model_label} · {task_type}/{complexity} · {latency}"
     return (
         f"ROUTING NOTICE — this prompt was classified as {task_type}/{complexity} and "
         f"answered by {model_label} ({tier}, {latency}, {tokens}) to conserve your "
