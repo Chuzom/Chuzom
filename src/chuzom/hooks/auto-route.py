@@ -420,8 +420,8 @@ _SELF_REFERENCE_RE = re.compile(
     r"|MANDATORY[\s_-]+ROUTE"
     r"|CHUZOM_ENFORCE"
     r"|chuzom[-_](?:enforce|auto-route|hook|session-start|session-end|agent-route|subagent-start|router|status-bar)"
-    r"|chuzom.{0,80}(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped|self-reference|welcome|banner|render|hook|install|show|display|session-start|ascii|greeting|visible|invisible|hidden|see)"
-    r"|(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped).{0,80}chuzom"
+    r"|chuzom.{0,80}(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped|self-reference|welcome|banner|render|hook|install|show|display|session-start|ascii|greeting|visible|invisible|hidden|see|route|routed|routing|indicator|prefix|emoji|symbol)"
+    r"|(?:stuck|block|deadlock|hang|frozen|enforce|debug|broken|kill|fix|bypass|wedge|hung|stopped|self-reference|welcome|banner|render|hook|install|show|display|session-start|ascii|greeting|visible|invisible|hidden|see|route|routed|routing|indicator|prefix|emoji|symbol).{0,80}chuzom"
     r")",
     re.IGNORECASE | re.DOTALL,
 )
@@ -2434,6 +2434,14 @@ def main() -> None:
             f"   1. Call {tool}(prompt=<user's request>) — FIRST and ONLY action\n"
             f"   2. Return the result to the user\n"
             f"   3. THEN (and only then) use native tools if needed for implementation\n"
+            f"\n"
+            f"📍 USER-VISIBLE ROUTE INDICATOR (required):\n"
+            f"   Begin your reply to the user with this exact line, then a blank line,\n"
+            f"   then your normal response. Replace <model> with the model name from the\n"
+            f"   {tool} result (chuzom MCP tools return the model that handled the call).\n"
+            f"   If the result does not surface the model, use `{tool}` as a fallback.\n"
+            f"\n"
+            f"      🎯 chuzom → <model> · {task_type}/{complexity} (via {tool})\n"
             f"\n"
             f"   Violations are logged and escalated. See ~/.chuzom/enforcement.log"
         )
