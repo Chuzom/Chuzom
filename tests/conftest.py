@@ -65,62 +65,15 @@ _KNOWN_BROKEN_TESTS = [
     ("test_profile_invariants.py::TestOpusAllowedInPremiumProfile::test_opus_not_removed_in_premium_at_low_pressure",
      "chain_builder returns sonnet-only for PREMIUM at low pressure — needs design call"),
 
-    # ── TST-001 (audit 2026-06) — newly-visible after un-skipping the nine
-    #    previously-ignored suites. Every entry below has the SAME root cause:
-    #    `LineageStore(db_path=<path>)` doesn't exist; the actual __init__
-    #    takes `router_dir=<dir>`. Substring patterns cover whole fixture
-    #    families so adding more tests to those files doesn't break.
-
-    # tests/qa/test_integrity.py — uses `LineageStore(db_path=...)` in the
-    # shared store fixture; every test that touches it errors at setup.
-    ("test_integrity.py::test_lineage_", "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-
-    # tests/qa/test_nonfunctional_resilience.py — same fixture pattern.
-    ("test_nonfunctional_resilience.py::test_lineage_", "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-
-    # tests/qa/test_observability.py — OTel exporter test pokes the lineage
-    # write path through the same broken constructor.
-    ("test_observability.py::test_lineage_record_succeeds_when_otel_disabled",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-
-    # tests/qa/test_performance.py — perf budgets exercise the same fixture.
-    ("test_performance.py::test_perf_lineage_",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-
-    # tests/qa/test_session_summary.py — both the `collect()` aggregation
-    # tests and the `render()` rendering tests share a fixture that
-    # initialises LineageStore via the planned API.
-    ("test_session_summary.py::test_collect_",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-    ("test_session_summary.py::test_render_",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-
-    # tests/scenarios/test_cross_cutting.py — three scenarios use the same
-    # broken constructor inside `Scenario` wiring.
-    ("test_cross_cutting.py::test_scenario_inversion_detected_complex_to_local",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-    ("test_cross_cutting.py::test_scenario_concurrent_sessions_isolated",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-    ("test_cross_cutting.py::test_scenario_down_inversion_simple_routed_to_premium",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-
-    # tests/scenarios/test_framework_scenarios.py — two framework scenarios
-    # initialise LineageStore through the same wiring.
-    ("test_framework_scenarios.py::test_scenario_agno_code_reviewer_session",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-    ("test_framework_scenarios.py::test_scenario_framework_attribution_round_trip",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-
-    # tests/test_lineage.py — the largest cluster. The `store` fixture and
-    # every test that consumes it errors out, plus three direct call sites.
-    ("test_lineage.py::test_store_",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-    ("test_lineage.py::test_summary_counts_inversions",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-    ("test_lineage.py::test_signal_scores_persist_as_dict",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
-    ("test_lineage.py::test_explicit_tier_overrides_inference",
-     "v0.2.x lineage rewrite: LineageStore(db_path=...) signature drift"),
+    # ── TST-001 cluster cleared in v0.2.x ────────────────────────────────
+    # The 14 entries previously listed here (test_integrity, test_nonfunctional_resilience,
+    # test_observability, test_performance, test_session_summary, test_cross_cutting,
+    # test_framework_scenarios, test_lineage) all shared one root cause:
+    # `LineageStore(db_path=<file>)` didn't exist. LineageStore now accepts
+    # both `router_dir` (directory-based, production shape) AND `db_path`
+    # (file-based, test shape) — closes the drift without touching test
+    # fixtures. If a test under any of those families fails again, add it
+    # back with its specific reason.
 ]
 
 
