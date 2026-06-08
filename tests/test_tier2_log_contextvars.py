@@ -18,10 +18,24 @@ See: Tier-2 of the three-tier Phase 2 plan + partial OBS-001 from the
 """
 from __future__ import annotations
 
-import pytest
-import structlog
+import sys
+from unittest.mock import MagicMock
 
-from chuzom.identity import TurnIdentity
+# Defensive: tests/commands/test_routing.py:9 does
+#   sys.modules["structlog"] = MagicMock()
+# at module-import time. Depending on pytest's file-collection order
+# (which differs between local + CI), our module-level ``import
+# structlog`` below can end up bound to that mock instead of the real
+# library, and every assertion against ``get_contextvars()`` fails
+# because MagicMock.__getitem__ returns another mock. Force a clean
+# re-import of the real structlog before we bind it.
+if isinstance(sys.modules.get("structlog"), MagicMock):
+    del sys.modules["structlog"]
+
+import pytest  # noqa: E402
+import structlog  # noqa: E402
+
+from chuzom.identity import TurnIdentity  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
