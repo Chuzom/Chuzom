@@ -21,6 +21,7 @@ from chuzom import cost, media, providers
 from chuzom.audit_routing import audit_routing_turn
 from chuzom.budget import get_budget_state, reserve_tokens, release_tokens
 from chuzom.identity import TurnIdentity, current_identity
+from chuzom.rbac_routing import check_route_prompt, raise_route_prompt_denied
 from chuzom.state import get_active_agent
 from chuzom.codex_agent import CODEX_MODELS, is_codex_available, run_codex
 from chuzom.contract import build_contract
@@ -1462,6 +1463,60 @@ async def route_and_call(
     # ``TurnIdentity``. Resolution is env-driven and never raises.
     if identity is None:
         identity = current_identity()
+
+    # T1-M2 (G-001): RBAC gate on ``Permission.ROUTE_PROMPT``. Three modes
+    # via ``CHUZOM_RBAC_MODE``:
+    #   * off (default) — no-op, preserves Tier-1 env-trust behaviour.
+    #   * warn         — log + audit a denial signal but allow the turn.
+    #     Designed for the dual-write window: ship the check, observe
+    #     which call sites fail, then flip to strict.
+    #   * strict       — raise ``PermissionDenied`` BEFORE any reservation,
+    #     dispatch, or provider call. Caller pays nothing for the deny.
+    # See chuzom.rbac_routing for the policy implementation.
+    _rbac_mode, _rbac_has_perm = check_route_prompt(identity)
+    if _rbac_mode == "strict" and not _rbac_has_perm:
+        try:
+            audit_routing_turn(
+                identity=identity,
+                task_type=str(task_type),
+                complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                model="(denied)",
+                provider="(denied)",
+                cost_usd=0.0,
+                cached=False,
+                detail_extras={
+                    "correlation_id": correlation_id,
+                    "outcome": "rbac_denied",
+                    "permission": "route_prompt",
+                    "rbac_mode": _rbac_mode,
+                },
+            )
+        except Exception as _audit_err:
+            log.warning("audit_rbac_deny_write_failed", error=str(_audit_err))
+        raise raise_route_prompt_denied(identity)
+    elif _rbac_mode == "warn" and not _rbac_has_perm:
+        # Warn mode: still write a breadcrumb so operators can find
+        # which call sites lack the permission today. action remains
+        # "routed" downstream so the existing dashboard renders these
+        # alongside real routings; the outcome field distinguishes.
+        try:
+            audit_routing_turn(
+                identity=identity,
+                task_type=str(task_type),
+                complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                model="(warn)",
+                provider="(warn)",
+                cost_usd=0.0,
+                cached=False,
+                detail_extras={
+                    "correlation_id": correlation_id,
+                    "outcome": "rbac_warn_missing_route_prompt",
+                    "permission": "route_prompt",
+                    "rbac_mode": _rbac_mode,
+                },
+            )
+        except Exception as _audit_err:
+            log.warning("audit_rbac_warn_write_failed", error=str(_audit_err))
 
     # Tier-2 / partial OBS-001 — bind routing-turn identity into structlog
     # contextvars so every log line emitted by this turn (and any nested
