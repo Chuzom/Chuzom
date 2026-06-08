@@ -1,4 +1,12 @@
+<p align="center">
+  <img src="assets/chuzom-logo.png" alt="Chuzom — meeting of rivers" width="640">
+</p>
+
 <h1 align="center">Chuzom</h1>
+
+<p align="center">
+  <em>Meeting of rivers, routing intelligence.</em>
+</p>
 
 <p align="center">
   <strong>The enterprise-ready LLM router for developer organizations.</strong><br/>
