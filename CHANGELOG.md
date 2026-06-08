@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased — Security: SSE entry-point removed, fs tools moved to opt-in
+## Unreleased — Security: SSE entry-point removed, fs tools moved to opt-in; claims reconciled with Alpha status
 
-> **Security advisory.** This release closes two Critical findings from the 2026-06 internal audit (`Docs/audit/FINDINGS.md`). Both findings were exploitable with default settings. Operators running prior versions on a reachable network should review the mitigations below.
+> **Security advisory + claims reconciliation.** This release closes two Critical and two High findings from the 2026-06 internal audit (`Docs/audit/FINDINGS.md`). The two Critical findings (SEC-001, SEC-002) were exploitable with default settings — operators running prior versions on a reachable network should review the mitigations below. The two High findings (INV-001, INV-002) reconcile in-tree audit and marketing claims with the project's actual maturity (`Development Status :: 3 - Alpha` per `pyproject.toml`).
 
 ### Security
 
@@ -11,6 +11,11 @@
 - **SEC-002 — `llm_fs_*` tools are now opt-in and sandboxed (BREAKING).** Prior versions registered four filesystem tools (`llm_fs_find`, `llm_fs_rename`, `llm_fs_edit_many`, `llm_fs_analyze_context`) by default. `llm_fs_edit_many` accepted an arbitrary glob and read up to 32 KB per match into the model prompt; `llm_fs_edit_many(glob_pattern="~/.ssh/**")` was a one-call exfiltration vector. Two independent gates now apply:
   1. **Opt-in env.** Tools are registered only when `CHUZOM_FS_TOOLS=on` (or `1`/`true`/`yes`) is set. Without the opt-in, `mcp.list_tools()` exposes zero `llm_fs_*` entries.
   2. **`project_root` sandbox.** `llm_fs_edit_many` and `llm_fs_analyze_context` now require a `project_root` parameter. The root is resolved with `Path.resolve()` (closing the symlink-escape hole); paths that resolve outside it are rejected before any file read or route call. `project_root='/'` is refused outright.
+
+### Truth-in-claims
+
+- **INV-001 — Pre-existing self-audit rescoped, not retracted.** `AUDIT_FINDINGS.txt` and `CHUZOM_AUDIT_REPORT.md` (both dated 2026-06-07, narrow lineage-subsystem reviews) previously stamped the project as "✅ APPROVED FOR IMMEDIATE PRODUCTION DEPLOYMENT" with 5★ ratings across the board. The 2026-06-08 comprehensive audit identified 3 Critical, 11 High, 11 Medium, 3 Low findings and scored enterprise-readiness at 1.65 / 5 — the prior claims were a scoping error, not a measurement of the whole project. Both files now carry a top-of-document scope notice, every overclaiming line is contextualised to "lineage subsystem only", and the documents point at `Docs/audit/` as the authoritative whole-project assessment. The lineage subsystem verdict (production-ready as a subsystem) is preserved.
+- **INV-002 — README hero reconciled with `pyproject.toml` Alpha status.** The README first paragraph previously read "The enterprise-ready LLM router for developer organizations." while `pyproject.toml` classified the project `Development Status :: 3 - Alpha`. The hero now describes the project as "Local-first LLM router for developer workstations" and adds a maturity line stating that the developer-tool layer is the production path today (alpha per `pyproject.toml`) and the enterprise control plane (RBAC, tamper-evident audit chain, per-user / per-team budgets, OpenTelemetry export) is scaffolded but not yet wired into the routing path (`INV-010`). The reader of the first 30 lines of README and the first 20 lines of `pyproject.toml` now arrives at the same maturity conclusion.
 
 ### Breaking changes
 
