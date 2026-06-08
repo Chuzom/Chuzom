@@ -36,7 +36,18 @@ Thumbs.db
 
 # Local-only architecture & internal design notes — NEVER commit
 # (User explicitly requested Docs/ stay local-only)
+#
+# Note: Uppercase Docs/ remains ignored (the user's original convention
+# for internal scratch). Lowercase docs/ is the canonical home for
+# externally-visible operator + audit + architecture documentation —
+# the explicit negation closes G-019 from
+# docs/audit/post-remediation/GAP_ANALYSIS.md (the INV-013 finding
+# that kept the audit corpus invisible to outside readers on
+# case-sensitive filesystems). On macOS the two names resolve to the
+# same directory; the negation documents intent for Linux/CI.
 Docs/
+!docs/
+!docs/**
 INTERNAL.md
 STRATEGY.md
 MONETIZATION.md
@@ -54,3 +65,7 @@ test_results/
 # Commit specific results explicitly when they're evidence-worthy.
 bench/cache/
 bench/results/
+
+# Audit working dir — evidence ledger, batch checkpoints, remediation plan
+# (Per audit charter — read-only audit artifacts, never committed)
+.audit/
