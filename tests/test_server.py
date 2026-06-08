@@ -55,14 +55,19 @@ def test_all_tools_registered():
         "chuzom_agent_complete_session", "chuzom_agent_lineage",
     }
     
-    # SEC-002: llm_fs_* tools are opt-in via CHUZOM_FS_TOOLS=on and won't be
-    # registered without it; exclude them from the must-be-present set when the
-    # opt-in is absent.
+    # SEC-002 + SEC-003: tools gated behind env opt-ins must be excluded
+    # from the must-be-present set when their opt-in is absent.
     import os as _os
-    fs_opt_in = _os.environ.get("CHUZOM_FS_TOOLS", "").strip().lower() in {"1", "on", "true", "yes"}
+    _AFFIRMATIVE = {"1", "on", "true", "yes"}
+    fs_opt_in = _os.environ.get("CHUZOM_FS_TOOLS", "").strip().lower() in _AFFIRMATIVE
+    ag_opt_in = _os.environ.get("CHUZOM_AGORAGENTIC", "").strip().lower() in _AFFIRMATIVE
     if not fs_opt_in:
         known_tools = known_tools - {
             "llm_fs_find", "llm_fs_rename", "llm_fs_edit_many", "llm_fs_analyze_context",
+        }
+    if not ag_opt_in:
+        known_tools = known_tools - {
+            "agoragentic_task", "agoragentic_browse", "agoragentic_wallet", "agoragentic_status",
         }
 
     # With slim=routing (default), only routing-tier tools are registered.

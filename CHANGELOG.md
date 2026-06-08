@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased — Security: SSE entry-point removed, fs tools moved to opt-in; claims reconciled with Alpha status
+## Unreleased — Audit Tracks 1 & 2 (developer-focused): security defaults tightened, claims reconciled, hidden tests un-skipped
 
-> **Security advisory + claims reconciliation.** This release closes two Critical and two High findings from the 2026-06 internal audit (`Docs/audit/FINDINGS.md`). The two Critical findings (SEC-001, SEC-002) were exploitable with default settings — operators running prior versions on a reachable network should review the mitigations below. The two High findings (INV-001, INV-002) reconcile in-tree audit and marketing claims with the project's actual maturity (`Development Status :: 3 - Alpha` per `pyproject.toml`).
+> **Security advisory + claims reconciliation + honest test signal.** This release closes the developer-focused subset of the 2026-06 internal audit (`Docs/audit/FINDINGS.md`): **2 Critical** and **6 High** findings across security defaults (SEC-001/002/003), session isolation (INV-007 + ROU-001), truth-in-claims (INV-001/002), and test-suite integrity (TST-001). Multi-tenancy / identity-layer items (INV-010, INV-011, ROU-002, PRI-001, OBS-001, TST-003) are deferred to Phase 2 pending the multi-tenancy product decision.
+>
+> The two Critical findings (SEC-001, SEC-002) were exploitable with default settings. Operators running prior versions on a reachable network should review the mitigations below.
 
 ### Security
 
@@ -11,31 +13,48 @@
 - **SEC-002 — `llm_fs_*` tools are now opt-in and sandboxed (BREAKING).** Prior versions registered four filesystem tools (`llm_fs_find`, `llm_fs_rename`, `llm_fs_edit_many`, `llm_fs_analyze_context`) by default. `llm_fs_edit_many` accepted an arbitrary glob and read up to 32 KB per match into the model prompt; `llm_fs_edit_many(glob_pattern="~/.ssh/**")` was a one-call exfiltration vector. Two independent gates now apply:
   1. **Opt-in env.** Tools are registered only when `CHUZOM_FS_TOOLS=on` (or `1`/`true`/`yes`) is set. Without the opt-in, `mcp.list_tools()` exposes zero `llm_fs_*` entries.
   2. **`project_root` sandbox.** `llm_fs_edit_many` and `llm_fs_analyze_context` now require a `project_root` parameter. The root is resolved with `Path.resolve()` (closing the symlink-escape hole); paths that resolve outside it are rejected before any file read or route call. `project_root='/'` is refused outright.
+- **SEC-003 — `agoragentic_*` MCP tools are now opt-in (BREAKING).** Prior versions registered four marketplace tools (`agoragentic_task`, `agoragentic_browse`, `agoragentic_wallet`, `agoragentic_status`) by default, even when `CHUZOM_SLIM=routing` was set. **`agoragentic_task` performs USDC settlement on the Base L2 blockchain** — it can spend real money via the credentials stored at `~/.chuzom/agoragentic.json`. An LLM agent enumerating tools, an MCP client probing the tool list, or a hallucinated tool call could trigger an unintended on-chain transaction. The four tools are now gated behind `CHUZOM_AGORAGENTIC=on` (or `1`/`true`/`yes`). Without the opt-in, `mcp.list_tools()` exposes zero `agoragentic_*` entries.
+- **INV-007 / ROU-001 — Per-session classification side channel (BREAKING).** The auto-route hook previously wrote a shared `~/.chuzom/last_classification.json` that every MCP server on the machine read from. Two failure modes: (1) two Claude Code sessions raced on the same file (whoever fired last set the verdict for both); (2) any same-user process could forge a classification within the 120 s freshness window. The hook now writes `~/.chuzom/last_classification_<session_id>.json` and the MCP reader pins to `CLAUDE_SESSION_ID` from the env that Claude Code injects when it spawns the MCP server. A belt-and-braces inner-payload check rejects shards whose inner `session_id` doesn't match the env. The legacy shared file is no longer written or read; consumers that still look for it gracefully return `None` and fall back to the length heuristic.
 
 ### Truth-in-claims
 
 - **INV-001 — Pre-existing self-audit rescoped, not retracted.** `AUDIT_FINDINGS.txt` and `CHUZOM_AUDIT_REPORT.md` (both dated 2026-06-07, narrow lineage-subsystem reviews) previously stamped the project as "✅ APPROVED FOR IMMEDIATE PRODUCTION DEPLOYMENT" with 5★ ratings across the board. The 2026-06-08 comprehensive audit identified 3 Critical, 11 High, 11 Medium, 3 Low findings and scored enterprise-readiness at 1.65 / 5 — the prior claims were a scoping error, not a measurement of the whole project. Both files now carry a top-of-document scope notice, every overclaiming line is contextualised to "lineage subsystem only", and the documents point at `Docs/audit/` as the authoritative whole-project assessment. The lineage subsystem verdict (production-ready as a subsystem) is preserved.
 - **INV-002 — README hero reconciled with `pyproject.toml` Alpha status.** The README first paragraph previously read "The enterprise-ready LLM router for developer organizations." while `pyproject.toml` classified the project `Development Status :: 3 - Alpha`. The hero now describes the project as "Local-first LLM router for developer workstations" and adds a maturity line stating that the developer-tool layer is the production path today (alpha per `pyproject.toml`) and the enterprise control plane (RBAC, tamper-evident audit chain, per-user / per-team budgets, OpenTelemetry export) is scaffolded but not yet wired into the routing path (`INV-010`). The reader of the first 30 lines of README and the first 20 lines of `pyproject.toml` now arrives at the same maturity conclusion.
 
+### Testing
+
+- **TST-001 — Un-skipped 9 silently-excluded test suites.** `tests/conftest.py:collect_ignore` had dropped 206 tests at collection time, including integrity, performance, observability, session-summary rendering, framework scenarios, and lineage roundtrips. The original justification (lineage symbols missing) was stale — PR #10 restored the exports but the exclusion list was never cleaned up. The README's "766 tests passing" badge ran against a suite that hid these. `collect_ignore` is now empty (every test file is collected); the residual failures all share one root cause (`LineageStore(db_path=...)` signature drift, scheduled for v0.2.x lineage rewrite) and are individually marked via `_KNOWN_BROKEN_TESTS` with reasons that show up in `pytest -v`. New meta-test `tests/test_no_silent_collect_ignore.py` guards against future silent-exclusion regressions.
+
 ### Breaking changes
 
 - The `chuzom-sse` console script no longer exists. Use the stdio transport (`chuzom`) until an authenticated SSE wrapper ships.
 - `llm_fs_edit_many` now requires `project_root: str` as a positional argument (was previously sandbox-less).
 - `llm_fs_analyze_context` renamed its first argument from `path` (default `"."`) to `project_root` (required). The previous default that quietly analysed the process cwd is gone.
-- `llm_fs_*` tools are NOT registered unless `CHUZOM_FS_TOOLS=on` is set. MCP clients that previously discovered these tools at startup will see them disappear until they set the env var.
+- `llm_fs_*` tools are NOT registered unless `CHUZOM_FS_TOOLS=on` is set.
+- `agoragentic_*` tools are NOT registered unless `CHUZOM_AGORAGENTIC=on` is set.
+- The hook → MCP classification bridge moved from `~/.chuzom/last_classification.json` to per-session shards `~/.chuzom/last_classification_<session_id>.json`. Consumers that still target the legacy filename will see no data (and the router will fall back to its length heuristic, which is the correct conservative default).
 
 ### Added
 
 - `tests/test_no_chuzom_sse_entry_point.py` — 3 regression tests guarding SEC-001.
-- `tests/test_fs_path_validation.py` — 18 tests covering the SEC-002 env gate and sandbox helpers (`_resolve_root`, `_assert_under_root`, `_filter_files_under_root`), including symlink-escape and absolute-path-outside-root cases.
+- `tests/test_fs_path_validation.py` — 26 tests covering the SEC-002 env gate and sandbox helpers (`_resolve_root`, `_assert_under_root`, `_filter_files_under_root`), including symlink-escape and absolute-path-outside-root cases.
+- `tests/test_agoragentic_opt_in.py` — 18 regression tests covering the SEC-003 env-gate truth table.
+- `tests/test_classification_side_channel_isolation.py` — 12 tests covering session isolation, adversarial forgery (ROU-001), inner-payload mismatch, staleness, and malformed-input resilience.
+- `tests/test_no_silent_collect_ignore.py` — 2 meta-tests asserting `collect_ignore` stays empty and every `_KNOWN_BROKEN_TESTS` entry carries a reason.
 - `chuzom.tools.fs.FsSandboxError` — raised when a path escapes the configured `project_root`.
-- Security notice docstrings on `chuzom.server.main_sse` and `chuzom.tools.fs.register` explaining the threat model and the conditions under which the prior behaviour may be reintroduced.
+- Security notice docstrings on `chuzom.server.main_sse`, `chuzom.tools.fs.register`, and `chuzom.tools.agoragentic.register` explaining the threat model and the conditions under which the prior behaviour may be reintroduced.
 
 ### Notes for operators
 
 - Anyone who was relying on the default-on filesystem tools must add `CHUZOM_FS_TOOLS=on` to their environment AND pass `project_root` on every call.
+- Anyone who was intentionally using the Agoragentic marketplace must add `CHUZOM_AGORAGENTIC=on` to the environment that launches the MCP server. The credentials file at `~/.chuzom/agoragentic.json` is unchanged.
+- **If you discover unauthorised on-chain activity from `~/.chuzom/agoragentic.json`'s `agent_id` predating this release:** rotate the API key, revoke the agent, and review settlements on the Base L2 explorer. The pre-fix default was exploitable.
 - Symlink escapes are now closed because path validation runs after `Path.resolve()`, not against the raw user-supplied string.
-- The full audit context — including these findings' file:line evidence and the rejected alternatives — lives in `Docs/audit/HIGH_PRIORITY_WORK_PLAN.md` (`F-SEC-001`, `F-SEC-002`) and `Docs/audit/FINDINGS.md`.
+- The full audit context — including findings' file:line evidence and the rejected alternatives — lives in `Docs/audit/HIGH_PRIORITY_WORK_PLAN.md` and `Docs/audit/FINDINGS.md`.
+
+### Phase 2 (parked pending multi-tenancy product decision)
+
+- `INV-010` (identity → routing → audit chain wiring), `INV-011` + `TST-003` (per-identity budgets + concurrency tests), `ROU-002` (per-tenant routing tables), `PRI-001` (redaction in routing path), `OBS-001` (tenant/user/agent fields in logs). All blocked on `Q-P-2` in `Docs/audit/OPEN_QUESTIONS.md`.
 
 ---
 
