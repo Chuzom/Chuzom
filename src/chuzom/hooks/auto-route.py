@@ -2597,28 +2597,39 @@ def main() -> None:
 
     # ── Last-classification sidecar (gap 1: hook verdict survives MCP boundary) ──
     #
-    # The MCP llm_* tools have no way to discover the session_id of the
-    # invoking prompt, so the per-session pending_route_*.json isn't
-    # reachable from inside the MCP server. We mirror the hook's
-    # classification verdict into a process-wide
-    # ``~/.chuzom/last_classification.json``. Tools read it on entry
-    # and pass its ``complexity`` as the ``complexity_hint`` to
-    # ``route_and_call`` — which then beats the length-based auto-
-    # heuristic. Stale entries (>120s) are ignored so an old verdict
-    # can't leak into a new turn.
-    try:
-        _write_json_atomic(
-            _ROUTER_DIR / "last_classification.json",
-            {
-                "task_type": task_type,
-                "complexity": complexity,
-                "method": method,
-                "issued_at": time.time(),
-                "session_id": session_id,
-            },
-        )
-    except OSError:
-        pass
+    # The MCP llm_* tools mirror the hook's classification by reading
+    # ``~/.chuzom/last_classification_<session_id>.json``. The MCP server
+    # inherits ``CLAUDE_SESSION_ID`` from the Claude Code process that
+    # spawned it, so the reader can pick the file matching this exact
+    # session. Tools pass its ``complexity`` as the ``complexity_hint``
+    # to ``route_and_call`` — which then beats the length-based heuristic.
+    #
+    # Per-session files (INV-007 / ROU-001):
+    #   * Two concurrent Claude Code sessions no longer race on a shared
+    #     file. Each writes and reads its own ``<session_id>`` shard.
+    #   * A co-user (or local process) cannot forge a classification for
+    #     a session it does not know the id of; the prior shared file made
+    #     this trivial within the 120s freshness window.
+    #
+    # Stale entries (>120s) are still ignored so an old verdict can't
+    # leak into a new turn. The legacy ``last_classification.json`` is
+    # intentionally NOT written — it was the side channel that allowed
+    # cross-session forgery; readers that still look for it will gracefully
+    # return ``None`` and fall back to the length heuristic.
+    if session_id:
+        try:
+            _write_json_atomic(
+                _ROUTER_DIR / f"last_classification_{session_id}.json",
+                {
+                    "task_type": task_type,
+                    "complexity": complexity,
+                    "method": method,
+                    "issued_at": time.time(),
+                    "session_id": session_id,
+                },
+            )
+        except OSError:
+            pass
 
     # ── Append mid-session trend indicator for visibility ────────────────────────
     trend_indicator = ""

@@ -75,9 +75,14 @@ Repository = "https://github.com/ypollak2/chuzom"
 Issues = "https://github.com/ypollak2/chuzom/issues"
 Changelog = "https://github.com/ypollak2/chuzom/blob/main/CHANGELOG.md"
 
+# chuzom-sse intentionally NOT exposed as a console script (SEC-001, audit 2026-06).
+# Prior versions installed a binary that bound 0.0.0.0 with no auth and exposed
+# the full MCP tool surface (incl. fs + wallet) to anyone reachable on the network.
+# main_sse() is retained in chuzom.server for future re-introduction behind
+# proper authentication + identity (post-INV-010). Do not re-add chuzom-sse
+# here until that wrapper exists. See Docs/audit/FINDINGS.md F-SEC-001.
 [project.scripts]
 chuzom = "chuzom.cli:main"
-chuzom-sse = "chuzom.server:main_sse"
 chuzom-onboard = "chuzom.onboard:main"
 chuzom-install-hooks = "chuzom.install_hooks:main"
 chuzom-quickstart = "chuzom.quickstart:main"

@@ -296,8 +296,9 @@ def _check_savings_posture() -> list[str]:
     5. **Enforcement mode** — strict / hard mode actually blocks
        bypasses; smart is the safe default. Off / shadow is a foot-gun.
     6. **Hook hint freshness** — the auto-route hook should be writing
-       ``~/.chuzom/last_classification.json`` on every prompt. A stale
-       file (> 1h) means the hook isn't firing.
+       ``~/.chuzom/last_classification_<session_id>.json`` on every prompt.
+       The doctor checks the most-recently-modified shard; a stale file
+       (> 1h) means the hook isn't firing in any session.
     7. **Today's simple-share** — if any routing happened today, what
        fraction was classified ``simple``? Pre-fix this was 0%; healthy
        posture is > 30% on a chat-heavy session, > 50% on info-gathering.
@@ -374,28 +375,39 @@ def _check_savings_posture() -> list[str]:
         # Default / smart.
         lines.append(_ok("CHUZOM_ENFORCE=smart (default) — write tools blocked until route honored"))
 
-    # 6. Hook hint freshness.
-    hint_path = Path.home() / ".chuzom" / "last_classification.json"
-    if hint_path.exists():
+    # 6. Hook hint freshness — per-session shards since INV-007.
+    # Find the newest last_classification_*.json across all sessions; that's
+    # the closest proxy for "is any session's hook still firing".
+    import glob as _glob
+    shard_paths = sorted(
+        _glob.glob(str(Path.home() / ".chuzom" / "last_classification_*.json")),
+        key=lambda p: Path(p).stat().st_mtime if Path(p).exists() else 0,
+        reverse=True,
+    )
+    if shard_paths:
+        newest = Path(shard_paths[0])
         try:
-            age = time.time() - hint_path.stat().st_mtime
+            age = time.time() - newest.stat().st_mtime
         except OSError:
             age = None
+        sid_suffix = newest.stem.removeprefix("last_classification_")[:8]
         if age is None:
-            lines.append(_warn("last_classification.json unreadable"))
+            lines.append(_warn(f"last_classification_{sid_suffix}*.json unreadable"))
         elif age < 3600:
             lines.append(_ok(
-                f"last_classification.json fresh ({int(age)}s) — hook hint bridge active"
+                f"last_classification_{sid_suffix}*.json fresh ({int(age)}s, "
+                f"{len(shard_paths)} session shard(s)) — hook hint bridge active"
             ))
         else:
             mins = int(age // 60)
             lines.append(_warn(
-                f"last_classification.json is {mins}m old — auto-route hook may "
-                "not be firing. Check ~/.chuzom/auto-route-debug.log for INVOCATION lines."
+                f"newest last_classification_*.json is {mins}m old — auto-route "
+                "hook may not be firing. Check ~/.chuzom/auto-route-debug.log for "
+                "INVOCATION lines."
             ))
     else:
         lines.append(_warn(
-            "~/.chuzom/last_classification.json missing — hook hint bridge "
+            "~/.chuzom/last_classification_*.json missing — hook hint bridge "
             "has not run yet. Send any prompt to create it."
         ))
 

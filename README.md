@@ -9,8 +9,12 @@
 </p>
 
 <p align="center">
-  <strong>The enterprise-ready LLM router for developer organizations.</strong><br/>
-  Route every prompt to the cheapest capable model. Log every decision in a tamper-evident audit chain. Enforce per-user and per-team budgets. Ship telemetry to OpenTelemetry. Stays local; no proxy.
+  <strong>Local-first LLM router for developer workstations.</strong><br/>
+  Route every prompt to the cheapest capable model. Log every decision to a local lineage store. Stays local; no proxy. Drop-in for Claude Code, Cursor, Codex CLI, Gemini CLI, and more.
+</p>
+
+<p align="center">
+  <sub><strong>Maturity:</strong> developer-tool layer is the production path today (alpha per <a href="pyproject.toml">pyproject.toml</a>). The enterprise control plane — RBAC, tamper-evident audit chain, per-user / per-team budgets, OpenTelemetry export — is scaffolded but not yet wired into the routing path (<a href="Docs/audit/FINDINGS.md">INV-010</a>). See <a href="Docs/audit/ROADMAP.md">ROADMAP</a> for sequencing.</sub>
 </p>
 
 <p align="center">

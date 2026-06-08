@@ -1,9 +1,11 @@
 """Tests for the hook → MCP complexity hint bridge.
 
-The auto-route hook writes ``~/.chuzom/last_classification.json`` on
-every UserPromptSubmit. MCP llm_* tools read that file to discover the
-hook's classification verdict so a short user prompt doesn't get re-
-classified as moderate by the router's length heuristic after wrapping.
+The auto-route hook writes ``~/.chuzom/last_classification_<session_id>.json``
+on every UserPromptSubmit (per-session shards since INV-007). MCP llm_*
+tools read the shard matching ``CLAUDE_SESSION_ID`` from the environment
+that Claude Code injected when it spawned the MCP server, so a short
+user prompt doesn't get re-classified as moderate by the router's length
+heuristic after wrapping.
 
 Tests below pin three contracts:
 
@@ -13,6 +15,11 @@ Tests below pin three contracts:
 3. Malformed / partially-written hint files don't crash callers —
    the file is updated atomically, but a half-written read is still
    possible during the rename window.
+
+INV-007 (audit 2026-06): per-session isolation is exercised separately
+in tests/test_classification_side_channel_isolation.py. The fixture
+here pins ``CLAUDE_SESSION_ID=test`` so these tests stay focused on the
+reader contract and the priority order, not on session isolation.
 """
 
 from __future__ import annotations
@@ -31,11 +38,13 @@ from chuzom.tools.text import (
 
 @pytest.fixture
 def hint_file(monkeypatch, tmp_path):
-    """Redirect Path.home() so the hint reader picks up our temp file."""
+    """Redirect Path.home() and pin CLAUDE_SESSION_ID so the per-session
+    shard reader picks up our temp file (INV-007)."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("CLAUDE_SESSION_ID", "test")
     chuzom_dir = tmp_path / ".chuzom"
     chuzom_dir.mkdir(parents=True, exist_ok=True)
-    return chuzom_dir / "last_classification.json"
+    return chuzom_dir / "last_classification_test.json"
 
 
 def _write_hint(path: Path, complexity: str, *, age_sec: float = 0.0) -> None:

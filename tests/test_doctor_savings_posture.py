@@ -59,7 +59,8 @@ def test_baseline_warns_on_every_missing_signal(clean_env, fake_home):
     # response_router defaults on → not a warning
     assert "CHUZOM_RESPONSE_ROUTER" in body
     assert "smart (default)" in body
-    assert "last_classification.json missing" in body
+    # INV-007: doctor now reports per-session shards (last_classification_*.json).
+    assert "last_classification_*.json missing" in body
     assert "usage.db missing" in body
 
 
@@ -122,15 +123,18 @@ def test_off_modes_warn(clean_env, monkeypatch, fake_home, mode):
 
 
 def test_fresh_hint_marks_ok(clean_env, fake_home):
-    hint = fake_home / ".chuzom" / "last_classification.json"
+    # INV-007: doctor now globs last_classification_<session_id>.json.
+    # A shard for any session counts as "the bridge is firing somewhere".
+    hint = fake_home / ".chuzom" / "last_classification_test.json"
     hint.write_text("{}")
     body = "\n".join(_plain(_check_savings_posture()))
-    assert "last_classification.json fresh" in body
+    assert "fresh" in body and "hook hint bridge active" in body
 
 
 def test_old_hint_warns(clean_env, fake_home):
     """A hint file >1h old means the hook isn't firing — flag it."""
-    hint = fake_home / ".chuzom" / "last_classification.json"
+    # INV-007: doctor now globs per-session shards.
+    hint = fake_home / ".chuzom" / "last_classification_test.json"
     hint.write_text("{}")
     # Backdate the mtime by 2h.
     two_hours_ago = time.time() - 7200
