@@ -404,7 +404,8 @@ class TestFsAnalyzeContext:
         from chuzom.tools.fs import llm_fs_analyze_context
 
         # Empty directory — no key files
-        result = await llm_fs_analyze_context(path=str(tmp_path))
+        # SEC-002: `path` was renamed to `project_root` (required, sandbox boundary).
+        result = await llm_fs_analyze_context(project_root=str(tmp_path))
         assert "No key project files found" in result
 
     @pytest.mark.asyncio
@@ -428,7 +429,8 @@ class TestFsAnalyzeContext:
         mock_resp.header.return_value = "> test"
 
         with patch.object(fs_module, "route_and_call", new=AsyncMock(return_value=mock_resp)):
-            result = await llm_fs_analyze_context(path=str(tmp_path))
+            # SEC-002: `path` was renamed to `project_root` (required, sandbox boundary).
+            result = await llm_fs_analyze_context(project_root=str(tmp_path))
 
         assert "Python" in result or "context_summary" in result.lower() or "saved" in result
 

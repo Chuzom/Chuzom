@@ -55,6 +55,16 @@ def test_all_tools_registered():
         "chuzom_agent_complete_session", "chuzom_agent_lineage",
     }
     
+    # SEC-002: llm_fs_* tools are opt-in via CHUZOM_FS_TOOLS=on and won't be
+    # registered without it; exclude them from the must-be-present set when the
+    # opt-in is absent.
+    import os as _os
+    fs_opt_in = _os.environ.get("CHUZOM_FS_TOOLS", "").strip().lower() in {"1", "on", "true", "yes"}
+    if not fs_opt_in:
+        known_tools = known_tools - {
+            "llm_fs_find", "llm_fs_rename", "llm_fs_edit_many", "llm_fs_analyze_context",
+        }
+
     # With slim=routing (default), only routing-tier tools are registered.
     # Check that registered tools are a known subset, not that ALL tools are present.
     from chuzom.config import get_config

@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased — Security: SSE entry-point removed, fs tools moved to opt-in
+
+> **Security advisory.** This release closes two Critical findings from the 2026-06 internal audit (`Docs/audit/FINDINGS.md`). Both findings were exploitable with default settings. Operators running prior versions on a reachable network should review the mitigations below.
+
+### Security
+
+- **SEC-001 — Removed `chuzom-sse` console script (BREAKING).** Prior versions installed a `chuzom-sse` binary that, when invoked, bound `0.0.0.0:$PORT` and exposed the full 60-tool MCP surface — including filesystem tools, wallet, and routing controls — with **zero authentication**. The entry point has been removed from `pyproject.toml`. The `chuzom.server.main_sse` function is retained in source for future re-introduction behind proper authentication + identity (post-INV-010); attempting to re-add the entry point without an auth wrapper is now guarded by a regression test (`tests/test_no_chuzom_sse_entry_point.py`).
+  - **Mitigation if you were running `chuzom-sse`:** stop the process, review any logs you have for unauthorised tool invocations during the exposure window, rotate credentials accessible from the host, and switch to the stdio transport (`chuzom`) until a hardened SSE wrapper ships.
+- **SEC-002 — `llm_fs_*` tools are now opt-in and sandboxed (BREAKING).** Prior versions registered four filesystem tools (`llm_fs_find`, `llm_fs_rename`, `llm_fs_edit_many`, `llm_fs_analyze_context`) by default. `llm_fs_edit_many` accepted an arbitrary glob and read up to 32 KB per match into the model prompt; `llm_fs_edit_many(glob_pattern="~/.ssh/**")` was a one-call exfiltration vector. Two independent gates now apply:
+  1. **Opt-in env.** Tools are registered only when `CHUZOM_FS_TOOLS=on` (or `1`/`true`/`yes`) is set. Without the opt-in, `mcp.list_tools()` exposes zero `llm_fs_*` entries.
+  2. **`project_root` sandbox.** `llm_fs_edit_many` and `llm_fs_analyze_context` now require a `project_root` parameter. The root is resolved with `Path.resolve()` (closing the symlink-escape hole); paths that resolve outside it are rejected before any file read or route call. `project_root='/'` is refused outright.
+
+### Breaking changes
+
+- The `chuzom-sse` console script no longer exists. Use the stdio transport (`chuzom`) until an authenticated SSE wrapper ships.
+- `llm_fs_edit_many` now requires `project_root: str` as a positional argument (was previously sandbox-less).
+- `llm_fs_analyze_context` renamed its first argument from `path` (default `"."`) to `project_root` (required). The previous default that quietly analysed the process cwd is gone.
+- `llm_fs_*` tools are NOT registered unless `CHUZOM_FS_TOOLS=on` is set. MCP clients that previously discovered these tools at startup will see them disappear until they set the env var.
+
+### Added
+
+- `tests/test_no_chuzom_sse_entry_point.py` — 3 regression tests guarding SEC-001.
+- `tests/test_fs_path_validation.py` — 18 tests covering the SEC-002 env gate and sandbox helpers (`_resolve_root`, `_assert_under_root`, `_filter_files_under_root`), including symlink-escape and absolute-path-outside-root cases.
+- `chuzom.tools.fs.FsSandboxError` — raised when a path escapes the configured `project_root`.
+- Security notice docstrings on `chuzom.server.main_sse` and `chuzom.tools.fs.register` explaining the threat model and the conditions under which the prior behaviour may be reintroduced.
+
+### Notes for operators
+
+- Anyone who was relying on the default-on filesystem tools must add `CHUZOM_FS_TOOLS=on` to their environment AND pass `project_root` on every call.
+- Symlink escapes are now closed because path validation runs after `Path.resolve()`, not against the raw user-supplied string.
+- The full audit context — including these findings' file:line evidence and the rejected alternatives — lives in `Docs/audit/HIGH_PRIORITY_WORK_PLAN.md` (`F-SEC-001`, `F-SEC-002`) and `Docs/audit/FINDINGS.md`.
+
+---
+
 ## v0.1.1 — Stop misrouting display-intent prompts to llm_code
 
 > **Patch release.** Targets the most common "Chuzom appears stuck" experience: trivial follow-ups like `show me the report` issued after code-heavy turns were being classified `code/moderate` via `code-context-inherit`, then forced through `mcp__chuzom__llm_code` — an external LLM that can't read local files. The tool would spin for 2-4 minutes before the user cancelled. No actual hang; just a misroute taking the slow path that couldn't help anyway. Full analysis in [`STUCK_PATTERNS_ANALYSIS.md`](./STUCK_PATTERNS_ANALYSIS.md).

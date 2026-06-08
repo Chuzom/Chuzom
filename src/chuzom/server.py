@@ -158,6 +158,21 @@ def main():
 def main_sse(port: int | None = None) -> None:
     """Start the MCP server with SSE transport for remote/hosted access.
 
+    ⚠️  SECURITY NOTICE (SEC-001, audit 2026-06):
+    This function is INTENTIONALLY not exposed as a console script.
+    The prior `chuzom-sse` entry point bound 0.0.0.0 with no auth and
+    exposed the full 60-tool MCP surface — including filesystem tools
+    and wallet — to anyone reachable on the network. It was removed in
+    the same release that introduced this notice.
+
+    Do NOT re-add `chuzom-sse` to `[project.scripts]` in pyproject.toml
+    until ALL of the following are true:
+      1. Bearer-token (or stronger) auth middleware wraps `mcp.sse_app()`
+      2. INV-010 has landed (identity → routing → audit chain)
+      3. Default host is `127.0.0.1`; `0.0.0.0` requires explicit env opt-in
+
+    See Docs/audit/HIGH_PRIORITY_WORK_PLAN.md F-SEC-001.
+
     Reads PORT and HOST from environment so it works on Railway, Render,
     Fly.io and other PaaS platforms that inject these at runtime.
 
