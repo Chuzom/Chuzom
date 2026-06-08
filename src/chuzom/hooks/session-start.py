@@ -628,6 +628,52 @@ def _format_learned_memory() -> str:
         return ""
 
 
+def _warm_ollama_bg() -> None:
+    """Fire-and-forget warm-up of the primary Ollama classification model.
+
+    Ollama keeps models resident in memory after first use, but the very
+    first call after a server restart (or after the keep-alive window
+    expires) has multi-second model-load latency. That latency lands
+    directly in the user's first prompt of a new Claude Code session,
+    where chuzom's classifier needs Ollama warm to keep classification
+    sub-second.
+
+    Detach a background curl that sends a single-character prompt to the
+    Ollama generate endpoint. The model loads, returns near-instantly
+    (model isn't running yet, so the "compute" is the load itself), and
+    stays resident for ``OLLAMA_KEEP_ALIVE`` (default 5m). By the time
+    the user hits their first prompt 1-30s later, the classifier call
+    finds the model already loaded.
+
+    Opt-out: ``CHUZOM_OLLAMA_WARMUP=off``. Override the model with
+    ``CHUZOM_OLLAMA_WARMUP_MODEL`` (default ``qwen3.5:latest`` — the
+    model the production chain uses for classification).
+    """
+    if os.environ.get("CHUZOM_OLLAMA_WARMUP", "on").strip().lower() in ("0", "off", "false", "no"):
+        return
+    model = os.environ.get("CHUZOM_OLLAMA_WARMUP_MODEL", "qwen3.5:latest")
+    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+    payload = json.dumps({"model": model, "prompt": " ", "stream": False})
+    try:
+        subprocess.Popen(
+            [
+                "curl", "-sm", "8", "-o", "/dev/null",
+                "-X", "POST", f"{base_url}/api/generate",
+                "-H", "Content-Type: application/json",
+                "-d", payload,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        # Warm-up is best-effort — never let a curl-spawn failure block
+        # session start. If Ollama isn't installed/running, the next
+        # routing call will discover that anyway via the chain fallback.
+        pass
+
+
 def _maybe_refresh_benchmarks_bg() -> None:
     """Trigger a background benchmark refresh if the local file is stale.
 
@@ -723,6 +769,11 @@ def main() -> None:
     # 5. Trigger benchmark refresh in background if stale (v5.0 adaptive router).
     # Runs as a detached subprocess so the session start is never blocked.
     _maybe_refresh_benchmarks_bg()
+
+    # 6. Warm up Ollama's classifier model in the background so the first
+    # prompt of the new session doesn't pay model-load latency on its
+    # classification call. Detached, never blocks session start.
+    _warm_ollama_bg()
 
     # Visible UI signal — Claude Code surfaces stderr as
     # "SessionStart:startup hook success: <msg>". Multi-line greeting renders

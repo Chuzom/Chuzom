@@ -1868,6 +1868,74 @@ def _get_selected_model(task_type: str, complexity: str) -> tuple[str, str]:
 
 
 _DEBUG_LOG = Path.home() / ".chuzom" / "auto-route-debug.log"
+_PROMPT_COUNTS = Path.home() / ".chuzom" / "session_prompt_counts.json"
+
+
+def _bump_session_prompt_count(session_id: str) -> int:
+    """Increment and return the per-session prompt counter.
+
+    Persisted in ~/.chuzom/session_prompt_counts.json keyed by session_id.
+    Used to drive the every-N-prompts mini-summary widget. Failures are
+    silent — a write error here must never block routing.
+    """
+    try:
+        if _PROMPT_COUNTS.exists():
+            counts = json.loads(_PROMPT_COUNTS.read_text())
+        else:
+            counts = {}
+    except Exception:
+        counts = {}
+    counts[session_id] = counts.get(session_id, 0) + 1
+    n = counts[session_id]
+    try:
+        # Trim to the most recent 50 session_ids so the file doesn't grow
+        # unbounded over time. The active session always survives because
+        # we just bumped it.
+        if len(counts) > 50:
+            counts = dict(sorted(counts.items(), key=lambda kv: kv[1])[-50:])
+            if session_id not in counts:
+                counts[session_id] = n
+        _PROMPT_COUNTS.write_text(json.dumps(counts))
+    except Exception:
+        pass
+    return n
+
+
+def _build_mini_summary() -> str | None:
+    """Compose a compact 4-line session-summary widget for additionalContext.
+
+    Reads recent routing decisions via ``LineageStore.recent()`` (which
+    includes the legacy-fallback adapter from PR #11), computes a tiny
+    set of stats, and returns a markdown-formatted block. Returns None
+    if there's nothing to show — caller skips injection in that case.
+
+    Format mirrors the full ``chuzom summary`` dashboard at a much
+    smaller scale so users get the same shape of information every N
+    prompts without the full table-rendering footprint.
+    """
+    try:
+        from chuzom.lineage import LineageStore
+        rows = LineageStore().recent(limit=200)
+        if not rows:
+            return None
+        n = len(rows)
+        # Tier mix
+        from collections import Counter
+        tiers = Counter(r.get("model_tier", "unknown") for r in rows)
+        top_tier, top_tier_n = tiers.most_common(1)[0]
+        # Task mix
+        tasks = Counter(r.get("task_type", "unknown") for r in rows)
+        top_task, top_task_n = tasks.most_common(1)[0]
+        # Cumulative savings (best-effort — fields may be missing)
+        savings = sum(float(r.get("cost_usd") or 0.0) for r in rows)
+        return (
+            "📊 chuzom session check (every 10 prompts):\n"
+            f"   routes: {n}  ·  top tier: {top_tier} ({top_tier_n})  ·  "
+            f"top task: {top_task} ({top_task_n})  ·  recorded cost: ${savings:.4f}\n"
+            "   run `chuzom summary` for the full dashboard."
+        )
+    except Exception:
+        return None
 
 
 def _debug_log(msg: str) -> None:
@@ -1951,6 +2019,29 @@ def main() -> None:
 
     session_id = hook_input.get("session_id", "")
     zero_claude = _zero_claude_enabled()
+
+    # ── Mini-summary widget — every Nth routed prompt, inject a compact
+    # 3-line stats block so users get periodic visibility into chuzom's
+    # state without having to run `chuzom summary` themselves. Cadence
+    # is configurable via CHUZOM_MINI_SUMMARY_EVERY (default 10); set to
+    # 0 to disable entirely. Computed once here and stashed for the
+    # rest of main() to append into whichever additionalContext path
+    # ends up firing.
+    _mini_summary_block: str | None = None
+    if session_id:
+        try:
+            _every = int(os.environ.get("CHUZOM_MINI_SUMMARY_EVERY", "10"))
+        except ValueError:
+            _every = 10
+        if _every > 0:
+            _prompt_n = _bump_session_prompt_count(session_id)
+            if _prompt_n > 0 and _prompt_n % _every == 0:
+                _mini_summary_block = _build_mini_summary()
+                if _mini_summary_block:
+                    _debug_log(
+                        f"[INVOCATION {invocation_id:.3f}] MINI_SUMMARY "
+                        f"injected (session prompt #{_prompt_n})"
+                    )
 
     # Native use is always explicit in zero-Claude mode. The prefix remains in
     # the prompt as a visible record that the user chose quota-consuming work.
@@ -2365,10 +2456,19 @@ def main() -> None:
                             _violation_notice + "\n\n" +
                             _output["hookSpecificOutput"][_ctx_key]
                         )
+                    # Append the every-N-prompts mini-summary widget when
+                    # this turn happened to be the Nth.
+                    if _mini_summary_block:
+                        _ctx_key = "contextForAgent" if "contextForAgent" in _output.get("hookSpecificOutput", {}) else "additionalContext"
+                        _output["hookSpecificOutput"][_ctx_key] = (
+                            _output["hookSpecificOutput"][_ctx_key] + "\n\n" + _mini_summary_block
+                        )
                 else:
                     _output = _build_block(_direct_result, task_type, complexity)
                     if _violation_notice:
                         _output["reason"] = _violation_notice + "\n" + _output["reason"]
+                    if _mini_summary_block:
+                        _output["reason"] = _output["reason"] + "\n\n" + _mini_summary_block
                 json.dump(_normalize_output_for_platform(_output, hook_input), sys.stdout)
                 sys.exit(0)
             else:
@@ -2546,10 +2646,16 @@ def main() -> None:
     if trend_indicator:
         indicator = f"{indicator}  {trend_indicator}"
 
+    # Append the every-N-prompts mini-summary widget when this turn
+    # happened to be the Nth (populated above in main()).
+    _final_context = directive
+    if _mini_summary_block:
+        _final_context = _final_context + "\n\n" + _mini_summary_block
+
     output = {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "additionalContext": directive,
+            "additionalContext": _final_context,
         }
     }
     _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUTTING: tool={tool} task={task_type}/{complexity} method={method}")

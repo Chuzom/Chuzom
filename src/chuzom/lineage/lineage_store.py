@@ -185,21 +185,40 @@ class LineageStore:
                 except json.JSONDecodeError:
                     continue
                 model_chosen = raw.get("selected_model", "")
+                provider = raw.get("provider", "unknown")
+                task_type = raw.get("task_type", "unknown")
                 complexity = raw.get("complexity", "unknown")
-                tier = tier_for_model(model_chosen)
+
+                # Meta-task relabel: production model_tracking logger
+                # writes selected_model="unknown" for routing decisions
+                # that didn't pick a model (coordination/introspect tasks
+                # handled by chuzom or Claude internally). Surface those
+                # as tier="meta" / model="chuzom-internal" so the
+                # dashboard shows them in an honest bucket instead of
+                # mixing with genuine routing failures.
+                if model_chosen == "unknown" or task_type in ("coordination", "introspect"):
+                    model_chosen = "chuzom-internal"
+                    provider = "meta"
+                    tier_value = "meta"
+                    inversion_value = "none"
+                else:
+                    tier = tier_for_model(model_chosen)
+                    tier_value = tier.value
+                    inversion_value = detect_inversion(complexity, tier).value
+
                 adapted.append({
                     "timestamp": raw.get("timestamp", 0),
-                    "task_type": raw.get("task_type", "unknown"),
+                    "task_type": task_type,
                     "complexity": complexity,
                     "classifier_method": raw.get("classification_method", "unknown"),
                     "model_chosen": model_chosen,
-                    "model_tier": tier.value,
-                    "inversion": detect_inversion(complexity, tier).value,
+                    "model_tier": tier_value,
+                    "inversion": inversion_value,
                     "outcome": "success",
                     "success": True,
                     "latency_ms": 0,
                     "cost_usd": raw.get("cost_usd_estimate") or 0.0,
-                    "host": raw.get("provider", "unknown"),
+                    "host": provider,
                     "notes": raw.get("notes") or "",
                     "framework": None,
                 })
