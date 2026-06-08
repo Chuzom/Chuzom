@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/chuzom-router/"><img src="https://img.shields.io/badge/pypi-chuzom--router-4F46E5?style=flat-square" alt="PyPI"></a>
-  <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/tests-732_passing-10B981?style=flat-square" alt="Tests"></a>
+  <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/tests-766_passing-10B981?style=flat-square" alt="Tests"></a>
   <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-10B981?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/SOC%202-mappable-8B5CF6?style=flat-square" alt="SOC 2">
@@ -96,7 +96,9 @@ The developer's workflow doesn't change. The model choice, the audit trail, and 
 - **Agent framework adapters** — Agno concrete; Hermes + LangGraph + CrewAI + OpenAI Agents SDK + Claude Agent SDK + Pydantic AI shaped for v0.0.3
 - **Routing inversion detection** — flags when complex prompts go cheap (underserved) or simple prompts go premium (overspend)
 - **Rich live dashboard** with status banner, tier distribution, latency histogram, agent rollups, watch mode
-- **732 tests** including scenario reports that render as readable stories
+- **Per-route visibility** — every routed reply begins with `🎯 chuzom → <model> · <task>/<complexity> · <latency>` so you can see where each prompt landed without leaving the chat
+- **Self-debug-safe** — chuzom recognises prompts that target chuzom itself (debug, route, hook, install, etc.) and bypasses enforcement so you never get locked out of the tools needed to repair chuzom
+- **766 tests** including scenario reports that render as readable stories
 
 ---
 
@@ -165,6 +167,20 @@ You'll see hooks installed, MCP server reachable, providers detected, and any se
 ```bash
 chuzom summary --watch
 ```
+
+### 5 · See the Chuzom banner on every `claude` launch (optional)
+
+Claude Code's `SessionStart` hooks cannot surface output to your terminal — they only inject context into the model. To get a visible startup banner, wrap `claude` in your shell rc so the banner prints **before** Claude Code takes over the TUI:
+
+```zsh
+# ~/.zshrc
+claude() {
+    command chuzom welcome --compact 2>/dev/null
+    command claude "$@"
+}
+```
+
+Swap `--compact` for the full painterly Chhuzom-confluence banner (78 lines of 24-bit ANSI art) by dropping the flag. `chuzom welcome` prints to stdout, so it works in any shell that supports function wrappers — `zsh`, `bash` (with `function claude() { ... }`), `fish`, etc.
 
 ---
 
@@ -435,6 +451,8 @@ Full deployment guide: [`Docs/ENTERPRISE_DEPLOYMENT.md`](Docs/ENTERPRISE_DEPLOYM
 
 Layers are independent: signals are pure functions, the decision engine is a pure function, the selector wraps providers + circuit breaker. Each layer's contract is pinned by tests so refactors stay safe.
 
+**Self-reference bypass.** When a prompt mentions chuzom itself alongside debug- or development-context words (e.g., *"chuzom is stuck"*, *"debug the chuzom hook"*, *"chuzom route indicator"*), the auto-route hook short-circuits before any routing or enforcement fires — no banner, no `pending_route_*.json` written, no blocked tools. This prevents the circular failure mode where users can't repair chuzom because chuzom is blocking the tools they need. The bypass is logged as `SELF_REFERENCE_BYPASS` in `~/.chuzom/auto-route-debug.log` so the audit trail stays complete.
+
 Architecture deep-dive: [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md).
 
 ---
@@ -548,6 +566,8 @@ Ships with 13 models pre-loaded; refresh from artificialanalysis.ai via `scripts
 chuzom install              # install hooks + rules + MCP config
 chuzom install --host all   # install for every supported host
 chuzom doctor               # health check + remediation hints
+chuzom welcome              # painterly Chhuzom-confluence banner
+chuzom welcome --compact    # one-line variant for ~/.zshrc wrappers
 
 # Session intelligence
 chuzom summary              # last 24h dashboard
@@ -559,6 +579,11 @@ chuzom last [--count N]     # recent routing decisions
 chuzom replay               # full session transcript
 chuzom savings-report       # token + cost breakdown
 chuzom retrospect           # IAF-style session debrief
+
+# Development workflow
+chuzom dev-refresh          # reinstall pkg + sync hooks + restart MCP servers
+chuzom dev-refresh --dry-run        # show the plan, don't execute
+chuzom dev-refresh --skip-mcp-kill  # keep current sessions alive
 
 # Governance
 chuzom budget set <provider> <amount>
@@ -573,6 +598,19 @@ chuzom team push [period]   # ship to Slack/Discord/webhook
 ---
 
 ## Configuration
+
+### Runtime toggles (env vars)
+
+| Variable | Values | Effect |
+|---|---|---|
+| `CHUZOM_ENFORCE` | `smart` (default) · `soft` · `hard` · `off` | Routing enforcement mode. `smart` hard-blocks Q&A and soft-allows code edits; `soft` logs but never blocks; `hard` blocks until an `llm_*` tool is called; `off` disables enforcement entirely. Same modes the `chuzom set-enforce` CLI writes. |
+| `CHUZOM_ROUTE_BANNER` | `on` (default) · `off` / `0` / `false` / `no` | Suppress the stderr `🎯 routed → …` line emitted on every DIRECT-success route. The user-visible reply-prefix indicator stays unaffected. |
+| `CHUZOM_ZERO_CLAUDE` | `1` / `true` / `on` | Strict zero-Claude routing — every prompt must execute via an external route or be blocked. Useful for cost-sensitive deployments. |
+| `CHUZOM_DEV_SRC` | absolute path | Source directory used by `chuzom dev-refresh` when `--source` isn't passed. |
+| `CHUZOM_CLAUDE_SUBSCRIPTION` | `true` / `1` / `yes` | Forces subscription-mode banner + OAuth pressure cascade even when not auto-detected. |
+| `CHUZOM_*_PATH` | absolute path | Override the location of any state DB (`CHUZOM_LINEAGE_PATH`, `CHUZOM_AUDIT_PATH`, etc.). |
+
+### State DBs
 
 State lives in `~/.chuzom/` (override per-DB via `CHUZOM_*_PATH` env vars):
 
