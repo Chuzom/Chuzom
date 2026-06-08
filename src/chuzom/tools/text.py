@@ -17,26 +17,43 @@ from chuzom.types import LLMResponse, RoutingProfile, TaskType
 def _read_hook_complexity_hint(max_age_sec: float = 120.0) -> str | None:
     """Return the complexity classified by the auto-route hook, or None.
 
-    The hook writes ``~/.chuzom/last_classification.json`` on every
-    UserPromptSubmit. MCP tools read it here so the hook's verdict
-    survives the boundary into the MCP server — without this, the
-    router falls back to a length heuristic on the wrapped prompt
+    The hook writes ``~/.chuzom/last_classification_<session_id>.json``
+    on every UserPromptSubmit. MCP tools read it here so the hook's
+    verdict survives the boundary into the MCP server — without this,
+    the router falls back to a length heuristic on the wrapped prompt
     (which has grown past the short-prompt boundary) and routes
     everything to the moderate tier even when the user's prompt was
     obviously simple.
 
-    Stale entries (older than ``max_age_sec``) are ignored. Two reasons:
+    Session isolation (INV-007 / ROU-001):
 
-    * A second user prompt arrives before the previous tool call
-      finishes — fresh classification should win, not the prior one.
-    * Cross-session reuse: the same file is shared by every session
-      on this machine; we only trust it for the most recent turn.
+    * The reader picks the per-session file using ``CLAUDE_SESSION_ID``
+      from the environment — Claude Code sets this when spawning the
+      MCP server, so each MCP process is naturally pinned to its own
+      session. Two concurrent Claude Code sessions write and read
+      independent shards; neither sees the other's verdict.
+    * If ``CLAUDE_SESSION_ID`` is missing (manual MCP invocation,
+      test harness, etc.) the reader returns ``None`` — the router
+      falls back to the length heuristic, which is the correct
+      conservative default.
+    * The pre-INV-007 shared ``last_classification.json`` is no longer
+      consulted. It allowed any same-user process to forge a
+      classification for any session within the 120s freshness window.
+
+    Stale entries (older than ``max_age_sec``) are still ignored: a
+    second user prompt arriving before the previous tool call finishes
+    must let the fresh classification win.
     """
     import json
+    import os
     from pathlib import Path
     import time
 
-    path = Path.home() / ".chuzom" / "last_classification.json"
+    session_id = os.environ.get("CLAUDE_SESSION_ID", "").strip()
+    if not session_id:
+        return None
+
+    path = Path.home() / ".chuzom" / f"last_classification_{session_id}.json"
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError:
@@ -45,6 +62,17 @@ def _read_hook_complexity_hint(max_age_sec: float = 120.0) -> str | None:
         data = json.loads(raw)
     except json.JSONDecodeError:
         return None
+
+    # Belt-and-braces: even if the file is per-session-named, verify the
+    # session_id inside matches the env. A forged file at the right path
+    # would also have to forge the inner session_id, and a forger that
+    # already knows the target session id has bypassed the file system
+    # gate entirely — so this is a cheap consistency check, not a
+    # security boundary.
+    inner_sid = data.get("session_id")
+    if isinstance(inner_sid, str) and inner_sid and inner_sid != session_id:
+        return None
+
     issued_at = data.get("issued_at")
     if not isinstance(issued_at, (int, float)):
         return None
