@@ -17,7 +17,6 @@ See: Docs/audit/HIGH_PRIORITY_WORK_PLAN.md F-SEC-002
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
