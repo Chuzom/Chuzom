@@ -118,6 +118,13 @@ def audit_routing_turn(
         # don't carry a meaningless null field.
         if actor.agent_id:
             detail["agent_id"] = actor.agent_id
+        # T1-M1 (Q-P-2 Phase 3a): always surface tenant_id when present.
+        # In Phase 3a it usually equals org_id (single-org-per-instance);
+        # in Phase 3b it differentiates per-tenant sidecars within one
+        # org. Carrying it from day 1 makes audit-row schemas
+        # forward-compat without a future migration.
+        if actor.tenant_id:
+            detail["tenant_id"] = actor.tenant_id
         if detail_extras:
             detail.update(detail_extras)
 

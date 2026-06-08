@@ -33,6 +33,13 @@ CHUZOM_ORG_ID_ENV = "CHUZOM_ORG_ID"
 # from Claude Code), agent_id stays None and the audit row simply omits
 # the agent dimension.
 CHUZOM_AGENT_ID_ENV = "CHUZOM_AGENT_ID"
+# T1-M1 (Q-P-2 Phase 3a): typed-but-implicit tenant axis. When unset,
+# the resolver defaults ``tenant_id`` to ``org_id`` so the field is
+# never None in production — consumers (budget keys, audit detail,
+# log contextvars) can rely on it. Set explicitly only in Phase 3b
+# (sidecar-per-tenant) where one chuzom process serves a tenant
+# distinct from its org. See Docs/audit/decisions/Q-P-2_multi-tenancy.md.
+CHUZOM_TENANT_ID_ENV = "CHUZOM_TENANT_ID"
 
 # Default org for Tier-1 single-user mode. Picked to be obviously
 # non-SSO-derived so a future audit reader can tell at a glance that the
@@ -74,6 +81,14 @@ class TurnIdentity:
     # invocation, etc.). When set, the audit row carries an ``agent_id``
     # field in ``detail`` and the log contextvars get an ``agent_id`` key.
     agent_id: str | None = None
+    # T1-M1 (Q-P-2 Phase 3a): typed-but-implicit tenant axis. ``None`` on
+    # the dataclass default for backwards compat with direct
+    # ``TurnIdentity(...)`` construction; ``current_identity()`` always
+    # populates it (env > org_id fallback) so production callers see a
+    # non-None value. Downstream consumers should treat ``None`` as
+    # "no tenant attribution available" — the resolver's job to avoid
+    # producing that state in production.
+    tenant_id: str | None = None
 
 
 def current_identity() -> TurnIdentity:
@@ -119,11 +134,22 @@ def current_identity() -> TurnIdentity:
     agent_id_raw = (os.environ.get(CHUZOM_AGENT_ID_ENV) or "").strip()
     agent_id = agent_id_raw or None
 
+    # T1-M1 (Q-P-2 Phase 3a): tenant_id is non-None in production.
+    # Explicit ``CHUZOM_TENANT_ID`` wins; otherwise fall back to
+    # ``org_id`` so single-org-per-instance deployments carry the
+    # tenant dimension for forward compat without forcing every
+    # caller to populate it. Phase 3b (sidecar-per-tenant) sets the
+    # env explicitly so chuzom processes within one org can serve
+    # distinct tenants.
+    tenant_id_raw = (os.environ.get(CHUZOM_TENANT_ID_ENV) or "").strip()
+    tenant_id = tenant_id_raw or org_id
+
     return TurnIdentity(
         user_id=user_id,
         user_email=user_email,
         org_id=org_id,
         agent_id=agent_id,
+        tenant_id=tenant_id,
     )
 
 
@@ -132,6 +158,7 @@ __all__ = [
     "CHUZOM_USER_EMAIL_ENV",
     "CHUZOM_ORG_ID_ENV",
     "CHUZOM_AGENT_ID_ENV",
+    "CHUZOM_TENANT_ID_ENV",
     "DEFAULT_ORG_ID",
     "TurnIdentity",
     "current_identity",
