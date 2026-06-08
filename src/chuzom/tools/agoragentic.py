@@ -2,18 +2,40 @@
 
 Route tasks to the Agoragentic capability marketplace for execution by
 trusted autonomous agents. Enables cross-agent task routing and settlement.
+
+SECURITY (SEC-003, audit 2026-06):
+``agoragentic_task`` performs USDC settlement on the Base L2 blockchain
+— it can spend real money. To prevent accidental exposure (an LLM
+hallucinating a wallet command, an MCP client enumerating tools and
+calling one by mistake, etc.), the four ``agoragentic_*`` MCP tools
+are gated behind the ``CHUZOM_AGORAGENTIC=on`` env opt-in. Without it,
+``register()`` exposes zero ``agoragentic_*`` tools to MCP clients.
+See ``Docs/audit/HIGH_PRIORITY_WORK_PLAN.md`` F-SEC-003.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os as _os
 from pathlib import Path
 from typing import Any, Optional
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# ── SEC-003: opt-in gate ──────────────────────────────────────────────────────
+_AGORAGENTIC_ENV = "CHUZOM_AGORAGENTIC"
+
+
+def _agoragentic_enabled() -> bool:
+    """True if the operator has opted in to the Agoragentic marketplace tools.
+
+    Affirmative values: ``1``, ``on``, ``true``, ``yes`` (case-insensitive).
+    Anything else (including unset and empty string) is treated as opt-out.
+    """
+    return _os.environ.get(_AGORAGENTIC_ENV, "").strip().lower() in {"1", "on", "true", "yes"}
 
 # Load API key from secure credentials file
 _CREDENTIALS_FILE = Path.home() / ".chuzom" / "agoragentic.json"
@@ -191,8 +213,22 @@ async def agoragentic_get_agent_status() -> dict[str, Any]:
 
 
 def register(mcp):
-    """Register Agoragentic tools with MCP server."""
-    
+    """Register Agoragentic tools with MCP server.
+
+    SEC-003: tools are OFF by default. Set ``CHUZOM_AGORAGENTIC=on`` in
+    the environment to register them. Without the opt-in,
+    ``mcp.list_tools()`` exposes zero ``agoragentic_*`` entries —
+    eliminating the wallet/marketplace surface for any operator who did
+    not explicitly enable it.
+
+    The tools talk to an external marketplace API with credentials at
+    ``~/.chuzom/agoragentic.json`` and can spend USDC on Base L2.
+    Treat this opt-in as a deliberate "I want to expose payment-signing
+    capability to the LLM agent" decision.
+    """
+    if not _agoragentic_enabled():
+        return  # SEC-003: tools intentionally absent unless opted in.
+
     @mcp.tool()
     async def agoragentic_task(
         task: str,

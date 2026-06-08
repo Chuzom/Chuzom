@@ -55,6 +55,16 @@ def test_all_tools_registered():
         "chuzom_agent_complete_session", "chuzom_agent_lineage",
     }
     
+    # SEC-003: agoragentic_* tools are opt-in via CHUZOM_AGORAGENTIC=on and
+    # won't be registered without it; exclude them from the must-be-present
+    # set when the opt-in is absent.
+    import os as _os
+    ag_opt_in = _os.environ.get("CHUZOM_AGORAGENTIC", "").strip().lower() in {"1", "on", "true", "yes"}
+    if not ag_opt_in:
+        known_tools = known_tools - {
+            "agoragentic_task", "agoragentic_browse", "agoragentic_wallet", "agoragentic_status",
+        }
+
     # With slim=routing (default), only routing-tier tools are registered.
     # Check that registered tools are a known subset, not that ALL tools are present.
     from chuzom.config import get_config

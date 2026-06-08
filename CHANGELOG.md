@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — Security: agoragentic marketplace tools moved to opt-in
+
+> **Security advisory.** This entry closes a High finding from the 2026-06 internal audit (`Docs/audit/FINDINGS.md` — F-SEC-003). The pre-fix behaviour exposed payment-signing capability to any MCP client by default.
+
+### Security
+
+- **SEC-003 — `agoragentic_*` MCP tools are now opt-in (BREAKING).** Prior versions registered four marketplace tools (`agoragentic_task`, `agoragentic_browse`, `agoragentic_wallet`, `agoragentic_status`) by default, even when `CHUZOM_SLIM=routing` was set. **`agoragentic_task` performs USDC settlement on the Base L2 blockchain** — it can spend real money via the credentials stored at `~/.chuzom/agoragentic.json`. An LLM agent enumerating tools, an MCP client probing the tool list, or a hallucinated tool call could trigger an unintended on-chain transaction. The four tools are now gated behind `CHUZOM_AGORAGENTIC=on` (or `1`/`true`/`yes`). Without the opt-in, `mcp.list_tools()` exposes zero `agoragentic_*` entries.
+
+### Breaking changes
+
+- `agoragentic_*` tools are NOT registered unless `CHUZOM_AGORAGENTIC=on` is set. MCP clients that previously discovered these tools at startup will see them disappear until they set the env var.
+
+### Operator notes
+
+- **If you were intentionally using the Agoragentic marketplace:** add `CHUZOM_AGORAGENTIC=on` to the environment that launches the MCP server. The credentials file at `~/.chuzom/agoragentic.json` is unchanged.
+- **If you were not using it:** no action required. The four tools simply disappear from the MCP tool list.
+- **If you discover unauthorised on-chain activity from `~/.chuzom/agoragentic.json`'s `agent_id` predating this release:** rotate the API key, revoke the agent, and review settlements on the Base L2 explorer. The pre-fix default was exploitable.
+
+### Added
+
+- `tests/test_agoragentic_opt_in.py` — 18 regression tests covering the env-gate truth table (affirmative values, falsy values, missing env, malformed values) and verifying both `register()` behaviour and the internal `_agoragentic_enabled` helper.
+
+### Notes for the wider remediation roadmap
+
+- This is the minimum-viable mitigation (work-plan Option B). A follow-up effort should **document** the Agoragentic integration in the README (work-plan Option A, scheduled month 2) and **decide** whether payment-signing belongs in the MCP tool surface at all, given that an LLM agent invoking the tool is the user-paying-money primitive.
+
+---
+
 ## v0.1.1 — Stop misrouting display-intent prompts to llm_code
 
 > **Patch release.** Targets the most common "Chuzom appears stuck" experience: trivial follow-ups like `show me the report` issued after code-heavy turns were being classified `code/moderate` via `code-context-inherit`, then forced through `mcp__chuzom__llm_code` — an external LLM that can't read local files. The tool would spin for 2-4 minutes before the user cancelled. No actual hang; just a misroute taking the slow path that couldn't help anyway. Full analysis in [`STUCK_PATTERNS_ANALYSIS.md`](./STUCK_PATTERNS_ANALYSIS.md).
