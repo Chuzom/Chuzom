@@ -734,14 +734,18 @@ def main() -> None:
 
     _reset_session_stats()
     _reset_stale_health()
-    # Clear any orphaned pending-route state files from crashed/killed sessions.
-    # Without this, stale files would block Bash/Edit in the new session.
+    # Clear orphaned per-session state files from crashed/killed sessions.
+    # Without this, stale files would block Bash/Edit in the new session
+    # (pending_route_*.json) and leak old classification verdicts into the
+    # length-heuristic fallback path (last_classification_*.json, INV-007).
     import glob as _glob
-    for _stale in _glob.glob(os.path.join(STATE_DIR, "pending_route_*.json")):
-        try:
-            os.unlink(_stale)
-        except OSError:
-            pass
+    _stale_globs = ("pending_route_*.json", "last_classification_*.json")
+    for _g in _stale_globs:
+        for _stale in _glob.glob(os.path.join(STATE_DIR, _g)):
+            try:
+                os.unlink(_stale)
+            except OSError:
+                pass
 
     hints = ""
 
