@@ -28,6 +28,11 @@ from dataclasses import dataclass
 CHUZOM_USER_ID_ENV = "CHUZOM_USER_ID"
 CHUZOM_USER_EMAIL_ENV = "CHUZOM_USER_EMAIL"
 CHUZOM_ORG_ID_ENV = "CHUZOM_ORG_ID"
+# Tier 2: agents running on the user's computer. Optional — when the
+# routed turn isn't part of an agent run (e.g. a direct MCP tool call
+# from Claude Code), agent_id stays None and the audit row simply omits
+# the agent dimension.
+CHUZOM_AGENT_ID_ENV = "CHUZOM_AGENT_ID"
 
 # Default org for Tier-1 single-user mode. Picked to be obviously
 # non-SSO-derived so a future audit reader can tell at a glance that the
@@ -64,6 +69,11 @@ class TurnIdentity:
     user_id: str
     user_email: str
     org_id: str
+    # Tier 2: the agent driving this turn, if any. None means "this turn
+    # was not part of an agent run" (a direct MCP tool call, a CLI
+    # invocation, etc.). When set, the audit row carries an ``agent_id``
+    # field in ``detail`` and the log contextvars get an ``agent_id`` key.
+    agent_id: str | None = None
 
 
 def current_identity() -> TurnIdentity:
@@ -103,10 +113,17 @@ def current_identity() -> TurnIdentity:
     if not org_id:
         org_id = DEFAULT_ORG_ID
 
+    # agent_id is optional. Blank / whitespace / unset all collapse to None
+    # so downstream consumers (audit detail, log contextvars) can use a
+    # simple ``if identity.agent_id:`` check.
+    agent_id_raw = (os.environ.get(CHUZOM_AGENT_ID_ENV) or "").strip()
+    agent_id = agent_id_raw or None
+
     return TurnIdentity(
         user_id=user_id,
         user_email=user_email,
         org_id=org_id,
+        agent_id=agent_id,
     )
 
 
@@ -114,6 +131,7 @@ __all__ = [
     "CHUZOM_USER_ID_ENV",
     "CHUZOM_USER_EMAIL_ENV",
     "CHUZOM_ORG_ID_ENV",
+    "CHUZOM_AGENT_ID_ENV",
     "DEFAULT_ORG_ID",
     "TurnIdentity",
     "current_identity",

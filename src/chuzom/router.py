@@ -1366,6 +1366,25 @@ async def route_and_call(
     if identity is None:
         identity = current_identity()
 
+    # Tier-2 / partial OBS-001 — bind routing-turn identity into structlog
+    # contextvars so every log line emitted by this turn (and any nested
+    # call it makes) carries the same ``request_id`` / ``user_id`` /
+    # ``org_id`` / ``agent_id`` keys without manual threading.
+    #
+    # ``request_id`` is the existing 8-hex correlation_id — repurposed so
+    # operators have one consistent name across logs, audit rows, and any
+    # future OTel spans. tenant_id is intentionally absent here; it lands
+    # in Tier 3 once the multi-tenancy product decision is made.
+    import structlog
+    _ctx_payload = {
+        "request_id": correlation_id,
+        "user_id": identity.user_id,
+        "org_id": identity.org_id,
+    }
+    if identity.agent_id:
+        _ctx_payload["agent_id"] = identity.agent_id
+    structlog.contextvars.bind_contextvars(**_ctx_payload)
+
     # ── Profile resolution (foundational routing rule) ────────────────────────
     profile, c, use_thinking = _resolve_profile(
         profile, complexity_hint, classification_data, prompt, model_override, config

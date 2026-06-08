@@ -106,6 +106,21 @@ def audit_routing_turn(
     try:
         actor = identity if identity is not None else current_identity()
 
+        detail = {
+            "task_type": task_type,
+            "complexity": complexity or "unknown",
+            "model": model,
+            "provider": provider,
+            "cost_usd": float(cost_usd or 0.0),
+        }
+        # Tier 2: surface agent_id in the audit row when this turn is
+        # part of an agent run. Omitted when None so non-agent turns
+        # don't carry a meaningless null field.
+        if actor.agent_id:
+            detail["agent_id"] = actor.agent_id
+        if detail_extras:
+            detail.update(detail_extras)
+
         event = AuditEvent(
             type=AuditEventType.ROUTING_DECISION,
             actor_id=actor.user_id,
@@ -113,14 +128,7 @@ def audit_routing_turn(
             org_id=actor.org_id,
             resource=f"model:{model}",
             action="cached" if cached else "routed",
-            detail={
-                "task_type": task_type,
-                "complexity": complexity or "unknown",
-                "model": model,
-                "provider": provider,
-                "cost_usd": float(cost_usd or 0.0),
-                **(detail_extras or {}),
-            },
+            detail=detail,
             severity="info",
         )
         _get_audit_log().append(event)
