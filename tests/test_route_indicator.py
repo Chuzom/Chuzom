@@ -24,7 +24,6 @@ refactors don't silently drop the user-visible indicator.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 
@@ -93,15 +92,9 @@ def test_format_echo_context_renders_real_data() -> None:
     from chuzom.hooks.direct_executor import DirectResult
     from dataclasses import fields
 
-    # Detect the model-field's type at runtime so we work whether it
-    # accepts a dataclass, a NamedTuple, or a plain dict.
     fld = {f.name: f for f in fields(DirectResult)}
-    if "model" in fld:
-        model_type = fld["model"].type
-    else:
-        model_type = None
 
-    # Most flexible: build a model object via the type that's referenced
+    # Build a model object via the type referenced by chain_builder.
     # in the chain builder. Fall back to a SimpleNamespace stand-in if
     # the type isn't importable.
     try:
