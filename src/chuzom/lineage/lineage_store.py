@@ -149,18 +149,63 @@ class LineageStore:
 
         Backward-compatible shim for callers written against the pre-v0.1.x
         flat-module ``LineageStore.recent(limit)`` API (notably
-        ``chuzom.summary``). Delegates to ``query_jsonl``; the JSONL backend
-        is now the canonical decision store, and rows already carry the
-        timestamp ordering the old SQLite query enforced.
+        ``chuzom.summary``).
 
-        Schema note: rows returned here use the new ``RoutingDecision``
-        shape (``selected_model`` rather than ``model_chosen``,
-        ``classification`` instead of separate ``task_type``/``complexity``,
-        no ``inversion`` / ``model_tier`` / ``outcome`` fields). Callers
-        that need the old fields should use ``row.get(field, default)``
-        rather than dict access so missing keys degrade gracefully.
+        Two-source merge:
+          1. **New canonical store** — ``routing_lineage.jsonl``. Populated
+             via ``LineageStore.append()``.
+          2. **Legacy store** — ``model_tracking.jsonl``. Populated by
+             ``chuzom.model_tracking.log_routing_decision``, which is the
+             code path the production auto-route hook actually uses today.
+
+        The v0.1.x rewrite added the new store but never migrated the
+        production write path. Until that migration lands, the legacy file
+        carries the real data — so we merge both and remap legacy field
+        names (``selected_model`` → ``model_chosen``, ``cost_usd_estimate``
+        → ``cost_usd``) plus derive ``model_tier`` and ``inversion`` via
+        ``tier_for_model``/``detect_inversion`` so the dashboard renders
+        meaningful tier breakdowns and inversion counts.
         """
-        return self.query_jsonl(limit=limit)
+        rows = list(self.query_jsonl(limit=limit))
+        if rows:
+            return rows
+
+        legacy = self.jsonl_file.parent / "model_tracking.jsonl"
+        if not legacy.exists():
+            return rows
+
+        # Lazy import to avoid a circular dependency at module load.
+        from chuzom.lineage.types import detect_inversion, tier_for_model
+
+        adapted: list[dict] = []
+        with open(legacy) as f:
+            for line in f:
+                try:
+                    raw = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                model_chosen = raw.get("selected_model", "")
+                complexity = raw.get("complexity", "unknown")
+                tier = tier_for_model(model_chosen)
+                adapted.append({
+                    "timestamp": raw.get("timestamp", 0),
+                    "task_type": raw.get("task_type", "unknown"),
+                    "complexity": complexity,
+                    "classifier_method": raw.get("classification_method", "unknown"),
+                    "model_chosen": model_chosen,
+                    "model_tier": tier.value,
+                    "inversion": detect_inversion(complexity, tier).value,
+                    "outcome": "success",
+                    "success": True,
+                    "latency_ms": 0,
+                    "cost_usd": raw.get("cost_usd_estimate") or 0.0,
+                    "host": raw.get("provider", "unknown"),
+                    "notes": raw.get("notes") or "",
+                    "framework": None,
+                })
+
+        adapted.sort(key=lambda r: r["timestamp"], reverse=True)
+        return adapted[:limit]
 
     def query_db(self, sql: str, params: tuple = ()) -> list[dict]:
         """Execute SQL query against SQLite backend.
