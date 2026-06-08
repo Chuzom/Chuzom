@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased — Audit Tracks 1 & 2 (developer-focused): security defaults tightened, claims reconciled, hidden tests un-skipped
+## v0.2.0 — 2026-06-08 — Audit Tracks 1 & 2 + lineage API rewrite
 
-> **Security advisory + claims reconciliation + honest test signal.** This release closes the developer-focused subset of the 2026-06 internal audit (`Docs/audit/FINDINGS.md`): **2 Critical** and **6 High** findings across security defaults (SEC-001/002/003), session isolation (INV-007 + ROU-001), truth-in-claims (INV-001/002), and test-suite integrity (TST-001). Multi-tenancy / identity-layer items (INV-010, INV-011, ROU-002, PRI-001, OBS-001, TST-003) are deferred to Phase 2 pending the multi-tenancy product decision.
+> **Security advisory + claims reconciliation + honest test signal + lineage API rewrite.** This release closes the developer-focused subset of the 2026-06 internal audit (`Docs/audit/FINDINGS.md`): **2 Critical** and **6 High** findings across security defaults (SEC-001/002/003), session isolation (INV-007 + ROU-001), truth-in-claims (INV-001/002), and test-suite integrity (TST-001). It also lands the **v0.2.x `LineageStore` API rewrite** that was implicit in TST-001's follow-up. Multi-tenancy / identity-layer items (INV-010, INV-011, ROU-002, PRI-001, OBS-001, TST-003) are deferred to Phase 2 pending the multi-tenancy product decision.
 >
 > The two Critical findings (SEC-001, SEC-002) were exploitable with default settings. Operators running prior versions on a reachable network should review the mitigations below.
 
@@ -23,7 +23,15 @@
 
 ### Testing
 
-- **TST-001 — Un-skipped 9 silently-excluded test suites.** `tests/conftest.py:collect_ignore` had dropped 206 tests at collection time, including integrity, performance, observability, session-summary rendering, framework scenarios, and lineage roundtrips. The original justification (lineage symbols missing) was stale — PR #10 restored the exports but the exclusion list was never cleaned up. The README's "766 tests passing" badge ran against a suite that hid these. `collect_ignore` is now empty (every test file is collected); the residual failures all share one root cause (`LineageStore(db_path=...)` signature drift, scheduled for v0.2.x lineage rewrite) and are individually marked via `_KNOWN_BROKEN_TESTS` with reasons that show up in `pytest -v`. New meta-test `tests/test_no_silent_collect_ignore.py` guards against future silent-exclusion regressions.
+- **TST-001 — Un-skipped 9 silently-excluded test suites.** `tests/conftest.py:collect_ignore` had dropped 206 tests at collection time, including integrity, performance, observability, session-summary rendering, framework scenarios, and lineage roundtrips. The original justification (lineage symbols missing) was stale — PR #10 restored the exports but the exclusion list was never cleaned up. The README's "766 tests passing" badge ran against a suite that hid these. `collect_ignore` is now empty (every test file is collected); the residual failures all share one root cause (`LineageStore(db_path=...)` signature drift, fixed below in the lineage rewrite) and were individually marked via `_KNOWN_BROKEN_TESTS` with reasons that show up in `pytest -v`. New meta-test `tests/test_no_silent_collect_ignore.py` guards against future silent-exclusion regressions.
+
+### Lineage API rewrite
+
+- **`LineageStore` — dual-keyword constructor + planned `LineageRecord` write/query surface.** PR #16 (TST-001) exposed ~30 tests across 8 files that referenced a `LineageStore` API never implemented. That API now exists, additively:
+  - **Constructor** (`__init__`) accepts both `router_dir` (directory, production shape — every `src/` caller hits this) and keyword-only `db_path` (specific SQLite file, test shape). Passing both raises `ValueError`. Production callers are unchanged — none used either keyword pre-rewrite.
+  - **New `lineage` SQLite table** parallel to the existing `routing_decisions` table; mirrors `LineageRecord.to_row()` (22 columns including agent_id / session_id / step_index / parent_session_id / framework). Forward-compatible migration: if a pre-v0.0.2 DB is opened with a lineage table that lacks the agent-session columns, `_init_db` `ALTER`s the table to add them.
+  - **New methods**: `record(LineageRecord)` writes to JSONL + the new table; `inversions(kind=None)` filters by `Inversion` enum; `summary()` aggregates total / up / down / none + inversion_rate; `by_session(session_id, agent_id=None)` returns rows ordered by step_index; `by_framework(slug)` returns rows matching the framework column; `close()` is a no-op symmetry shim.
+  - **Result**: 14 `_KNOWN_BROKEN_TESTS` entries removed from `conftest.py`; the previously-skipped suites now contribute **~350 newly-visible passing tests** to coverage. Total: `tests/test_lineage.py` + `tests/qa/` + `tests/scenarios/` go from 116 → **470 passing** with 0 failures.
 
 ### Breaking changes
 
@@ -42,6 +50,8 @@
 - `tests/test_classification_side_channel_isolation.py` — 12 tests covering session isolation, adversarial forgery (ROU-001), inner-payload mismatch, staleness, and malformed-input resilience.
 - `tests/test_no_silent_collect_ignore.py` — 2 meta-tests asserting `collect_ignore` stays empty and every `_KNOWN_BROKEN_TESTS` entry carries a reason.
 - `chuzom.tools.fs.FsSandboxError` — raised when a path escapes the configured `project_root`.
+- `chuzom.lineage.LineageStore.{record, inversions, summary, by_session, by_framework, close}` — planned-API methods for writing and querying `LineageRecord` instances.
+- `lineage` SQLite table — parallel to `routing_decisions`; mirrors `LineageRecord.to_row()` with forward-compatible migration of pre-v0.0.2 schemas.
 - Security notice docstrings on `chuzom.server.main_sse`, `chuzom.tools.fs.register`, and `chuzom.tools.agoragentic.register` explaining the threat model and the conditions under which the prior behaviour may be reintroduced.
 
 ### Notes for operators

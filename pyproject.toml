@@ -1,6 +1,6 @@
 [project]
 name = "chuzom-router"
-version = "0.1.1"
+version = "0.2.0"
 description = "Lightweight signal-driven LLM router for Claude Code, Cursor, Codex, Gemini CLI, and Codex CLI."
 readme = "README.md"
 license = "MIT"
@@ -95,29 +95,68 @@ build-backend = "hatchling.build"
 packages = ["src/chuzom"]
 
 [tool.hatch.build.targets.sdist]
+# CRITICAL: keep this list tight. Per CLAUDE.md package-distribution safety:
+#   * Internal docs (CLAUDE.md, AUDIT_FINDINGS.txt, audit reports) must NEVER ship.
+#   * Local venvs (.venv*) must NEVER ship — they contain absolute symlinks that
+#     break extraction AND can leak local paths.
+#   * Dev-only dirs (tests/, scripts/, research/, demo/, Docs/, .audit/,
+#     deprecation/) must NEVER ship — end users don't need them.
+#   * IDE / plugin configs (.cursor/, .claude/, .codex-plugin/, etc.) must
+#     NEVER ship.
+# Run `tar tzf dist/*.tar.gz | grep -v /src/` after every build and confirm
+# only the survivors below remain.
 exclude = [
+    # IDE / plugin / agent configs
     ".claude/",
     ".claude-plugin/",
     ".codex-plugin/",
     ".factory-plugin/",
     ".serena/",
     ".github/",
+    ".cursor/",
+    ".cursorignore",
     "agents/",
     "skills/",
+    # Internal docs (NEVER ship per CLAUDE.md)
     "Docs/",
+    "CLAUDE.md",
+    "SECURITY.md",
+    "AUDIT_FINDINGS.txt",
+    "CHUZOM_AUDIT_REPORT.md",
+    "STUCK_PATTERNS_ANALYSIS.md",
+    ".audit/",
+    # Dev-only directories
+    "tests/",
+    "scripts/",
+    "research/",
+    "demo/",
+    "deprecation/",
+    "bench/",
+    "routerarena_submission/",
+    # Local venvs — they contain absolute symlinks and break the build.
+    ".venv/",
+    ".venv-*/",
+    "venv/",
+    "venv-*/",
+    # Build artefacts
+    "dist/",
+    "build/",
+    "*.egg-info/",
+    # Secrets + lockfile + local config
     ".env",
     ".env.example",
     ".env.backup.*",
     "*.bak",
     "*.bak.*",
-    "CLAUDE.md",
-    "SECURITY.md",
     "uv.lock",
     ".mcp.json",
-    "*.png",
-    "*.jpg",
     ".gitignore",
     ".gitattributes",
+    "**/.gitignore",
+    "**/.gitattributes",
+    # Binary assets (logos handled via README only)
+    "*.png",
+    "*.jpg",
 ]
 
 [tool.pytest.ini_options]
