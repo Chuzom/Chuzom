@@ -576,6 +576,14 @@ def main() -> None:
         # the user's terminal directly.
         from chuzom.commands.welcome import cmd_welcome
         sys.exit(cmd_welcome(args[1:]))
+    elif args and args[0] == "dev-refresh":
+        # Full dev refresh: reinstall package, sync hooks, restart MCP
+        # servers — all three layers that need updating after a source
+        # edit. Wraps the three-step pipeline that historically caused
+        # "I reinstalled but my change isn't live" confusion when any
+        # one layer was skipped.
+        from chuzom.commands.dev_refresh import cmd_dev_refresh
+        sys.exit(cmd_dev_refresh(args[1:]))
     elif args and args[0] == "routing":
         from chuzom.commands.routing import cmd_routing
         cmd_routing(args[1:])
