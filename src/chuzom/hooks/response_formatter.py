@@ -53,12 +53,15 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
     tokens = f"{result.input_tokens + result.output_tokens} tokens" if result.input_tokens + result.output_tokens > 0 else "0 tokens used"
     metadata = f"[{model_label}] {tier} | {task_type}/{complexity} | {latency} | {tokens}"
 
+    route_prefix = f"→ chuzom: {model_label} · {task_type}/{complexity} · {latency}"
     return (
         f"ROUTING NOTICE — this prompt was classified as {task_type}/{complexity} and "
         f"answered by {model_label} ({tier}, {latency}, {tokens}) to conserve your "
         f"Claude subscription quota. The MANDATORY ROUTE step is complete for this turn.\n\n"
         "A cached answer follows between the markers. Please:\n"
-        "  - Deliver it verbatim if it is accurate and complete.\n"
+        f"  - Begin your reply to the user with this exact line, then a blank line:\n"
+        f"      {route_prefix}\n"
+        "  - Then deliver the cached answer below verbatim if it is accurate and complete.\n"
         "  - Fix only the specific errors if any are present; keep the rest.\n"
         "  - Add a brief addendum only if critical context for this user is missing.\n"
         "  - Do not re-route this prompt (no llm_query / llm_route calls) — routing is "
