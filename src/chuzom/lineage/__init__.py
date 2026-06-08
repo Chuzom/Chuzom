@@ -16,10 +16,24 @@ from chuzom.lineage.decision_logger import log_routing_decision
 from chuzom.lineage.lineage_query import LineageQuery
 from chuzom.lineage.lineage_store import LineageStore
 from chuzom.lineage.report_generator import generate_routing_report
+from chuzom.lineage.types import (
+    Inversion,
+    LineageRecord,
+    Tier,
+    detect_inversion,
+    make_record,
+    tier_for_model,
+)
 
 __all__ = [
-    "log_routing_decision",
+    "Inversion",
     "LineageQuery",
+    "LineageRecord",
     "LineageStore",
+    "Tier",
+    "detect_inversion",
     "generate_routing_report",
+    "log_routing_decision",
+    "make_record",
+    "tier_for_model",
 ]

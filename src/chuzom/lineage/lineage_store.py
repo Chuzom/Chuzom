@@ -144,6 +144,24 @@ class LineageStore:
 
         return records[-limit:]  # Last N records
 
+    def recent(self, limit: int = 50) -> list[dict]:
+        """Return the N most recent routing decisions as a list of dicts.
+
+        Backward-compatible shim for callers written against the pre-v0.1.x
+        flat-module ``LineageStore.recent(limit)`` API (notably
+        ``chuzom.summary``). Delegates to ``query_jsonl``; the JSONL backend
+        is now the canonical decision store, and rows already carry the
+        timestamp ordering the old SQLite query enforced.
+
+        Schema note: rows returned here use the new ``RoutingDecision``
+        shape (``selected_model`` rather than ``model_chosen``,
+        ``classification`` instead of separate ``task_type``/``complexity``,
+        no ``inversion`` / ``model_tier`` / ``outcome`` fields). Callers
+        that need the old fields should use ``row.get(field, default)``
+        rather than dict access so missing keys degrade gracefully.
+        """
+        return self.query_jsonl(limit=limit)
+
     def query_db(self, sql: str, params: tuple = ()) -> list[dict]:
         """Execute SQL query against SQLite backend.
 
