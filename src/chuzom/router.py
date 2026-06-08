@@ -18,7 +18,9 @@ from typing import Any
 from uuid import uuid4
 
 from chuzom import cost, media, providers
+from chuzom.audit_routing import audit_routing_turn
 from chuzom.budget import get_budget_state, reserve_tokens, release_tokens
+from chuzom.identity import TurnIdentity, current_identity
 from chuzom.state import get_active_agent
 from chuzom.codex_agent import CODEX_MODELS, is_codex_available, run_codex
 from chuzom.contract import build_contract
@@ -1295,6 +1297,7 @@ async def route_and_call(
     ctx: Any | None = None,
     classification_data: dict | None = None,
     caller_context: str | None = None,
+    identity: TurnIdentity | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -1335,6 +1338,16 @@ async def route_and_call(
         caller_context: Optional context string from the MCP tool caller
             (e.g. recent conversation summary). Injected alongside session
             buffer and persistent history into the LLM messages.
+        identity: Tier-1 audit attribution (``user_id`` + ``user_email`` +
+            ``org_id``). When ``None`` (the default), the routing path
+            resolves identity from the operator's env via
+            :func:`chuzom.identity.current_identity` — so existing call
+            sites continue to work unchanged. Every successful routed
+            turn (cached hit included) appends one
+            ``AuditEventType.ROUTING_DECISION`` row attributed to this
+            identity. The write is best-effort: failures are logged at
+            WARNING and never break the turn. Set
+            ``CHUZOM_AUDIT_DISABLED=1`` to skip the append entirely.
 
     Returns:
         An ``LLMResponse`` with the model output, cost, and latency.
@@ -1346,6 +1359,12 @@ async def route_and_call(
     """
     config = get_config()
     correlation_id = uuid4().hex[:8]
+
+    # Tier-1 identity resolution. Done once per turn before any model call
+    # so both the cached-hit and cold-fetched return paths share the same
+    # ``TurnIdentity``. Resolution is env-driven and never raises.
+    if identity is None:
+        identity = current_identity()
 
     # ── Profile resolution (foundational routing rule) ────────────────────────
     profile, c, use_thinking = _resolve_profile(
@@ -1547,6 +1566,16 @@ async def route_and_call(
                         cost_usd=cached.cost_usd,
                         latency_ms=cached.latency_ms,
                     )
+                    audit_routing_turn(
+                        identity=identity,
+                        task_type=str(task_type),
+                        complexity=effective_complexity,
+                        model=cached.model,
+                        provider=cached.provider,
+                        cost_usd=cached.cost_usd,
+                        cached=True,
+                        detail_extras={"correlation_id": correlation_id},
+                    )
                     return cached
             except Exception as _sc_err:
                 log.debug("Semantic cache check failed (continuing): %s", _sc_err)
@@ -1681,6 +1710,16 @@ async def route_and_call(
         )
         async with _budget_lock:
             _pending_spend = max(0.0, _pending_spend - _reservation)
+        audit_routing_turn(
+            identity=identity,
+            task_type=str(task_type),
+            complexity=effective_complexity,
+            model=getattr(response, "model", "unknown") or "unknown",
+            provider=getattr(response, "provider", "unknown") or "unknown",
+            cost_usd=float(getattr(response, "cost_usd", 0.0) or 0.0),
+            cached=False,
+            detail_extras={"correlation_id": correlation_id},
+        )
         return response
 
 
