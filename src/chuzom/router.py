@@ -1480,6 +1480,13 @@ async def route_and_call(
     }
     if identity.agent_id:
         _ctx_payload["agent_id"] = identity.agent_id
+    # T1-M1 (Q-P-2 Phase 3a): tenant_id is bound into log contextvars
+    # when present. In Phase 3a ``current_identity()`` resolves it
+    # from ``CHUZOM_TENANT_ID`` env → ``org_id`` fallback so the field
+    # is always populated in production; the if-guard keeps direct
+    # ``TurnIdentity(...)`` callers (tests, internal helpers) honest.
+    if identity.tenant_id:
+        _ctx_payload["tenant_id"] = identity.tenant_id
     structlog.contextvars.bind_contextvars(**_ctx_payload)
 
     # ── Profile resolution (foundational routing rule) ────────────────────────

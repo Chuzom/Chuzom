@@ -123,9 +123,12 @@ def test_full_resolver_round_trip(
     monkeypatch.setenv(CHUZOM_USER_EMAIL_ENV, "alice@corp.io")
     monkeypatch.setenv(CHUZOM_ORG_ID_ENV, "acme")
     monkeypatch.setenv(CHUZOM_AGENT_ID_ENV, "agno-reviewer")
+    # T1-M1 (Q-P-2 Phase 3a): tenant_id defaults to org_id when
+    # CHUZOM_TENANT_ID is unset.
     assert current_identity() == TurnIdentity(
         user_id="alice",
         user_email="alice@corp.io",
         org_id="acme",
         agent_id="agno-reviewer",
+        tenant_id="acme",
     )

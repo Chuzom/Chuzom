@@ -63,10 +63,13 @@ def test_all_env_vars_set(clean_env, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(CHUZOM_USER_ID_ENV, "alice")
     monkeypatch.setenv(CHUZOM_USER_EMAIL_ENV, "alice@corp.io")
     monkeypatch.setenv(CHUZOM_ORG_ID_ENV, "acme")
+    # T1-M1 (Q-P-2 Phase 3a): tenant_id defaults to org_id when
+    # CHUZOM_TENANT_ID is unset, so the resolver returns "acme" here.
     assert current_identity() == TurnIdentity(
         user_id="alice",
         user_email="alice@corp.io",
         org_id="acme",
+        tenant_id="acme",
     )
 
 
