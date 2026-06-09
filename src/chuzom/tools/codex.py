@@ -7,7 +7,7 @@ from chuzom.codex_agent import is_codex_available, run_codex
 
 async def llm_codex(
     prompt: str,
-    model: str = "gpt-5.4",
+    model: str = "gpt-5.5",
 ) -> str:
     """Route a task to the local Codex desktop agent (OpenAI).
 
@@ -15,11 +15,13 @@ async def llm_codex(
     OpenAI subscription (not Claude quota) — ideal as a fallback when Claude
     limits are tight, or for tasks that benefit from OpenAI's models.
 
-    Available models: gpt-5.4, o3, o4-mini, gpt-4o, gpt-4o-mini
+    Available models on ChatGPT-subscription auth: gpt-5.5, gpt-5.4.
+    API-tier users can pass any model their account supports; see
+    :func:`chuzom.codex_agent._load_codex_models` for env-var extension.
 
     Args:
         prompt: The task or question to send to Codex.
-        model: OpenAI model to use (default: gpt-5.4).
+        model: OpenAI model to use (default: gpt-5.5 — Codex CLI's current default).
     """
     if not is_codex_available():
         return (

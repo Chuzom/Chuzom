@@ -1118,7 +1118,7 @@ async def llm_quota_status() -> str:
 
         # Show model routing priorities
         model_map = {
-            "codex": "gpt-4o / gpt-5.4",
+            "codex": "gpt-5.5 / gpt-5.4",
             "claude": "claude-sonnet / claude-opus",
             "gemini_cli": "gemini-pro",
         }
