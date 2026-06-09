@@ -145,15 +145,27 @@ async def test_soft_breached_persists_after_commit() -> None:
 
 @pytest.mark.asyncio
 async def test_soft_breach_log_is_rising_edge_only(
-    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The structured warning fires once when crossing the threshold,
     not on every subsequent reserve above it. Operators wire this to
     alerting; an N-spam-per-reserve hose would defeat the purpose.
 
-    chuzom uses structlog → stdout, so we capture via capsys rather
-    than the stdlib-logging caplog fixture.
+    We monkeypatch the module-level ``log.warning`` to capture calls
+    directly — this avoids depending on whether structlog routes to
+    stdout or stderr (stdlib StreamHandler defaults to stderr; some
+    pytest configs redirect). The behaviour we care about is the
+    rising-edge dedup, not the transport.
     """
+    from chuzom import budget_envelope as be_mod
+
+    calls: list[str] = []
+
+    def _capture(event: str, **kwargs: object) -> None:
+        calls.append(event)
+
+    monkeypatch.setattr(be_mod.log, "warning", _capture)
+
     m = BudgetEnvelopeManager()
     m.register(_k(), cap_usd=10.0, soft_cap_usd=5.0)
 
@@ -163,8 +175,7 @@ async def test_soft_breach_log_is_rising_edge_only(
     # Reserve again above the threshold — should NOT re-emit.
     await m.try_reserve(_k(), 1.0)  # total 7
 
-    captured = capsys.readouterr().out
-    assert captured.count("budget_soft_cap_breached") == 1
+    assert calls.count("budget_soft_cap_breached") == 1
 
 
 # ── 4. No-soft-cap backwards compatibility ───────────────────────────────────
