@@ -42,7 +42,7 @@ from chuzom.health import get_tracker
 from chuzom.profiles import get_model_chain, provider_from_model
 from chuzom.receipt_store import compute_receipt, store_receipt
 from chuzom.tracing import set_span_attributes, traced_span
-from chuzom.types import BudgetExceededError, Complexity, CostBudgetExceeded, LLMResponse, RoutingProfile, TaskType, WallClockExceeded
+from chuzom.types import BudgetExceededError, Complexity, CostBudgetExceeded, DeadlineExceeded, LLMResponse, RoutingProfile, TaskType, WallClockExceeded
 
 # Foundational routing rule: complexity always determines the profile.
 # This mapping is the single source of truth — every call through route_and_call
@@ -1425,6 +1425,7 @@ async def route_and_call(
     identity: TurnIdentity | None = None,
     max_cost_per_task: float | None = None,
     max_wall_clock_seconds: float | None = None,
+    deadline_monotonic: float | None = None,
     idempotency_key: str | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
@@ -1466,6 +1467,18 @@ async def route_and_call(
         caller_context: Optional context string from the MCP tool caller
             (e.g. recent conversation summary). Injected alongside session
             buffer and persistent history into the LLM messages.
+        deadline_monotonic: Track-3 agent-safety absolute deadline.
+            When set, the routed turn refuses to start if
+            ``time.monotonic()`` is already past this value (raises
+            ``DeadlineExceeded`` before any provider is contacted),
+            and otherwise caps its dispatch wall-clock at
+            ``min(deadline_remaining, max_wall_clock_seconds)`` so a
+            slow provider can't bleed past the workflow deadline.
+            Designed to be set by a parent workflow and passed verbatim
+            into every nested ``route_and_call`` so children inherit
+            the same deadline without each level having to recompute
+            it. Use ``time.monotonic()`` (not ``time.time()``) so the
+            deadline is wall-clock-jump-resistant.
         idempotency_key: Track-3 agent-safety dedupe key. When the same
             key is presented again within the store's TTL window (default
             1 hour, override via ``CHUZOM_IDEMPOTENCY_PATH`` for the
@@ -1579,6 +1592,43 @@ async def route_and_call(
             )
         except Exception as _audit_err:
             log.warning("audit_rbac_warn_write_failed", error=str(_audit_err))
+
+    # T3-M2: deadline pre-flight. If the parent workflow's deadline
+    # has already passed, refuse to start any work — write a
+    # best-effort audit row tagged ``outcome="deadline_exceeded"`` and
+    # raise immediately. Done BEFORE the idempotency lookup so a
+    # cached response isn't accidentally returned for a past-deadline
+    # call. Uses time.monotonic() to be jump-resistant.
+    if deadline_monotonic is not None:
+        import time as _t_dl
+        _dl_now = _t_dl.monotonic()
+        _dl_remaining = deadline_monotonic - _dl_now
+        if _dl_remaining <= 0:
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                    model="(deadline)",
+                    provider="(deadline)",
+                    cost_usd=0.0,
+                    cached=False,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "deadline_exceeded",
+                        "deadline_monotonic": deadline_monotonic,
+                        "over_by_seconds": -_dl_remaining,
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_deadline_write_failed", error=str(_audit_err))
+            raise DeadlineExceeded(
+                f"Routed turn refused: workflow deadline "
+                f"{deadline_monotonic:.3f} (monotonic) already passed "
+                f"by {-_dl_remaining:.3f}s before dispatch.",
+                deadline_monotonic=deadline_monotonic,
+                over_by_seconds=-_dl_remaining,
+            )
 
     # T3-M4: idempotency dedupe BEFORE any reservation or dispatch.
     # When the caller supplies a key, a prior result (if any) is
@@ -1995,10 +2045,34 @@ async def route_and_call(
         # a cleanup branch in one and forget the other.
         import time as _t
         _dispatch_started = _t.monotonic()
+        # T3-M2: compute the effective wall-clock cap from BOTH the
+        # per-call cap AND the workflow deadline. The tighter wins;
+        # ``deadline_is_tighter`` controls which exception we raise on
+        # timeout so callers can distinguish "this single call ran
+        # long" (WallClockExceeded — try a different model) from
+        # "the workflow's deadline is up" (DeadlineExceeded — stop
+        # the workflow).
+        _wc_cap = max_wall_clock_seconds if (max_wall_clock_seconds is not None and max_wall_clock_seconds > 0) else None
+        _dl_remaining_at_dispatch = (
+            (deadline_monotonic - _dispatch_started)
+            if deadline_monotonic is not None else None
+        )
+        if _wc_cap is not None and _dl_remaining_at_dispatch is not None:
+            _effective_timeout = min(_wc_cap, _dl_remaining_at_dispatch)
+            _deadline_is_tighter = _dl_remaining_at_dispatch < _wc_cap
+        elif _wc_cap is not None:
+            _effective_timeout = _wc_cap
+            _deadline_is_tighter = False
+        elif _dl_remaining_at_dispatch is not None:
+            _effective_timeout = _dl_remaining_at_dispatch
+            _deadline_is_tighter = True
+        else:
+            _effective_timeout = None
+            _deadline_is_tighter = False
         try:
-            if max_wall_clock_seconds is not None and max_wall_clock_seconds > 0:
+            if _effective_timeout is not None and _effective_timeout > 0:
                 response = await asyncio.wait_for(
-                    _dispatch_coro, timeout=max_wall_clock_seconds
+                    _dispatch_coro, timeout=_effective_timeout
                 )
             else:
                 response = await _dispatch_coro
@@ -2036,8 +2110,38 @@ async def route_and_call(
             elapsed = _t.monotonic() - _dispatch_started
             async with _budget_lock:
                 _pending_spend = max(0.0, _pending_spend - _reservation)
-            # Best-effort timeout audit row; never let audit failures
-            # mask the timeout we're already raising.
+            # T3-M2: distinguish deadline-driven timeout from
+            # wall-clock-driven timeout. ``_deadline_is_tighter`` was
+            # computed at the start of the try block.
+            if _deadline_is_tighter and deadline_monotonic is not None:
+                try:
+                    audit_routing_turn(
+                        identity=identity,
+                        task_type=str(task_type),
+                        complexity=effective_complexity,
+                        model="(deadline)",
+                        provider="(deadline)",
+                        cost_usd=0.0,
+                        cached=False,
+                        detail_extras={
+                            "correlation_id": correlation_id,
+                            "outcome": "deadline_exceeded",
+                            "deadline_monotonic": deadline_monotonic,
+                            "elapsed_seconds": elapsed,
+                            "over_by_seconds": elapsed - (_dl_remaining_at_dispatch or 0.0),
+                        },
+                    )
+                except Exception as _audit_err:
+                    log.warning("audit_deadline_timeout_write_failed", error=str(_audit_err))
+                raise DeadlineExceeded(
+                    f"Routed turn exceeded workflow deadline "
+                    f"(deadline_monotonic={deadline_monotonic:.3f}, "
+                    f"elapsed ~{elapsed:.3f}s in dispatch) before any "
+                    "model returned.",
+                    deadline_monotonic=deadline_monotonic,
+                    over_by_seconds=elapsed - (_dl_remaining_at_dispatch or 0.0),
+                ) from _to_err
+            # Wall-clock-driven timeout (existing T3-S2 path).
             try:
                 audit_routing_turn(
                     identity=identity,
