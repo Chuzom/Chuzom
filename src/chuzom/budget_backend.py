@@ -100,6 +100,76 @@ class BudgetBackend(Protocol):
     def tier_state(self, key: BudgetKey) -> dict[str, float | bool | None]: ...
 
 
+# ── T2-L2 forecast tier ────────────────────────────────────────────────────
+
+
+class ForecastedBudgetBreach(Exception):
+    """Raised when the forecast tier refuses a reservation because the
+    rolling burn rate projects the envelope hitting its cap inside the
+    configured horizon — even though the immediate try_reserve would
+    succeed against the hard cap.
+
+    Carries diagnostic fields so the caller can surface why the call
+    was refused without the operator having to read structured logs.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        key: "BudgetKey",
+        burn_rate_usd_per_sec: float,
+        seconds_to_breach: float,
+        horizon_seconds: float,
+    ) -> None:
+        super().__init__(message)
+        self.key = key
+        self.burn_rate_usd_per_sec = burn_rate_usd_per_sec
+        self.seconds_to_breach = seconds_to_breach
+        self.horizon_seconds = horizon_seconds
+
+
+_FORECAST_MODES = frozenset({"off", "warn", "strict"})
+_FORECAST_MODE_DEFAULT = "off"  # opt-in (matches the session-established three-mode pattern)
+_FORECAST_WINDOW_DEFAULT_SEC = 60.0
+_FORECAST_HORIZON_DEFAULT_SEC = 300.0
+
+
+def _forecast_mode() -> str:
+    """Read ``CHUZOM_BUDGET_FORECAST_MODE`` env, normalise, default off.
+
+    Invalid values fall back to ``off`` (fail-open). Parity with the
+    policy / classification three-mode gate established this session.
+    """
+    raw = os.environ.get("CHUZOM_BUDGET_FORECAST_MODE", "")
+    if not raw:
+        return _FORECAST_MODE_DEFAULT
+    normalised = raw.strip().lower()
+    if normalised not in _FORECAST_MODES:
+        return _FORECAST_MODE_DEFAULT
+    return normalised
+
+
+def _forecast_window_seconds() -> float:
+    try:
+        return float(
+            os.environ.get("CHUZOM_BUDGET_FORECAST_WINDOW_SECONDS")
+            or _FORECAST_WINDOW_DEFAULT_SEC
+        )
+    except ValueError:
+        return _FORECAST_WINDOW_DEFAULT_SEC
+
+
+def _forecast_horizon_seconds() -> float:
+    try:
+        return float(
+            os.environ.get("CHUZOM_BUDGET_FORECAST_HORIZON_SECONDS")
+            or _FORECAST_HORIZON_DEFAULT_SEC
+        )
+    except ValueError:
+        return _FORECAST_HORIZON_DEFAULT_SEC
+
+
 # ── SQLite backend ─────────────────────────────────────────────────────────
 
 
@@ -113,6 +183,14 @@ CREATE TABLE IF NOT EXISTS envelopes (
     pending_usd REAL NOT NULL DEFAULT 0.0,
     soft_breached INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS budget_spend_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key_blob TEXT NOT NULL,
+    amount_usd REAL NOT NULL,
+    committed_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_spend_events_key_time
+    ON budget_spend_events(key_blob, committed_at DESC);
 """
 
 _BUSY_TIMEOUT_MS = 5000  # 5s — generous enough for contention, short enough to surface deadlocks
@@ -308,6 +386,17 @@ class SqliteBudgetBackend:
                 if projected > row.cap_usd:
                     self._conn.execute("COMMIT")
                     return False
+            # T2-L2 forecast gate. Applied AFTER the hard-cap check so the
+            # forecast tier is a strictly additive refusal — it never
+            # accepts a reservation the hard cap would reject. Runs
+            # inside the transaction so the burn-rate read is consistent
+            # with the chain state we just inspected.
+            forecast_mode = _forecast_mode()
+            forecast_breach: ForecastedBudgetBreach | None = None
+            if forecast_mode != "off":
+                forecast_breach = self._check_forecast_inside_tx(
+                    chain, cost_usd
+                )
             for env_key, _ in chain:
                 self._conn.execute(
                     "UPDATE envelopes SET pending_usd = pending_usd + ? "
@@ -320,9 +409,26 @@ class SqliteBudgetBackend:
             # the commit is durable.
             for env_key, _ in chain:
                 self._maybe_flip_soft_state(env_key)
+            # Forecast handling AFTER commit: in strict mode, raise; in
+            # warn mode, log + proceed. The pending reservation stands
+            # in warn mode so callers see consistent accounting.
+            if forecast_breach is not None:
+                if forecast_mode == "strict":
+                    raise forecast_breach
+                log.warning(
+                    "budget_forecast_warn",
+                    key=str(forecast_breach.key),
+                    burn_rate_usd_per_sec=forecast_breach.burn_rate_usd_per_sec,
+                    seconds_to_breach=forecast_breach.seconds_to_breach,
+                    horizon_seconds=forecast_breach.horizon_seconds,
+                )
             return True
         except Exception:
-            self._conn.execute("ROLLBACK")
+            try:
+                self._conn.execute("ROLLBACK")
+            except sqlite3.OperationalError:
+                # Already committed (forecast strict raise after COMMIT).
+                pass
             raise
 
     async def release(self, key: BudgetKey, cost_usd: float) -> None:
@@ -358,6 +464,7 @@ class SqliteBudgetBackend:
         self._begin_immediate_with_retry()
         try:
             chain = self._chain_rows(key)
+            now = time.time()
             for env_key, _ in chain:
                 self._conn.execute(
                     "UPDATE envelopes SET "
@@ -366,6 +473,18 @@ class SqliteBudgetBackend:
                     "WHERE key_blob = ?",
                     (cost_usd, cost_usd, _serialise_key(env_key)),
                 )
+                # T2-L2: record spend event under the same transaction so
+                # the burn-rate query observes consistent committed totals.
+                # Only the directly-committed key emits an event; parent
+                # envelopes' burn rate is derived by summing their own
+                # committed events from descendants when needed (deferred).
+                if env_key == key:
+                    self._conn.execute(
+                        "INSERT INTO budget_spend_events "
+                        "(key_blob, amount_usd, committed_at) "
+                        "VALUES (?, ?, ?)",
+                        (_serialise_key(env_key), cost_usd, now),
+                    )
             self._conn.execute("COMMIT")
             for env_key, _ in chain:
                 self._maybe_flip_soft_state(env_key)
@@ -388,6 +507,80 @@ class SqliteBudgetBackend:
                     time.sleep(0.005)
                     continue
                 raise
+
+    # ── T2-L2: forecast + spend-event helpers ─────────────────────────────
+
+    def get_burn_rate_usd_per_second(
+        self, key: BudgetKey, window_seconds: float
+    ) -> float:
+        """Rolling burn rate for ``key``: sum of spend events in the
+        last ``window_seconds``, divided by the window.
+
+        Synchronous snapshot. Returns ``0.0`` when no events fall
+        inside the window — a fresh envelope or a long-idle one both
+        produce a benign zero.
+        """
+        if window_seconds <= 0:
+            return 0.0
+        since = time.time() - window_seconds
+        cur = self._conn.execute(
+            "SELECT COALESCE(SUM(amount_usd), 0.0) FROM budget_spend_events "
+            "WHERE key_blob = ? AND committed_at >= ?",
+            (_serialise_key(key), since),
+        )
+        total = float(cur.fetchone()[0])
+        return total / window_seconds
+
+    def _check_forecast_inside_tx(
+        self,
+        chain: list[tuple[BudgetKey, _EnvelopeRow]],
+        cost_usd: float,
+    ) -> "ForecastedBudgetBreach | None":
+        """Inspect the leaf envelope's burn rate. If the projected
+        time-to-breach is inside the configured horizon, return a
+        :class:`ForecastedBudgetBreach` describing why; otherwise None.
+
+        Only the leaf key is forecast-checked in the MVP — parent-chain
+        burn-rate aggregation is deferred (parents are already protected
+        by their own hard caps, and the leaf's projection is the
+        most-actionable signal in practice).
+        """
+        window = _forecast_window_seconds()
+        horizon = _forecast_horizon_seconds()
+        leaf_key, leaf_row = chain[0]
+        burn_rate = self.get_burn_rate_usd_per_second(leaf_key, window)
+        if burn_rate <= 0:
+            return None
+        remaining = leaf_row.cap_usd - leaf_row.consumed_usd - leaf_row.pending_usd
+        # The hard-cap check already accepted the cost, so the new
+        # pending will be (pending + cost_usd); future remaining is
+        # (remaining - cost_usd) — that's what the burn rate will run
+        # down. We're optimistic about the immediate accommodation;
+        # the question is the trajectory after this call lands.
+        future_remaining = max(0.0, remaining - cost_usd)
+        seconds_to_breach = future_remaining / burn_rate
+        if seconds_to_breach >= horizon:
+            return None
+        return ForecastedBudgetBreach(
+            f"Forecasted budget breach in {seconds_to_breach:.0f}s "
+            f"at burn rate ${burn_rate:.4f}/s (horizon {horizon:.0f}s).",
+            key=leaf_key,
+            burn_rate_usd_per_sec=burn_rate,
+            seconds_to_breach=seconds_to_breach,
+            horizon_seconds=horizon,
+        )
+
+    def _record_spend_event_for_tests(
+        self, key: BudgetKey, amount_usd: float, committed_at: float
+    ) -> None:
+        """Inject a spend event directly. Tests use this to set up burn-rate
+        scenarios without spinning wall-clock. Production code never
+        calls this — use ``commit`` to record real spend."""
+        self._conn.execute(
+            "INSERT INTO budget_spend_events "
+            "(key_blob, amount_usd, committed_at) VALUES (?, ?, ?)",
+            (_serialise_key(key), float(amount_usd), float(committed_at)),
+        )
 
     # ── Soft tier ─────────────────────────────────────────────────────────
 
