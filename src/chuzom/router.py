@@ -14,10 +14,13 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import replace
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import uuid4
 
 from chuzom import cost, media, providers
+
+if TYPE_CHECKING:
+    from chuzom.agents.base import AgentRoutingPolicy
 from chuzom.audit_routing import audit_routing_turn
 from chuzom.budget import get_budget_state, reserve_tokens, release_tokens
 from chuzom.identity import TurnIdentity, current_identity
@@ -72,6 +75,90 @@ _COMPLEXITY_TO_PROFILE: dict[Complexity, RoutingProfile] = {
 }
 
 log = get_logger("chuzom.router")
+
+
+# ── T3-XL1: agent-aware routing policy helpers ─────────────────────────────
+# Mode env follows the three-mode pattern used by RBAC + classification
+# allow-list: off (no-op) / warn (log non-preferred picks) / strict
+# (refuse non-preferred candidates, raise PermissionDenied if exhausted).
+# Default is warn so a fresh deployment surfaces policy effects without
+# breaking routing — operators flip to strict when ready to enforce.
+
+_AGENT_POLICY_MODES = frozenset({"off", "warn", "strict"})
+_AGENT_POLICY_MODE_DEFAULT = "warn"
+
+
+def _policy_mode() -> str:
+    """Read ``CHUZOM_AGENT_POLICY_MODE`` env, normalise, default to warn.
+
+    Invalid values fall back to ``warn`` (fail-open). A typo'd env var
+    must never break routing.
+    """
+    raw = os.environ.get("CHUZOM_AGENT_POLICY_MODE", "")
+    if not raw:
+        return _AGENT_POLICY_MODE_DEFAULT
+    normalised = raw.strip().lower()
+    if normalised not in _AGENT_POLICY_MODES:
+        return _AGENT_POLICY_MODE_DEFAULT
+    return normalised
+
+
+def _apply_routing_policy(
+    models_to_try: list[str],
+    policy: "AgentRoutingPolicy | None",
+    classification: str | None,
+) -> list[str]:
+    """Reorder candidates so policy preferences float to the head.
+
+    Ordering precedence (highest priority first):
+
+    1. **Classification-keyed model preferences** —
+       ``policy.preferred_models_by_classification[classification]``
+       lists exact model IDs in priority order. Matching models are
+       lifted to the head, in the policy's order.
+    2. **Preferred providers** — models whose provider is in
+       ``policy.preferred_providers`` follow next, grouped by provider
+       in the policy's provider order. Within a provider group, the
+       original chain order is preserved (stable).
+    3. **Everything else** — non-preferred models keep their original
+       chain order at the tail.
+
+    No-ops when policy is ``None``, has no preferences, or
+    ``_policy_mode() == "off"``. Pure function — does not mutate the
+    input list.
+    """
+    if policy is None or _policy_mode() == "off":
+        return models_to_try
+    if not policy.preferred_providers and not policy.preferred_models_by_classification:
+        return models_to_try
+
+    # 1. Classification-keyed model preferences
+    classification_models: tuple[str, ...] = ()
+    if classification is not None:
+        classification_models = policy.preferred_models_by_classification.get(
+            classification, ()
+        )
+
+    head: list[str] = []
+    seen: set[str] = set()
+    for preferred in classification_models:
+        if preferred in models_to_try and preferred not in seen:
+            head.append(preferred)
+            seen.add(preferred)
+
+    # 2. Preferred-provider group
+    if policy.preferred_providers:
+        for provider in policy.preferred_providers:
+            for model in models_to_try:
+                if model in seen:
+                    continue
+                if provider_from_model(model) == provider:
+                    head.append(model)
+                    seen.add(model)
+
+    # 3. Tail — everything else, original order
+    tail = [m for m in models_to_try if m not in seen]
+    return head + tail
 
 
 async def _build_and_filter_chain(
@@ -730,6 +817,7 @@ async def _dispatch_model_loop(
     effective_complexity: str,
     max_cost_per_task: float | None = None,
     identity: TurnIdentity | None = None,
+    routing_policy: "AgentRoutingPolicy | None" = None,
 ) -> LLMResponse:
     """Execute the main model dispatch loop with primary + emergency fallback chains.
 
@@ -781,6 +869,12 @@ async def _dispatch_model_loop(
     # rbac-skipped, raise PermissionDenied with the offending model so
     # the caller knows to broaden the allow-list or change the chain.
     rbac_skipped: list[tuple[str, str]] = []  # (model, why)
+    # T3-XL1: track candidates skipped because the agent's routing policy
+    # refused them (non-preferred provider under strict mode, or per-turn
+    # cost cap breach). Same final-raise contract as rbac_skipped — if
+    # nothing in the chain was attempted, raise PermissionDenied.
+    policy_skipped: list[tuple[str, str]] = []  # (model, why)
+    _policy_active_mode = _policy_mode() if routing_policy is not None else "off"
 
     for attempt, model in enumerate(models_to_try, start=1):
         provider = provider_from_model(model)
@@ -889,6 +983,62 @@ async def _dispatch_model_loop(
                 )
                 cost_skipped.append((model, projected))
                 continue
+
+        # T3-XL1: agent-aware routing policy gates. Two checks, both
+        # mode-gated by CHUZOM_AGENT_POLICY_MODE (off | warn | strict):
+        #   * provider preference — strict skips non-preferred candidates
+        #     entirely; warn logs but proceeds.
+        #   * per-turn cost cap   — always skips candidates whose projected
+        #     cost would breach the policy's cap (safety contract, not a
+        #     preference; only the master "off" switch can disable it).
+        # Off mode short-circuits all policy logic above and below.
+        if routing_policy is not None and _policy_active_mode != "off":
+            if routing_policy.preferred_providers:
+                if provider not in routing_policy.preferred_providers:
+                    if _policy_active_mode == "strict":
+                        route_log.info(
+                            "agent_policy_provider_skip",
+                            correlation_id=correlation_id,
+                            provider=provider,
+                            model=model,
+                            preferred=list(routing_policy.preferred_providers),
+                        )
+                        policy_skipped.append(
+                            (model, f"policy:provider:{provider}")
+                        )
+                        continue
+                    else:  # warn — log, proceed
+                        route_log.warning(
+                            "agent_policy_provider_warn",
+                            correlation_id=correlation_id,
+                            provider=provider,
+                            model=model,
+                            preferred=list(routing_policy.preferred_providers),
+                        )
+            if routing_policy.max_cost_per_turn_usd is not None:
+                try:
+                    from chuzom.session_spend import _estimate_cost as _est_turn
+                    _est_in_turn = max(1, len(prompt) // 4)
+                    _est_out_turn = (
+                        max_tokens
+                        if isinstance(max_tokens, int) and max_tokens > 0
+                        else 500
+                    )
+                    _turn_projected = _est_turn(model, _est_in_turn, _est_out_turn)
+                except Exception:
+                    _turn_projected = float("inf")
+                if _turn_projected > routing_policy.max_cost_per_turn_usd:
+                    route_log.info(
+                        "agent_policy_turn_cost_skip",
+                        correlation_id=correlation_id,
+                        model=model,
+                        projected_cost=_turn_projected,
+                        cap=routing_policy.max_cost_per_turn_usd,
+                    )
+                    policy_skipped.append(
+                        (model, f"policy:turn_cost:{_turn_projected:.4f}")
+                    )
+                    continue
 
         # Quality feedback: skip models with poor track record for this task pattern
         try:
@@ -1419,14 +1569,14 @@ async def _dispatch_model_loop(
             cap=max_cost_per_task,
         )
 
-    # T1-M3: if the chain was exhausted because every candidate was
-    # RBAC-skipped (identity's allow-list refused all providers /
-    # models), raise PermissionDenied with the first offending pair so
-    # the caller can broaden the policy or change the chain. Precedes
-    # the generic RuntimeError for the same reason as the cost-cap raise.
-    if rbac_skipped and not chain_attempts and not cost_skipped:
+    # T1-M3 + T3-XL1: if the chain was exhausted because every candidate
+    # was refused by either the identity allow-list (RBAC) or the agent
+    # routing policy, raise PermissionDenied with the first offending
+    # pair so the caller can broaden the policy or change the chain.
+    # Precedes the generic RuntimeError for the same reason as the
+    # cost-cap raise.
+    if (rbac_skipped or policy_skipped) and not chain_attempts and not cost_skipped:
         from chuzom.enterprise.rbac import Permission, PermissionDenied
-        first_model, first_why = rbac_skipped[0]
         raise PermissionDenied(identity, Permission.ROUTE_PROMPT)
 
     # Build diagnostic chain summary showing every model that was tried
@@ -1459,6 +1609,7 @@ async def route_and_call(
     max_wall_clock_seconds: float | None = None,
     deadline_monotonic: float | None = None,
     idempotency_key: str | None = None,
+    agent_session_id: str | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -2046,6 +2197,33 @@ async def route_and_call(
             except Exception as _prep_err:
                 log.debug("Context preparation failed (continuing without): %s", _prep_err)
 
+        # T3-XL1: resolve the effective agent routing policy and apply it.
+        # Lazy imports keep the top-level cost of router.py unchanged and
+        # avoid a circular dependency with chuzom.tools.agents (which
+        # imports router transitively via session_spend bookkeeping).
+        _routing_policy = None
+        if agent_session_id is not None:
+            try:
+                from chuzom.tools.agents import get_session_store
+                _routing_policy = get_session_store().effective_policy(
+                    agent_session_id
+                )
+            except Exception as _pol_err:
+                # Policy lookup is best-effort: a missing session, schema
+                # mismatch, or store error must never break routing.
+                # Fail-open with a log line so operators can investigate.
+                route_log.warning(
+                    "agent_policy_lookup_failed",
+                    correlation_id=correlation_id,
+                    agent_session_id=agent_session_id,
+                    error=str(_pol_err),
+                )
+                _routing_policy = None
+        if _routing_policy is not None and _policy_mode() != "off":
+            models_to_try = _apply_routing_policy(
+                models_to_try, _routing_policy, effective_complexity
+            )
+
         # Dispatch through the extracted model loop, which handles both primary
         # and emergency BUDGET fallback chains atomically.
         # T3-S2: optional wall-clock cap. ``asyncio.wait_for`` is used (not
@@ -2075,6 +2253,7 @@ async def route_and_call(
             max_cost_per_task=max_cost_per_task,
             effective_complexity=effective_complexity,
             identity=identity,
+            routing_policy=_routing_policy,
         )
         # T3-S2 + T3-M1: combined timeout + cancel handling. Both failure
         # modes share the same cleanup contract — release the budget
