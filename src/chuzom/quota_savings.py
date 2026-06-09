@@ -228,4 +228,84 @@ def compute_quota_savings(
     )
 
 
-__all__ = ["QuotaSavingsSnapshot", "compute_quota_savings"]
+# ── Per-call provider hint (subscription vs API tier) ────────────────────
+
+
+_SUBSCRIPTION_PROVIDERS = frozenset({"anthropic", "cc"})
+_API_PROVIDERS = frozenset({"openai", "gemini", "codex", "groq", "deepseek"})
+_FREE_LOCAL_PROVIDERS = frozenset({"ollama", "vllm", "lm_studio"})
+
+
+def _sum_cost_usd_since_for_provider(
+    db_path: Path, since: datetime, provider: str
+) -> float:
+    """Sum ``cost_usd`` from the ``usage`` table for one provider since
+    ``since``. Best-effort: missing DB or schema → 0.0."""
+    if not db_path.exists():
+        return 0.0
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            since_iso = since.strftime("%Y-%m-%d %H:%M:%S")
+            cur = conn.execute(
+                "SELECT COALESCE(SUM(cost_usd), 0.0) FROM usage "
+                "WHERE provider = ? AND timestamp >= ?",
+                (provider, since_iso),
+            )
+            row = cur.fetchone()
+            return float(row[0]) if row and row[0] is not None else 0.0
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:
+        return 0.0
+    except Exception:
+        return 0.0
+
+
+def provider_route_hint(
+    provider: str,
+    *,
+    db_path: Path | None = None,
+    now: datetime | None = None,
+) -> str | None:
+    """Return a short routing-notice suffix specific to ``provider``.
+
+    * **Subscription tier** (``anthropic`` / ``cc``) — show how much of
+      the Claude subscription quota is still available, in the same
+      weekly + 5h denomination the user sees on claude.ai. Reads from
+      the cached usage snapshot.
+    * **API tier** (``gemini``, ``openai``, ``codex``, …) — show the
+      cumulative cost in the rolling last 30 days for THIS provider, so
+      the user can see whether the routing they just got was
+      pulling from a budget that is starting to bite.
+    * **Free / local** (``ollama``, ``vllm``, ``lm_studio``) — return
+      ``None``; no metric makes sense for a zero-cost local call.
+
+    Best-effort: returns ``None`` on any data gap rather than raising.
+    The routing notice must never break because a metric isn't ready.
+    """
+    if provider in _FREE_LOCAL_PROVIDERS:
+        return None
+    if provider in _SUBSCRIPTION_PROVIDERS:
+        from chuzom import state as _state
+        cached = _state.get_last_usage()
+        if cached is None:
+            return None
+        weekly_left = max(0.0, 100.0 - cached.weekly_pct * 100.0)
+        session_left = max(0.0, 100.0 - cached.session_pct * 100.0)
+        return f"wk left {weekly_left:.0f}% · 5h left {session_left:.0f}%"
+    if provider in _API_PROVIDERS:
+        db = db_path or _default_db_path()
+        since = (now or datetime.now(timezone.utc)) - timedelta(days=30)
+        total = _sum_cost_usd_since_for_provider(db, since, provider)
+        if total <= 0.0:
+            return None
+        return f"30d on {provider}: ${total:.2f}"
+    return None
+
+
+__all__ = [
+    "QuotaSavingsSnapshot",
+    "compute_quota_savings",
+    "provider_route_hint",
+]
