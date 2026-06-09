@@ -354,3 +354,219 @@ def test_route_prefix_omits_savings_when_not_meaningful(
         ctx = format_echo_context(result, "analyze", "moderate")
     # No DB → 0 savings → routing notice has no `saved … pp` suffix.
     assert "saved" not in ctx.split("🎯 chuzom →")[1].split("\n")[0]
+
+
+# ── 7. provider_route_hint — subscription vs API tier ─────────────────────
+
+
+def _make_usage_db_with_costs(
+    db_path: Path, rows: list[tuple[str, str, float]]
+) -> None:
+    """Create the usage table and populate (timestamp, provider, cost_usd)."""
+    import sqlite3 as _sql
+    conn = _sql.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            CREATE TABLE usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                model TEXT NOT NULL DEFAULT 'x',
+                provider TEXT NOT NULL,
+                task_type TEXT NOT NULL DEFAULT 'x',
+                profile TEXT NOT NULL DEFAULT 'x',
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                cost_usd REAL NOT NULL,
+                latency_ms REAL NOT NULL DEFAULT 0,
+                success INTEGER NOT NULL DEFAULT 1,
+                saved_usd REAL DEFAULT 0.0
+            )
+            """
+        )
+        for ts, prov, cost in rows:
+            conn.execute(
+                "INSERT INTO usage (timestamp, provider, cost_usd) VALUES (?, ?, ?)",
+                (ts, prov, cost),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_provider_hint_for_subscription_shows_remaining_quota() -> None:
+    from chuzom.quota_savings import provider_route_hint
+    with patch(
+        "chuzom.state.get_last_usage",
+        return_value=_FakeCachedUsage(weekly=0.89, session=0.01),
+    ):
+        hint = provider_route_hint("anthropic")
+    assert hint is not None
+    assert "11%" in hint
+    assert "99%" in hint
+    assert "wk left" in hint
+    assert "5h left" in hint
+
+
+def test_provider_hint_for_cc_alias_also_works() -> None:
+    """'cc' is the Claude Code subscription provider — same as anthropic."""
+    from chuzom.quota_savings import provider_route_hint
+    with patch(
+        "chuzom.state.get_last_usage",
+        return_value=_FakeCachedUsage(weekly=0.50, session=0.10),
+    ):
+        hint = provider_route_hint("cc")
+    assert hint is not None
+    assert "50%" in hint
+
+
+def test_provider_hint_for_subscription_without_cached_usage_returns_none() -> None:
+    from chuzom.quota_savings import provider_route_hint
+    with patch("chuzom.state.get_last_usage", return_value=None):
+        assert provider_route_hint("anthropic") is None
+
+
+def test_provider_hint_for_api_shows_30d_spend(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from chuzom.quota_savings import provider_route_hint
+    db = tmp_path / "usage.db"
+    now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
+    inside = (now - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+    outside = (now - timedelta(days=45)).strftime("%Y-%m-%d %H:%M:%S")
+    _make_usage_db_with_costs(
+        db,
+        [
+            (inside, "gemini", 0.50),
+            (inside, "gemini", 0.73),
+            (inside, "openai", 99.0),  # different provider — must not contribute
+            (outside, "gemini", 88.0),  # outside window — must not contribute
+        ],
+    )
+    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db))
+    hint = provider_route_hint("gemini", now=now)
+    assert hint is not None
+    assert "30d on gemini" in hint
+    assert "$1.23" in hint
+
+
+def test_provider_hint_for_codex_uses_api_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Per user steering: codex is treated as API tier in this metric."""
+    from chuzom.quota_savings import provider_route_hint
+    db = tmp_path / "usage.db"
+    now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
+    inside = (now - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
+    _make_usage_db_with_costs(db, [(inside, "codex", 0.0)])
+    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db))
+    # Codex usage at $0.00 (subscription tier in practice) → no hint
+    assert provider_route_hint("codex", now=now) is None
+    # With non-zero codex spend, the hint surfaces
+    db2 = tmp_path / "usage2.db"
+    _make_usage_db_with_costs(db2, [(inside, "codex", 0.42)])
+    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db2))
+    hint = provider_route_hint("codex", now=now)
+    assert hint is not None
+    assert "30d on codex" in hint
+    assert "$0.42" in hint
+
+
+def test_provider_hint_for_ollama_returns_none() -> None:
+    """Free/local providers carry no metric."""
+    from chuzom.quota_savings import provider_route_hint
+    assert provider_route_hint("ollama") is None
+
+
+def test_provider_hint_for_unknown_provider_returns_none() -> None:
+    from chuzom.quota_savings import provider_route_hint
+    assert provider_route_hint("some-future-provider") is None
+
+
+def test_provider_hint_for_api_with_zero_spend_returns_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No spend yet → no metric to show (avoid '30d on gemini: $0.00' noise)."""
+    from chuzom.quota_savings import provider_route_hint
+    db = tmp_path / "usage.db"
+    _make_usage_db_with_costs(db, [])
+    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db))
+    assert provider_route_hint("gemini") is None
+
+
+def test_route_prefix_appends_subscription_hint_for_anthropic_routes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from chuzom.hooks.response_formatter import format_echo_context
+    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", "/nonexistent/usage.db")
+    result = SimpleNamespace(
+        model=SimpleNamespace(provider="anthropic", model="claude-haiku-4-5"),
+        latency_ms=300,
+        input_tokens=10,
+        output_tokens=20,
+        text="OK",
+    )
+    with patch(
+        "chuzom.state.get_last_usage",
+        return_value=_FakeCachedUsage(weekly=0.89, session=0.01),
+    ):
+        ctx = format_echo_context(result, "query", "simple")
+    prefix_line = next(
+        line for line in ctx.splitlines() if "🎯 chuzom" in line
+    )
+    assert "wk left" in prefix_line
+    assert "5h left" in prefix_line
+
+
+def test_route_prefix_appends_api_hint_for_gemini_routes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+    from chuzom.hooks.response_formatter import format_echo_context
+    db = tmp_path / "usage.db"
+    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    _make_usage_db_with_costs(db, [(now_ts, "gemini", 1.23)])
+    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db))
+    result = SimpleNamespace(
+        model=SimpleNamespace(provider="gemini", model="gemini-2.5-flash"),
+        latency_ms=850,
+        input_tokens=10,
+        output_tokens=20,
+        text="OK",
+    )
+    with patch(
+        "chuzom.state.get_last_usage",
+        return_value=_FakeCachedUsage(weekly=0.40, session=0.01),
+    ):
+        ctx = format_echo_context(result, "analyze", "moderate")
+    prefix_line = next(
+        line for line in ctx.splitlines() if "🎯 chuzom" in line
+    )
+    assert "30d on gemini" in prefix_line
+    assert "$1.23" in prefix_line
+
+
+def test_route_prefix_omits_hint_for_ollama_routes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from chuzom.hooks.response_formatter import format_echo_context
+    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", "/nonexistent/usage.db")
+    result = SimpleNamespace(
+        model=SimpleNamespace(provider="ollama", model="llama3"),
+        latency_ms=120,
+        input_tokens=10,
+        output_tokens=20,
+        text="OK",
+    )
+    with patch(
+        "chuzom.state.get_last_usage",
+        return_value=_FakeCachedUsage(weekly=0.40, session=0.01),
+    ):
+        ctx = format_echo_context(result, "query", "simple")
+    prefix_line = next(
+        line for line in ctx.splitlines() if "🎯 chuzom" in line
+    )
+    assert "wk left" not in prefix_line
+    assert "30d on" not in prefix_line
