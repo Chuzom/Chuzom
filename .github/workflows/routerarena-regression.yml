@@ -25,21 +25,21 @@
 
 name: routerarena-regression
 
+# Auto-triggers (pull_request + push) intentionally disabled until a
+# RouterArena submission is on the table. The workflow stays in-tree
+# because it is the audit's Part 7 rec #6 evidence and we want the
+# infra to be one PR away from re-enable. Reactivation path:
+#
+#   1. Set the OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY
+#      repository secrets (otherwise the benchmark step skips
+#      anyway via the in-job guard further down).
+#   2. Re-add `pull_request:` and `push:` blocks below alongside the
+#      existing `workflow_dispatch:` trigger.
+#
+# Until then, the workflow is reachable only by manual dispatch
+# (Actions tab → "routerarena-regression" → "Run workflow"), so
+# nothing runs implicitly and no artifact is produced on every push.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "src/chuzom/router.py"
-      - "src/chuzom/classifier.py"
-      - "src/chuzom/profiles.py"
-      - "src/chuzom/providers.py"
-      - "src/chuzom/policies/**"
-      - "src/chuzom/hooks/auto-route.py"
-      - "scripts/routerarena_prep.py"
-      - "scripts/routerarena_submit.py"
-      - ".github/workflows/routerarena-regression.yml"
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       limit:
