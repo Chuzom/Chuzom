@@ -54,6 +54,18 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
     metadata = f"[{model_label}] {tier} | {task_type}/{complexity} | {latency} | {tokens}"
 
     route_prefix = f"🎯 chuzom → {model_label} · {task_type}/{complexity} · {latency}"
+    # Quota-saved metric: append the cumulative weekly + 5h counterfactual
+    # in subscription-percentage-point terms when the savings are
+    # non-trivial (≥0.5 pp). Computed best-effort; any failure is silent
+    # so the routing notice never breaks because the metric DB is
+    # unreachable.
+    try:
+        from chuzom.quota_savings import compute_quota_savings
+        _snap = compute_quota_savings()
+        if _snap is not None and _snap.is_meaningful():
+            route_prefix = f"{route_prefix} · {_snap.short_form()}"
+    except Exception:
+        pass
     return (
         f"ROUTING NOTICE — this prompt was classified as {task_type}/{complexity} and "
         f"answered by {model_label} ({tier}, {latency}, {tokens}) to conserve your "
