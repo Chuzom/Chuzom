@@ -19,7 +19,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/chuzom-router/"><img src="https://img.shields.io/badge/pypi-chuzom--router-4F46E5?style=flat-square" alt="PyPI"></a>
-  <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/tests-766_passing-10B981?style=flat-square" alt="Tests"></a>
+  <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/tests-3667_passing-10B981?style=flat-square" alt="Tests"></a>
   <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-10B981?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/SOC%202-mappable-8B5CF6?style=flat-square" alt="SOC 2">
@@ -93,16 +93,18 @@ The developer's workflow doesn't change. The model choice, the audit trail, and 
 
 - **Cost reduction** of 35–80% on routine work via tier-based routing
 - **Tamper-evident audit log** with SHA-256 hash chain — every routing decision, quota breach, policy change captured
-- **Per-user + per-team quotas** with pre-emptive refusal (no spend on rejected calls)
+- **Distributed-safe per-identity budgets** — atomic check-then-charge (single-instance SQLite + multi-instance Postgres backends share one `BudgetBackend` Protocol); pre-emptive refusal so no money is spent on calls the cap would reject
+- **Forecast / predictive budget tier** — refuses reservations BEFORE the hard cap is hit when the rolling burn rate projects exhaustion inside the horizon (opt-in via `CHUZOM_BUDGET_FORECAST_MODE`)
+- **Agent-aware routing policy** — per-session `AgentRoutingPolicy` biases candidate ordering by preferred provider, classification-keyed model preferences, and a per-turn cost cap distinct from the session budget. Inherits through the parent-session chain so a sub-agent picks up its spawner's constraints unless it overrides them
 - **PII / secret detection** that forces local-only routing when prompts contain credentials
 - **OpenTelemetry export** — spans + metrics + logs to Honeycomb, Datadog, Grafana, Jaeger
 - **Multi-CLI host support** for Claude Code, Cursor, Codex CLI, Gemini CLI, Claude Desktop, and 9 more
-- **Agent framework adapters** — Agno concrete; Hermes + LangGraph + CrewAI + OpenAI Agents SDK + Claude Agent SDK + Pydantic AI shaped for v0.0.3
+- **Agent framework adapters** — Agno concrete; Hermes + LangGraph + CrewAI + OpenAI Agents SDK + Claude Agent SDK + Pydantic AI shaped for v0.3.0
 - **Routing inversion detection** — flags when complex prompts go cheap (underserved) or simple prompts go premium (overspend)
 - **Rich live dashboard** with status banner, tier distribution, latency histogram, agent rollups, watch mode
-- **Per-route visibility** — every routed reply begins with `🎯 chuzom → <model> · <task>/<complexity> · <latency>` so you can see where each prompt landed without leaving the chat
+- **Per-route visibility with budget context** — every routed reply begins with `🎯 chuzom → <model> · <task>/<complexity> · <latency>`. Subscription routes append `wk left N% · 5h left M%`; API routes append `30d on <provider>: $X.XX`; when the cumulative counterfactual is meaningful you also see `saved Xpp wk / Ypp 5h` (rolled into a full breakdown via the new `llm_quota_saved` tool)
 - **Self-debug-safe** — chuzom recognises prompts that target chuzom itself (debug, route, hook, install, etc.) and bypasses enforcement so you never get locked out of the tools needed to repair chuzom
-- **766 tests** including scenario reports that render as readable stories
+- **~3667 tests** including scenario reports that render as readable stories
 
 ---
 
@@ -114,18 +116,24 @@ The developer's workflow doesn't change. The model choice, the audit trail, and 
 | Local-first, no proxy | ✅ | ✅ |
 | **Signal/decision YAML DSL** | — | ✅ |
 | **Agent-aware sessions with budget envelope** | — | ✅ |
+| **Agent-aware routing policy (per-session preferred providers + per-turn cost cap, inherits through parent chain)** | — | ✅ |
+| **Distributed-safe budget backend (single-instance SQLite + multi-instance Postgres, atomic check-then-charge)** | — | ✅ |
+| **Forecast / predictive budget tier (refuses reservations before the cap, off / warn / strict modes)** | — | ✅ |
 | **Hash-chained audit log (SOC 2 / GDPR / HIPAA mappable)** | — | ✅ |
 | **RBAC: 4 roles × 12 permissions** | — | ✅ |
+| **Per-classification provider allow-list (e.g. CODE must stay on-prem)** | — | ✅ |
 | **Per-user + per-team quotas with pre-emptive refusal** | — | ✅ |
 | **PII redaction before lineage write (12 patterns + custom)** | — | ✅ |
 | **Vault / AWS Secrets Manager / GCP SM YAML indirections** | — | ✅ |
 | **OpenTelemetry traces + metrics + logs (auto-emit per decision)** | — | ✅ |
 | **Routing inversion detection (up + down)** | — | ✅ |
+| **Quota-saved metric in subscription-percentage points (weekly + 5h windows)** | — | ✅ |
+| **Per-provider routing-notice hint (subscription quota remaining / API 30d spend)** | — | ✅ |
 | **Scenario reports with narrative routing traces** | — | ✅ |
 | **Per-host integration matrix** | 8 hosts | **14 hosts** |
 | **Agent framework adapters** | — | **7 frameworks** |
 | **Pareto-frontier model registry from artificialanalysis.ai** | — | ✅ |
-| **Test count** | ~200 | **732** |
+| **Test count** | ~200 | **~3667** |
 
 ---
 
@@ -275,12 +283,12 @@ Full integration matrix in [`Docs/HOST_INTEGRATION_REPORT.md`](Docs/HOST_INTEGRA
 | Framework | Status | What you get |
 |---|:---:|---|
 | **[Agno](https://github.com/agno-agi/agno)** (primary) | **concrete** | `RouteredModel` + `RouteredTeam` — drop-in for `agno.models.base.Model`; full budget envelope; lineage tagged `framework="agno"` |
-| **Hermes** | skeleton (v0.0.3) | Protocol-shape pinned; concrete impl deferred until tool-use format is confirmed |
-| **LangGraph** | stub (v0.0.3+) | Adapter shape ready; Runnable wrapping next |
-| **CrewAI** | stub (v0.0.3+) | LiteLLM-compatible completion shim path |
-| **OpenAI Agents SDK** | stub (v0.0.3+) | AsyncOpenAI client wrap path |
-| **Claude Agent SDK** | stub (v0.0.3+) | anthropic client wrap path |
-| **Pydantic AI** | stub (v0.0.3+) | Model-protocol implementation path |
+| **Hermes** | skeleton (v0.3.0) | Protocol-shape pinned; concrete impl deferred until tool-use format is confirmed |
+| **LangGraph** | stub (v0.3.0+) | Adapter shape ready; Runnable wrapping next |
+| **CrewAI** | stub (v0.3.0+) | LiteLLM-compatible completion shim path |
+| **OpenAI Agents SDK** | stub (v0.3.0+) | AsyncOpenAI client wrap path |
+| **Claude Agent SDK** | stub (v0.3.0+) | anthropic client wrap path |
+| **Pydantic AI** | stub (v0.3.0+) | Model-protocol implementation path |
 
 Chuzom doesn't replace your agent runtime. It sits inside it, picks the right model per agent step, enforces the session's budget, and tags every routing decision with the framework + agent_id for cost rollups.
 
@@ -368,26 +376,46 @@ result = redact_prompt(
 
 Applied **before** the lineage write so the durable record never contains the raw secret.
 
-### 💵 Per-user + per-team quotas
+### 💵 Per-identity budgets with atomic check-then-charge
+
+`BudgetBackend` is a duck-typed Protocol with three production-grade implementations:
+
+| Backend | Use case | Coordination |
+|---|---|---|
+| `BudgetEnvelopeManager` (in-process) | Tests, ephemeral runs | `asyncio.Lock` |
+| `SqliteBudgetBackend` (default) | Single-instance deployments | SQLite `BEGIN IMMEDIATE` (cross-process file lock) |
+| `PostgresBudgetBackend` | Multi-instance Phase 3b | `UPDATE … WHERE consumed + pending + cost <= cap` (row-level lock) |
 
 ```python
-from chuzom.enterprise import QuotaPolicy, QuotaTracker
+from chuzom.budget_backend import get_budget_backend
+from chuzom.budget_key import BudgetKey, SCOPE_TURN
 
-quotas = QuotaTracker()
-quotas.set_policy("user", alice.id, QuotaPolicy(
-    daily_cap_usd=20.0,
-    monthly_cap_usd=300.0,
-    soft_warning_pct=0.80,
-    hard_block=True,
-))
+backend = get_budget_backend()                     # CHUZOM_BUDGET_BACKEND env decides
+key = BudgetKey(tenant_id="t1", org_id="o1", user_id="alice",
+                agent_id=None, scope=SCOPE_TURN)
 
-# Pre-emptive refusal — no money spent on rejected calls
-breached, info = quotas.would_exceed("user", alice.id, prospective_cost_usd=0.50)
-if breached:
-    return {"error": "quota_exceeded", **info}
+backend.register(key, cap_usd=5.00, soft_cap_usd=4.00)
+
+# Pre-emptive refusal — no money spent on calls the cap would reject.
+if not await backend.try_reserve(key, cost_usd=0.20):
+    return {"error": "quota_exceeded"}
+
+# On provider success:
+await backend.commit(key, cost_usd=actual_cost)
 ```
 
-Daily + monthly caps, soft warning thresholds, hard refusal mode, UTC-aligned period buckets.
+**G-002 acceptance pinned by tests** — 100 concurrent reservations against a $5 cap → exactly 50 succeed (per-process for SQLite; across 4 processes for Postgres via Testcontainers).
+
+### ⏱️ Forecast tier (T2-L2) — refuse before the cap
+
+Opt-in via `CHUZOM_BUDGET_FORECAST_MODE` (off / warn / strict). When enabled, every `try_reserve` consults the rolling burn rate from committed spend events; if the projected time-to-breach falls inside `CHUZOM_BUDGET_FORECAST_HORIZON_SECONDS` (default 300), strict mode raises `ForecastedBudgetBreach` before the call ever reaches a provider:
+
+```
+ForecastedBudgetBreach: Forecasted budget breach in 90s
+at burn rate $0.0033/s (horizon 300s).
+```
+
+Off-mode and warn-mode preserve the existing call path; strict mode wraps the runaway-agent guards already in T3-M3 (`max_iterations`, `max_recursion_depth`).
 
 ### 📊 Observability — OpenTelemetry-native
 
@@ -424,8 +452,8 @@ Full deployment guide: [`Docs/ENTERPRISE_DEPLOYMENT.md`](Docs/ENTERPRISE_DEPLOYM
               │  • pii_secret          (priority 10) │
               │  • code_keywords       (priority 50) │
               │  • research_keywords   (priority 40) │
-              │  • embedding_match     (v0.0.3)      │
-              │  • reask               (v0.0.3)      │
+              │  • embedding_match     (v0.3.0)      │
+              │  • reask               (v0.3.0)      │
               └──────────────────┬──────────────────┘
                                  │  bag of SignalScore
               ┌──────────────────▼──────────────────┐
@@ -584,6 +612,11 @@ chuzom replay               # full session transcript
 chuzom savings-report       # token + cost breakdown
 chuzom retrospect           # IAF-style session debrief
 
+# MCP tools (called by your host CLI / agent runtime, not by the user directly)
+llm_quota_saved             # cumulative subscription-% counterfactual (weekly + 5h)
+llm_check_usage             # cached Claude subscription snapshot
+llm_refresh_claude_usage    # OAuth refresh (macOS Keychain)
+
 # Development workflow
 chuzom dev-refresh          # reinstall pkg + sync hooks + restart MCP servers
 chuzom dev-refresh --dry-run        # show the plan, don't execute
@@ -610,9 +643,16 @@ chuzom team push [period]   # ship to Slack/Discord/webhook
 | `CHUZOM_ENFORCE` | `smart` (default) · `soft` · `hard` · `off` | Routing enforcement mode. `smart` hard-blocks Q&A and soft-allows code edits; `soft` logs but never blocks; `hard` blocks until an `llm_*` tool is called; `off` disables enforcement entirely. Same modes the `chuzom set-enforce` CLI writes. |
 | `CHUZOM_ROUTE_BANNER` | `on` (default) · `off` / `0` / `false` / `no` | Suppress the stderr `🎯 routed → …` line emitted on every DIRECT-success route. The user-visible reply-prefix indicator stays unaffected. |
 | `CHUZOM_ZERO_CLAUDE` | `1` / `true` / `on` | Strict zero-Claude routing — every prompt must execute via an external route or be blocked. Useful for cost-sensitive deployments. |
+| `CHUZOM_AGENT_POLICY_MODE` | `off` · `warn` (default) · `strict` | T3-XL1 agent-aware routing policy gate. `strict` refuses non-preferred candidates with `PermissionDenied`; `warn` logs and proceeds; `off` short-circuits the policy layer entirely. |
+| `CHUZOM_BUDGET_BACKEND` | `sqlite` (default) · `memory` · `postgres` | Selects the budget backend implementation. `sqlite` (single-instance persistent) is the default; `postgres` opts in to the multi-instance Phase 3b backend (requires the `postgres` extra + `CHUZOM_BUDGET_POSTGRES_DSN`); invalid values fail-open to `sqlite`. |
+| `CHUZOM_BUDGET_POSTGRES_DSN` | libpq DSN | Postgres connection string when `CHUZOM_BUDGET_BACKEND=postgres`. Missing DSN → fail-open to SQLite. |
+| `CHUZOM_BUDGET_FORECAST_MODE` | `off` (default) · `warn` · `strict` | T2-L2 forecast tier gate. `strict` raises `ForecastedBudgetBreach` when burn-rate trajectory projects exhaustion inside the horizon; `warn` logs and proceeds. |
+| `CHUZOM_BUDGET_FORECAST_WINDOW_SECONDS` | seconds (default `60`) | Rolling window for the burn-rate calculation. |
+| `CHUZOM_BUDGET_FORECAST_HORIZON_SECONDS` | seconds (default `300`) | Projected time-to-breach below this threshold triggers a forecast refusal under strict mode. |
+| `CHUZOM_WEEKLY_QUOTA_USD_OPUS_EQUIV` | USD (default `50`) | Calibration constant for the quota-saved metric: dollars of Opus-equivalent spend that equal 100% of one week of Claude subscription quota. Override per plan tier. |
 | `CHUZOM_DEV_SRC` | absolute path | Source directory used by `chuzom dev-refresh` when `--source` isn't passed. |
 | `CHUZOM_CLAUDE_SUBSCRIPTION` | `true` / `1` / `yes` | Forces subscription-mode banner + OAuth pressure cascade even when not auto-detected. |
-| `CHUZOM_*_PATH` | absolute path | Override the location of any state DB (`CHUZOM_LINEAGE_PATH`, `CHUZOM_AUDIT_PATH`, etc.). |
+| `CHUZOM_*_PATH` | absolute path | Override the location of any state DB (`CHUZOM_LINEAGE_PATH`, `CHUZOM_AUDIT_PATH`, `CHUZOM_BUDGETS_DB_PATH`, etc.). |
 
 ### State DBs
 
@@ -621,11 +661,12 @@ State lives in `~/.chuzom/` (override per-DB via `CHUZOM_*_PATH` env vars):
 | File | Purpose |
 |---|---|
 | `lineage.db` | Every routing decision |
-| `sessions.db` | Agent session lifecycle |
+| `sessions.db` | Agent session lifecycle (includes T3-XL1 `routing_policy_json` column) |
 | `identity.db` | Users + teams + tokens |
 | `audit.db` | Immutable hash-chained audit |
 | `quotas.db` | Per-identity consumption + policies |
-| `cache.db` | Semantic response cache (v0.0.2 stub) |
+| `budgets.db` | T2-L1 `BudgetBackend` envelopes + T2-L2 spend events (SQLite backend) |
+| `cache.db` | Semantic response cache (stub) |
 | `usage.json` | Live Claude subscription snapshot |
 
 Per-project config lives in `config/` (gitignored where appropriate):
@@ -643,25 +684,29 @@ Provider keys via env vars or `~/.chuzom/config.yaml` (mode-600 user-readable, f
 
 ## Tests + quality
 
-| Tier | Count | Coverage |
-|---|---|---|
-| Unit (lineage / signals / agents / decisions / bench) | 112 | foundation |
-| Integration (12 hosts) | 118 | host structural |
-| QA — 5 pillars + Agno deep | 166 | functional / non-functional / perf / integrity / usability |
-| QA — MCP handshake (live subprocess) | 10 | protocol layer end-to-end |
-| QA — network failure simulation | 22 | circuit breaker state machine |
-| QA — multi-host coexistence | 13 | Chuzom + llm-router parallel |
-| QA — framework contracts (6 stubs) | 88 | per-framework × 14 contract dims |
-| QA — session summary | 16 | dashboard data + render |
-| QA — plugin packaging | 18 | marketplace + MCP-config plugins |
-| QA — observability (OTLP) | 16 | spans + metrics + logs |
-| QA — model registry | 17 | YAML + Pareto + filtering |
-| QA — org policy (secure YAML) | 21 | plaintext rejection + resolution |
-| QA — **enterprise (identity + RBAC + audit + redaction + quotas)** | **53** | per-module + parametrized |
-| Scenario reports | 24 | CLI + framework + cross-cutting |
-| Auto-route classifier regression | 52 | inherited + fix-verb expansion |
+| Tier | Coverage |
+|---|---|
+| Unit (lineage / signals / agents / decisions / bench) | foundation |
+| Integration (12 hosts) | host structural |
+| QA — 5 pillars + Agno deep | functional / non-functional / perf / integrity / usability |
+| QA — MCP handshake (live subprocess) | protocol layer end-to-end |
+| QA — network failure simulation | circuit breaker state machine |
+| QA — multi-host coexistence | Chuzom + llm-router parallel |
+| QA — framework contracts (6 stubs) | per-framework × 14 contract dims |
+| QA — session summary | dashboard data + render |
+| QA — plugin packaging | marketplace + MCP-config plugins |
+| QA — observability (OTLP) | spans + metrics + logs |
+| QA — model registry | YAML + Pareto + filtering |
+| QA — org policy (secure YAML) | plaintext rejection + resolution |
+| QA — **enterprise (identity + RBAC + audit + redaction + quotas)** | per-module + parametrized |
+| **T1** — tenant id + RBAC + per-provider permissions | per-identity scopes |
+| **T2** — budget cluster (key + envelope + tiers + atomic backend + forecast + Postgres) | G-002 acceptance, multi-instance |
+| **T3** — agent safety (cancel shield, deadlines, runaway guards, idempotency, cost cap, wall clock, routing policy) | G-008 acceptance |
+| **T4** — privacy + governance (redaction routing, classification allow-list) | per-classification provider gates |
+| Scenario reports | CLI + framework + cross-cutting |
+| Auto-route classifier regression | inherited + fix-verb expansion |
 
-**732 total tests passing**, 0 failed, 129 intentional skips. 26 second wall time.
+**~3667 total tests passing** across the full sweep (excluding the in-progress `tests/lineage/` and one known timing-sensitive perf flake). ~2.5 minute wall time.
 
 Run subsets:
 
@@ -691,16 +736,31 @@ pytest tests/integration/    # host structural
 
 ## Status
 
-**v0.0.2** — feature-complete for the dogfood ring. 732 tests passing. SECURITY.md, threat model, and enterprise deployment guide all shipped. Plugin packaging verified for Claude Code, Cursor, Codex CLI, Gemini CLI.
+**v0.2.0** — beyond the dogfood ring, into the audit-driven hardening phase. **~3667 tests passing** across the full sweep (excluding the in-progress `tests/lineage/` and one known timing-sensitive perf flake). SECURITY.md, threat model, and enterprise deployment guide all shipped. Plugin packaging verified for Claude Code, Cursor, Codex CLI, Gemini CLI.
 
-**v0.0.3** roadmap (next):
+### Recently shipped
+
+- **T3-XL1** — agent-aware routing policy (`AgentRoutingPolicy`), per-session candidate reordering, per-turn cost cap distinct from session budget, parent-chain inheritance via `SessionStore.effective_policy`. Gated by `CHUZOM_AGENT_POLICY_MODE` = off / warn / strict.
+- **T2-L1** — distributed-safe budget backend; `BudgetBackend` Protocol + `SqliteBudgetBackend` with `BEGIN IMMEDIATE` atomicity. **G-002** TST-003 acceptance: 100 concurrent reservations → exactly N succeed.
+- **T2-L2** — forecast / predictive budget tier. Burn-rate driven `ForecastedBudgetBreach` under strict mode. Spend events persisted alongside envelope state in the same transaction.
+- **T2-XL1** — multi-instance coordination via `PostgresBudgetBackend`. Single-`UPDATE` atomic check-then-charge SQL. Multi-process G-002 acceptance pinned with Testcontainers + `multiprocessing.spawn`.
+- **T4-M2** — per-classification provider allow-list (e.g. CODE must stay on-prem). Earlier in roadmap; landed.
+- **T-CODEX-3** — real Codex / Gemini-CLI stderr surfaces in the router's `chain_errors` summary instead of the opaque `(response omitted)`.
+- **Per-route savings indicator** — routing notice now carries cumulative weekly + 5h counterfactual savings in subscription-percentage-point terms, plus per-provider context (subscription quota remaining for Claude routes, rolling 30-day spend for API routes). Full breakdown via the new `llm_quota_saved` MCP tool.
+
+### Open backlog (next slice)
+
+- **T-CODEX-2** — Codex research-task injection with knowledge-cutoff disclaimer (free fallback when Perplexity rate-limits)
+- **T3-L1** — multi-agent supervisor lineage rollups across the parent/child session chain
+- **T4-L1** — full ZDR (zero-data-retention) plumbing for routes that demand it
+- **T4-XL1** — Customer-Managed-Key (CMK) integration
+- **T-QS-2** — observed-calibration path for the quota-saved metric (derive the `$/pp` ratio from each user's own claude_usage history instead of a configured constant)
 - Concrete adapters for Hermes / LangGraph / CrewAI / OpenAI Agents SDK / Claude Agent SDK / Pydantic AI
 - OIDC / SAML adapter (federated identity)
 - Central proxy mode with mTLS (for orgs that require VPC egress isolation)
 - GDPR right-to-erasure CLI tool (`chuzom erase-user <email>`)
 - Empirical `quality_gap` lookup tables derived from lineage outcomes
 - Embedding signal + semantic response cache (sqlite-vec backend)
-- Per-team model allow/deny lists
 - Automatic identity-event audit emission
 
 ---
