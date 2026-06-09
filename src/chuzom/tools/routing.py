@@ -666,6 +666,28 @@ async def llm_stream(
     return f"{header}\n\n{content}"
 
 
+# Profile × complexity routing table for llm_select_agent.
+# Codex model names must stay in the ChatGPT-subscription-supported set
+# ({"gpt-5.5", "gpt-5.4"} as of Codex CLI v0.133); see
+# :func:`chuzom.codex_agent._load_codex_models`. A drift here causes the
+# Codex chain to fail with HTTP 400 and the whole chain to fall through
+# to paid providers — silent and expensive.
+_SELECT_AGENT_MAP: dict[tuple[str, str], tuple[str, str, str, str]] = {
+    ("budget",   "simple"):   ("codex",       "gpt-5.5",                "claude_code", "claude-sonnet-4-6"),
+    ("budget",   "moderate"): ("codex",       "gpt-5.5",                "claude_code", "claude-sonnet-4-6"),
+    ("budget",   "complex"):  ("codex",       "gpt-5.4",                "claude_code", "claude-sonnet-4-6"),
+    ("balanced", "simple"):   ("codex",       "gpt-5.5",                "claude_code", "claude-sonnet-4-6"),
+    ("balanced", "moderate"): ("claude_code", "claude-sonnet-4-6",      "codex",       "gpt-5.4"),
+    ("balanced", "complex"):  ("claude_code", "claude-opus-4-6",        "codex",       "gpt-5.4"),
+    ("premium",  "simple"):   ("claude_code", "claude-sonnet-4-6",      "codex",       "gpt-5.5"),
+    ("premium",  "moderate"): ("claude_code", "claude-opus-4-6",        "codex",       "gpt-5.4"),
+    ("premium",  "complex"):  ("claude_code", "claude-opus-4-6",        "codex",       "gpt-5.4"),
+}
+_SELECT_AGENT_DEFAULT: tuple[str, str, str, str] = (
+    "claude_code", "claude-sonnet-4-6", "codex", "gpt-5.4",
+)
+
+
 async def llm_select_agent(
     prompt: str,
     profile: str = "balanced",
@@ -677,12 +699,17 @@ async def llm_select_agent(
     invoke, not which model to call mid-session.
 
     Decision tree (profile × complexity):
-      budget  + simple/moderate  → codex  + gpt-4o-mini
-      budget  + complex          → codex  + gpt-4o (Codex handles most coding; escalate if needed)
-      balanced + simple          → codex  + gpt-4o-mini
+      budget  + simple/moderate  → codex  + gpt-5.5
+      budget  + complex          → codex  + gpt-5.4 (Codex handles most coding; escalate if needed)
+      balanced + simple          → codex  + gpt-5.5
       balanced + moderate        → claude_code + sonnet
       balanced + complex         → claude_code + opus
       premium + any              → claude_code + opus
+
+    Codex model names track the ChatGPT-subscription-supported set
+    (see :func:`chuzom.codex_agent._load_codex_models`). Pre-v10.1.3 the
+    table referenced ``gpt-4o`` / ``gpt-4o-mini``, which Codex CLI rejects
+    on ChatGPT auth with HTTP 400, causing the whole Codex chain to fail.
 
     Returns JSON with:
       primary          — agent binary name: "claude_code" | "codex" | "gemini_cli"
@@ -725,28 +752,15 @@ async def llm_select_agent(
     task_type_str = task_type_val.value if hasattr(task_type_val, "value") else str(task_type_val)
     complexity_str = complexity_val.value if hasattr(complexity_val, "value") else str(complexity_val)
 
-    # Decision tree: profile × complexity → (agent, model)
-    _AGENT_MAP = {
-        ("budget",   "simple"):   ("codex",       "gpt-4o-mini",            "claude_code", "claude-sonnet-4-6"),
-        ("budget",   "moderate"): ("codex",       "gpt-4o-mini",            "claude_code", "claude-sonnet-4-6"),
-        ("budget",   "complex"):  ("codex",       "gpt-4o",                 "claude_code", "claude-sonnet-4-6"),
-        ("balanced", "simple"):   ("codex",       "gpt-4o-mini",            "claude_code", "claude-sonnet-4-6"),
-        ("balanced", "moderate"): ("claude_code", "claude-sonnet-4-6",      "codex",       "gpt-4o"),
-        ("balanced", "complex"):  ("claude_code", "claude-opus-4-6",        "codex",       "gpt-4o"),
-        ("premium",  "simple"):   ("claude_code", "claude-sonnet-4-6",      "codex",       "gpt-4o-mini"),
-        ("premium",  "moderate"): ("claude_code", "claude-opus-4-6",        "codex",       "gpt-4o"),
-        ("premium",  "complex"):  ("claude_code", "claude-opus-4-6",        "codex",       "gpt-4o"),
-    }
-
     key = (profile, complexity_str)
-    primary, primary_model, fallback, fallback_model = _AGENT_MAP.get(
-        key, ("claude_code", "claude-sonnet-4-6", "codex", "gpt-4o")
+    primary, primary_model, fallback, fallback_model = _SELECT_AGENT_MAP.get(
+        key, _SELECT_AGENT_DEFAULT,
     )
 
     # Override: research tasks → always claude_code (needs web access via Perplexity)
     if task_type_str == "research":
         primary, primary_model = "claude_code", "claude-sonnet-4-6"
-        fallback, fallback_model = "codex", "gpt-4o"
+        fallback, fallback_model = "codex", "gpt-5.4"
 
     # Environment check
     codex_ok = is_codex_available()

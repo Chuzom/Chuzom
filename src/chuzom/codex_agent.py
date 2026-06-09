@@ -31,17 +31,31 @@ the conventional user-local binary path used by manual/Homebrew installs.
 exists and is executable.
 """
 
-CODEX_MODELS = [
-    "gpt-5.4",       # strongest reasoning
-    "o3",             # deep reasoning
-    "o4-mini",        # fast reasoning
-    "gpt-4o",         # balanced
-    "gpt-4o-mini",   # fast/cheap
-]
-"""Available OpenAI models when routing through Codex, ordered by capability.
+def _load_codex_models() -> list[str]:
+    """Load the Codex model fallback chain, honouring an env-var override.
 
-All models run through the user's OpenAI subscription (separate from
-Claude quota), making Codex a free-from-Claude fallback.
+    Default returns the ChatGPT-subscription-supported set. As of Codex CLI
+    v0.133, ChatGPT-account auth refuses ``o3``, ``o4-mini``, ``gpt-4o``,
+    and ``gpt-4o-mini`` with HTTP 400 *"not supported when using Codex with
+    a ChatGPT account"*. Only ``gpt-5.5`` (the current Codex default) and
+    ``gpt-5.4`` are accepted on that tier, so they are the safe defaults.
+
+    API-tier users (paid OpenAI billing via ``codex login --api-key``) can
+    extend the list with ``CHUZOM_CODEX_MODELS`` (comma-separated, e.g.
+    ``"gpt-5.5,gpt-5.4,o3,gpt-4o"``). Empty / whitespace-only entries are
+    dropped silently.
+    """
+    env = os.environ.get("CHUZOM_CODEX_MODELS", "").strip()
+    if env:
+        return [m.strip() for m in env.split(",") if m.strip()]
+    return ["gpt-5.5", "gpt-5.4"]
+
+
+CODEX_MODELS = _load_codex_models()
+"""Codex model fallback chain in best-to-fast order.
+
+See :func:`_load_codex_models` for the env-var override and the tier-specific
+default rationale.
 """
 
 # ── BLOCKING I/O MITIGATION ──────────────────────────────────────────────
@@ -234,7 +248,7 @@ class CodexResult:
 
 async def run_codex(
     prompt: str,
-    model: str = "gpt-5.4",
+    model: str = "gpt-5.5",
     working_dir: str | None = None,
     timeout: int | None = None,
 ) -> CodexResult:
@@ -258,7 +272,9 @@ async def run_codex(
 
     Args:
         prompt: The task or question to send to Codex.
-        model: Which OpenAI model to use (default: ``"gpt-5.4"``).
+        model: Which OpenAI model to use (default: ``"gpt-5.5"`` — the current
+            Codex CLI default; both ``gpt-5.5`` and ``gpt-5.4`` work on
+            ChatGPT-account auth, see :func:`_load_codex_models`).
         working_dir: Working directory for the Codex process.  Defaults
             to the current working directory.
         timeout: Maximum seconds to wait before killing the process.
@@ -285,8 +301,22 @@ async def run_codex(
         from chuzom.timeout_config import codex_timeout
         timeout = codex_timeout()
 
-    # All arguments passed as separate list items — no shell expansion
-    args = [binary, "exec", "-m", model, "--color", "never", "-C", cwd, prompt]
+    # All arguments passed as separate list items — no shell expansion.
+    # --skip-git-repo-check: chuzom is a pure-LLM consumer, not a code-edit
+    # client; without this flag Codex CLI v0.133+ refuses to run when ``cwd``
+    # is outside a trusted git repo ("Not inside a trusted directory and
+    # --skip-git-repo-check was not specified") and exits non-zero — which
+    # the router then logs as "Codex exited 1" and skips Codex for the
+    # entire chain. Always-on is safe because we never ask Codex to mutate
+    # the working tree.
+    args = [
+        binary, "exec",
+        "-m", model,
+        "--color", "never",
+        "--skip-git-repo-check",
+        "-C", cwd,
+        prompt,
+    ]
 
     start = time.monotonic()
     try:
