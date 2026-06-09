@@ -81,6 +81,14 @@ class AgentSession:
     step_count: int
     state: SessionState
     framework: str | None = None  # which framework adapter started this
+    # T3-M3 (Track-3 agent-safety) — runaway guards.
+    # max_iterations: hard cap on step_count; record_step raises
+    #   IterationsExceeded when reached and transitions the session
+    #   to BUDGET_EXCEEDED (terminal). None = no cap.
+    # max_recursion_depth: hard cap on the parent_session_id chain
+    #   length at child-create time. None = no cap.
+    max_iterations: int | None = None
+    max_recursion_depth: int | None = None
 
     @property
     def remaining_usd(self) -> float:

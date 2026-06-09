@@ -20,7 +20,12 @@ import uuid
 from pathlib import Path
 
 from chuzom.agents.base import AgentSession, SessionState
-from chuzom.agents.budget import BudgetEnvelope, BudgetExceeded
+from chuzom.agents.budget import (
+    BudgetEnvelope,
+    BudgetExceeded,
+    IterationsExceeded,
+    RecursionDepthExceeded,
+)
 
 
 _SCHEMA = """
@@ -34,18 +39,30 @@ CREATE TABLE IF NOT EXISTS sessions (
     consumed_usd REAL NOT NULL DEFAULT 0.0,
     step_count INTEGER NOT NULL DEFAULT 0,
     state TEXT NOT NULL,
-    framework TEXT
+    framework TEXT,
+    max_iterations INTEGER,
+    max_recursion_depth INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);
 """
 
+# T3-M3: idempotent ALTER TABLE ADD COLUMN migration for sessions DBs
+# that pre-date the runaway-guard columns. PRAGMA table_info introspects
+# the live schema; we add only the missing columns. SQLite accepts
+# multiple statements separated by ';'.
+_MIGRATIONS_V2 = (
+    ("max_iterations", "ALTER TABLE sessions ADD COLUMN max_iterations INTEGER"),
+    ("max_recursion_depth", "ALTER TABLE sessions ADD COLUMN max_recursion_depth INTEGER"),
+)
+
 _INSERT = """
 INSERT INTO sessions (
     session_id, agent_id, started_at, completed_at, parent_session_id,
-    budget_cap_usd, consumed_usd, step_count, state, framework
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    budget_cap_usd, consumed_usd, step_count, state, framework,
+    max_iterations, max_recursion_depth
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _UPDATE_STEP = """
@@ -66,6 +83,12 @@ class TerminalStateViolation(RuntimeError):
 
 
 def _row_to_session(row: tuple) -> AgentSession:
+    # row may carry the T3-M3 max_iterations / max_recursion_depth
+    # columns (positions 10–11). Pre-T3-M3 rows have only 10 fields
+    # because the migration ran AFTER the SELECT statement was built
+    # — fall back to None for backwards compat.
+    max_iter = row[10] if len(row) > 10 else None
+    max_depth = row[11] if len(row) > 11 else None
     return AgentSession(
         session_id=row[0],
         agent_id=row[1],
@@ -77,6 +100,8 @@ def _row_to_session(row: tuple) -> AgentSession:
         step_count=row[7],
         state=SessionState(row[8]),
         framework=row[9],
+        max_iterations=max_iter,
+        max_recursion_depth=max_depth,
     )
 
 
@@ -93,6 +118,15 @@ class SessionStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path))
         self._conn.executescript(_SCHEMA)
+        # T3-M3: idempotent ALTER TABLE migration for pre-T3-M3 DBs.
+        # Introspect existing columns; add only the missing ones.
+        existing_cols = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        for col, ddl in _MIGRATIONS_V2:
+            if col not in existing_cols:
+                self._conn.execute(ddl)
         self._conn.commit()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
@@ -104,10 +138,41 @@ class SessionStore:
         budget_usd: float,
         parent_session_id: str | None = None,
         framework: str | None = None,
+        max_iterations: int | None = None,
+        max_recursion_depth: int | None = None,
     ) -> AgentSession:
-        """Open a new active session with the given budget cap."""
+        """Open a new active session with the given budget cap.
+
+        T3-M3 runaway guards (both optional; ``None`` = no cap):
+
+        * ``max_iterations`` — hard cap on ``step_count``. Once
+          ``record_step`` would push ``step_count`` past this value,
+          ``IterationsExceeded`` is raised and the session
+          transitions to ``BUDGET_EXCEEDED`` (terminal).
+        * ``max_recursion_depth`` — hard cap on the parent chain.
+          Checked at create time by walking
+          ``parent_session_id`` recursively; if any ancestor has a
+          ``max_recursion_depth`` cap and the walked depth would
+          equal-or-exceed it, ``RecursionDepthExceeded`` is raised
+          before any row is inserted.
+
+        ``budget_usd`` must be positive; ``max_iterations`` and
+        ``max_recursion_depth``, when provided, must be positive.
+        """
         if budget_usd <= 0:
             raise ValueError("budget_usd must be positive")
+        if max_iterations is not None and max_iterations <= 0:
+            raise ValueError("max_iterations must be positive when set")
+        if max_recursion_depth is not None and max_recursion_depth <= 0:
+            raise ValueError("max_recursion_depth must be positive when set")
+
+        # T3-M3: walk the parent chain and refuse if any ancestor has a
+        # max_recursion_depth that this child would breach. Depth is
+        # measured against the deepest cap in the chain so a child of a
+        # tightly-capped parent inherits the cap.
+        if parent_session_id is not None:
+            self._enforce_recursion_depth(parent_session_id)
+
         session_id = str(uuid.uuid4())
         now = time.time()
         session = AgentSession(
@@ -121,6 +186,8 @@ class SessionStore:
             step_count=0,
             state=SessionState.ACTIVE,
             framework=framework,
+            max_iterations=max_iterations,
+            max_recursion_depth=max_recursion_depth,
         )
         self._conn.execute(
             _INSERT,
@@ -135,6 +202,8 @@ class SessionStore:
                 session.step_count,
                 session.state.value,
                 session.framework,
+                session.max_iterations,
+                session.max_recursion_depth,
             ),
         )
         self._conn.commit()
@@ -144,13 +213,47 @@ class SessionStore:
         cursor = self._conn.execute(
             "SELECT session_id, agent_id, started_at, completed_at, "
             "parent_session_id, budget_cap_usd, consumed_usd, step_count, "
-            "state, framework FROM sessions WHERE session_id = ?",
+            "state, framework, max_iterations, max_recursion_depth "
+            "FROM sessions WHERE session_id = ?",
             (session_id,),
         )
         row = cursor.fetchone()
         if row is None:
             raise SessionNotFound(session_id)
         return _row_to_session(row)
+
+    def _enforce_recursion_depth(self, parent_session_id: str) -> None:
+        """Walk the parent chain; raise RecursionDepthExceeded if any
+        ancestor's ``max_recursion_depth`` cap would be breached by the
+        new child being created at depth = chain_length + 1.
+
+        The walk includes the immediate parent at depth 1; each
+        ancestor's cap is evaluated against the depth at which THE
+        NEW CHILD would land. Cycle guard: bail after 1024 hops to
+        avoid pathological corrupt data sending us into an infinite
+        loop.
+        """
+        depth = 1  # the new child sits 1 level below its parent
+        current_id: str | None = parent_session_id
+        for _ in range(1024):
+            if current_id is None:
+                return
+            try:
+                ancestor = self.get(current_id)
+            except SessionNotFound:
+                # Stale parent reference — treat as no enforcement.
+                return
+            if (
+                ancestor.max_recursion_depth is not None
+                and depth >= ancestor.max_recursion_depth
+            ):
+                raise RecursionDepthExceeded(
+                    parent_session_id=parent_session_id,
+                    max_recursion_depth=ancestor.max_recursion_depth,
+                    current_depth=depth,
+                )
+            current_id = ancestor.parent_session_id
+            depth += 1
 
     def envelope(self, session_id: str) -> BudgetEnvelope:
         """Construct a BudgetEnvelope reflecting current consumed/cap."""
@@ -171,16 +274,48 @@ class SessionStore:
     def record_step(self, session_id: str, cost_usd: float) -> AgentSession:
         """Record an actual call's cost. Increments step_count and consumed.
 
-        If the new consumed would breach the cap, the session transitions
-        to BUDGET_EXCEEDED and BudgetExceeded is raised. Caller should
-        decide whether to still log the lineage row (yes, for audit) or
-        roll it back (rare).
+        Three terminal-transition conditions, checked in order:
+
+        1. **T3-M3 iterations cap.** If ``max_iterations`` is set and
+           the new step count would equal or exceed it, the session
+           is transitioned to ``BUDGET_EXCEEDED`` and
+           ``IterationsExceeded`` is raised before any cost is
+           charged. This precedes the budget check so a runaway loop
+           is stopped at the cheapest point.
+        2. **Budget cap.** If charging ``cost_usd`` would breach
+           ``budget_cap_usd``, the session is transitioned to
+           ``BUDGET_EXCEEDED`` and ``BudgetExceeded`` is raised.
+        3. **Otherwise.** The step is recorded and the session stays
+           ``ACTIVE``.
+
+        Calls on terminal-state sessions raise
+        ``TerminalStateViolation`` unchanged.
         """
         s = self.get(session_id)
         if s.state.is_terminal:
             raise TerminalStateViolation(
                 f"session {session_id} is {s.state.value}; cannot record_step"
             )
+
+        # T3-M3: iterations cap. Checked before budget so a runaway
+        # loop halts at the cheapest possible point (no cost charged).
+        if (
+            s.max_iterations is not None
+            and s.step_count + 1 > s.max_iterations
+        ):
+            # Persist the terminal state before raising so subsequent
+            # callers see the transition (parity with budget-breach).
+            self._conn.execute(
+                _UPDATE_TERMINAL,
+                (SessionState.BUDGET_EXCEEDED.value, time.time(), session_id),
+            )
+            self._conn.commit()
+            raise IterationsExceeded(
+                session_id=session_id,
+                max_iterations=s.max_iterations,
+                current_step_count=s.step_count,
+            )
+
         env = BudgetEnvelope(cap_usd=s.budget_cap_usd, consumed_usd=s.consumed_usd)
         breached = env.would_exceed(cost_usd)
         new_consumed = s.consumed_usd + cost_usd
