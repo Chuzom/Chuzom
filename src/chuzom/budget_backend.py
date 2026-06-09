@@ -636,8 +636,13 @@ class SqliteBudgetBackend:
 
 _BACKEND_KIND_SQLITE = "sqlite"
 _BACKEND_KIND_MEMORY = "memory"
+_BACKEND_KIND_POSTGRES = "postgres"
 _BACKEND_KIND_DEFAULT = _BACKEND_KIND_SQLITE
-_KNOWN_BACKENDS = {_BACKEND_KIND_SQLITE, _BACKEND_KIND_MEMORY}
+_KNOWN_BACKENDS = {
+    _BACKEND_KIND_SQLITE,
+    _BACKEND_KIND_MEMORY,
+    _BACKEND_KIND_POSTGRES,
+}
 
 _backend: BudgetBackend | None = None
 
@@ -645,10 +650,16 @@ _backend: BudgetBackend | None = None
 def get_budget_backend() -> BudgetBackend:
     """Return the module-level budget backend singleton.
 
-    Selection: ``CHUZOM_BUDGET_BACKEND`` env var, one of
-    ``sqlite`` (default — persistent, cross-process-safe) or ``memory``
-    (the existing in-process :class:`BudgetEnvelopeManager`, useful for
-    tests and ephemeral deployments).
+    Selection: ``CHUZOM_BUDGET_BACKEND`` env var, one of:
+
+    * ``sqlite`` (default) — persistent, single-instance cross-process-safe
+      via SQLite ``BEGIN IMMEDIATE``.
+    * ``memory`` — in-process :class:`BudgetEnvelopeManager`, useful for
+      tests and ephemeral deployments.
+    * ``postgres`` (T2-XL1, Phase 3b) — multi-instance coordination via a
+      shared Postgres database. Requires the ``postgres`` extra and
+      ``CHUZOM_BUDGET_POSTGRES_DSN`` to be set. Falls back to ``sqlite``
+      if the dep / DSN is missing (fail-open posture).
 
     Invalid values fall back to the safer ``sqlite`` default — a
     misconfigured env var must never break boot.
@@ -660,6 +671,19 @@ def get_budget_backend() -> BudgetBackend:
     kind = raw if raw in _KNOWN_BACKENDS else _BACKEND_KIND_DEFAULT
     if kind == _BACKEND_KIND_MEMORY:
         _backend = BudgetEnvelopeManager()
+    elif kind == _BACKEND_KIND_POSTGRES:
+        try:
+            from chuzom.budget_backend_postgres import PostgresBudgetBackend
+            _backend = PostgresBudgetBackend()
+        except (ImportError, RuntimeError) as err:
+            # Fail-open: a missing dep or DSN must not break boot.
+            # Operators see the warning and can fix; routing continues
+            # against the local SQLite backend in the meantime.
+            log.warning(
+                "postgres_backend_unavailable_fallback_sqlite",
+                error=str(err),
+            )
+            _backend = SqliteBudgetBackend()
     else:
         _backend = SqliteBudgetBackend()
     return _backend
@@ -669,7 +693,7 @@ def reset_budget_backend_for_tests() -> None:
     """Drop the singleton so the next ``get_budget_backend`` starts
     fresh. Production code never calls this."""
     global _backend
-    if _backend is not None and isinstance(_backend, SqliteBudgetBackend):
+    if _backend is not None and hasattr(_backend, "close"):
         try:
             _backend.close()
         except Exception:
