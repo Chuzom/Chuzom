@@ -22,7 +22,12 @@ from chuzom.audit_routing import audit_routing_turn
 from chuzom.budget import get_budget_state, reserve_tokens, release_tokens
 from chuzom.identity import TurnIdentity, current_identity
 from chuzom.idempotency import get_store as _get_idempotency_store
-from chuzom.rbac_routing import check_route_prompt, raise_route_prompt_denied
+from chuzom.rbac_routing import (
+    check_model as _rbac_check_model,
+    check_provider as _rbac_check_provider,
+    check_route_prompt,
+    raise_route_prompt_denied,
+)
 from chuzom.state import get_active_agent
 from chuzom.codex_agent import CODEX_MODELS, is_codex_available, run_codex
 from chuzom.contract import build_contract
@@ -723,6 +728,7 @@ async def _dispatch_model_loop(
     _reservation: float,
     effective_complexity: str,
     max_cost_per_task: float | None = None,
+    identity: TurnIdentity | None = None,
 ) -> LLMResponse:
     """Execute the main model dispatch loop with primary + emergency fallback chains.
 
@@ -769,6 +775,11 @@ async def _dispatch_model_loop(
     # raise CostBudgetExceeded with the cheapest projection so the caller
     # knows what cap would have let the turn run.
     cost_skipped: list[tuple[str, float]] = []  # (model, projected_cost)
+    # T1-M3: track candidates skipped because the identity's per-provider
+    # or per-model allow-list refused them. If the whole chain is
+    # rbac-skipped, raise PermissionDenied with the offending model so
+    # the caller knows to broaden the allow-list or change the chain.
+    rbac_skipped: list[tuple[str, str]] = []  # (model, why)
 
     for attempt, model in enumerate(models_to_try, start=1):
         provider = provider_from_model(model)
@@ -784,6 +795,33 @@ async def _dispatch_model_loop(
                 model=model,
             )
             continue
+
+        # T1-M3: per-candidate RBAC (provider + model allow-list).
+        # In strict mode, skip candidates the identity is not allowed
+        # to use; the chain walk advances. In warn mode, log + audit
+        # but allow. In off mode (no identity or no env), no-op. The
+        # check costs nothing when no allow-list is attached to the
+        # identity (the Tier-1 default).
+        if identity is not None:
+            _prov_mode, _prov_ok = _rbac_check_provider(identity, provider)
+            if _prov_mode == "strict" and not _prov_ok:
+                route_log.info(
+                    "rbac_provider_skip",
+                    correlation_id=correlation_id,
+                    provider=provider,
+                    model=model,
+                )
+                rbac_skipped.append((model, f"provider:{provider}"))
+                continue
+            _mod_mode, _mod_ok = _rbac_check_model(identity, model)
+            if _mod_mode == "strict" and not _mod_ok:
+                route_log.info(
+                    "rbac_model_skip",
+                    correlation_id=correlation_id,
+                    model=model,
+                )
+                rbac_skipped.append((model, f"model:{model}"))
+                continue
 
         # T3-S1: per-candidate cost cap. Project this model's cost using
         # ``session_spend._estimate_cost(model, input_tokens, output_tokens)``
@@ -1348,6 +1386,16 @@ async def _dispatch_model_loop(
             projected_cost=cheapest_cost,
             cap=max_cost_per_task,
         )
+
+    # T1-M3: if the chain was exhausted because every candidate was
+    # RBAC-skipped (identity's allow-list refused all providers /
+    # models), raise PermissionDenied with the first offending pair so
+    # the caller can broaden the policy or change the chain. Precedes
+    # the generic RuntimeError for the same reason as the cost-cap raise.
+    if rbac_skipped and not chain_attempts and not cost_skipped:
+        from chuzom.enterprise.rbac import Permission, PermissionDenied
+        first_model, first_why = rbac_skipped[0]
+        raise PermissionDenied(identity, Permission.ROUTE_PROMPT)
 
     # Build diagnostic chain summary showing every model that was tried
     chain_summary = ""
@@ -1937,6 +1985,7 @@ async def route_and_call(
             _reservation=_reservation,
             max_cost_per_task=max_cost_per_task,
             effective_complexity=effective_complexity,
+            identity=identity,
         )
         # T3-S2 + T3-M1: combined timeout + cancel handling. Both failure
         # modes share the same cleanup contract — release the budget

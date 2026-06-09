@@ -128,7 +128,83 @@ def raise_route_prompt_denied(identity: TurnIdentity | Any) -> PermissionDenied:
     return PermissionDenied(identity, Permission.ROUTE_PROMPT)
 
 
+def check_provider(identity: TurnIdentity | Any, provider: str) -> tuple[str, bool]:
+    """T1-M3: per-provider allow-list check for one candidate.
+
+    Returns ``(mode, allowed)``:
+      * ``mode`` is the resolved RBAC mode (off / warn / strict).
+      * ``allowed`` is True when:
+          - mode is off (no enforcement), OR
+          - the identity has no ``allowed_providers`` attribute (no
+            allow-list configured, treated as 'allow all'), OR
+          - the identity has ``allowed_providers`` and ``provider`` is
+            in it (case-insensitive match against the lowercased set).
+
+    Direct ``TurnIdentity`` instances do NOT carry
+    ``allowed_providers`` today — Tier 3 / Phase 3b will populate it
+    on the upgraded identity object that ``current_identity()``
+    returns once SSO/SCIM is wired. Until then, every check returns
+    ``allowed=True`` in modes off + warn, and ``allowed=True`` in
+    strict (because there's no allow-list to fail against).
+
+    The router uses the result to skip over-restricted candidates in
+    strict mode, write a breadcrumb in warn mode, and no-op in off
+    mode.
+    """
+    mode = _resolve_mode()
+    if mode == "off":
+        return mode, True
+    allowed_providers = getattr(identity, "allowed_providers", None)
+    if allowed_providers is None:
+        # No allow-list = allow-all (legacy / no-policy default).
+        return mode, True
+    allowed = provider.lower() in {p.lower() for p in allowed_providers}
+    if mode == "warn" and not allowed:
+        log.warning(
+            "rbac_warn_provider_disallowed",
+            provider=provider,
+            user_id=getattr(identity, "user_id", "unknown"),
+            org_id=getattr(identity, "org_id", "unknown"),
+            tenant_id=getattr(identity, "tenant_id", None),
+        )
+    return mode, allowed
+
+
+def check_model(identity: TurnIdentity | Any, model: str) -> tuple[str, bool]:
+    """T1-M3: per-model allow-list check for one candidate.
+
+    Same semantics as :func:`check_provider` but on
+    ``identity.allowed_models``. Model id is matched against the set
+    case-insensitively; vendor prefixes (``anthropic/``,
+    ``openai/``, ``gemini/``, ``codex/`` etc.) are normalised away
+    before comparison so the allow-list can be written as either
+    ``"claude-sonnet-4-6"`` or ``"anthropic/claude-sonnet-4-6"``.
+    """
+    mode = _resolve_mode()
+    if mode == "off":
+        return mode, True
+    allowed_models = getattr(identity, "allowed_models", None)
+    if allowed_models is None:
+        return mode, True
+    normalised = model.split("/", 1)[1].lower() if "/" in model else model.lower()
+    allowed_norm = {
+        (m.split("/", 1)[1] if "/" in m else m).lower() for m in allowed_models
+    }
+    allowed = normalised in allowed_norm or model.lower() in {m.lower() for m in allowed_models}
+    if mode == "warn" and not allowed:
+        log.warning(
+            "rbac_warn_model_disallowed",
+            model=model,
+            user_id=getattr(identity, "user_id", "unknown"),
+            org_id=getattr(identity, "org_id", "unknown"),
+            tenant_id=getattr(identity, "tenant_id", None),
+        )
+    return mode, allowed
+
+
 __all__ = [
     "check_route_prompt",
+    "check_provider",
+    "check_model",
     "raise_route_prompt_denied",
 ]
