@@ -1,0 +1,125 @@
+# Daily cleanup workflow. Deletes head branches whose PR was merged more
+# than RETENTION_DAYS ago. Safe for stacked-PR workflows because there
+# is a retention window between merge and branch deletion, so child PRs
+# have time to either land or be retargeted.
+#
+# Why this exists
+# ---------------
+# `gh pr merge --delete-branch` (and the UI button) delete the head branch
+# immediately on merge. Any open PR whose base ref was the deleted branch
+# is auto-closed by GitHub. The 2026-06-09 merge train hit this: PRs
+# #44/#45/#46 were closed as orphans after their parents merged, requiring
+# fresh PRs (#47/#48/#49) recreated from the same branch contents.
+#
+# Pair with
+# ---------
+# Settings -> General -> "Automatically delete head branches" = OFF, so
+# this workflow is the single authority for deletion timing.
+name: Cleanup merged branches
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Delete merged branches older than this many days.'
+        required: false
+        default: '7'
+      dry_run:
+        description: 'When true, print actions without deleting.'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: cleanup-merged-branches
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete merged branches older than retention window
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_RETENTION_DAYS: ${{ inputs.retention_days }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RETENTION_DAYS="${INPUT_RETENTION_DAYS:-7}"
+          DRY_RUN="${INPUT_DRY_RUN:-false}"
+
+          cutoff=$(date -u -d "${RETENTION_DAYS} days ago" '+%Y-%m-%dT%H:%M:%SZ')
+          echo "Repository:   $GH_REPO"
+          echo "Retention:    ${RETENTION_DAYS} days"
+          echo "Cutoff (UTC): $cutoff"
+          echo "Dry run:      $DRY_RUN"
+          echo ""
+
+          merged_payload=$(gh pr list \
+            --state merged \
+            --limit 500 \
+            --json number,headRefName,mergedAt)
+
+          branches_to_consider=$(jq -r \
+            --arg cutoff "$cutoff" \
+            '.[] | select(.mergedAt != null and .mergedAt < $cutoff) | .headRefName' \
+            <<<"$merged_payload" | sort -u)
+
+          if [ -z "$branches_to_consider" ]; then
+            echo "No merged branches older than the retention window. Nothing to do."
+            exit 0
+          fi
+
+          deleted=0
+          skipped_protected=0
+          skipped_missing=0
+          skipped_in_use=0
+          while IFS= read -r branch; do
+            [ -z "$branch" ] && continue
+            case "$branch" in
+              main|master|develop|release/*)
+                echo "SKIP protected: $branch"
+                skipped_protected=$((skipped_protected + 1))
+                continue
+                ;;
+            esac
+
+            if ! gh api "repos/$GH_REPO/branches/$branch" --silent 2>/dev/null; then
+              echo "SKIP already-deleted: $branch"
+              skipped_missing=$((skipped_missing + 1))
+              continue
+            fi
+
+            open_dependants=$(gh pr list \
+              --state open \
+              --base "$branch" \
+              --json number \
+              --jq 'length')
+            if [ "$open_dependants" -gt 0 ]; then
+              echo "SKIP in-use as base of open PR: $branch"
+              skipped_in_use=$((skipped_in_use + 1))
+              continue
+            fi
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "DRY-RUN would delete: $branch"
+            else
+              if gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$branch"; then
+                echo "DELETED: $branch"
+                deleted=$((deleted + 1))
+              else
+                echo "FAILED to delete (continuing): $branch"
+              fi
+            fi
+          done <<<"$branches_to_consider"
+
+          echo ""
+          echo "Summary: deleted=$deleted skipped_protected=$skipped_protected skipped_missing=$skipped_missing skipped_in_use=$skipped_in_use"
