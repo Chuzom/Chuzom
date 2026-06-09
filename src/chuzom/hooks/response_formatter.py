@@ -66,6 +66,17 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
             route_prefix = f"{route_prefix} · {_snap.short_form()}"
     except Exception:
         pass
+    # Per-provider tier hint: for subscription routes (Claude), show
+    # weekly + 5h quota remaining; for API routes (Gemini, OpenAI,
+    # Codex), show the 30-day rolling spend on the routed provider.
+    # Free / local providers (Ollama) emit nothing.
+    try:
+        from chuzom.quota_savings import provider_route_hint
+        _hint = provider_route_hint(result.model.provider)
+        if _hint:
+            route_prefix = f"{route_prefix} · {_hint}"
+    except Exception:
+        pass
     return (
         f"ROUTING NOTICE — this prompt was classified as {task_type}/{complexity} and "
         f"answered by {model_label} ({tier}, {latency}, {tokens}) to conserve your "
