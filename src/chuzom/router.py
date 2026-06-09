@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from dataclasses import replace
 from typing import Any, TYPE_CHECKING
 from uuid import uuid4
@@ -159,6 +160,52 @@ def _apply_routing_policy(
     # 3. Tail — everything else, original order
     tail = [m for m in models_to_try if m not in seen]
     return head + tail
+
+
+# T-CODEX-3: subprocess error surface helper.
+# The dispatch loop reduces a failed Codex / Gemini-CLI invocation to a
+# RuntimeError that lands in ``chain_errors``. Before this helper, that
+# error always read ``"Codex exited 1: (response omitted)"`` — so the
+# router's chain summary never carried the real cause and a future PR
+# #39-class bug would be just as expensive to diagnose. The helper
+# extracts the first informative line from the agent's captured content
+# (which includes stderr per run_codex / run_gemini_cli), strips ANSI
+# codes, and truncates to a small cap so a multi-kilobyte traceback can't
+# blow up the chain summary.
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_SUBPROCESS_ERROR_CONTENT_CAP = 200
+
+
+def _format_subprocess_chain_error(
+    agent: str,
+    exit_code: int,
+    content: str | None,
+) -> str:
+    """Format a single-line chain-error message for a CLI agent failure.
+
+    Shape: ``"<agent> exited <code>: <first-informative-line>"``.
+    Falls back to ``"<no stderr captured>"`` when content is empty so
+    the diagnostic shape stays intact on silent failures.
+    """
+    if content is None:
+        body = "<no stderr captured>"
+    else:
+        stripped = _ANSI_RE.sub("", content).strip()
+        if not stripped:
+            body = "<no stderr captured>"
+        else:
+            first_line = next(
+                (ln.strip() for ln in stripped.splitlines() if ln.strip()),
+                "",
+            )
+            if not first_line:
+                body = "<no stderr captured>"
+            elif len(first_line) > _SUBPROCESS_ERROR_CONTENT_CAP:
+                body = first_line[: _SUBPROCESS_ERROR_CONTENT_CAP - 1] + "…"
+            else:
+                body = first_line
+    return f"{agent} exited {exit_code}: {body}"
 
 
 async def _build_and_filter_chain(
@@ -1106,7 +1153,11 @@ async def _dispatch_model_loop(
                 elif provider == "codex":
                     codex_result = await run_codex(prompt, model=model_name)
                     if not codex_result.success:
-                        raise RuntimeError(f"Codex exited {codex_result.exit_code}: (response omitted)")
+                        raise RuntimeError(
+                            _format_subprocess_chain_error(
+                                "Codex", codex_result.exit_code, codex_result.content
+                            )
+                        )
                     in_tokens = max(1, len(prompt) // 4)
                     out_tokens = max(1, len(codex_result.content) // 4)
                     response = LLMResponse(
@@ -1121,7 +1172,13 @@ async def _dispatch_model_loop(
                 elif provider == "gemini_cli":
                     gemini_result = await run_gemini_cli(prompt, model=model_name)
                     if not gemini_result.success:
-                        raise RuntimeError(f"Gemini CLI exited {gemini_result.exit_code}: (response omitted)")
+                        raise RuntimeError(
+                            _format_subprocess_chain_error(
+                                "Gemini CLI",
+                                gemini_result.exit_code,
+                                gemini_result.content,
+                            )
+                        )
                     in_tokens = max(1, len(prompt) // 4)
                     out_tokens = max(1, len(gemini_result.content) // 4)
                     response = LLMResponse(
