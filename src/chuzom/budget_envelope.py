@@ -57,11 +57,31 @@ class BudgetEnvelope:
     The dynamic state (consumed_usd, pending tally) lives in the
     manager — the envelope is just the *contract*: which key, what
     cap, which parents to debit on every reservation.
+
+    Tier semantics (T2-M3):
+
+    * ``cap_usd`` is the **hard** cap. Reservations that would push
+      consumed+pending above it are refused atomically — see
+      ``BudgetEnvelopeManager.try_reserve``.
+    * ``soft_cap_usd`` (optional) is a **soft** alerting threshold.
+      Reservations that cross it succeed but the manager records the
+      transition; operators can query ``tier_state(key)`` to surface
+      alerts (e.g. dashboards, paging) without changing the
+      enforcement contract.
+    * Forecast / predictive tiers are deferred to T2-L1 — they need
+      cross-instance burn-rate data that an in-process manager cannot
+      compute correctly under multi-instance load.
+
+    ``soft_cap_usd`` must be ``None`` or strictly less than
+    ``cap_usd``; an equal or larger soft cap would be a no-op or
+    nonsensical and is rejected at registration.
     """
 
     key: BudgetKey
     cap_usd: float
     parents: tuple[BudgetKey, ...] = field(default_factory=tuple)
+    # T2-M3: optional soft alerting threshold. None = no soft tier.
+    soft_cap_usd: float | None = None
 
 
 class BudgetEnvelopeManager:
@@ -83,6 +103,11 @@ class BudgetEnvelopeManager:
         # doesn't accidentally floor a reservation that some other
         # subsystem made on the same key.
         self._pending: dict[BudgetKey, float] = {}
+        # T2-M3: per-key soft-tier state. True once consumed+pending
+        # crosses soft_cap_usd. The value flips back to False on a
+        # release that brings the total back below the soft cap, so
+        # callers polling ``tier_state`` see consistent transitions.
+        self._soft_breached: dict[BudgetKey, bool] = {}
         self._lock = asyncio.Lock()
 
     def register(
@@ -91,6 +116,7 @@ class BudgetEnvelopeManager:
         cap_usd: float,
         *,
         parents: tuple[BudgetKey, ...] = (),
+        soft_cap_usd: float | None = None,
     ) -> BudgetEnvelope:
         """Register or replace an envelope.
 
@@ -99,13 +125,33 @@ class BudgetEnvelopeManager:
         are. A re-register preserves any existing consumed/pending
         totals so a long-lived parent re-registered with a higher cap
         does not lose its accounting history.
+
+        T2-M3: ``soft_cap_usd`` (optional) sets a soft alerting
+        threshold. Must be strictly less than ``cap_usd`` when
+        provided — equal or larger would be a no-op or nonsensical.
         """
         if cap_usd <= 0:
             raise ValueError(f"cap_usd must be positive, got {cap_usd!r}")
-        env = BudgetEnvelope(key=key, cap_usd=float(cap_usd), parents=tuple(parents))
+        if soft_cap_usd is not None:
+            if soft_cap_usd <= 0:
+                raise ValueError(
+                    f"soft_cap_usd must be positive, got {soft_cap_usd!r}"
+                )
+            if soft_cap_usd >= cap_usd:
+                raise ValueError(
+                    f"soft_cap_usd ({soft_cap_usd}) must be strictly less "
+                    f"than cap_usd ({cap_usd})"
+                )
+        env = BudgetEnvelope(
+            key=key,
+            cap_usd=float(cap_usd),
+            parents=tuple(parents),
+            soft_cap_usd=float(soft_cap_usd) if soft_cap_usd is not None else None,
+        )
         self._envelopes[key] = env
         self._consumed.setdefault(key, 0.0)
         self._pending.setdefault(key, 0.0)
+        self._soft_breached.setdefault(key, False)
         return env
 
     def get(self, key: BudgetKey) -> BudgetEnvelope | None:
@@ -172,6 +218,7 @@ class BudgetEnvelopeManager:
                     self._pending.get(env.key, 0.0) + cost_usd
                 )
                 reserve_for(env.key, cost_usd)
+                self._update_soft_state(env)
             return True
 
     async def release(self, key: BudgetKey, cost_usd: float) -> None:
@@ -184,6 +231,7 @@ class BudgetEnvelopeManager:
                 current = self._pending.get(env.key, 0.0)
                 self._pending[env.key] = max(0.0, current - cost_usd)
                 release_for(env.key, cost_usd)
+                self._update_soft_state(env)
 
     async def commit(self, key: BudgetKey, cost_usd: float) -> None:
         """Move ``cost_usd`` from pending to consumed on self + parents.
@@ -208,6 +256,78 @@ class BudgetEnvelopeManager:
                     0.0, self._pending.get(env.key, 0.0) - cost_usd
                 )
                 release_for(env.key, cost_usd)
+                self._update_soft_state(env)
+
+    # ── T2-M3 soft tier ────────────────────────────────────────────────────
+
+    def _update_soft_state(self, env: BudgetEnvelope) -> None:
+        """Recompute and persist the soft-breached flag for ``env``.
+
+        Called from inside the manager lock after every consumed /
+        pending mutation. No-op when the envelope has no soft cap.
+        Emits a structured log on the rising edge (False → True) so
+        operators can wire it to alerting without polling tier_state.
+        """
+        if env.soft_cap_usd is None:
+            return
+        total = self._consumed.get(env.key, 0.0) + self._pending.get(env.key, 0.0)
+        was_breached = self._soft_breached.get(env.key, False)
+        is_breached = total >= env.soft_cap_usd
+        self._soft_breached[env.key] = is_breached
+        if is_breached and not was_breached:
+            log.warning(
+                "budget_soft_cap_breached",
+                key=str(env.key),
+                soft_cap_usd=env.soft_cap_usd,
+                cap_usd=env.cap_usd,
+                consumed_usd=self._consumed.get(env.key, 0.0),
+                pending_usd=self._pending.get(env.key, 0.0),
+            )
+
+    def tier_state(self, key: BudgetKey) -> dict[str, float | bool | None]:
+        """Return introspection snapshot for ``key``.
+
+        Keys:
+
+        * ``cap_usd`` — hard cap or ``None`` if unregistered.
+        * ``soft_cap_usd`` — soft cap or ``None``.
+        * ``consumed_usd`` — committed spend so far.
+        * ``pending_usd`` — outstanding reservations.
+        * ``remaining_usd`` — ``cap - consumed - pending``, floored at 0.
+        * ``usage_pct`` — ``(consumed+pending)/cap`` in [0.0, 1.0+).
+          ``None`` if no envelope is registered (no enforcement, no
+          meaningful ratio).
+        * ``soft_breached`` — True iff consumed+pending ≥ soft_cap_usd.
+          False when no soft cap is configured.
+
+        Non-async because callers (dashboards, observability) expect a
+        snapshot, not a serialised view. Concurrent mutations can
+        produce numbers that drift mid-read; that's fine for a metric
+        and matches the contract of ``consumed`` / ``pending`` /
+        ``remaining``.
+        """
+        env = self._envelopes.get(key)
+        if env is None:
+            return {
+                "cap_usd": None,
+                "soft_cap_usd": None,
+                "consumed_usd": 0.0,
+                "pending_usd": 0.0,
+                "remaining_usd": float("inf"),
+                "usage_pct": None,
+                "soft_breached": False,
+            }
+        consumed = self._consumed.get(key, 0.0)
+        pending = self._pending.get(key, 0.0)
+        return {
+            "cap_usd": env.cap_usd,
+            "soft_cap_usd": env.soft_cap_usd,
+            "consumed_usd": consumed,
+            "pending_usd": pending,
+            "remaining_usd": max(0.0, env.cap_usd - consumed - pending),
+            "usage_pct": (consumed + pending) / env.cap_usd,
+            "soft_breached": self._soft_breached.get(key, False),
+        }
 
 
 # ── Module-level singleton ──────────────────────────────────────────────────
