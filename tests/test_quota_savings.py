@@ -450,26 +450,31 @@ def test_provider_hint_for_api_shows_30d_spend(
     assert "$1.23" in hint
 
 
-def test_provider_hint_for_codex_uses_api_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Per user steering: codex is treated as API tier in this metric."""
+def test_provider_hint_for_codex_uses_subscription_auth_path() -> None:
+    """Codex authenticates via a ChatGPT subscription — actual_cost is
+    always $0 in the usage table, so the original API path silently
+    suppressed the hint. Codex now routes through the subscription-auth
+    path and surfaces the Claude wk/5h numbers as a proxy for overall
+    AI-routing pressure, prefixed with 'codex sub'."""
     from chuzom.quota_savings import provider_route_hint
-    db = tmp_path / "usage.db"
-    now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
-    inside = (now - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
-    _make_usage_db_with_costs(db, [(inside, "codex", 0.0)])
-    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db))
-    # Codex usage at $0.00 (subscription tier in practice) → no hint
-    assert provider_route_hint("codex", now=now) is None
-    # With non-zero codex spend, the hint surfaces
-    db2 = tmp_path / "usage2.db"
-    _make_usage_db_with_costs(db2, [(inside, "codex", 0.42)])
-    monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db2))
-    hint = provider_route_hint("codex", now=now)
+    with patch(
+        "chuzom.state.get_last_usage",
+        return_value=_FakeCachedUsage(weekly=0.89, session=0.01),
+    ):
+        hint = provider_route_hint("codex")
     assert hint is not None
-    assert "30d on codex" in hint
-    assert "$0.42" in hint
+    assert "codex sub" in hint
+    assert "wk left" in hint
+    assert "5h left" in hint
+    assert "11%" in hint  # 100 - 89
+    assert "99%" in hint  # 100 - 1
+
+
+def test_provider_hint_for_codex_returns_none_without_cached_usage() -> None:
+    """No cached snapshot → no proxy numbers to anchor on → None."""
+    from chuzom.quota_savings import provider_route_hint
+    with patch("chuzom.state.get_last_usage", return_value=None):
+        assert provider_route_hint("codex") is None
 
 
 def test_provider_hint_for_ollama_returns_none() -> None:
