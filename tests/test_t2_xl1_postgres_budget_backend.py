@@ -31,6 +31,11 @@ import pytest
 
 from chuzom.budget_key import SCOPE_TURN, BudgetKey
 
+# CI may not install the optional `postgres` / `postgres-test` extras. Skip
+# the whole module gracefully when psycopg is unavailable rather than
+# failing on the first import that exercises PostgresBudgetBackend.__init__.
+psycopg = pytest.importorskip("psycopg")
+
 
 # ── Docker / Testcontainers availability ──────────────────────────────────
 
@@ -55,11 +60,23 @@ def _docker_socket_present() -> bool:
     return False
 
 
-def _has_testcontainers() -> bool:
+def _has_docker_binary() -> bool:
     return shutil.which("docker") is not None
 
 
-_DOCKER_AVAILABLE = _has_testcontainers() and _docker_socket_present()
+def _has_testcontainers() -> bool:
+    """The integration test needs both the `testcontainers` package and a
+    reachable Docker daemon. Either missing → skip cleanly."""
+    try:
+        import testcontainers.postgres  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+_DOCKER_AVAILABLE = (
+    _has_docker_binary() and _docker_socket_present() and _has_testcontainers()
+)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
