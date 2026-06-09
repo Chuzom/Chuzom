@@ -21,6 +21,7 @@ from chuzom import cost, media, providers
 from chuzom.audit_routing import audit_routing_turn
 from chuzom.budget import get_budget_state, reserve_tokens, release_tokens
 from chuzom.identity import TurnIdentity, current_identity
+from chuzom.idempotency import get_store as _get_idempotency_store
 from chuzom.rbac_routing import check_route_prompt, raise_route_prompt_denied
 from chuzom.state import get_active_agent
 from chuzom.codex_agent import CODEX_MODELS, is_codex_available, run_codex
@@ -1376,6 +1377,7 @@ async def route_and_call(
     identity: TurnIdentity | None = None,
     max_cost_per_task: float | None = None,
     max_wall_clock_seconds: float | None = None,
+    idempotency_key: str | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -1416,6 +1418,18 @@ async def route_and_call(
         caller_context: Optional context string from the MCP tool caller
             (e.g. recent conversation summary). Injected alongside session
             buffer and persistent history into the LLM messages.
+        idempotency_key: Track-3 agent-safety dedupe key. When the same
+            key is presented again within the store's TTL window (default
+            1 hour, override via ``CHUZOM_IDEMPOTENCY_PATH`` for the
+            store path), the original ``LLMResponse`` is returned
+            **without contacting any provider** — no cost incurred and
+            an audit row is written with
+            ``outcome="idempotency_dedupe"``. The default of ``None``
+            preserves pre-T3-M4 behaviour: every call hits the provider.
+            Agent platforms set this on logically-identical retries so a
+            crash-and-replay does not duplicate side effects or spend.
+            Keys are opaque to chuzom; callers choose the hashing
+            recipe that fits their workflow.
         max_wall_clock_seconds: Track-3 agent-safety wall-clock cap. When
             provided, the dispatch loop runs inside an ``asyncio.wait_for``
             shield of ``max_wall_clock_seconds``; on timeout the budget
@@ -1517,6 +1531,39 @@ async def route_and_call(
             )
         except Exception as _audit_err:
             log.warning("audit_rbac_warn_write_failed", error=str(_audit_err))
+
+    # T3-M4: idempotency dedupe BEFORE any reservation or dispatch.
+    # When the caller supplies a key, a prior result (if any) is
+    # returned immediately, no provider contacted, no spend incurred.
+    # A best-effort audit row is written so the SIEM can see that the
+    # turn was served from the dedupe store rather than the provider.
+    # Failures of the dedupe store are logged at WARNING and never
+    # break the turn — fail-open on the dedupe path.
+    if idempotency_key:
+        try:
+            _cached_resp = _get_idempotency_store().lookup(idempotency_key)
+        except Exception as _idem_err:  # noqa: BLE001 — fail-open
+            log.warning("idempotency_lookup_failed", error=str(_idem_err))
+            _cached_resp = None
+        if _cached_resp is not None:
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                    model=getattr(_cached_resp, "model", "unknown") or "unknown",
+                    provider=getattr(_cached_resp, "provider", "unknown") or "unknown",
+                    cost_usd=0.0,
+                    cached=True,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "idempotency_dedupe",
+                        "idempotency_key": idempotency_key,
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_idempotency_dedupe_write_failed", error=str(_audit_err))
+            return _cached_resp
 
     # Tier-2 / partial OBS-001 — bind routing-turn identity into structlog
     # contextvars so every log line emitted by this turn (and any nested
@@ -1979,6 +2026,14 @@ async def route_and_call(
             cached=False,
             detail_extras={"correlation_id": correlation_id},
         )
+        # T3-M4: persist the result for a future replay under the same
+        # idempotency_key. Best-effort; a write failure must not break
+        # the success path the caller is about to receive.
+        if idempotency_key:
+            try:
+                _get_idempotency_store().store(idempotency_key, response)
+            except Exception as _idem_err:  # noqa: BLE001 — fail-open
+                log.warning("idempotency_store_failed", error=str(_idem_err))
         return response
 
 
