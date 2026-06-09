@@ -36,6 +36,56 @@ class BudgetExceeded(Exception):
         )
 
 
+class IterationsExceeded(Exception):
+    """Raised when a session's ``step_count`` would exceed its
+    ``max_iterations`` cap.
+
+    T3-M3 (Track-3 agent-safety). Per-session counter; the cap is set
+    at ``SessionStore.create(max_iterations=N)`` and checked in
+    ``record_step`` before any state transition. The session is
+    transitioned to ``BUDGET_EXCEEDED`` on raise so subsequent
+    ``record_step`` calls fail with ``TerminalStateViolation``.
+    """
+
+    def __init__(
+        self,
+        session_id: str,
+        max_iterations: int,
+        current_step_count: int,
+    ) -> None:
+        self.session_id = session_id
+        self.max_iterations = int(max_iterations)
+        self.current_step_count = int(current_step_count)
+        super().__init__(
+            f"session {session_id} reached max_iterations="
+            f"{max_iterations} (current step {current_step_count + 1})"
+        )
+
+
+class RecursionDepthExceeded(Exception):
+    """Raised when a parent chain at session-create time would exceed
+    the parent's ``max_recursion_depth`` cap.
+
+    T3-M3 (Track-3 agent-safety). The depth is walked from the
+    parent's ``parent_session_id`` chain at create time so a child
+    cannot be spawned that would push the chain past the cap.
+    """
+
+    def __init__(
+        self,
+        parent_session_id: str,
+        max_recursion_depth: int,
+        current_depth: int,
+    ) -> None:
+        self.parent_session_id = parent_session_id
+        self.max_recursion_depth = int(max_recursion_depth)
+        self.current_depth = int(current_depth)
+        super().__init__(
+            f"parent {parent_session_id} max_recursion_depth="
+            f"{max_recursion_depth} reached (would-be depth {current_depth})"
+        )
+
+
 @dataclass(frozen=True)
 class BudgetEnvelope:
     """Holds a cap, tracks consumed, answers two questions:
