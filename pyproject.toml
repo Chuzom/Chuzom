@@ -62,6 +62,18 @@ code-context = [
 tui = [
     "textual>=0.80.0",
 ]
+# Multi-instance budget coordination via Postgres (T2-XL1 / Phase 3b).
+# Pulled in lazily so the SQLite single-instance default stays minimal.
+postgres = [
+    "psycopg[binary]>=3.2",
+]
+# Integration testing for the Postgres backend uses Testcontainers to spin
+# up a temporary Postgres in CI. Local runs use the same path. Skipped
+# automatically when Docker is unavailable.
+postgres-test = [
+    "psycopg[binary]>=3.2",
+    "testcontainers[postgres]>=4.0",
+]
 # Semantic response cache + embedding-based classifier (v0.1+).
 # Pulled in lazily so the bare router stays lightweight.
 semantic = [
