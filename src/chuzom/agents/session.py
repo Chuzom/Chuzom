@@ -13,13 +13,15 @@ Session state transitions:
 """
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import time
 import uuid
 from pathlib import Path
+from types import MappingProxyType
 
-from chuzom.agents.base import AgentSession, SessionState
+from chuzom.agents.base import AgentRoutingPolicy, AgentSession, SessionState
 from chuzom.agents.budget import (
     BudgetEnvelope,
     BudgetExceeded,
@@ -48,21 +50,22 @@ CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);
 """
 
-# T3-M3: idempotent ALTER TABLE ADD COLUMN migration for sessions DBs
-# that pre-date the runaway-guard columns. PRAGMA table_info introspects
-# the live schema; we add only the missing columns. SQLite accepts
-# multiple statements separated by ';'.
+# T3-M3 + T3-XL1: idempotent ALTER TABLE ADD COLUMN migration for sessions
+# DBs that pre-date the runaway-guard columns or the routing-policy column.
+# PRAGMA table_info introspects the live schema; we add only the missing
+# columns. SQLite accepts multiple statements separated by ';'.
 _MIGRATIONS_V2 = (
     ("max_iterations", "ALTER TABLE sessions ADD COLUMN max_iterations INTEGER"),
     ("max_recursion_depth", "ALTER TABLE sessions ADD COLUMN max_recursion_depth INTEGER"),
+    ("routing_policy_json", "ALTER TABLE sessions ADD COLUMN routing_policy_json TEXT"),
 )
 
 _INSERT = """
 INSERT INTO sessions (
     session_id, agent_id, started_at, completed_at, parent_session_id,
     budget_cap_usd, consumed_usd, step_count, state, framework,
-    max_iterations, max_recursion_depth
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    max_iterations, max_recursion_depth, routing_policy_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _UPDATE_STEP = """
@@ -82,13 +85,52 @@ class TerminalStateViolation(RuntimeError):
     """Raised when a mutation is attempted on a terminal-state session."""
 
 
+def _policy_to_json(policy: AgentRoutingPolicy | None) -> str | None:
+    """Serialise a policy to JSON for the routing_policy_json column.
+
+    inherits_from is NOT serialised — at persistence time we record only
+    the leaf policy. Cross-session inheritance lives in the session graph
+    (via parent_session_id), not in the stored policy.
+    """
+    if policy is None:
+        return None
+    return json.dumps(
+        {
+            "preferred_providers": list(policy.preferred_providers),
+            "preferred_models_by_classification": {
+                k: list(v) for k, v in policy.preferred_models_by_classification.items()
+            },
+            "max_cost_per_turn_usd": policy.max_cost_per_turn_usd,
+            "max_temperature": policy.max_temperature,
+        }
+    )
+
+
+def _policy_from_json(raw: str | None) -> AgentRoutingPolicy | None:
+    if raw is None:
+        return None
+    data = json.loads(raw)
+    by_class = {
+        k: tuple(v)
+        for k, v in (data.get("preferred_models_by_classification") or {}).items()
+    }
+    return AgentRoutingPolicy(
+        preferred_providers=tuple(data.get("preferred_providers") or ()),
+        preferred_models_by_classification=MappingProxyType(by_class),
+        max_cost_per_turn_usd=data.get("max_cost_per_turn_usd"),
+        max_temperature=data.get("max_temperature"),
+    )
+
+
 def _row_to_session(row: tuple) -> AgentSession:
     # row may carry the T3-M3 max_iterations / max_recursion_depth
-    # columns (positions 10–11). Pre-T3-M3 rows have only 10 fields
-    # because the migration ran AFTER the SELECT statement was built
-    # — fall back to None for backwards compat.
+    # columns (positions 10–11) and the T3-XL1 routing_policy_json
+    # column (position 12). Older rows have fewer fields because the
+    # migration ran AFTER the SELECT statement was built — fall back
+    # to None for backwards compat.
     max_iter = row[10] if len(row) > 10 else None
     max_depth = row[11] if len(row) > 11 else None
+    policy_json = row[12] if len(row) > 12 else None
     return AgentSession(
         session_id=row[0],
         agent_id=row[1],
@@ -102,6 +144,7 @@ def _row_to_session(row: tuple) -> AgentSession:
         framework=row[9],
         max_iterations=max_iter,
         max_recursion_depth=max_depth,
+        routing_policy=_policy_from_json(policy_json),
     )
 
 
@@ -140,6 +183,7 @@ class SessionStore:
         framework: str | None = None,
         max_iterations: int | None = None,
         max_recursion_depth: int | None = None,
+        routing_policy: AgentRoutingPolicy | None = None,
     ) -> AgentSession:
         """Open a new active session with the given budget cap.
 
@@ -188,6 +232,7 @@ class SessionStore:
             framework=framework,
             max_iterations=max_iterations,
             max_recursion_depth=max_recursion_depth,
+            routing_policy=routing_policy,
         )
         self._conn.execute(
             _INSERT,
@@ -204,6 +249,7 @@ class SessionStore:
                 session.framework,
                 session.max_iterations,
                 session.max_recursion_depth,
+                _policy_to_json(session.routing_policy),
             ),
         )
         self._conn.commit()
@@ -213,7 +259,8 @@ class SessionStore:
         cursor = self._conn.execute(
             "SELECT session_id, agent_id, started_at, completed_at, "
             "parent_session_id, budget_cap_usd, consumed_usd, step_count, "
-            "state, framework, max_iterations, max_recursion_depth "
+            "state, framework, max_iterations, max_recursion_depth, "
+            "routing_policy_json "
             "FROM sessions WHERE session_id = ?",
             (session_id,),
         )
@@ -221,6 +268,39 @@ class SessionStore:
         if row is None:
             raise SessionNotFound(session_id)
         return _row_to_session(row)
+
+    def effective_policy(self, session_id: str) -> AgentRoutingPolicy | None:
+        """Walk parent chain root→leaf and merge policies child-over-parent.
+
+        Cross-session inheritance for T3-XL1: when a session has a
+        ``parent_session_id`` set, the parent's policy fills in any field
+        the child leaves unset. Walks recursively to the root, merges
+        outward so the leaf wins on conflicts. Returns ``None`` if no
+        session in the chain has a policy.
+
+        Cycle guard: bails after 1024 hops (parity with
+        ``_enforce_recursion_depth``).
+        """
+        chain: list[AgentRoutingPolicy] = []  # root first, leaf last
+        current_id: str | None = session_id
+        for _ in range(1024):
+            if current_id is None:
+                break
+            try:
+                s = self.get(current_id)
+            except SessionNotFound:
+                break
+            if s.routing_policy is not None:
+                chain.append(s.routing_policy.resolved())
+            current_id = s.parent_session_id
+        if not chain:
+            return None
+        # chain[0] is the leaf (the session we started from); walk
+        # outward so each merge applies the next ancestor's defaults.
+        effective = chain[0]
+        for ancestor in chain[1:]:
+            effective = effective.merged_with(ancestor)
+        return effective
 
     def _enforce_recursion_depth(self, parent_session_id: str) -> None:
         """Walk the parent chain; raise RecursionDepthExceeded if any

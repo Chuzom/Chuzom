@@ -1,8 +1,10 @@
 """Agent layer data model — AgentProfile + AgentSession + SessionState."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
+from types import MappingProxyType
+from typing import Mapping
 
 
 class SessionState(str, Enum):
@@ -61,6 +63,92 @@ class AgentProfile:
 
 
 @dataclass(frozen=True)
+class AgentRoutingPolicy:
+    """T3-XL1 agent-aware routing bias attached to one ``AgentSession``.
+
+    Distinct from ``AgentProfile`` (which is type-level config set at
+    agent-registration time) — a ``AgentRoutingPolicy`` is per-session and
+    inherits through the parent session chain so a sub-agent picks up its
+    spawner's constraints unless it explicitly overrides them.
+
+    Attributes:
+        preferred_providers: Provider names in priority order
+            (e.g. ``("anthropic", "openai", "gemini")``). The router puts
+            preferred providers at the head of the candidate list. Empty
+            means "no provider bias".
+        preferred_models_by_classification: Per-classification model
+            priority lists. Keyed by chuzom classification labels
+            (``"simple"``, ``"moderate"``, ``"complex"``, ``"research"``,
+            ``"code"``, …). Each value is the preferred model order for
+            that classification.
+        max_cost_per_turn_usd: Per-call cost cap, distinct from the
+            session-level ``budget_cap_usd``. ``None`` = no per-turn cap.
+        max_temperature: Sampling-temperature ceiling. ``None`` = no clamp.
+        inherits_from: Optional explicit parent policy. ``resolved()``
+            walks this chain and merges parent → child so the leaf wins.
+
+    Inheritance is also driven implicitly by the session graph: see
+    ``SessionStore.effective_policy``, which walks ``parent_session_id``
+    and merges root → leaf. Both paths use ``merged_with`` so the rules
+    are identical.
+    """
+
+    preferred_providers: tuple[str, ...] = ()
+    # Mapping rather than dict so the frozen invariant is enforced; the
+    # factory wraps any provided dict in a MappingProxyType.
+    preferred_models_by_classification: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+    max_cost_per_turn_usd: float | None = None
+    max_temperature: float | None = None
+    inherits_from: "AgentRoutingPolicy | None" = None
+
+    def merged_with(self, parent: "AgentRoutingPolicy") -> "AgentRoutingPolicy":
+        """Return a policy where ``self`` (child) overrides ``parent``.
+
+        Merge rules:
+
+        * **Scalar fields** (``max_cost_per_turn_usd``, ``max_temperature``)
+          — child value wins if not ``None``; otherwise parent fills in.
+        * **Provider tuple** — child wins outright if non-empty; otherwise
+          parent's order survives. Tuples are not unioned because order
+          matters for routing and a union would be ambiguous.
+        * **Classification dict** — merged key-by-key. Child's keys
+          replace parent's; parent keys absent from child survive.
+        * **inherits_from** — dropped on the merged result; caller is
+          expected to have already resolved the chain.
+        """
+        merged_dict = dict(parent.preferred_models_by_classification)
+        merged_dict.update(self.preferred_models_by_classification)
+        return AgentRoutingPolicy(
+            preferred_providers=(
+                self.preferred_providers
+                if self.preferred_providers
+                else parent.preferred_providers
+            ),
+            preferred_models_by_classification=MappingProxyType(merged_dict),
+            max_cost_per_turn_usd=(
+                self.max_cost_per_turn_usd
+                if self.max_cost_per_turn_usd is not None
+                else parent.max_cost_per_turn_usd
+            ),
+            max_temperature=(
+                self.max_temperature
+                if self.max_temperature is not None
+                else parent.max_temperature
+            ),
+            inherits_from=None,
+        )
+
+    def resolved(self) -> "AgentRoutingPolicy":
+        """Walk ``inherits_from`` chain and return the merged policy."""
+        if self.inherits_from is None:
+            return replace(self, inherits_from=None)
+        parent_resolved = self.inherits_from.resolved()
+        return self.merged_with(parent_resolved)
+
+
+@dataclass(frozen=True)
 class AgentSession:
     """One run of one agent. Immutable snapshot — SessionStore returns a
     fresh instance on every update.
@@ -89,6 +177,10 @@ class AgentSession:
     #   length at child-create time. None = no cap.
     max_iterations: int | None = None
     max_recursion_depth: int | None = None
+    # T3-XL1: agent-aware routing policy. None = no policy on this
+    # session; the effective policy may still be inherited from a
+    # parent via SessionStore.effective_policy.
+    routing_policy: AgentRoutingPolicy | None = None
 
     @property
     def remaining_usd(self) -> float:
