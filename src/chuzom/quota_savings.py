@@ -232,7 +232,13 @@ def compute_quota_savings(
 
 
 _SUBSCRIPTION_PROVIDERS = frozenset({"anthropic", "cc"})
-_API_PROVIDERS = frozenset({"openai", "gemini", "codex", "groq", "deepseek"})
+# Subscription-tier providers that auth via a parent subscription (no
+# per-call dollar cost recorded in usage.db). They show the Claude
+# subscription wk/5h pressure as a proxy for "AI routing pressure" —
+# imperfect because codex is on an OpenAI ChatGPT account, but the
+# best signal chuzom can surface without an OpenAI-side quota API.
+_SUBSCRIPTION_AUTH_PROVIDERS = frozenset({"codex"})
+_API_PROVIDERS = frozenset({"openai", "gemini", "groq", "deepseek"})
 _FREE_LOCAL_PROVIDERS = frozenset({"ollama", "vllm", "lm_studio"})
 
 
@@ -270,14 +276,21 @@ def provider_route_hint(
 ) -> str | None:
     """Return a short routing-notice suffix specific to ``provider``.
 
-    * **Subscription tier** (``anthropic`` / ``cc``) — show how much of
+    * **Claude subscription** (``anthropic`` / ``cc``) — show how much of
       the Claude subscription quota is still available, in the same
       weekly + 5h denomination the user sees on claude.ai. Reads from
       the cached usage snapshot.
-    * **API tier** (``gemini``, ``openai``, ``codex``, …) — show the
-      cumulative cost in the rolling last 30 days for THIS provider, so
-      the user can see whether the routing they just got was
-      pulling from a budget that is starting to bite.
+    * **Other subscription-auth** (``codex`` — ChatGPT-account auth) —
+      surface "<provider> sub" prefix plus the same Claude weekly + 5h
+      numbers as a proxy for overall AI-routing pressure. Codex doesn't
+      expose its own quota API, and an actual_cost of $0 was making the
+      hint silently disappear under the API path; treating it as a
+      subscription-auth provider keeps the routing notice consistent
+      regardless of which model handled the turn.
+    * **API tier** (``gemini``, ``openai``, ``groq``, ``deepseek``) — show
+      the cumulative cost in the rolling last 30 days for THIS provider,
+      so the user can see whether the routing they just got was pulling
+      from a budget that is starting to bite.
     * **Free / local** (``ollama``, ``vllm``, ``lm_studio``) — return
       ``None``; no metric makes sense for a zero-cost local call.
 
@@ -294,6 +307,17 @@ def provider_route_hint(
         weekly_left = max(0.0, 100.0 - cached.weekly_pct * 100.0)
         session_left = max(0.0, 100.0 - cached.session_pct * 100.0)
         return f"wk left {weekly_left:.0f}% · 5h left {session_left:.0f}%"
+    if provider in _SUBSCRIPTION_AUTH_PROVIDERS:
+        from chuzom import state as _state
+        cached = _state.get_last_usage()
+        if cached is None:
+            return None
+        weekly_left = max(0.0, 100.0 - cached.weekly_pct * 100.0)
+        session_left = max(0.0, 100.0 - cached.session_pct * 100.0)
+        return (
+            f"{provider} sub · wk left {weekly_left:.0f}% "
+            f"· 5h left {session_left:.0f}%"
+        )
     if provider in _API_PROVIDERS:
         db = db_path or _default_db_path()
         since = (now or datetime.now(timezone.utc)) - timedelta(days=30)
