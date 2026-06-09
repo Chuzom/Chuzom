@@ -28,6 +28,7 @@ from chuzom.rbac_routing import (
     check_route_prompt,
     raise_route_prompt_denied,
 )
+from chuzom.redaction_routing import maybe_redact as _maybe_redact
 from chuzom.state import get_active_agent
 from chuzom.codex_agent import CODEX_MODELS, is_codex_available, run_codex
 from chuzom.contract import build_contract
@@ -1663,6 +1664,13 @@ async def route_and_call(
                 log.warning("audit_idempotency_dedupe_write_failed", error=str(_audit_err))
             return _cached_resp
 
+    # T4-M1: prompt redaction immediately before the prompt heads to any
+    # downstream component (context-prep, dispatcher, provider). Off by
+    # default (CHUZOM_REDACTION env unset / off); when on, the scrubbed
+    # prompt replaces the original variable used throughout the rest of
+    # the body. Counts are stashed for the success-path audit row.
+    prompt, _redaction_counts = _maybe_redact(prompt)
+
     # Tier-2 / partial OBS-001 — bind routing-turn identity into structlog
     # contextvars so every log line emitted by this turn (and any nested
     # call it makes) carries the same ``request_id`` / ``user_id`` /
@@ -2169,6 +2177,11 @@ async def route_and_call(
             ) from _to_err
         async with _budget_lock:
             _pending_spend = max(0.0, _pending_spend - _reservation)
+        _success_detail = {"correlation_id": correlation_id}
+        # T4-M1: surface scrub-rate per turn so operators can observe
+        # which PII patterns are firing without persisting any PII.
+        if _redaction_counts:
+            _success_detail["redactions"] = _redaction_counts
         audit_routing_turn(
             identity=identity,
             task_type=str(task_type),
@@ -2177,7 +2190,7 @@ async def route_and_call(
             provider=getattr(response, "provider", "unknown") or "unknown",
             cost_usd=float(getattr(response, "cost_usd", 0.0) or 0.0),
             cached=False,
-            detail_extras={"correlation_id": correlation_id},
+            detail_extras=_success_detail,
         )
         # T3-M4: persist the result for a future replay under the same
         # idempotency_key. Best-effort; a write failure must not break
