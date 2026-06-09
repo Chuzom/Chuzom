@@ -406,6 +406,45 @@ class WallClockExceeded(TimeoutError):
         )
 
 
+class DeadlineExceeded(TimeoutError):
+    """Raised when a routed turn outlives ``deadline_monotonic``.
+
+    Track-3 agent-safety (T3-M2): the parent workflow propagates an
+    absolute ``time.monotonic()`` deadline through every nested
+    ``route_and_call``. Each turn:
+
+    * Refuses to do work if the deadline has already passed (raises
+      this exception before any provider is contacted).
+    * Caps its dispatch wall-clock at ``min(deadline_remaining,
+      max_wall_clock_seconds)`` so a slow provider can't bleed past
+      the workflow deadline.
+    * Distinguishes deadline-driven timeout (this exception) from
+      single-call wall-clock timeout (``WallClockExceeded``) so the
+      caller knows whether to retry: deadline = stop the workflow;
+      wall-clock = a different model in the chain may still succeed.
+
+    Subclasses ``TimeoutError`` so generic ``try/except TimeoutError``
+    catches both this and ``WallClockExceeded`` — operators that
+    don't need to distinguish can still write the simple form.
+
+    The ``deadline_monotonic`` and ``over_by_seconds`` attributes
+    carry the bounds the caller needs to render an actionable error.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        deadline_monotonic: float,
+        over_by_seconds: float | None = None,
+    ):
+        super().__init__(message)
+        self.deadline_monotonic = float(deadline_monotonic)
+        self.over_by_seconds = (
+            float(over_by_seconds) if over_by_seconds is not None else None
+        )
+
+
 @dataclass(frozen=True)
 class LLMResponse:
     """Unified response from any LLM or media generation call.
