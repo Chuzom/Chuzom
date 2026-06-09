@@ -824,6 +824,37 @@ async def _dispatch_model_loop(
                 rbac_skipped.append((model, f"model:{model}"))
                 continue
 
+        # T4-M2: per-classification provider allow-list. Operators pin
+        # which providers may see which task types (e.g. CODE must
+        # never leave the on-prem provider). Independent of identity
+        # RBAC — applies to every turn, identity-less or not.
+        from chuzom.classification_allowlist import (
+            MODE_STRICT as _CLS_STRICT,
+            MODE_WARN as _CLS_WARN,
+            check_classification_provider as _check_classification_provider,
+        )
+        _cls_mode, _cls_ok = _check_classification_provider(task_type, provider)
+        if _cls_mode == _CLS_STRICT and not _cls_ok:
+            route_log.info(
+                "classification_allowlist_skip",
+                correlation_id=correlation_id,
+                task_type=task_type.value,
+                provider=provider,
+                model=model,
+            )
+            rbac_skipped.append(
+                (model, f"classification:{task_type.value}->{provider}")
+            )
+            continue
+        elif _cls_mode == _CLS_WARN and not _cls_ok:
+            route_log.warning(
+                "classification_allowlist_warn",
+                correlation_id=correlation_id,
+                task_type=task_type.value,
+                provider=provider,
+                model=model,
+            )
+
         # T3-S1: per-candidate cost cap. Project this model's cost using
         # ``session_spend._estimate_cost(model, input_tokens, output_tokens)``
         # — the same primitive the global reservation uses, so the cap is
