@@ -52,10 +52,20 @@ Claude quota), making Codex a free-from-Claude fallback.
 #
 # Solution: Cache results at module import time, before any async code runs.
 # Pre-compute both Codex binary and plugin availability on module load.
+#
+# SELF-HEAL (added later): a startup-only probe permanently misses Codex
+# binaries installed *after* the MCP daemon launched — a real failure mode
+# we hit in production. The cache is now positive-only-trusted: a False
+# result triggers a re-probe at most once per _PROBE_INTERVAL_SEC. Worst
+# case is one delayed call per minute on a slow filesystem; the upside is
+# the cache self-heals without requiring an MCP restart whenever Codex,
+# Codex.app, or the npm plugin land on disk.
 # ─────────────────────────────────────────────────────────────────────────
 
 _CODEX_BINARY_PATH: str | None = None
 _CODEX_PLUGIN_AVAILABLE: bool = False
+_PROBE_INTERVAL_SEC: float = 60.0
+_LAST_PROBE_TS: float = 0.0
 
 
 def _initialize_codex_cache() -> None:
@@ -126,13 +136,62 @@ def find_codex_binary() -> str | None:
 def is_codex_available() -> bool:
     """Check whether a usable Codex CLI binary exists on this system.
 
-    Returns the cached result from module import time (pre-computed to avoid
-    blocking I/O in async contexts). Calling this during async routing is safe.
+    Cache strategy:
+
+    * **Positive cache is trusted.** If a binary was found previously the
+      function returns ``True`` immediately — binaries virtually never
+      vanish at runtime and trusting the cache keeps the hot path
+      allocation-free.
+    * **Negative cache re-probes.** A ``None`` cache triggers a fresh
+      filesystem probe at most once per ``_PROBE_INTERVAL_SEC``. This
+      self-heals the failure mode where the MCP daemon launched before
+      Codex was installed (cache locked to ``False`` for the daemon's
+      lifetime, no MCP restart possible from a user perspective).
+
+    The 60-second floor keeps the worst case bounded: at most one
+    filesystem hit per minute on a slow / network-mounted home, while
+    a normal local install heals on the next routing decision.
+    Calling this from async code remains safe under those assumptions.
 
     Returns:
-        ``True`` if a Codex binary was found at module import time.
+        ``True`` if a Codex binary is currently findable on disk.
     """
+    global _CODEX_BINARY_PATH, _CODEX_PLUGIN_AVAILABLE, _LAST_PROBE_TS
+
+    # Fast path: positive cache.
+    if _CODEX_BINARY_PATH is not None:
+        return True
+
+    # Negative cache → rate-limited re-probe.
+    now = time.monotonic()
+    if now - _LAST_PROBE_TS < _PROBE_INTERVAL_SEC:
+        return False
+    _LAST_PROBE_TS = now
+
+    _CODEX_BINARY_PATH = find_codex_binary()
+    if _CODEX_BINARY_PATH is not None:
+        # Binary just appeared — plugin often lands alongside it; re-check
+        # too so the next is_codex_plugin_available() call reflects reality.
+        try:
+            _CODEX_PLUGIN_AVAILABLE = _check_codex_plugin()
+        except Exception:
+            # Plugin probe failure is non-fatal; the binary alone is enough
+            # to route through Codex.
+            pass
     return _CODEX_BINARY_PATH is not None
+
+
+def _reset_codex_cache_for_tests() -> None:
+    """Drop the cached binary path and last-probe timestamp so the next
+    ``is_codex_available()`` call performs a fresh probe.
+
+    Production code never calls this — tests use it to exercise the
+    self-heal path deterministically without ``time.sleep(60)``.
+    """
+    global _CODEX_BINARY_PATH, _CODEX_PLUGIN_AVAILABLE, _LAST_PROBE_TS
+    _CODEX_BINARY_PATH = None
+    _CODEX_PLUGIN_AVAILABLE = False
+    _LAST_PROBE_TS = 0.0
 
 
 def is_codex_plugin_available() -> bool:
