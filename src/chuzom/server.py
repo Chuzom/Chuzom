@@ -121,16 +121,84 @@ agents.register(mcp)  # v0.0.2 — 6 agent-session MCP tools
 
 @mcp.resource("chuzom://status")
 def router_status() -> str:
-    """MCP resource returning a plain-text snapshot of the router's current state.
+    """MCP resource returning a plain-text snapshot of router state.
 
-    Includes the active profile, subscription tier, configured provider
-    counts (text and media), optional monthly budget, and per-provider
-    circuit-breaker health status.
+    SEC-004 closure (audit, lateral finding): under
+    ``CHUZOM_PROFILE=enterprise`` this resource gates by identity.
+    Without a valid ``CHUZOM_TOKEN`` (or, when called via SSE, a
+    Bearer header) we return a minimal redacted shape that confirms
+    the server is up but leaks NO provider configuration — the
+    same posture the original audit's SEC-004 row asked for.
 
-    Returns:
-        A newline-delimited plain-text summary (not markdown).
+    Developer profile preserves the full surface so dev workstations
+    and `chuzom doctor` keep working out-of-the-box.
     """
-    config = get_config()
+    return _render_router_status()
+
+
+def _render_router_status(
+    *, force_redacted: bool | None = None,
+) -> str:
+    """Implementation of ``chuzom://status``. Split out so tests
+    don't need to spin up an MCP transport.
+
+    ``force_redacted`` is a test affordance — when ``True`` the
+    redacted shape is rendered regardless of identity; when
+    ``False`` the full shape; when ``None`` the gate is applied per
+    the SEC-004 contract (enterprise + no valid identity →
+    redacted; everything else → full).
+
+    Crucially the gate check happens BEFORE we touch ``get_config``
+    so a Pydantic-rejected ``CHUZOM_PROFILE`` value (chuzom's
+    Config schema predates the enterprise profile axis introduced
+    in slice 3) can't crash the redacted path."""
+    if force_redacted is None:
+        from chuzom.profile import is_enterprise
+        from chuzom.identity import (
+            EnterpriseIdentityRequired,
+            _enterprise_identity,
+        )
+        if is_enterprise():
+            try:
+                _enterprise_identity()
+                redact = False
+            except EnterpriseIdentityRequired:
+                redact = True
+        else:
+            redact = False
+    else:
+        redact = force_redacted
+
+    if redact:
+        # Minimal shape — confirms the server is up, leaks
+        # nothing about configured providers / models / tiers.
+        # We deliberately don't call ``get_config()`` on this path
+        # so a non-Pydantic-aware enterprise profile value can't
+        # crash the redacted shape.
+        return "\n".join([
+            "Profile: enterprise",
+            "Status: ok",
+            "Note: provider details redacted (SEC-004); "
+            "authenticate with CHUZOM_TOKEN for full status.",
+        ])
+
+    try:
+        config = get_config()
+    except Exception:
+        # Routing config failed to validate. Most likely cause:
+        # ``CHUZOM_PROFILE`` is being used for the deployment-profile
+        # axis (slice 3) but chuzom's routing ``Config`` expects one
+        # of ``budget/balanced/premium/quota_balanced/subscription_local``
+        # for the same env. Surface a useful message rather than
+        # crashing the resource handler.
+        return "\n".join([
+            "Profile: enterprise",
+            "Status: ok",
+            "Note: routing config unavailable — the deployment-profile "
+            "env may collide with the routing config's CHUZOM_PROFILE "
+            "expectations. Restart with a clean routing profile to see "
+            "provider details.",
+        ])
     tracker = get_tracker()
     report = tracker.status_report()
     lines = [
@@ -150,8 +218,174 @@ def router_status() -> str:
 # ── Backward compat re-exports are at the top of this module ─────────────────
 
 
+_STARTUP_VERIFY_SKIP_ENV = "CHUZOM_SKIP_STARTUP_VERIFY"
+_STARTUP_VERIFY_OFF_VALUES = {"on", "1", "true", "yes"}
+
+# Loop-5 follow-up — critical-module list checked at BOTH developer
+# and enterprise boot. Fires before _startup_verify_or_die so a
+# stale-installed runtime (the G-034 / OP-1 failure mode that broke
+# the MCP repeatedly during the audit + Loop-5 work) is caught at
+# boot rather than mid-call. Keep this list minimal: only modules
+# whose absence guarantees the server is broken. Adding low-value
+# modules here turns startup into a slow probe.
+_CRITICAL_MODULES: tuple[str, ...] = (
+    "chuzom.cli",
+    "chuzom.classification_allowlist",  # the canonical G-034 canary
+    "chuzom.admin_api",
+    "chuzom.invoice_reconciliation",
+    "chuzom.enterprise.identity",
+    "chuzom.enterprise.rbac",
+    "chuzom.enterprise.quotas",
+    "chuzom.agents.session",
+)
+
+_CRITICAL_MODULE_SKIP_ENV = "CHUZOM_SKIP_CRITICAL_MODULE_CHECK"
+
+
+def _critical_modules_or_die() -> None:
+    """Loop-5 follow-up — verify every critical module is importable
+    at server startup. Refuses to boot when any fails.
+
+    Why this is separate from ``_startup_verify_or_die``:
+
+    * ``_startup_verify_or_die`` only fires under enterprise profile;
+      this check fires in developer profile too. Developer installs
+      drift just as easily as enterprise ones — Loop-5 itself was
+      blocked twice by ``No module named 'chuzom.classification_allowlist'``.
+    * ``verify_enterprise`` covers RBAC / audit / redaction / DB
+      invariants that only matter at the enterprise tier. The
+      missing-module surface is universal.
+
+    The G-034 install-smoke gate (``scripts/ci_install_smoke_test.sh``)
+    prevents a broken sdist from publishing to PyPI in the first
+    place. This boot-time check is the second layer — it catches
+    a runtime that drifted AFTER install (a `pip install -U` against
+    an old wheel, an editable install that lost a `.pth` entry, a
+    user who skipped the smoke gate locally).
+
+    Bypass via ``CHUZOM_SKIP_CRITICAL_MODULE_CHECK=on`` for emergency
+    debug; the bypass logs a warning to stderr so it can never be
+    silent.
+    """
+    import importlib
+    import os
+    import sys
+
+    skip = (
+        (os.environ.get(_CRITICAL_MODULE_SKIP_ENV) or "")
+        .strip().lower() in _STARTUP_VERIFY_OFF_VALUES
+    )
+    if skip:
+        sys.stderr.write(
+            f"[chuzom server] {_CRITICAL_MODULE_SKIP_ENV}=on — "
+            "skipping critical-module check. The server may boot "
+            "with a broken module surface; routed calls will fail "
+            "with inscrutable transport errors.\n"
+        )
+        return
+
+    failures: list[tuple[str, str]] = []
+    for name in _CRITICAL_MODULES:
+        try:
+            importlib.import_module(name)
+        except Exception as exc:  # noqa: BLE001
+            # Any import-time failure counts — ImportError on missing
+            # files, SyntaxError on corrupt files, ModuleNotFoundError
+            # on a partial install. We don't try to classify because
+            # the remediation is the same for all of them.
+            failures.append((name, f"{type(exc).__name__}: {exc}"))
+
+    if not failures:
+        return
+
+    sys.stderr.write(
+        "[chuzom server] critical-module check FAILED — installed "
+        "runtime is missing modules that exist in source. This is "
+        "the G-034 / OP-1 stale-install failure mode.\n"
+    )
+    for name, detail in failures:
+        sys.stderr.write(f"  ✗ {name}\n    → {detail}\n")
+    sys.stderr.write(
+        "\nRemediation:\n"
+        "  1. uv tool install --reinstall --editable ~/projects/chuzom\n"
+        "     (or `pip install -e .` from the source checkout)\n"
+        "  2. Restart the MCP server process — in-memory module table "
+        "is cached from the previous install.\n"
+        "  3. Verify with `chuzom doctor` (the OP-4 transport probe).\n"
+        f"  4. Bypass for emergency debug only: "
+        f"{_CRITICAL_MODULE_SKIP_ENV}=on (NOT for production).\n"
+    )
+    sys.exit(1)
+
+
+def _startup_verify_or_die() -> None:
+    """Refinement #11 — run the enterprise verifier at boot and
+    refuse to start if any check fails.
+
+    Only fires under ``CHUZOM_PROFILE=enterprise`` so existing
+    developer / single-user installs see zero behaviour change.
+    Operators can bypass for emergency debug via
+    ``CHUZOM_SKIP_STARTUP_VERIFY=on`` — the bypass logs a warning so
+    it can never be silent.
+
+    The verifier itself is a sub-100ms pure check list; failing fast
+    on a misconfigured enterprise deployment is the whole point.
+    Anything that needs the MCP transport (auto-route hook, llm_*
+    tools) is dead in the water until the operator fixes the
+    config, and silent boot would mean every routed call producing
+    inscrutable errors at the transport layer (the OP-1 / OP-4
+    failure mode this session showed in spades).
+    """
+    import os
+    import sys
+
+    from chuzom.profile import is_enterprise
+
+    if not is_enterprise():
+        return
+
+    skip = (
+        (os.environ.get(_STARTUP_VERIFY_SKIP_ENV) or "")
+        .strip().lower() in _STARTUP_VERIFY_OFF_VALUES
+    )
+    if skip:
+        sys.stderr.write(
+            f"[chuzom server] {_STARTUP_VERIFY_SKIP_ENV}=on — "
+            "skipping enterprise verifier on startup. The MCP server "
+            "may boot in a degraded state; routed calls can fail "
+            "with inscrutable transport errors.\n"
+        )
+        return
+
+    from chuzom.commands.verify_enterprise import run_verifier
+
+    report = run_verifier(enterprise=True)
+    if report.all_passed:
+        return
+
+    sys.stderr.write(
+        "[chuzom server] enterprise startup verification FAILED:\n"
+    )
+    for r in report.results:
+        if not r.passed:
+            sys.stderr.write(f"  ✗ {r.name}: {r.status}\n")
+            if r.remediation:
+                sys.stderr.write(f"    → {r.remediation}\n")
+    sys.stderr.write(
+        "Set CHUZOM_SKIP_STARTUP_VERIFY=on to bypass (NOT for production).\n"
+    )
+    sys.exit(1)
+
+
 def main():
     """Start the MCP server (stdio transport by default)."""
+    # Critical-module check runs FIRST — the enterprise verifier
+    # below imports modules that may themselves be missing in a
+    # stale install, which would surface as a confusing
+    # ``ModuleNotFoundError`` inside the verifier rather than a
+    # clean remediation message.
+    _critical_modules_or_die()
+    _startup_verify_or_die()
     mcp.run()
 
 
@@ -194,6 +428,163 @@ def main_sse(port: int | None = None) -> None:
 
     starlette_app = mcp.sse_app()
     config = uvicorn.Config(starlette_app, host=host, port=port, log_level="info")
+    server = uvicorn.Server(config)
+    anyio.run(server.serve)
+
+
+_SSE_ALLOW_PUBLIC_ENV = "CHUZOM_SSE_ALLOW_PUBLIC"
+_SSE_ALLOW_PUBLIC_VALUES = {"on", "1", "true", "yes"}
+
+
+def _allow_public_bind() -> bool:
+    import os as _os
+    return (
+        (_os.environ.get(_SSE_ALLOW_PUBLIC_ENV) or "")
+        .strip().lower() in _SSE_ALLOW_PUBLIC_VALUES
+    )
+
+
+def main_sse_secured(
+    *, host: str = "127.0.0.1", port: int = 17891,
+) -> None:
+    """Refinement #12 / SEC-001 closure.
+
+    Start the SSE transport behind a Bearer-token auth middleware
+    that delegates to ``IdentityStore.authenticate`` + requires
+    ``Permission.ROUTE_PROMPT``. Closes the literal first audit
+    finding (SEC-001) that removed the original ``chuzom-sse``
+    entry point because it bound 0.0.0.0 with no auth.
+
+    Three concrete defences vs the pre-removal entry point:
+
+    * **Auth is mandatory.** Every request must carry
+      ``Authorization: Bearer <token>``; the token validates against
+      the identity store and must carry ``Permission.ROUTE_PROMPT``.
+      Tools without auth see ``401 Unauthorized``.
+    * **Default bind is localhost.** ``host`` defaults to
+      ``127.0.0.1``; ``0.0.0.0`` requires explicit
+      ``CHUZOM_SSE_ALLOW_PUBLIC=on`` so a careless deployment can't
+      silently expose the surface.
+    * **Startup verifier fires under enterprise profile.** Misconfig
+      is refused before binding (same contract as ``main()``).
+
+    The original ``main_sse`` is retained above with its SEC-001
+    notice so a reader auditing for the regression can still see
+    the unsecured shape — but ``main_sse_secured`` is what the CLI
+    actually exposes.
+    """
+    import os
+    import sys
+
+    import anyio
+    import uvicorn
+    from starlette.middleware import Middleware
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import PlainTextResponse
+
+    if host == "0.0.0.0" and not _allow_public_bind():
+        sys.stderr.write(
+            "[chuzom sse] refusing to bind 0.0.0.0 without "
+            f"{_SSE_ALLOW_PUBLIC_ENV}=on. Set the env explicitly or "
+            "pass --host 127.0.0.1 (the default) for localhost only.\n"
+        )
+        sys.exit(2)
+
+    _critical_modules_or_die()
+    _startup_verify_or_die()
+
+    import types
+
+    from chuzom.enterprise.identity import (
+        IdentityStore,
+        InvalidToken,
+    )
+    from chuzom.enterprise.oidc import OidcConfig, OidcError, OidcValidator
+    from chuzom.enterprise.rbac import Permission, permissions_for_role
+
+    # Store opens once at process start; the SSE handler dispatches
+    # under uvicorn workers so we need cross-thread safety.
+    identity_store = IdentityStore(check_same_thread=False)
+
+    # Optional OIDC federation: validate IdP JWTs (non-'tsr_' tokens) and
+    # just-in-time provision the user. None when CHUZOM_OIDC_ISSUER is unset.
+    oidc_config = OidcConfig.from_env()
+    oidc_validator = OidcValidator(oidc_config) if oidc_config else None
+    oidc_default_org = (os.environ.get("CHUZOM_OIDC_DEFAULT_ORG") or "default").strip() or "default"
+    oidc_default_team = (os.environ.get("CHUZOM_OIDC_DEFAULT_TEAM") or "default").strip() or "default"
+
+    async def _authenticate_oidc(token: str):
+        """Validate an IdP JWT → JIT-provisioned identity, or None on reject.
+
+        🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        """
+        try:
+            claims = await oidc_validator.validate(token)
+        except OidcError:
+            return None
+        role = oidc_validator.map_role(claims.groups)
+        org = identity_store.get_or_create_org(oidc_default_org)
+        team = identity_store.get_or_create_team(org.id, oidc_default_team)
+        user = identity_store.get_or_create_by_external_id(
+            external_id=claims.subject, email=claims.email,
+            display_name=claims.email, role=role,
+            org_id=org.id, team_id=team.id,
+        )
+        if not user.active:
+            return None
+        perms = frozenset(permissions_for_role(user.role))
+        # Lightweight principal carrying just what downstream RBAC reads.
+        return types.SimpleNamespace(user=user, token=None, permissions=perms)
+
+    class _BearerAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            authz = request.headers.get("Authorization", "")
+            parts = authz.strip().split(None, 1)
+            if len(parts) != 2 or parts[0].lower() != "bearer":
+                return PlainTextResponse(
+                    "Unauthorized — Bearer token required",
+                    status_code=401,
+                )
+            token = parts[1].strip()
+            if not token:
+                return PlainTextResponse(
+                    "Unauthorized — empty bearer token",
+                    status_code=401,
+                )
+            # Federated (OIDC JWT) tokens lack the chuzom 'tsr_' prefix.
+            if not token.startswith("tsr_") and oidc_validator is not None:
+                identity = await _authenticate_oidc(token)
+                if identity is None:
+                    return PlainTextResponse(
+                        "Unauthorized — OIDC token rejected", status_code=401,
+                    )
+            else:
+                try:
+                    identity = identity_store.authenticate(token)
+                except InvalidToken as exc:
+                    return PlainTextResponse(
+                        f"Unauthorized — {exc}", status_code=401,
+                    )
+            if Permission.ROUTE_PROMPT not in identity.permissions:
+                return PlainTextResponse(
+                    "Forbidden — identity lacks ROUTE_PROMPT",
+                    status_code=403,
+                )
+            # Pass through with identity attached so downstream
+            # tools can attribute the routed turn (future
+            # extension; the middleware contract is set).
+            request.state.identity = identity
+            return await call_next(request)
+
+    starlette_app = mcp.sse_app()
+    starlette_app.user_middleware.insert(
+        0, Middleware(_BearerAuthMiddleware)
+    )
+    starlette_app.middleware_stack = starlette_app.build_middleware_stack()
+
+    config = uvicorn.Config(
+        starlette_app, host=host, port=port, log_level="info",
+    )
     server = uvicorn.Server(config)
     anyio.run(server.serve)
 

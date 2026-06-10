@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a reproducible problem with chuzom
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and its impact.
+      placeholder: Tell us what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest set of steps needed to reproduce the issue.
+      placeholder: |
+        1. Run ...
+        2. Configure ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: input
+    id: chuzom-version
+    attributes:
+      label: chuzom version
+      description: Paste the output of `chuzom --version`.
+      placeholder: chuzom 0.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      description: Where are you running chuzom?
+      options:
+        - Claude Code
+        - Cursor
+        - Codex CLI
+        - Gemini CLI
+        - other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      description: Include OS name and version.
+      placeholder: macOS 15.5, Ubuntu 24.04, Windows 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant logs, tracebacks, or terminal output. Remove secrets before submitting.
+      render: shell
+    validations:
+      required: false

@@ -1,20 +1,28 @@
-"""Tier-1 identity: minimal user resolution for the routing audit chain.
+"""Identity resolution for the routing audit chain.
 
-Phase 2 of the 2026-06 audit roadmap ships in three tiers:
+Two operating modes, switched by ``CHUZOM_PROFILE`` (see
+``chuzom.profile``):
 
-  Tier 1 — Single user in an enterprise. One ``user_id`` threads through
-           every routed turn so the audit chain has *someone* to attribute
-           the decision to. No agents, no tenants. This module.
-  Tier 2 — Agents on the user's computer. Adds ``agent_id`` alongside
-           ``user_id``. Builds on the same env-based resolver.
-  Tier 3 — Enterprise-controlled agents. Promotes ``TurnIdentity`` into
-           the full ``chuzom.enterprise.identity.Identity`` (User +
-           APIToken + Permissions). Wires RBAC into the routing path.
+* **Developer (default).** Trusts the operator's environment. Reads
+  ``CHUZOM_USER_ID`` / ``CHUZOM_USER_EMAIL`` / ``CHUZOM_ORG_ID`` /
+  ``CHUZOM_AGENT_ID`` / ``CHUZOM_TENANT_ID`` with sane fallbacks
+  (``getpass.getuser()``, ``<user>@local``, ``"local"``). Never
+  raises — a single-user dev workstation cannot be allowed to fail
+  on identity resolution.
 
-Tier 1's resolver intentionally never talks to the ``enterprise.identity``
-``IdentityStore`` — that store assumes SSO / token-issuance machinery that
-is out of scope for the single-user developer path. Tier 1 trusts the
-operator's environment.
+* **Enterprise (G-002).** Refuses env-trust. Reads ``CHUZOM_TOKEN``,
+  resolves it through ``chuzom.enterprise.identity.IdentityStore.authenticate``,
+  verifies the identity carries ``Permission.ROUTE_PROMPT``, and
+  maps the authenticated ``Identity`` into a ``TurnIdentity`` for
+  the rest of the routing pipeline. Missing / invalid / under-
+  permissioned token raises ``EnterpriseIdentityRequired`` so the
+  first routed call fails loudly rather than silently routing as
+  an env-claimed admin.
+
+The agent dimension (``CHUZOM_AGENT_ID``) is still read from env in
+both modes — agent_id is a workflow-attribution tag, not an auth
+principal. A future slice can promote it to an attestation chain
+once agent provisioning is in scope.
 """
 from __future__ import annotations
 
@@ -50,6 +58,195 @@ DEFAULT_ORG_ID = "local"
 # environments, restricted containers). Never raise — the routing path
 # must never block on identity resolution.
 _FALLBACK_USER_ID = "unknown"
+
+# G-002: enterprise-profile token env. Operators set this in CI /
+# Docker / Kubernetes secret-injection. The token is validated via
+# ``IdentityStore.authenticate`` on every routed turn; failure raises
+# ``EnterpriseIdentityRequired`` so the deployment cannot accidentally
+# route as an env-claimed admin.
+CHUZOM_TOKEN_ENV = "CHUZOM_TOKEN"
+
+
+class EnterpriseIdentityRequired(RuntimeError):
+    """Raised when ``CHUZOM_PROFILE=enterprise`` is set but no valid
+    ``CHUZOM_TOKEN`` can be resolved into an identity with
+    ``Permission.ROUTE_PROMPT``.
+
+    The exception text points at the documented setup path so an
+    operator hitting this for the first time has a clear next step
+    rather than a generic auth error.
+    """
+
+
+# G-002: lazy singleton IdentityStore for the enterprise resolver.
+# Module-level rather than per-call so we don't reopen the SQLite
+# connection on every routed turn. Tests monkeypatch this to inject
+# a scoped store.
+_enterprise_store = None  # type: ignore[var-annotated]
+
+
+def _get_enterprise_store():
+    """Resolve the process-wide ``IdentityStore`` for token validation.
+
+    Opened with ``check_same_thread=False`` because the routing path
+    is async / cross-task; the underlying SQLite serialises writes."""
+    global _enterprise_store
+    if _enterprise_store is None:
+        from chuzom.enterprise.identity import IdentityStore
+        _enterprise_store = IdentityStore(check_same_thread=False)
+    return _enterprise_store
+
+
+# OIDC federation env keys. When CHUZOM_OIDC_ISSUER is set, a CHUZOM_TOKEN that
+# is NOT a chuzom-native ``tsr_`` token is validated as an IdP-issued JWT and the
+# user is just-in-time provisioned. See chuzom.enterprise.oidc.
+CHUZOM_OIDC_ISSUER_ENV = "CHUZOM_OIDC_ISSUER"
+CHUZOM_OIDC_DEFAULT_ORG_ENV = "CHUZOM_OIDC_DEFAULT_ORG"
+CHUZOM_OIDC_DEFAULT_TEAM_ENV = "CHUZOM_OIDC_DEFAULT_TEAM"
+
+# Lazy singleton OIDC validator (mirrors the IdentityStore singleton). Built once
+# from CHUZOM_OIDC_* env; tests monkeypatch this to inject a JWKS-backed validator.
+_oidc_validator = None  # type: ignore[var-annotated]
+
+
+def _oidc_configured() -> bool:
+    return bool((os.environ.get(CHUZOM_OIDC_ISSUER_ENV) or "").strip())
+
+
+def _get_oidc_validator():
+    """Resolve the process-wide OIDC validator, or None when OIDC is unset."""
+    global _oidc_validator
+    if _oidc_validator is None:
+        from chuzom.enterprise.oidc import OidcConfig, OidcValidator
+        config = OidcConfig.from_env()
+        if config is None:
+            return None
+        _oidc_validator = OidcValidator(config)
+    return _oidc_validator
+
+
+def _oidc_identity(token: str, store) -> "TurnIdentity":
+    """Resolve a federated (OIDC JWT) ``CHUZOM_TOKEN`` into a TurnIdentity.
+
+    Validates the JWT, maps groups → role, just-in-time provisions the user
+    under the configured default org/team, and verifies ROUTE_PROMPT. Raises
+    ``EnterpriseIdentityRequired`` on any failure so a misconfigured federation
+    fails loudly rather than routing unauthenticated.
+
+    🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+    """
+    from chuzom.enterprise.oidc import OidcError
+    from chuzom.enterprise.rbac import Permission, permissions_for_role
+
+    validator = _get_oidc_validator()
+    if validator is None:
+        raise EnterpriseIdentityRequired(
+            f"{CHUZOM_TOKEN_ENV} is not a chuzom 'tsr_' token and OIDC is not "
+            f"configured. Set {CHUZOM_OIDC_ISSUER_ENV} (+ audience) to enable "
+            "federated identity, or issue a chuzom token via the admin API."
+        )
+    try:
+        claims = validator.validate_sync(token)
+    except OidcError as exc:
+        raise EnterpriseIdentityRequired(f"OIDC token rejected: {exc}.")
+
+    role = validator.map_role(claims.groups)
+    if Permission.ROUTE_PROMPT not in permissions_for_role(role):
+        raise EnterpriseIdentityRequired(
+            f"OIDC-mapped role {role.value!r} does not grant routing."
+        )
+
+    org_name = (os.environ.get(CHUZOM_OIDC_DEFAULT_ORG_ENV) or "default").strip() or "default"
+    team_name = (os.environ.get(CHUZOM_OIDC_DEFAULT_TEAM_ENV) or "default").strip() or "default"
+    org = store.get_or_create_org(org_name)
+    team = store.get_or_create_team(org.id, team_name)
+    user = store.get_or_create_by_external_id(
+        external_id=claims.subject,
+        email=claims.email,
+        display_name=claims.email,
+        role=role,
+        org_id=org.id,
+        team_id=team.id,
+    )
+    if not user.active:
+        raise EnterpriseIdentityRequired(
+            f"federated user {user.email!r} is deactivated."
+        )
+
+    agent_id = (os.environ.get(CHUZOM_AGENT_ID_ENV) or "").strip() or None
+    tenant_id = (os.environ.get(CHUZOM_TENANT_ID_ENV) or "").strip() or user.org_id
+    return TurnIdentity(
+        user_id=user.id,
+        user_email=user.email,
+        org_id=user.org_id,
+        agent_id=agent_id,
+        tenant_id=tenant_id,
+    )
+
+
+def _enterprise_identity(store=None) -> "TurnIdentity":
+    """G-002 enterprise-profile resolver. Reads ``CHUZOM_TOKEN``,
+    authenticates against ``IdentityStore``, requires
+    ``Permission.ROUTE_PROMPT``, maps to ``TurnIdentity``.
+
+    When OIDC is configured (``CHUZOM_OIDC_ISSUER`` set) and the token is not a
+    chuzom-native ``tsr_`` token, it is validated as an IdP JWT and the user is
+    just-in-time provisioned (see ``_oidc_identity``).
+
+    Raises ``EnterpriseIdentityRequired`` on any failure. The caller
+    (``current_identity``) propagates the exception so the first
+    routed turn fails loudly under a misconfigured enterprise
+    deployment instead of silently falling back to env-trust.
+    """
+    token = (os.environ.get(CHUZOM_TOKEN_ENV) or "").strip()
+    if not token:
+        raise EnterpriseIdentityRequired(
+            f"CHUZOM_PROFILE=enterprise requires {CHUZOM_TOKEN_ENV} "
+            "to be set to a valid bearer token issued via the admin "
+            "API (POST /v1/admin/users/{user_id}/tokens). See "
+            "docs/audit/post-remediation/GAP_ANALYSIS.md#g-002."
+        )
+
+    if store is None:
+        store = _get_enterprise_store()
+
+    # Federated (OIDC JWT) tokens don't carry the chuzom 'tsr_' prefix. Route
+    # them to the OIDC resolver when federation is enabled.
+    if not token.startswith("tsr_") and _oidc_configured():
+        return _oidc_identity(token, store)
+
+    from chuzom.enterprise.identity import InvalidToken
+    from chuzom.enterprise.rbac import Permission
+
+    try:
+        identity = store.authenticate(token)
+    except InvalidToken as exc:
+        raise EnterpriseIdentityRequired(
+            f"{CHUZOM_TOKEN_ENV} is not a valid token: {exc}. "
+            "Revoke and re-issue via the admin API."
+        )
+
+    if Permission.ROUTE_PROMPT not in identity.permissions:
+        raise EnterpriseIdentityRequired(
+            f"identity {identity.user.email!r} lacks Permission.ROUTE_PROMPT — "
+            "issue a token for a role that grants routing (ADMIN / "
+            "MANAGER / EMPLOYEE) or extend the token's permissions."
+        )
+
+    # Agent dimension is still env-derived in enterprise mode — see
+    # module docstring for the rationale.
+    agent_id_raw = (os.environ.get(CHUZOM_AGENT_ID_ENV) or "").strip()
+    agent_id = agent_id_raw or None
+    tenant_id_raw = (os.environ.get(CHUZOM_TENANT_ID_ENV) or "").strip()
+    tenant_id = tenant_id_raw or identity.user.org_id
+
+    return TurnIdentity(
+        user_id=identity.user.id,
+        user_email=identity.user.email,
+        org_id=identity.user.org_id,
+        agent_id=agent_id,
+        tenant_id=tenant_id,
+    )
 
 
 @dataclass(frozen=True)
@@ -92,9 +289,21 @@ class TurnIdentity:
 
 
 def current_identity() -> TurnIdentity:
-    """Resolve the current identity from the environment.
+    """Resolve the current identity.
 
-    Resolution order — first non-empty value wins:
+    Dispatches on ``CHUZOM_PROFILE`` (see ``chuzom.profile``):
+
+    * **Enterprise** — delegates to ``_enterprise_identity``. Raises
+      ``EnterpriseIdentityRequired`` on missing / invalid /
+      under-permissioned ``CHUZOM_TOKEN``. The first routed turn
+      fails loudly; existing fail-open audit / RBAC paths take over
+      from there (G-001/G-003 enterprise defaults).
+
+    * **Developer (default)** — env-trust resolver below. Never
+      raises; an unset environment falls back through
+      ``getpass.getuser()`` to a sentinel.
+
+    Resolution order in developer mode — first non-empty value wins:
 
     ``user_id``:
         1. ``CHUZOM_USER_ID`` env var
@@ -109,10 +318,13 @@ def current_identity() -> TurnIdentity:
     ``org_id``:
         1. ``CHUZOM_ORG_ID`` env var
         2. Sentinel ``"local"``
-
-    This function does not raise. The routing path calls it on every
-    turn; an unset environment cannot be allowed to break routing.
     """
+    # G-002: enterprise profile refuses env-trust. The Tier-3 path
+    # is the *only* identity source; missing / invalid token raises.
+    from chuzom.profile import is_enterprise
+    if is_enterprise():
+        return _enterprise_identity()
+
     user_id = (os.environ.get(CHUZOM_USER_ID_ENV) or "").strip()
     if not user_id:
         try:
@@ -159,7 +371,12 @@ __all__ = [
     "CHUZOM_ORG_ID_ENV",
     "CHUZOM_AGENT_ID_ENV",
     "CHUZOM_TENANT_ID_ENV",
+    "CHUZOM_TOKEN_ENV",
+    "CHUZOM_OIDC_ISSUER_ENV",
+    "CHUZOM_OIDC_DEFAULT_ORG_ENV",
+    "CHUZOM_OIDC_DEFAULT_TEAM_ENV",
     "DEFAULT_ORG_ID",
+    "EnterpriseIdentityRequired",
     "TurnIdentity",
     "current_identity",
 ]

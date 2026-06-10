@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/chuzom-logo.png" alt="Chuzom — meeting of rivers" width="640">
+  <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/assets/chuzom-logo.png" alt="Chuzom — meeting of rivers" width="640">
 </p>
 
 <h1 align="center">Chuzom</h1>
@@ -14,31 +14,25 @@
 </p>
 
 <p align="center">
-  <sub><strong>Maturity:</strong> developer-tool layer is the production path today (alpha per <a href="pyproject.toml">pyproject.toml</a>). The enterprise control plane — RBAC, tamper-evident audit chain, per-user / per-team budgets, OpenTelemetry export — is scaffolded but not yet wired into the routing path (<a href="Docs/audit/FINDINGS.md">INV-010</a>). See <a href="Docs/audit/ROADMAP.md">ROADMAP</a> for sequencing.</sub>
+  <sub><strong>Maturity:</strong> developer-tool layer is the production path today (alpha per <a href="https://github.com/ypollak2/chuzom/blob/main/pyproject.toml">pyproject.toml</a>). The enterprise control plane — RBAC, tamper-evident audit chain, per-user / per-team budgets, OpenTelemetry export — is scaffolded but not yet wired into the routing path (<a href="https://github.com/ypollak2/chuzom/blob/main/Docs/audit/FINDINGS.md">INV-010</a>). See <a href="https://github.com/ypollak2/chuzom/blob/main/Docs/audit/ROADMAP.md">ROADMAP</a> for sequencing.</sub>
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/chuzom-router/"><img src="https://img.shields.io/badge/pypi-chuzom--router-4F46E5?style=flat-square" alt="PyPI"></a>
-  <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/tests-3667_passing-10B981?style=flat-square" alt="Tests"></a>
+  <a href="https://github.com/ypollak2/chuzom/actions/workflows/ci.yml"><img src="https://github.com/ypollak2/chuzom/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/ypollak2/chuzom"><img src="https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-10B981?style=flat-square" alt="License"></a>
+  <a href="https://github.com/ypollak2/chuzom/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-10B981?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/SOC%202-mappable-8B5CF6?style=flat-square" alt="SOC 2">
   <img src="https://img.shields.io/badge/GDPR-mappable-8B5CF6?style=flat-square" alt="GDPR">
   <img src="https://img.shields.io/badge/OTEL-traces%20%2B%20metrics%20%2B%20logs-F59E0B?style=flat-square" alt="OTel">
 </p>
 
-<p align="center">
-  <strong>Install in 30 seconds</strong>
-</p>
-
-<p align="center">
+<p align="center"><strong>Install in 30 seconds</strong></p>
 
 ```bash
 pip install chuzom-router
 chuzom install --host claude-code   # or cursor / codex-cli / gemini-cli
 ```
-
-</p>
 
 <p align="center">
   <sub>Works with Claude Code · Cursor · Codex CLI · Gemini CLI · Claude Desktop · Factory IDE · Trae · 7 more</sub><br/>
@@ -192,7 +186,7 @@ claude() {
 }
 ```
 
-Swap `--compact` for the full painterly Chhuzom-confluence banner (78 lines of 24-bit ANSI art) by dropping the flag. `chuzom welcome` prints to stdout, so it works in any shell that supports function wrappers — `zsh`, `bash` (with `function claude() { ... }`), `fish`, etc.
+Swap `--compact` for the full painterly Chuzom-confluence banner (78 lines of 24-bit ANSI art) by dropping the flag. `chuzom welcome` prints to stdout, so it works in any shell that supports function wrappers — `zsh`, `bash` (with `function claude() { ... }`), `fish`, etc.
 
 ---
 
@@ -274,7 +268,7 @@ chuzom install --host gemini-cli
 chuzom install --host all
 ```
 
-Full integration matrix in [`Docs/HOST_INTEGRATION_REPORT.md`](Docs/HOST_INTEGRATION_REPORT.md) (118 structural tests, all green).
+Full integration matrix in [`Docs/HOST_INTEGRATION_REPORT.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/HOST_INTEGRATION_REPORT.md) (118 structural tests, all green).
 
 ---
 
@@ -436,7 +430,7 @@ That's it. Chuzom auto-emits per routing decision:
 
 Compatible with **Honeycomb, Grafana Cloud, Datadog, Jaeger, AWS X-Ray, GCP Cloud Trace** — anything that speaks OTLP.
 
-Full deployment guide: [`Docs/ENTERPRISE_DEPLOYMENT.md`](Docs/ENTERPRISE_DEPLOYMENT.md). Threat model: [`Docs/THREAT_MODEL.md`](Docs/THREAT_MODEL.md). Security posture: [`SECURITY.md`](SECURITY.md).
+Full deployment guide: [`Docs/ENTERPRISE_DEPLOYMENT.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/ENTERPRISE_DEPLOYMENT.md). Threat model: [`Docs/THREAT_MODEL.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/THREAT_MODEL.md). Security posture: [`SECURITY.md`](https://github.com/ypollak2/chuzom/blob/main/SECURITY.md).
 
 ---
 
@@ -485,7 +479,7 @@ Layers are independent: signals are pure functions, the decision engine is a pur
 
 **Self-reference bypass.** When a prompt mentions chuzom itself alongside debug- or development-context words (e.g., *"chuzom is stuck"*, *"debug the chuzom hook"*, *"chuzom route indicator"*), the auto-route hook short-circuits before any routing or enforcement fires — no banner, no `pending_route_*.json` written, no blocked tools. This prevents the circular failure mode where users can't repair chuzom because chuzom is blocking the tools they need. The bypass is logged as `SELF_REFERENCE_BYPASS` in `~/.chuzom/auto-route-debug.log` so the audit trail stays complete.
 
-Architecture deep-dive: [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md).
+Architecture deep-dive: [`Docs/ARCHITECTURE.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/ARCHITECTURE.md).
 
 ---
 
@@ -598,7 +592,7 @@ Ships with 13 models pre-loaded; refresh from artificialanalysis.ai via `scripts
 chuzom install              # install hooks + rules + MCP config
 chuzom install --host all   # install for every supported host
 chuzom doctor               # health check + remediation hints
-chuzom welcome              # painterly Chhuzom-confluence banner
+chuzom welcome              # painterly Chuzom-confluence banner
 chuzom welcome --compact    # one-line variant for ~/.zshrc wrappers
 
 # Session intelligence
@@ -652,6 +646,14 @@ chuzom team push [period]   # ship to Slack/Discord/webhook
 | `CHUZOM_WEEKLY_QUOTA_USD_OPUS_EQUIV` | USD (default `50`) | Calibration constant for the quota-saved metric: dollars of Opus-equivalent spend that equal 100% of one week of Claude subscription quota. Override per plan tier. |
 | `CHUZOM_DEV_SRC` | absolute path | Source directory used by `chuzom dev-refresh` when `--source` isn't passed. |
 | `CHUZOM_CLAUDE_SUBSCRIPTION` | `true` / `1` / `yes` | Forces subscription-mode banner + OAuth pressure cascade even when not auto-detected. |
+| `CHUZOM_OIDC_ISSUER` | IdP issuer URL | Enables OIDC federation. When set, a `CHUZOM_TOKEN` that is not a chuzom `tsr_` token is validated as an IdP-issued JWT (RS256 / JWKS) and the user is just-in-time provisioned. Requires the `sso` extra (`pip install 'chuzom-router[sso]'`). |
+| `CHUZOM_OIDC_AUDIENCE` | string | Required `aud` claim value when OIDC is enabled. |
+| `CHUZOM_OIDC_JWKS_URI` | URL | JWKS endpoint. Defaults to `{issuer}/.well-known/jwks.json`. |
+| `CHUZOM_OIDC_EMAIL_CLAIM` / `CHUZOM_OIDC_GROUPS_CLAIM` | claim name | Claims carrying email (default `email`) and groups (default `groups`). |
+| `CHUZOM_OIDC_ROLE_MAP` | `group=role,…` | Maps IdP groups → chuzom roles, e.g. `chuzom-admins=admin,chuzom-users=employee`. Highest-privilege match wins; unmatched → `employee`. |
+| `CHUZOM_OIDC_DEFAULT_ORG` / `CHUZOM_OIDC_DEFAULT_TEAM` | name | Org/team that JIT-provisioned federated users land in (default `default`). |
+| `CHUZOM_SCIM_ENABLED` | `on` / `1` / `true` | Enables the SCIM 2.0 provisioning endpoint (`/scim/v2/Users`) for IdP-driven create / update / deprovision. Requires `CHUZOM_SCIM_TOKEN`. |
+| `CHUZOM_SCIM_TOKEN` | bearer secret | The bearer token the IdP presents to the SCIM endpoint (compared in constant time). |
 | `CHUZOM_*_PATH` | absolute path | Override the location of any state DB (`CHUZOM_LINEAGE_PATH`, `CHUZOM_AUDIT_PATH`, `CHUZOM_BUDGETS_DB_PATH`, etc.). |
 
 ### State DBs
@@ -706,7 +708,7 @@ Provider keys via env vars or `~/.chuzom/config.yaml` (mode-600 user-readable, f
 | Scenario reports | CLI + framework + cross-cutting |
 | Auto-route classifier regression | inherited + fix-verb expansion |
 
-**~3667 total tests passing** across the full sweep (excluding the in-progress `tests/lineage/` and one known timing-sensitive perf flake). ~2.5 minute wall time.
+Full suite runs in CI on every push — [![CI](https://github.com/ypollak2/chuzom/actions/workflows/ci.yml/badge.svg)](https://github.com/ypollak2/chuzom/actions/workflows/ci.yml) — across Python 3.11 + 3.13, excluding the in-progress `tests/lineage/` and one known timing-sensitive perf flake. ~2.5 minute wall time.
 
 Run subsets:
 
@@ -722,21 +724,21 @@ pytest tests/integration/    # host structural
 
 | Doc | What it covers |
 |---|---|
-| [`SECURITY.md`](SECURITY.md) | Responsible disclosure, posture, SOC 2 / GDPR / HIPAA / PCI mapping |
-| [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md) | Three-ring architecture, data flows, package layout |
-| [`Docs/ENTERPRISE_DEPLOYMENT.md`](Docs/ENTERPRISE_DEPLOYMENT.md) | Deployment topology, IdP integration, audit shipping, runbooks |
-| [`Docs/THREAT_MODEL.md`](Docs/THREAT_MODEL.md) | STRIDE per asset, attack scenario walkthroughs, residual risks |
-| [`Docs/QA_TEST_STRATEGY.md`](Docs/QA_TEST_STRATEGY.md) | Five pillars, quality gates with explicit thresholds, risk register |
-| [`Docs/QA_TEST_REPORT.md`](Docs/QA_TEST_REPORT.md) | Per-pillar + per-host scorecards (auto-generated) |
-| [`Docs/SCENARIO_REPORT.md`](Docs/SCENARIO_REPORT.md) | Per-scenario narrative routing journeys |
-| [`Docs/HOST_INTEGRATION_REPORT.md`](Docs/HOST_INTEGRATION_REPORT.md) | 14-host integration matrix + verification status |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
+| [`SECURITY.md`](https://github.com/ypollak2/chuzom/blob/main/SECURITY.md) | Responsible disclosure, posture, SOC 2 / GDPR / HIPAA / PCI mapping |
+| [`Docs/ARCHITECTURE.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/ARCHITECTURE.md) | Three-ring architecture, data flows, package layout |
+| [`Docs/ENTERPRISE_DEPLOYMENT.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/ENTERPRISE_DEPLOYMENT.md) | Deployment topology, IdP integration, audit shipping, runbooks |
+| [`Docs/THREAT_MODEL.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/THREAT_MODEL.md) | STRIDE per asset, attack scenario walkthroughs, residual risks |
+| [`Docs/QA_TEST_STRATEGY.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/QA_TEST_STRATEGY.md) | Five pillars, quality gates with explicit thresholds, risk register |
+| [`Docs/QA_TEST_REPORT.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/QA_TEST_REPORT.md) | Per-pillar + per-host scorecards (auto-generated) |
+| [`Docs/SCENARIO_REPORT.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/SCENARIO_REPORT.md) | Per-scenario narrative routing journeys |
+| [`Docs/HOST_INTEGRATION_REPORT.md`](https://github.com/ypollak2/chuzom/blob/main/Docs/HOST_INTEGRATION_REPORT.md) | 14-host integration matrix + verification status |
+| [`CHANGELOG.md`](https://github.com/ypollak2/chuzom/blob/main/CHANGELOG.md) | Release notes |
 
 ---
 
 ## Status
 
-**v0.2.0** — beyond the dogfood ring, into the audit-driven hardening phase. **~3667 tests passing** across the full sweep (excluding the in-progress `tests/lineage/` and one known timing-sensitive perf flake). SECURITY.md, threat model, and enterprise deployment guide all shipped. Plugin packaging verified for Claude Code, Cursor, Codex CLI, Gemini CLI.
+**v0.2.0** — beyond the dogfood ring, into the audit-driven hardening phase. Full test suite green in CI on every push (see the CI badge above). SECURITY.md, threat model, and enterprise deployment guide all shipped. Plugin packaging verified for Claude Code, Cursor, Codex CLI, Gemini CLI.
 
 ### Recently shipped
 
