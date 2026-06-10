@@ -110,13 +110,24 @@ def _current_bucket(period: str) -> str:
 class QuotaTracker:
     """SQLite-backed quota state."""
 
-    def __init__(self, db_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path | None = None,
+        *,
+        check_same_thread: bool = True,
+    ) -> None:
         self.db_path = db_path or Path(
             os.environ.get("CHUZOM_QUOTAS_PATH")
             or (Path.home() / ".chuzom" / "quotas.db")
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        # Accept check_same_thread=False so the quota gate (quota_routing) and
+        # the admin API can share one tracker across the async routing path /
+        # FastAPI worker threads. SQLite serialises writes at the engine level,
+        # matching the IdentityStore / AuditLog pattern.
+        self._conn = sqlite3.connect(
+            str(self.db_path), check_same_thread=check_same_thread,
+        )
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
 
