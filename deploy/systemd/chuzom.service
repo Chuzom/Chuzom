@@ -1,0 +1,29 @@
+[Unit]
+Description=chuzom — local-first LLM router (secured SSE server)
+Documentation=https://github.com/ypollak2/chuzom
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chuzom
+Group=chuzom
+# Provider keys, CHUZOM_DEPLOYMENT_PROFILE, OIDC/SCIM vars, etc.
+EnvironmentFile=/etc/chuzom/chuzom.env
+# chuzom must be on PATH for the service user (e.g. pip install into a venv and
+# symlink, or `pipx install chuzom-router`). 0.0.0.0 needs CHUZOM_SSE_ALLOW_PUBLIC=on
+# (set it in the EnvironmentFile).
+ExecStart=/usr/local/bin/chuzom serve --host 0.0.0.0 --port 17891
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+StateDirectory=chuzom
+Environment=HOME=/var/lib/chuzom
+
+[Install]
+WantedBy=multi-user.target

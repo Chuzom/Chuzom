@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chuzom.fullname" . }}
+  labels:
+    {{- include "chuzom.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chuzom.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chuzom.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: chuzom
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve", "--host", "0.0.0.0", "--port", "{{ .Values.service.port }}"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: CHUZOM_DEPLOYMENT_PROFILE
+              value: {{ .Values.deploymentProfile | quote }}
+            - name: CHUZOM_SSE_ALLOW_PUBLIC
+              value: {{ .Values.sseAllowPublic | quote }}
+            - name: CHUZOM_QUOTA_MODE
+              value: {{ .Values.quotaMode | quote }}
+            - name: CHUZOM_LOG_JSON
+              value: {{ .Values.logJson | quote }}
+            - name: CHUZOM_BUDGET_BACKEND
+              value: {{ .Values.budget.backend | quote }}
+            {{- if .Values.oidc.issuer }}
+            - name: CHUZOM_OIDC_ISSUER
+              value: {{ .Values.oidc.issuer | quote }}
+            - name: CHUZOM_OIDC_AUDIENCE
+              value: {{ .Values.oidc.audience | quote }}
+            - name: CHUZOM_OIDC_ROLE_MAP
+              value: {{ .Values.oidc.roleMap | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "chuzom.fullname" . }}
+                optional: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

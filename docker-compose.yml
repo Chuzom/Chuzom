@@ -1,0 +1,56 @@
+# chuzom — enterprise-mode stack (E3). The "try org mode in 2 minutes" artifact:
+# the secured SSE router + Postgres budget backend (multi-instance T2-XL1).
+#
+#   docker compose up --build
+#   # then point an MCP/HTTP client at http://localhost:17891 with a Bearer token
+#
+# Provider keys + OIDC config are read from your shell env or a local .env file
+# (compose auto-loads .env). Copy .env.example → .env and fill what you use.
+
+services:
+  chuzom:
+    build: .
+    image: chuzom-router:local
+    ports:
+      - "17891:17891"
+    environment:
+      # Enterprise posture: RBAC strict, audit on, identity required.
+      CHUZOM_DEPLOYMENT_PROFILE: enterprise
+      CHUZOM_SSE_ALLOW_PUBLIC: "on"
+      CHUZOM_LOG_JSON: "1"
+      # Multi-instance budget coordination via Postgres (T2-XL1).
+      CHUZOM_BUDGET_BACKEND: postgres
+      CHUZOM_BUDGET_POSTGRES_DSN: postgresql://chuzom:chuzom@postgres:5432/chuzom
+      # Per-identity quota enforcement (F4).
+      CHUZOM_QUOTA_MODE: strict
+      # Provider keys — substituted from host env / .env, default empty.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      # Federated identity (OIDC) — optional.
+      CHUZOM_OIDC_ISSUER: ${CHUZOM_OIDC_ISSUER:-}
+      CHUZOM_OIDC_AUDIENCE: ${CHUZOM_OIDC_AUDIENCE:-}
+      CHUZOM_OIDC_ROLE_MAP: ${CHUZOM_OIDC_ROLE_MAP:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chuzom
+      POSTGRES_PASSWORD: chuzom
+      POSTGRES_DB: chuzom
+    volumes:
+      - chuzom-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chuzom -d chuzom"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  chuzom-pgdata:
