@@ -225,12 +225,25 @@ def execute_tool(name: str, args: dict, project_root: Path) -> str:
             return "\n".join(results)
 
         elif name == "run_command":
+            import shlex
+
             cmd = args["command"]
             if _BLOCKED_COMMANDS.search(cmd):
                 return f"Error: Command blocked for safety: {cmd}"
+            # 🥷 Backslash-security: Avoid the shell — parse into an argv list and
+            # run without a shell so command metacharacters can't inject. The
+            # blocklist above stays as defense-in-depth. Note: this intentionally
+            # drops shell features (pipes/redirects/globs); run_command executes a
+            # single program with arguments, not a shell pipeline.
+            try:
+                argv = shlex.split(cmd)
+            except ValueError as exc:
+                return f"Error: could not parse command: {exc}"
+            if not argv:
+                return "Error: empty command"
             try:
                 result = subprocess.run(
-                    cmd, shell=True, capture_output=True, text=True,
+                    argv, capture_output=True, text=True,
                     timeout=30, cwd=str(project_root),
                 )
                 output = result.stdout
@@ -244,6 +257,8 @@ def execute_tool(name: str, args: dict, project_root: Path) -> str:
                 return output or "(no output)"
             except subprocess.TimeoutExpired:
                 return "Error: Command timed out after 30s"
+            except FileNotFoundError:
+                return f"Error: command not found: {argv[0]}"
 
         else:
             return f"Error: Unknown tool: {name}"

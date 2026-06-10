@@ -1,0 +1,51 @@
+name: Deploy artifacts
+
+# Validate the E3 deployment artifacts whenever they change. Path-filtered so it
+# doesn't run on unrelated pushes. GitHub runners have an unauthenticated Docker
+# daemon, so the image builds here (unlike a sign-in-gated local Docker Desktop).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - "deploy/**"
+      - "pyproject.toml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - "deploy/**"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t chuzom-router:ci .
+      - name: Smoke test the serve entrypoint inside the image
+        run: docker run --rm --entrypoint chuzom chuzom-router:ci serve --help
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: helm lint
+        run: helm lint deploy/helm/chuzom
+      - name: helm template renders
+        run: |
+          helm template chuzom deploy/helm/chuzom \
+            --set budget.backend=postgres \
+            --set budget.postgresDsn=postgresql://x \
+            --set ingress.enabled=true \
+            --set secrets.OPENAI_API_KEY=sk-test > /dev/null
