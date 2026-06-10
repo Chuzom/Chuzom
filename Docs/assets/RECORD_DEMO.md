@@ -23,7 +23,7 @@ asciinema rec demo.cast \
 #    Let it tick once or twice, then Ctrl-C and `exit`.
 
 # 3. Render to GIF (theme + speed tuned for a hero banner)
-agg demo.cast docs/assets/demo.gif \
+agg demo.cast Docs/assets/demo.gif \
   --theme monokai --font-size 16 --speed 1.3 --cols 100 --rows 28
 
 # 4. Keep it small (<2 MB renders fast on GitHub/PyPI)
@@ -36,7 +36,7 @@ Replace the `DEMO GIF SLOT` HTML comment near the top of `README.md` with:
 
 ```html
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/docs/assets/demo.gif"
+  <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/Docs/assets/demo.gif"
        alt="chuzom routing a prompt and showing live savings" width="760">
 </p>
 ```

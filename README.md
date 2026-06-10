@@ -43,12 +43,12 @@ chuzom install --host claude-code   # or cursor / codex-cli / gemini-cli
 DEMO GIF SLOT — highest-leverage asset for adoption. Once recorded, replace this
 comment with:
   <p align="center">
-    <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/docs/assets/demo.gif"
+    <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/Docs/assets/demo.gif"
          alt="chuzom routing a prompt and showing live savings" width="760">
   </p>
 The GIF should show, in ~10s: a prompt in Claude Code → the live
 `🎯 chuzom → <model> · saved $` banner → `chuzom summary --watch` updating.
-Record it with the script in docs/assets/RECORD_DEMO.md.
+Record it with the script in Docs/assets/RECORD_DEMO.md.
 -->
 
 ---
