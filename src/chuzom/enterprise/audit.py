@@ -151,13 +151,23 @@ class TamperDetected(RuntimeError):
 class AuditLog:
     """Append-only SQLite-backed audit log."""
 
-    def __init__(self, db_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path | None = None,
+        *,
+        check_same_thread: bool = True,
+    ) -> None:
         self.db_path = db_path or Path(
             os.environ.get("CHUZOM_AUDIT_PATH")
             or (Path.home() / ".chuzom" / "audit.db")
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        # check_same_thread=False lets the admin API share one AuditLog across
+        # FastAPI worker threads (SQLite serialises writes at the engine level),
+        # matching IdentityStore / QuotaTracker.
+        self._conn = sqlite3.connect(
+            str(self.db_path), check_same_thread=check_same_thread,
+        )
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
 
