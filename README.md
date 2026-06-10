@@ -39,6 +39,18 @@ chuzom install --host claude-code   # or cursor / codex-cli / gemini-cli
   <sub><strong>Local-first.</strong> No hosted proxy. No account required. Optional org control plane.</sub>
 </p>
 
+<!--
+DEMO GIF SLOT — highest-leverage asset for adoption. Once recorded, replace this
+comment with:
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/docs/assets/demo.gif"
+         alt="chuzom routing a prompt and showing live savings" width="760">
+  </p>
+The GIF should show, in ~10s: a prompt in Claude Code → the live
+`🎯 chuzom → <model> · saved $` banner → `chuzom summary --watch` updating.
+Record it with the script in docs/assets/RECORD_DEMO.md.
+-->
+
 ---
 
 <details>
@@ -85,7 +97,7 @@ The developer's workflow doesn't change. The model choice, the audit trail, and 
 
 ## What you get
 
-- **Cost reduction** of 35–80% on routine work via tier-based routing
+- **Cost reduction** of 35–80% on routine work via tier-based routing — reproducible head-to-head vs always-cheap / always-premium on a fixed corpus with cost-vs-quality scoring (`python -m bench`, see [bench/](https://github.com/ypollak2/chuzom/tree/main/bench))
 - **Tamper-evident audit log** with SHA-256 hash chain — every routing decision, quota breach, policy change captured
 - **Distributed-safe per-identity budgets** — atomic check-then-charge (single-instance SQLite + multi-instance Postgres backends share one `BudgetBackend` Protocol); pre-emptive refusal so no money is spent on calls the cap would reject
 - **Forecast / predictive budget tier** — refuses reservations BEFORE the hard cap is hit when the rolling burn rate projects exhaustion inside the horizon (opt-in via `CHUZOM_BUDGET_FORECAST_MODE`)
@@ -104,30 +116,50 @@ The developer's workflow doesn't change. The model choice, the audit trail, and 
 
 ## What makes Chuzom different
 
-|  | llm-router | **Chuzom** |
-|---|:---:|:---:|
-| Cost-aware multi-provider routing | ✅ | ✅ |
-| Local-first, no proxy | ✅ | ✅ |
-| **Signal/decision YAML DSL** | — | ✅ |
-| **Agent-aware sessions with budget envelope** | — | ✅ |
-| **Agent-aware routing policy (per-session preferred providers + per-turn cost cap, inherits through parent chain)** | — | ✅ |
-| **Distributed-safe budget backend (single-instance SQLite + multi-instance Postgres, atomic check-then-charge)** | — | ✅ |
-| **Forecast / predictive budget tier (refuses reservations before the cap, off / warn / strict modes)** | — | ✅ |
-| **Hash-chained audit log (SOC 2 / GDPR / HIPAA mappable)** | — | ✅ |
-| **RBAC: 4 roles × 12 permissions** | — | ✅ |
-| **Per-classification provider allow-list (e.g. CODE must stay on-prem)** | — | ✅ |
-| **Per-user + per-team quotas with pre-emptive refusal** | — | ✅ |
-| **PII redaction before lineage write (12 patterns + custom)** | — | ✅ |
-| **Vault / AWS Secrets Manager / GCP SM YAML indirections** | — | ✅ |
-| **OpenTelemetry traces + metrics + logs (auto-emit per decision)** | — | ✅ |
-| **Routing inversion detection (up + down)** | — | ✅ |
-| **Quota-saved metric in subscription-percentage points (weekly + 5h windows)** | — | ✅ |
-| **Per-provider routing-notice hint (subscription quota remaining / API 30d spend)** | — | ✅ |
-| **Scenario reports with narrative routing traces** | — | ✅ |
-| **Per-host integration matrix** | 8 hosts | **14 hosts** |
-| **Agent framework adapters** | — | **7 frameworks** |
-| **Pareto-frontier model registry from artificialanalysis.ai** | — | ✅ |
-| **Test count** | ~200 | **~3667** |
+Chuzom isn't a hosted gateway — it's a **local-first router that lives on the
+developer's workstation**, so the honest comparison is against the tools a team
+actually reaches for. Legend: ✅ yes · 🟡 partial / opt-in · — no.
+
+### Developer experience — Chuzom's wedge
+
+| Capability | LiteLLM Proxy | Portkey | OpenRouter | **Chuzom** |
+|---|:---:|:---:|:---:|:---:|
+| Runs locally, no proxy hop / no hosted account | 🟡 | — | — | ✅ |
+| Cost-aware multi-provider routing | ✅ | ✅ | 🟡 | ✅ |
+| Signal / decision **YAML DSL** for routing | — | — | — | ✅ |
+| **Subscription-aware** routing (Claude Pro/Max, Codex sub) | — | — | — | ✅ |
+| Live **in-editor savings banner** (`🎯 chuzom → model · saved $`) | — | — | — | ✅ |
+| PII / secret detection → forces local-only routing | 🟡 | ✅ | — | ✅ |
+| Semantic / result caching | ✅ | ✅ | — | ✅ |
+| Scenario reports with narrative routing traces | — | — | — | ✅ |
+| Multi-CLI host support (14 hosts) | — | — | — | ✅ |
+
+### Enterprise control plane — where Chuzom is now competitive
+
+| Capability | LiteLLM Proxy | Portkey | OpenRouter | **Chuzom** |
+|---|:---:|:---:|:---:|:---:|
+| Per-user / per-team budgets + spend tracking | ✅ | ✅ | 🟡 | ✅ |
+| Per-identity **quota enforcement** on the routing path | ✅ | ✅ | 🟡 | ✅ |
+| RBAC (roles × permissions) | ✅ | ✅ | — | 🟡 ¹ |
+| Audit log | ✅ | ✅ | — | 🟡 ¹ |
+| **Tamper-evident hash-chained** audit | — | — | — | ✅ |
+| **SSO / OIDC / SCIM** | ✅ | ✅ | 🟡 | ✅ ² |
+| Admin API / control plane | ✅ | ✅ | ✅ | 🟡 ³ |
+| Container / Helm / systemd deployment | ✅ | ✅ | ✅ ⁴ | ✅ |
+| Self-hostable / air-gapped (Ollama-only) | ✅ | 🟡 | — | ✅ |
+| Open-source core | ✅ | 🟡 | — | ✅ (MIT) |
+
+¹ Implemented and tested; **enforced by default under `CHUZOM_PROFILE=enterprise`**
+   (developer profile stays permissive).
+² OIDC JWT validation (JWKS / RS256) + just-in-time provisioning + SCIM 2.0
+   user provisioning. SAML via an OIDC bridge.
+³ FastAPI control plane (user / token / policy / audit endpoints); a few
+   endpoints are still being hardened.
+⁴ OpenRouter is hosted — "deployment" is N/A; marked ✅ for "available as a service."
+
+> Every ✅ in the top block is a genuine win none of the three hosted gateways
+> offer. The bottom block is where Chuzom has closed most of the gap — SSO,
+> quotas, audit, and a deployable stack all shipped.
 
 ---
 
