@@ -97,9 +97,14 @@ jobs:
         run: |
           # Run pytest in the background so we can detect the aiosqlite thread hang.
           # pytest writes junit xml before the hang; we read that to determine pass/fail.
+          # Coverage is measured (not yet gated). Once a baseline is
+          # established, add `--cov-fail-under=80` to make it a hard gate (N1).
           uv run pytest tests/ -q \
             --ignore=tests/test_agno_integration.py \
             --timeout=30 \
+            --cov=src/chuzom \
+            --cov-report=xml:/tmp/coverage.xml \
+            --cov-report=term-missing:skip-covered \
             --junit-xml=/tmp/pytest-results.xml &
           PYTEST_PID=$!
 

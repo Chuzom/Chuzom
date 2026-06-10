@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_tokens_hash ON api_tokens(hash_hex);
 CREATE INDEX IF NOT EXISTS idx_tokens_user ON api_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_external ON users(external_id);
 """
 
 
@@ -196,13 +197,26 @@ class IdentityStore:
     CHUZOM_IDENTITY_PATH env var.
     """
 
-    def __init__(self, db_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path | None = None,
+        *,
+        check_same_thread: bool = True,
+    ) -> None:
         self.db_path = db_path or Path(
             os.environ.get("CHUZOM_IDENTITY_PATH")
             or (Path.home() / ".chuzom" / "identity.db")
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        # check_same_thread=False is required when the store is shared
+        # across threads (e.g. behind a FastAPI/uvicorn app where the
+        # connection is created at startup but used by worker threads).
+        # SQLite serialises writes at the engine level so this is safe
+        # for our usage pattern. Default stays True for CLI/single-thread
+        # callers per the prior contract.
+        self._conn = sqlite3.connect(
+            str(self.db_path), check_same_thread=check_same_thread
+        )
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
 
@@ -227,6 +241,24 @@ class IdentityStore:
         if not row:
             raise IdentityNotFound(f"org {org_id!r}")
         return Org(*row)
+
+    def get_org_by_name(self, name: str) -> Org:
+        row = self._conn.execute(
+            "SELECT id FROM orgs WHERE name = ?", (name,)
+        ).fetchone()
+        if not row:
+            raise IdentityNotFound(f"org named {name!r}")
+        return self.get_org(row[0])
+
+    def get_or_create_org(self, name: str) -> Org:
+        """Idempotent org lookup-or-create (race-safe on the UNIQUE name)."""
+        try:
+            return self.get_org_by_name(name)
+        except IdentityNotFound:
+            try:
+                return self.create_org(name)
+            except IdentityConflict:
+                return self.get_org_by_name(name)  # lost a create race
 
     # ── Teams ─────────────────────────────────────────────────────────
 
@@ -261,6 +293,24 @@ class IdentityStore:
         if not row:
             raise IdentityNotFound(f"team {team_id!r}")
         return Team(*row)
+
+    def get_team_by_name(self, org_id: str, name: str) -> Team:
+        row = self._conn.execute(
+            "SELECT id FROM teams WHERE org_id = ? AND name = ?", (org_id, name)
+        ).fetchone()
+        if not row:
+            raise IdentityNotFound(f"team named {name!r} in org {org_id}")
+        return self.get_team(row[0])
+
+    def get_or_create_team(self, org_id: str, name: str) -> Team:
+        """Idempotent team lookup-or-create (race-safe on UNIQUE(org_id, name))."""
+        try:
+            return self.get_team_by_name(org_id, name)
+        except IdentityNotFound:
+            try:
+                return self.create_team(org_id, name)
+            except IdentityConflict:
+                return self.get_team_by_name(org_id, name)  # lost a create race
 
     # ── Users ─────────────────────────────────────────────────────────
 
@@ -319,6 +369,74 @@ class IdentityStore:
         if not row:
             raise IdentityNotFound(f"user with email {email!r}")
         return self.get_user(row[0])
+
+    def get_user_by_external_id(self, external_id: str) -> User:
+        """Look up a user by their IdP subject (external_id). Empty external_id
+        never matches — locally-created users have external_id ''."""
+        if not external_id:
+            raise IdentityNotFound("empty external_id")
+        row = self._conn.execute(
+            "SELECT id FROM users WHERE external_id = ?", (external_id,)
+        ).fetchone()
+        if not row:
+            raise IdentityNotFound(f"user with external_id {external_id!r}")
+        return self.get_user(row[0])
+
+    def link_external_id(self, user_id: str, external_id: str) -> None:
+        """Bind an existing local user to an IdP subject (first federated login
+        for a pre-provisioned email)."""
+        self._conn.execute(
+            "UPDATE users SET external_id = ? WHERE id = ?",
+            (external_id, user_id),
+        )
+        self._conn.commit()
+
+    def get_or_create_by_external_id(
+        self,
+        *,
+        external_id: str,
+        email: str,
+        display_name: str,
+        role: Role,
+        org_id: str,
+        team_id: str,
+    ) -> User:
+        """Just-in-time provisioning for federated identity.
+
+        Resolution order:
+          1. Existing user with this external_id → return it.
+          2. Existing user with this email (pre-provisioned) → bind external_id
+             and return it.
+          3. Otherwise create a new user under (org_id, team_id) with the
+             IdP-derived role.
+
+        The IdP is treated as the source of truth for *existence*; role re-sync
+        on every login is intentionally out of scope here (a deliberate, audited
+        action belongs in the admin/SCIM path).
+        """
+        try:
+            return self.get_user_by_external_id(external_id)
+        except IdentityNotFound:
+            pass
+
+        try:
+            existing = self.get_user_by_email(email)
+        except IdentityNotFound:
+            existing = None
+        if existing is not None:
+            if existing.external_id != external_id:
+                self.link_external_id(existing.id, external_id)
+                existing = self.get_user(existing.id)
+            return existing
+
+        return self.create_user(
+            org_id=org_id,
+            team_id=team_id,
+            email=email,
+            display_name=display_name or email,
+            role=role,
+            external_id=external_id,
+        )
 
     def deactivate_user(self, user_id: str) -> None:
         """Soft-disable: existing tokens stay valid until they expire/are

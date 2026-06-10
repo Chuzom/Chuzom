@@ -1,0 +1,70 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly re-scan catches newly disclosed CVEs in unchanged deps.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+  security-events: write   # required to upload SARIF to the Security tab
+
+env:
+  UV_HTTP_TIMEOUT: 30
+
+jobs:
+  # ── Supply-chain CVE scan — HARD GATE ─────────────────────────────────────
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - name: Audit resolved dependencies for known CVEs
+        # Audits the project's resolved environment (incl. litellm's large
+        # transitive surface). Fails the build on any known vulnerability.
+        run: uv run --with pip-audit pip-audit --strict
+
+  # ── Static security analysis (bandit) — REPORT, ratchets to gate ──────────
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv python install 3.11
+      - name: Run bandit (SARIF to Security tab)
+        # NOTE: non-blocking until S3 (replace shell=True in
+        # hooks/agent_loop.py with an argv list). Once that lands, drop
+        # continue-on-error so bandit becomes a required check.
+        continue-on-error: true
+        run: |
+          uv run --with 'bandit[sarif]' bandit \
+            -r src/chuzom -ll -f sarif -o bandit.sarif || true
+      - name: Upload bandit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+
+  # ── CodeQL deep semantic analysis — reports to Security tab ───────────────
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-extended
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
