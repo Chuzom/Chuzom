@@ -23,6 +23,7 @@ from chuzom import cost, media, providers
 if TYPE_CHECKING:
     from chuzom.agents.base import AgentRoutingPolicy
 from chuzom.audit_routing import audit_routing_turn
+from chuzom.quota_routing import check_quota, raise_quota_denied, record_consumption
 from chuzom.budget import get_budget_state, reserve_tokens, release_tokens
 from chuzom.identity import TurnIdentity, current_identity
 from chuzom.idempotency import get_store as _get_idempotency_store
@@ -1833,6 +1834,38 @@ async def route_and_call(
         except Exception as _audit_err:
             log.warning("audit_rbac_warn_write_failed", error=str(_audit_err))
 
+    # F4: per-identity quota gate. Enterprise-gated (CHUZOM_QUOTA_MODE; default
+    # strict under enterprise, off in developer). strict + already-over-cap →
+    # refuse BEFORE any reservation / dispatch / provider call (zero spend);
+    # warn → breadcrumb + proceed. Post-success spend is recorded via
+    # record_consumption() so the next over-cap call is refused.
+    # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+    _quota_mode, _quota_breached, _quota_info = check_quota(identity)
+    if _quota_breached and _quota_mode in ("strict", "warn"):
+        _quota_detail = {
+            "correlation_id": correlation_id,
+            "outcome": "quota_exceeded" if _quota_mode == "strict" else "quota_warn",
+            "quota_mode": _quota_mode,
+        }
+        for _k in ("scope", "identifier", "period", "cap_usd", "consumed_usd"):
+            if _k in _quota_info:
+                _quota_detail[_k] = _quota_info[_k]
+        try:
+            audit_routing_turn(
+                identity=identity,
+                task_type=str(task_type),
+                complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                model="(quota)",
+                provider="(quota)",
+                cost_usd=0.0,
+                cached=False,
+                detail_extras=_quota_detail,
+            )
+        except Exception as _audit_err:
+            log.warning("audit_quota_write_failed", error=str(_audit_err))
+        if _quota_mode == "strict":
+            raise raise_quota_denied(_quota_info)
+
     # T3-M2: deadline pre-flight. If the parent workflow's deadline
     # has already passed, refuse to start any work — write a
     # best-effort audit row tagged ``outcome="deadline_exceeded"`` and
@@ -2459,6 +2492,9 @@ async def route_and_call(
             cached=False,
             detail_extras=_success_detail,
         )
+        # F4: record real per-identity spend so the next over-cap turn is
+        # refused. No-op off-mode / zero-cost (cached/local/free) turns.
+        record_consumption(identity, float(getattr(response, "cost_usd", 0.0) or 0.0))
         # T3-M4: persist the result for a future replay under the same
         # idempotency_key. Best-effort; a write failure must not break
         # the success path the caller is about to receive.
