@@ -1,0 +1,11 @@
+apiVersion: v2
+name: chuzom
+description: Local-first LLM router — enterprise (secured SSE server) deployment
+type: application
+version: 0.1.0
+appVersion: "0.2.0"
+home: https://github.com/ypollak2/chuzom
+sources:
+  - https://github.com/ypollak2/chuzom
+maintainers:
+  - name: ypollak2

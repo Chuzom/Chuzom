@@ -1,0 +1,52 @@
+replicaCount: 1
+
+image:
+  repository: chuzom-router
+  tag: "local"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 17891
+
+# Deployment posture. enterprise → RBAC strict, audit on, identity required.
+deploymentProfile: enterprise
+quotaMode: strict
+sseAllowPublic: "on"
+logJson: "1"
+
+budget:
+  backend: sqlite        # sqlite (single instance) | postgres (multi-instance)
+  postgresDsn: ""        # required when backend=postgres
+
+oidc:
+  issuer: ""
+  audience: ""
+  roleMap: ""            # e.g. "chuzom-admins=admin,chuzom-users=employee"
+
+# Secret values rendered into a Kubernetes Secret and injected as env. Prefer
+# setting these via --set / an external secrets operator rather than committing.
+secrets:
+  OPENAI_API_KEY: ""
+  ANTHROPIC_API_KEY: ""
+  GEMINI_API_KEY: ""
+
+ingress:
+  enabled: false
+  className: ""
+  host: chuzom.example.com
+  annotations: {}
+  tls: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001

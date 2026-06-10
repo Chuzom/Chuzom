@@ -1,0 +1,43 @@
+# Keep the build context small + secret-free. Mirrors the sdist exclude intent.
+.git
+.github
+.venv
+.venv-*
+venv
+venv-*
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+dist
+build
+*.egg-info
+# IDE / plugin / agent configs
+.claude
+.claude-plugin
+.codex-plugin
+.factory-plugin
+.serena
+.cursor
+.audit
+# Dev-only dirs not needed at runtime
+Docs
+tests
+research
+demo
+deprecation
+bench
+routerarena_submission
+deploy
+# Local state + secrets
+*.db
+.env
+.env.*
+!.env.example
+uv.lock
+# Assets (README-only)
+assets
+*.png
+*.jpg

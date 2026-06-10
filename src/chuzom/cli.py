@@ -584,6 +584,11 @@ def main() -> None:
         # one layer was skipped.
         from chuzom.commands.dev_refresh import cmd_dev_refresh
         sys.exit(cmd_dev_refresh(args[1:]))
+    elif args and args[0] == "serve":
+        # E3: run chuzom as a long-lived HTTP service (container / systemd
+        # entrypoint). Default = secured SSE MCP server; --admin = admin API.
+        from chuzom.commands.serve import cmd_serve
+        sys.exit(cmd_serve(args[1:]))
     elif args and args[0] == "routing":
         from chuzom.commands.routing import cmd_routing
         cmd_routing(args[1:])
