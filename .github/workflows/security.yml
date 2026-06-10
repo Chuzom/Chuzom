@@ -49,11 +49,13 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.11
-      - name: Run bandit (SARIF to Security tab)
-        # NOTE: non-blocking until S3 (replace shell=True in
-        # hooks/agent_loop.py with an argv list). Once that lands, drop
-        # continue-on-error so bandit becomes a required check.
-        continue-on-error: true
+      - name: Bandit high-severity gate
+        # HARD GATE on high-severity findings (e.g. a re-introduced shell=True).
+        # S3 removed the only high finding, so this passes today and blocks
+        # regressions. Medium findings (B608 f-string SQL, B310 urlopen) are
+        # reported via SARIF below but not gated — they need per-finding triage.
+        run: uv run --with bandit bandit -r src/chuzom --severity-level high -q
+      - name: Bandit SARIF (all findings to Security tab)
         run: |
           uv run --with 'bandit[sarif]' bandit \
             -r src/chuzom -ll -f sarif -o bandit.sarif || true
