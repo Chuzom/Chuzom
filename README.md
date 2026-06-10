@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/assets/chuzom-logo.png" alt="Chuzom — meeting of rivers" width="640">
+  <img src="https://raw.githubusercontent.com/ypollak2/chuzom/main/assets/hero-light.svg" alt="Chuzom — meeting of rivers, routing intelligence" width="760">
 </p>
 
 <h1 align="center">Chuzom</h1>
