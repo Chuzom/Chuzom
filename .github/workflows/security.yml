@@ -11,7 +11,8 @@ on:
 
 permissions:
   contents: read
-  security-events: write   # required to upload SARIF to the Security tab
+  security-events: write   # upload SARIF to the Security tab
+  actions: read            # SARIF fingerprinting reads the workflow run (else 403)
 
 env:
   UV_HTTP_TIMEOUT: 30
@@ -26,10 +27,15 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.11
-      - name: Audit resolved dependencies for known CVEs
-        # Audits the project's resolved environment (incl. litellm's large
-        # transitive surface). Fails the build on any known vulnerability.
-        run: uv run --with pip-audit pip-audit --strict
+      - name: Audit dependencies for known CVEs
+        # Audit the EXPORTED dependency tree, not the installed env. The project
+        # itself (chuzom-router) isn't published on PyPI at this version, so
+        # auditing the env tripped "Dependency not found on PyPI and could not
+        # be audited". --no-emit-project drops the root; we audit exactly the
+        # locked third-party deps (incl. litellm's large transitive surface).
+        run: |
+          uv export --no-emit-project --no-hashes -o /tmp/requirements.txt
+          uvx pip-audit --strict --requirement /tmp/requirements.txt
 
   # ── Static security analysis (bandit) — REPORT, ratchets to gate ──────────
   bandit:
