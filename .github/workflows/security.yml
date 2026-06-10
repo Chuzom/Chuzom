@@ -28,13 +28,14 @@ jobs:
           enable-cache: true
       - run: uv python install 3.11
       - name: Audit dependencies for known CVEs
-        # Audit the EXPORTED dependency tree, not the installed env (the root
-        # project isn't on PyPI at this version). --no-emit-project drops it.
-        #
-        # NON-BLOCKING for now: the locked tree has known CVEs (litellm, pyjwt,
-        # urllib3, starlette, python-multipart, pygments). Dependabot opens the
-        # bump PRs; once they land, drop `continue-on-error` to make this a hard
-        # gate again. The findings stay visible in the job log meanwhile.
+        # REPORT-ONLY. Audits the EXPORTED dependency tree (--no-emit-project
+        # drops the unpublished root project). The flagged packages are bumped
+        # forward to reduce the CVE count, but the transitive tree carries a
+        # steady stream of freshly-disclosed 2026 CVEs (aiohttp, cryptography,
+        # idna, …) — a hard gate would break CI weekly on deps we don't control.
+        # Dependabot drives the incremental bumps; findings stay in the job log.
+        # Ratchet back to --strict (drop continue-on-error) once the tree is
+        # clean and bumps are cadenced.
         continue-on-error: true
         run: |
           uv export --no-emit-project --no-hashes -o /tmp/requirements.txt

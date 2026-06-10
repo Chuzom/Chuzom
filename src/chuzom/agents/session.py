@@ -153,13 +153,22 @@ class SessionStore:
     immediate writes. Caller is responsible for serializing concurrent
     access to the same session_id."""
 
-    def __init__(self, db_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path | None = None,
+        *,
+        check_same_thread: bool = True,
+    ) -> None:
         self.db_path = db_path or Path(
             os.environ.get("CHUZOM_SESSIONS_PATH")
             or (Path.home() / ".chuzom" / "sessions.db")
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        # check_same_thread=False lets the admin API share one SessionStore
+        # across FastAPI worker threads (matches IdentityStore / QuotaTracker).
+        self._conn = sqlite3.connect(
+            str(self.db_path), check_same_thread=check_same_thread,
+        )
         self._conn.executescript(_SCHEMA)
         # T3-M3: idempotent ALTER TABLE migration for pre-T3-M3 DBs.
         # Introspect existing columns; add only the missing ones.
