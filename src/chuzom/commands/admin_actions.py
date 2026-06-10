@@ -20,7 +20,6 @@ require ``CHUZOM_TOKEN`` under enterprise profile (G-002 follow-up).
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 
 _USAGE = (
