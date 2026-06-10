@@ -1,0 +1,243 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" fill="none" role="img" aria-label="Chuzom — meeting of rivers, routing intelligence">
+  <title>Chuzom — meeting of rivers, routing intelligence</title>
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 0.10; }
+      50% { opacity: 0.22; }
+    }
+    @keyframes glow {
+      0%, 100% { filter: drop-shadow(0 0 2px #4F46E500); }
+      50% { filter: drop-shadow(0 0 8px #4F46E555); }
+    }
+    @keyframes tierFadeIn {
+      0% { opacity: 0; transform: translateX(-6px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes riverDraw {
+      0% { stroke-dashoffset: 120; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes badgePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .signal-bg { animation: pulse 3s ease-in-out infinite; }
+    .signal-box { animation: glow 3s ease-in-out infinite; }
+    .tier-free   { animation: tierFadeIn 0.5s ease-out 0.3s both; }
+    .tier-budget { animation: tierFadeIn 0.5s ease-out 0.5s both; }
+    .tier-premium{ animation: tierFadeIn 0.5s ease-out 0.7s both; }
+    .river { stroke-dasharray: 120; animation: riverDraw 2.4s ease-out forwards; }
+    .live-dot { animation: badgePulse 1.8s ease-in-out infinite; }
+  </style>
+
+  <defs>
+    <linearGradient id="heroBg" x1="0" y1="0" x2="900" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f3f4f8"/>
+    </linearGradient>
+    <linearGradient id="indigoGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="routeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#EF4444"/>
+    </linearGradient>
+    <linearGradient id="riverIndigo" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#6366F1" stop-opacity="0.65"/>
+    </linearGradient>
+
+    <marker id="arrowFree"    viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981"/></marker>
+    <marker id="arrowBudget"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#F59E0B"/></marker>
+    <marker id="arrowPremium" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#EF4444"/></marker>
+    <marker id="arrowIndigo"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4F46E5"/></marker>
+
+    <!-- Confluence rivers: 4 hosts (Claude / Cursor / Gemini / Codex) feed into one Chuzom pipeline. -->
+    <path id="riverClaude" d="M 60,150 C 130,150 180,168 240,180" fill="none"/>
+    <path id="riverCursor" d="M 60,180 C 140,180 180,184 240,188" fill="none"/>
+    <path id="riverGemini" d="M 60,210 C 140,210 180,200 240,196" fill="none"/>
+    <path id="riverCodex"  d="M 60,240 C 130,240 180,220 240,204" fill="none"/>
+
+    <!-- Routing dot paths (pipeline -> tier boxes) -->
+    <path id="pathFree"    d="M 480,170 L 570,158" fill="none"/>
+    <path id="pathBudget"  d="M 480,192 L 570,222" fill="none"/>
+    <path id="pathPremium" d="M 480,214 L 570,286" fill="none"/>
+  </defs>
+
+  <!-- Canvas + light border -->
+  <rect width="900" height="360" rx="18" fill="url(#heroBg)"/>
+  <rect x="1" y="1" width="898" height="358" rx="17" fill="none" stroke="#d1d9e0" stroke-width="1" opacity="0.55"/>
+
+  <!-- ── Wordmark ─────────────────────────────────────────────────────── -->
+  <g>
+    <text x="60" y="56" font-family="system-ui, -apple-system, 'SF Pro Display', sans-serif" font-size="44" font-weight="800" fill="#1f2328" letter-spacing="-1.5">Chuzom</text>
+    <text x="170" y="56" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#4F46E5" letter-spacing="2" opacity="0.85">ROUTING INTELLIGENCE</text>
+    <text x="60" y="80" font-family="system-ui, sans-serif" font-size="15" fill="#656d76">Meeting of rivers — every prompt flows to the cheapest model that can do the job.</text>
+  </g>
+
+  <!-- Live status pill: 🟢 routed -->
+  <g transform="translate(720,40)">
+    <rect x="0" y="0" width="140" height="28" rx="14" fill="#10B981" opacity="0.1" stroke="#10B981" stroke-width="0.8"/>
+    <circle class="live-dot" cx="14" cy="14" r="4" fill="#10B981"/>
+    <text x="26" y="18" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#0F8A66">LIVE · 14 hosts</text>
+  </g>
+
+  <!-- ── Confluence: four host inputs flowing in (the "rivers") ──────── -->
+  <g>
+    <!-- Host labels -->
+    <g font-family="system-ui, sans-serif" font-size="11" font-weight="600">
+      <rect x="20" y="138" width="56" height="22" rx="6" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="48" y="153" text-anchor="middle" fill="#1f2328">Claude</text>
+
+      <rect x="20" y="168" width="56" height="22" rx="6" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="48" y="183" text-anchor="middle" fill="#1f2328">Cursor</text>
+
+      <rect x="20" y="198" width="56" height="22" rx="6" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="48" y="213" text-anchor="middle" fill="#1f2328">Gemini</text>
+
+      <rect x="20" y="228" width="56" height="22" rx="6" fill="#ffffff" stroke="#d1d9e0"/>
+      <text x="48" y="243" text-anchor="middle" fill="#1f2328">Codex</text>
+    </g>
+
+    <!-- Rivers (curved confluence) -->
+    <use href="#riverClaude" class="river" stroke="url(#riverIndigo)" stroke-width="3" stroke-linecap="round"/>
+    <use href="#riverCursor" class="river" stroke="url(#riverIndigo)" stroke-width="3" stroke-linecap="round"/>
+    <use href="#riverGemini" class="river" stroke="url(#riverIndigo)" stroke-width="3" stroke-linecap="round"/>
+    <use href="#riverCodex"  class="river" stroke="url(#riverIndigo)" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- Flowing routing dots on each river -->
+    <circle r="3" fill="#4F46E5">
+      <animateMotion dur="2.2s" repeatCount="indefinite" begin="0s"><mpath href="#riverClaude"/></animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.2s" repeatCount="indefinite" begin="0s"/>
+    </circle>
+    <circle r="3" fill="#4F46E5">
+      <animateMotion dur="2.2s" repeatCount="indefinite" begin="0.55s"><mpath href="#riverCursor"/></animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.2s" repeatCount="indefinite" begin="0.55s"/>
+    </circle>
+    <circle r="3" fill="#4F46E5">
+      <animateMotion dur="2.2s" repeatCount="indefinite" begin="1.10s"><mpath href="#riverGemini"/></animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.2s" repeatCount="indefinite" begin="1.10s"/>
+    </circle>
+    <circle r="3" fill="#4F46E5">
+      <animateMotion dur="2.2s" repeatCount="indefinite" begin="1.65s"><mpath href="#riverCodex"/></animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.2s" repeatCount="indefinite" begin="1.65s"/>
+    </circle>
+  </g>
+
+  <!-- ── Chuzom pipeline (the confluence) ────────────────────────────── -->
+  <g>
+    <!-- Outer glow halo -->
+    <rect class="signal-bg" x="240" y="140" width="240" height="100" rx="14" fill="url(#indigoGrad)"/>
+    <rect class="signal-box" x="240" y="140" width="240" height="100" rx="14" fill="none" stroke="#4F46E5" stroke-width="1.5"/>
+
+    <!-- Pipeline stages stacked inside the box -->
+    <g font-family="system-ui, sans-serif" font-size="11" fill="#4F46E5">
+      <text x="360" y="160" text-anchor="middle" font-size="13" font-weight="800" letter-spacing="0.3" fill="#4338CA">CHUZOM PIPELINE</text>
+
+      <!-- stage 1 -->
+      <rect x="252" y="170" width="216" height="18" rx="5" fill="#ffffff" stroke="#4F46E5" stroke-width="0.8" opacity="0.95"/>
+      <text x="262" y="183" font-weight="700" fill="#4338CA">①</text>
+      <text x="276" y="183" fill="#1f2328">signal · classify · DSL decision</text>
+
+      <!-- stage 2 -->
+      <rect x="252" y="192" width="216" height="18" rx="5" fill="#ffffff" stroke="#4F46E5" stroke-width="0.8" opacity="0.95"/>
+      <text x="262" y="205" font-weight="700" fill="#4338CA">②</text>
+      <text x="276" y="205" fill="#1f2328">guard · budget · agent policy · RBAC</text>
+
+      <!-- stage 3 -->
+      <rect x="252" y="214" width="216" height="18" rx="5" fill="#ffffff" stroke="#4F46E5" stroke-width="0.8" opacity="0.95"/>
+      <text x="262" y="227" font-weight="700" fill="#4338CA">③</text>
+      <text x="276" y="227" fill="#1f2328">selector · circuit breaker · failover</text>
+    </g>
+  </g>
+
+  <!-- ── Routing arrows from pipeline → tier boxes ───────────────────── -->
+  <line x1="480" y1="170" x2="570" y2="158" stroke="#10B981" stroke-width="2" stroke-opacity="0.35" marker-end="url(#arrowFree)"/>
+  <circle r="3" fill="#10B981">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="0s"><mpath href="#pathFree"/></animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.4s" repeatCount="indefinite" begin="0s"/>
+  </circle>
+
+  <line x1="480" y1="192" x2="570" y2="222" stroke="#F59E0B" stroke-width="2" stroke-opacity="0.35" marker-end="url(#arrowBudget)"/>
+  <circle r="3" fill="#F59E0B">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.8s"><mpath href="#pathBudget"/></animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.4s" repeatCount="indefinite" begin="0.8s"/>
+  </circle>
+
+  <line x1="480" y1="214" x2="570" y2="286" stroke="#EF4444" stroke-width="2" stroke-opacity="0.35" marker-end="url(#arrowPremium)"/>
+  <circle r="3" fill="#EF4444">
+    <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.6s"><mpath href="#pathPremium"/></animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.4s" repeatCount="indefinite" begin="1.6s"/>
+  </circle>
+
+  <!-- ── Tier outputs (right column) ─────────────────────────────────── -->
+  <!-- Free / local -->
+  <g class="tier-free">
+    <rect x="580" y="138" width="240" height="44" rx="9" fill="#10B981" opacity="0.12" stroke="#10B981" stroke-width="1.5"/>
+    <circle cx="600" cy="160" r="6" fill="#10B981"/>
+    <text x="616" y="156" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#0F8A66">Simple · query</text>
+    <text x="616" y="172" font-family="system-ui, sans-serif" font-size="10" fill="#656d76">Ollama / Haiku 4.5 / Gemini Flash</text>
+    <text x="810" y="164" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" font-weight="800" fill="#0F8A66">FREE</text>
+  </g>
+
+  <!-- Mid / budget -->
+  <g class="tier-budget">
+    <rect x="580" y="200" width="240" height="44" rx="9" fill="#F59E0B" opacity="0.12" stroke="#F59E0B" stroke-width="1.5"/>
+    <circle cx="600" cy="222" r="6" fill="#F59E0B"/>
+    <text x="616" y="218" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#B45309">Moderate · code</text>
+    <text x="616" y="234" font-family="system-ui, sans-serif" font-size="10" fill="#656d76">Sonnet 4.6 / GPT-4o / Gemini Pro</text>
+    <text x="810" y="226" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" font-weight="800" fill="#B45309">$0.01</text>
+  </g>
+
+  <!-- Premium / complex -->
+  <g class="tier-premium">
+    <rect x="580" y="262" width="240" height="44" rx="9" fill="#EF4444" opacity="0.12" stroke="#EF4444" stroke-width="1.5"/>
+    <circle cx="600" cy="284" r="6" fill="#EF4444"/>
+    <text x="616" y="280" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#B91C1C">Complex · reason</text>
+    <text x="616" y="296" font-family="system-ui, sans-serif" font-size="10" fill="#656d76">Opus 4.7 / o3 / Claude Agent SDK</text>
+    <text x="810" y="288" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" font-weight="800" fill="#B91C1C">$$$</text>
+  </g>
+
+  <!-- Cost gradient bar between tier blocks and edge -->
+  <rect x="836" y="142" width="4" height="164" rx="2" fill="url(#routeGrad)" opacity="0.75"/>
+
+  <!-- ── Routing notice strip — the user-visible chuzom signature ────── -->
+  <g transform="translate(60,294)">
+    <rect x="0" y="0" width="780" height="36" rx="8" fill="#0F172A"/>
+    <rect x="0" y="0" width="780" height="36" rx="8" fill="#4F46E5" opacity="0.08"/>
+    <text x="14" y="23" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12" fill="#E0E7FF">
+      <tspan fill="#A5B4FC">🎯 chuzom →</tspan>
+      <tspan fill="#FBBF24"> gemini/gemini-2.5-flash</tspan>
+      <tspan fill="#94A3B8"> · analyze/moderate · 1.7s · </tspan>
+      <tspan fill="#34D399">saved 7.0pp wk / 3.0pp 5h</tspan>
+      <tspan fill="#94A3B8"> · </tspan>
+      <tspan fill="#67E8F9">30d on gemini: $1.23</tspan>
+    </text>
+  </g>
+
+  <!-- ── Bottom stat pills ────────────────────────────────────────────── -->
+  <g font-family="system-ui, sans-serif" font-size="11" font-weight="700">
+    <g>
+      <rect x="60" y="338" width="140" height="18" rx="9" fill="#4F46E5" opacity="0.10" stroke="#4F46E5" stroke-width="0.5"/>
+      <text x="130" y="351" text-anchor="middle" fill="#4338CA">Atomic budgets · G-002</text>
+    </g>
+    <g>
+      <rect x="210" y="338" width="140" height="18" rx="9" fill="#06B6D4" opacity="0.10" stroke="#06B6D4" stroke-width="0.5"/>
+      <text x="280" y="351" text-anchor="middle" fill="#0E7490">OTLP traces + metrics</text>
+    </g>
+    <g>
+      <rect x="360" y="338" width="140" height="18" rx="9" fill="#10B981" opacity="0.10" stroke="#10B981" stroke-width="0.5"/>
+      <text x="430" y="351" text-anchor="middle" fill="#0F8A66">~3667 tests passing</text>
+    </g>
+    <g>
+      <rect x="510" y="338" width="140" height="18" rx="9" fill="#F59E0B" opacity="0.10" stroke="#F59E0B" stroke-width="0.5"/>
+      <text x="580" y="351" text-anchor="middle" fill="#B45309">Hash-chained audit</text>
+    </g>
+    <g>
+      <rect x="660" y="338" width="180" height="18" rx="9" fill="#EF4444" opacity="0.10" stroke="#EF4444" stroke-width="0.5"/>
+      <text x="750" y="351" text-anchor="middle" fill="#B91C1C">PII / secret · forced local</text>
+    </g>
+  </g>
+</svg>
