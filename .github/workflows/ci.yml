@@ -97,19 +97,20 @@ jobs:
         run: |
           # Run pytest in the background so we can detect the aiosqlite thread hang.
           # pytest writes junit xml before the hang; we read that to determine pass/fail.
-          # Coverage is measured (not yet gated). Once a baseline is
-          # established, add `--cov-fail-under=80` to make it a hard gate (N1).
+          # NOTE: do NOT add --cov here. Coverage instrumentation slows the
+          # full suite past the 280s watchdog below, so pytest never writes
+          # junit before the timeout fires → "Could not read junit xml". Run
+          # coverage in a separate, unwrapped job if/when it's needed (N1).
           uv run pytest tests/ -q \
             --ignore=tests/test_agno_integration.py \
             --timeout=30 \
-            --cov=src/chuzom \
-            --cov-report=xml:/tmp/coverage.xml \
-            --cov-report=term-missing:skip-covered \
             --junit-xml=/tmp/pytest-results.xml &
           PYTEST_PID=$!
 
-          # Wait up to 150s for pytest to exit normally.
-          for i in $(seq 1 150); do
+          # Wait up to 280s for pytest to exit normally. The full suite is
+          # ~150s; 280s leaves margin so the watchdog only fires on a real
+          # aiosqlite exit-hang, not a merely-slow run (job timeout is 10m).
+          for i in $(seq 1 280); do
             if ! kill -0 $PYTEST_PID 2>/dev/null; then
               wait $PYTEST_PID
               exit $?
