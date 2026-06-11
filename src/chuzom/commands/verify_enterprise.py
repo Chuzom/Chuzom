@@ -273,6 +273,35 @@ def _check_audit_db_reachable() -> CheckResult:
     )
 
 
+def _check_audit_chain_intact() -> CheckResult:
+    """Walk the audit hash chain and confirm no row was tampered with. This is
+    the integrity counterpart to _check_audit_not_disabled (which only checks
+    the log is switched on, not that its history is unbroken)."""
+    from chuzom.enterprise.audit import AuditLog, TamperDetected
+    try:
+        log = AuditLog(check_same_thread=False)
+        rows = log.count()
+        log.verify_chain()
+        return CheckResult(
+            name="audit_chain_intact", passed=True,
+            status=f"{rows} events, hash chain verified",
+        )
+    except TamperDetected as exc:
+        return CheckResult(
+            name="audit_chain_intact", passed=False, status=str(exc),
+            remediation=(
+                "Audit log tampered outside the API — investigate the breach "
+                "and restore audit.db from a trusted backup"
+            ),
+        )
+    except Exception as exc:  # DB unreadable / corrupt
+        return CheckResult(
+            name="audit_chain_intact", passed=False,
+            status=f"could not verify chain: {exc}",
+            remediation="Ensure ~/.chuzom/audit.db (or CHUZOM_AUDIT_PATH) is readable",
+        )
+
+
 def _check_admin_actions_db_reachable() -> CheckResult:
     from chuzom.admin_actions import AdminActionLog
     return _writable_db_check(
@@ -311,6 +340,7 @@ ENTERPRISE_CHECKS: tuple[Callable[[], CheckResult], ...] = (
     _check_redaction_on,
     _check_identity_db_reachable,
     _check_audit_db_reachable,
+    _check_audit_chain_intact,
     _check_admin_actions_db_reachable,
     _check_policy_store_reachable,
 )

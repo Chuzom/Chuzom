@@ -682,6 +682,9 @@ def main() -> None:
     elif args and args[0] == "verify":
         from chuzom.commands.verify import main as _verify_main
         _verify_main(args[1:])
+    elif args and args[0] == "audit":
+        from chuzom.commands.audit import main as _audit_main
+        sys.exit(_audit_main(args[1:]))
     elif args and args[0] == "last":
         from chuzom.commands.last import main as _last_main
         _last_main(args[1:])
