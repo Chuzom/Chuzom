@@ -66,7 +66,7 @@ jobs:
         # fail CI over a repo-level feature toggle. bandit findings are in the
         # job log regardless.
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: bandit.sarif
           category: bandit
@@ -77,7 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: python
           queries: security-extended
@@ -87,6 +87,6 @@ jobs:
         # don't fail CI over a repo-level toggle. Drop continue-on-error once
         # code scanning is enabled to make CodeQL a required check.
         continue-on-error: true
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:python"
