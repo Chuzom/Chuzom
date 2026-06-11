@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub><strong>Maturity:</strong> developer-tool layer is the production path today (alpha per <a href="https://github.com/ypollak2/chuzom/blob/main/pyproject.toml">pyproject.toml</a>). The enterprise control plane — RBAC, tamper-evident audit chain, per-user / per-team budgets, OpenTelemetry export — is scaffolded but not yet wired into the routing path (<a href="https://github.com/ypollak2/chuzom/blob/main/Docs/audit/FINDINGS.md">INV-010</a>). See <a href="https://github.com/ypollak2/chuzom/blob/main/Docs/audit/ROADMAP.md">ROADMAP</a> for sequencing.</sub>
+  <sub><strong>Maturity:</strong> developer-tool layer is the production path today (alpha per <a href="https://github.com/ypollak2/chuzom/blob/main/pyproject.toml">pyproject.toml</a>). The enterprise control plane — RBAC, tamper-evident audit chain, per-identity / per-team budgets — is now <strong>wired into the routing path and enforced under the enterprise deployment profile</strong> (<code>CHUZOM_DEPLOYMENT_PROFILE=enterprise</code> flips RBAC&nbsp;→&nbsp;strict, audit&nbsp;→&nbsp;mandatory), verified end-to-end (closes the audit's INV-010 gap). The remaining step is SSO/SCIM-token-driven population of per-identity allow-lists (Phase&nbsp;3b); until then allow-lists are supplied via policy/env. See <a href="https://github.com/ypollak2/chuzom/blob/main/Docs/audit/ROADMAP.md">ROADMAP</a> for sequencing.</sub>
 </p>
 
 <p align="center">
