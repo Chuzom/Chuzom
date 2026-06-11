@@ -353,6 +353,28 @@ def _user_to_safe_dict(user: User) -> dict[str, Any]:
     }
 
 
+def _require_user_in_caller_org(
+    store: IdentityStore, user_id: str, caller_org_id: str
+) -> User:
+    """Fetch a user, enforcing the caller's org as an authorization boundary.
+
+    Raises 404 when the user does not exist OR belongs to a different org —
+    deliberately the SAME response for both, so a cross-org admin cannot probe
+    which user ids exist outside their org (no existence disclosure).
+    🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+    """
+    try:
+        target = store.get_user(user_id)
+    except IdentityNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if target.org_id != caller_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"user {user_id} not found",
+        )
+    return target
+
+
 # ────────────────────────────────────────────────────────────────────────
 # Team-budget helpers (Loop-5 #4)
 # ────────────────────────────────────────────────────────────────────────
@@ -503,10 +525,15 @@ def create_app() -> FastAPI:
         identity: Identity = Depends(require_perm(Permission.MANAGE_USERS)),
         store: IdentityStore = Depends(get_identity_store),
     ) -> list[dict[str, Any]]:
+        # P1-2: org_id is an authorization boundary — an admin only ever sees
+        # users in their OWN org, never another tenant's roster.
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
         rows = store._conn.execute(
             "SELECT id, org_id, team_id, email, display_name, role, "
             "external_id, active, created_at FROM users "
-            "ORDER BY created_at ASC"
+            "WHERE org_id = ? "
+            "ORDER BY created_at ASC",
+            (identity.user.org_id,),
         ).fetchall()
         result: list[dict[str, Any]] = []
         for row in rows:
@@ -530,6 +557,15 @@ def create_app() -> FastAPI:
         store: IdentityStore = Depends(get_identity_store),
         admin_log: AdminActionLog = Depends(get_admin_action_log),
     ) -> dict[str, Any]:
+        # P1-2: an admin may only create users within their OWN org — refuse a
+        # cross-org create even with MANAGE_USERS, so one tenant's admin can't
+        # plant principals in another tenant.
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        if body.org_id != identity.user.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="cannot create a user outside your own org",
+            )
         # Resolve role (case-insensitive). Unknown role → 400.
         try:
             role = Role(body.role.strip().lower())
@@ -577,6 +613,10 @@ def create_app() -> FastAPI:
         store: IdentityStore = Depends(get_identity_store),
         admin_log: AdminActionLog = Depends(get_admin_action_log),
     ) -> dict[str, Any]:
+        # P1-2: the target user must be in the caller's org (404 otherwise) so a
+        # cross-org admin can't revoke another tenant's tokens.
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        _require_user_in_caller_org(store, user_id, identity.user.org_id)
         store.revoke_token(token_id)
         _emit_admin_action(
             admin_log, identity=identity,
@@ -602,13 +642,10 @@ def create_app() -> FastAPI:
         store: IdentityStore = Depends(get_identity_store),
         admin_log: AdminActionLog = Depends(get_admin_action_log),
     ) -> dict[str, Any]:
-        # 404 if the user doesn't exist; 400 if deactivated.
-        try:
-            target = store.get_user(user_id)
-        except IdentityNotFound as exc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-            )
+        # 404 if the user doesn't exist OR is in another org (P1-2 boundary);
+        # 400 if deactivated.
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        target = _require_user_in_caller_org(store, user_id, identity.user.org_id)
         if not target.active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
