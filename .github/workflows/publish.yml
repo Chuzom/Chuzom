@@ -74,7 +74,11 @@ jobs:
           ls -la dist/
 
       - name: Publish to PyPI
+        # Trusted publishing (OIDC): NO password — auth comes from the `pypi`
+        # environment + `id-token: write`. Passing a `password:` would switch
+        # the action to token auth; omitting it commits cleanly to OIDC.
+        # Requires a PyPI publisher registered for: project chuzom-router,
+        # owner Chuzom, repo chuzom, workflow publish.yml, environment pypi.
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_TOKEN }}
           skip_existing: true
