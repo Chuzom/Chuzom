@@ -68,7 +68,6 @@ def test_developer_profile_skips_verifier() -> None:
     srv._startup_verify_or_die()
 
 
-@pytest.mark.xfail(reason="INV-010/Refinement-11: enterprise startup verifier not wired into main()", strict=False)
 def test_enterprise_clean_config_passes(
     monkeypatch, tmp_path: Path,
 ) -> None:

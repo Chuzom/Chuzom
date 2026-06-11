@@ -35,6 +35,7 @@ from typing import Any
 from chuzom.enterprise.audit import AuditEvent, AuditEventType, AuditLog
 from chuzom.identity import TurnIdentity, current_identity
 from chuzom.logging import get_logger
+from chuzom.profile import is_enterprise
 
 log = get_logger("chuzom.audit_routing")
 
@@ -54,6 +55,13 @@ _audit_log_lock = threading.Lock()
 
 
 def _audit_disabled() -> bool:
+    # 🥷 Backslash-security: Log all security-relevant events.
+    # G-003: under the enterprise profile the audit trail is mandatory —
+    # ``CHUZOM_AUDIT_DISABLED`` is refused regardless of its value so an
+    # env tweak can't silently turn off the tamper-evident log. Developer
+    # profile preserves the env-driven opt-out for local/test use.
+    if is_enterprise():
+        return False
     return (os.environ.get(_AUDIT_DISABLED_ENV) or "").strip().lower() in _AFFIRMATIVE
 
 

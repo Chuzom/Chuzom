@@ -38,6 +38,7 @@ from typing import Any
 from chuzom.enterprise.rbac import Permission, PermissionDenied, has_permission
 from chuzom.identity import TurnIdentity
 from chuzom.logging import get_logger
+from chuzom.profile import is_enterprise
 
 log = get_logger("chuzom.rbac_routing")
 
@@ -50,12 +51,22 @@ _WARN_VALUES = {"warn", "soft", "shadow"}
 
 
 def _resolve_mode() -> str:
-    """Return ``'off'`` / ``'warn'`` / ``'strict'`` based on env."""
+    """Return ``'off'`` / ``'warn'`` / ``'strict'`` based on env + profile.
+
+    Explicit ``CHUZOM_RBAC_MODE`` always wins. When unset, the
+    deployment profile decides: enterprise defaults to ``strict`` (G-001
+    safety-on); developer keeps the legacy ``off`` default.
+    """
     raw = (os.environ.get(_RBAC_MODE_ENV) or "").strip().lower()
     if raw in _STRICT_VALUES:
         return "strict"
     if raw in _WARN_VALUES:
         return "warn"
+    # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+    # Enterprise profile flips the default to strict when the operator
+    # hasn't set an explicit mode; developer profile is unchanged.
+    if raw == "" and is_enterprise():
+        return "strict"
     return "off"
 
 

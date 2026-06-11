@@ -405,12 +405,36 @@ SKIP_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# ── Enterprise-profile detection ─────────────────────────────────────────────
+# G-039 closure. The self-reference bypass below is a documented escape
+# hatch for developer / dev-workstation use. Under an enterprise
+# deployment it becomes a *governed bypass* — a chuzom-flavoured prompt
+# could otherwise route as un-audited. We inline the check (instead of
+# ``from chuzom.profile import is_enterprise``) because this hook stays
+# stdlib-only so it can run in a fresh subprocess without importing the
+# chuzom package. Mirrors ``chuzom.profile`` PROFILE_ENV + the
+# enterprise-alias set verbatim.
+_ENTERPRISE_PROFILE_VALUES = {"enterprise", "prod", "production"}
+
+
+def _is_enterprise_profile() -> bool:
+    """Loop-5 #1 — primary env is ``CHUZOM_DEPLOYMENT_PROFILE``; legacy
+    ``CHUZOM_PROFILE`` is read as fallback during the deprecation window.
+    Mirrors ``chuzom.profile.resolve_profile`` resolution order exactly."""
+    primary = (os.environ.get("CHUZOM_DEPLOYMENT_PROFILE") or "").strip().lower()
+    if primary:
+        return primary in _ENTERPRISE_PROFILE_VALUES
+    legacy = (os.environ.get("CHUZOM_PROFILE") or "").strip().lower()
+    return legacy in _ENTERPRISE_PROFILE_VALUES
+
+
 # ── Self-Reference Bypass ────────────────────────────────────────────────────
 # When the user is debugging chuzom itself, routing creates a circular
 # dependency: the broken router blocks the tools needed to repair it.
 # Match prompts that reference chuzom internals (paths, log files, hook
 # names, env vars) OR mention chuzom near a debugging-context word.
 # A match exits the hook cleanly — no pending state, no banner, no block.
+# Under enterprise profile the bypass is refused (G-039); see ``main()``.
 _SELF_REFERENCE_RE = re.compile(
     r"(?:"
     r"\.chuzom[/\\]"
@@ -2013,9 +2037,19 @@ def main() -> None:
     # Self-reference bypass: skip routing when the user is debugging chuzom
     # itself, to avoid the circular dependency where chuzom blocks its own
     # repair. See _SELF_REFERENCE_RE above for the match criteria.
+    # G-039 closure: under enterprise profile the bypass is REFUSED — we log
+    # the attempt (for forensics) and let normal routing proceed so no
+    # chuzom-flavoured prompt can route as un-audited.
     if _SELF_REFERENCE_RE.search(prompt):
-        _debug_log(f"[INVOCATION {invocation_id:.3f}] SELF_REFERENCE_BYPASS — chuzom-debug prompt, skipping routing")
-        sys.exit(0)
+        if _is_enterprise_profile():
+            _debug_log(
+                f"[INVOCATION {invocation_id:.3f}] "
+                "SELF_REFERENCE_BYPASS_REFUSED — chuzom-debug prompt under "
+                "enterprise profile; continuing with normal routing (G-039)."
+            )
+        else:
+            _debug_log(f"[INVOCATION {invocation_id:.3f}] SELF_REFERENCE_BYPASS — chuzom-debug prompt, skipping routing")
+            sys.exit(0)
 
     session_id = hook_input.get("session_id", "")
     zero_claude = _zero_claude_enabled()

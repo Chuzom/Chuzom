@@ -86,7 +86,6 @@ def test_rbac_default_is_off_in_developer_profile() -> None:
     assert _rbac_resolve_mode() == "off"
 
 
-@pytest.mark.xfail(reason="INV-010: enterprise strict-default control plane not yet wired", strict=False)
 def test_rbac_default_is_strict_in_enterprise_profile(monkeypatch) -> None:
     monkeypatch.setenv(PROFILE_ENV, "enterprise")
     assert _rbac_resolve_mode() == "strict"
@@ -124,7 +123,6 @@ def test_audit_disable_env_works_in_developer_profile(monkeypatch) -> None:
     assert _audit_disabled() is True
 
 
-@pytest.mark.xfail(reason="INV-010: enterprise strict-default control plane not yet wired", strict=False)
 def test_audit_disable_env_refused_in_enterprise(monkeypatch) -> None:
     """G-003 closure: enterprise refuses the env regardless of value."""
     monkeypatch.setenv(PROFILE_ENV, "enterprise")
@@ -148,7 +146,6 @@ def test_redaction_default_is_off_in_developer_profile() -> None:
     assert _redaction_enabled() is False
 
 
-@pytest.mark.xfail(reason="INV-010: enterprise strict-default control plane not yet wired", strict=False)
 def test_redaction_default_is_on_in_enterprise_profile(monkeypatch) -> None:
     monkeypatch.setenv(PROFILE_ENV, "enterprise")
     assert _redaction_enabled() is True
@@ -172,7 +169,6 @@ def test_redaction_explicit_on_works_without_profile(monkeypatch) -> None:
 # ── 5. Cross-feature smoke: enterprise profile flips ALL three together ─────
 
 
-@pytest.mark.xfail(reason="INV-010: enterprise strict-default control plane not yet wired", strict=False)
 def test_enterprise_profile_flips_all_three_defaults(monkeypatch) -> None:
     """The whole point of CHUZOM_PROFILE: one env flips three
     safety-feature defaults atomically."""

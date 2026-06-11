@@ -52,18 +52,15 @@ def _clean_env(monkeypatch) -> None:
 # ── 1. Inline enterprise detector mirrors chuzom.profile ───────────────────
 
 
-@pytest.mark.xfail(reason="G-039: enterprise gate on auto-route self-reference bypass not yet back-ported to src/chuzom/hooks/auto-route.py", strict=False)
 def test_developer_profile_not_enterprise(hook_module) -> None:
     assert hook_module._is_enterprise_profile() is False
 
 
-@pytest.mark.xfail(reason="G-039: enterprise gate on auto-route self-reference bypass not yet back-ported to src/chuzom/hooks/auto-route.py", strict=False)
 def test_enterprise_profile_detected(hook_module, monkeypatch) -> None:
     monkeypatch.setenv("CHUZOM_PROFILE", "enterprise")
     assert hook_module._is_enterprise_profile() is True
 
 
-@pytest.mark.xfail(reason="G-039: enterprise gate on auto-route self-reference bypass not yet back-ported to src/chuzom/hooks/auto-route.py", strict=False)
 def test_enterprise_aliases_detected(hook_module, monkeypatch) -> None:
     """The aliases (``prod``, ``production``, casing variants) must
     track ``chuzom.profile`` exactly so a profile flip on one path
@@ -73,7 +70,6 @@ def test_enterprise_aliases_detected(hook_module, monkeypatch) -> None:
         assert hook_module._is_enterprise_profile() is True, value
 
 
-@pytest.mark.xfail(reason="G-039: enterprise gate on auto-route self-reference bypass not yet back-ported to src/chuzom/hooks/auto-route.py", strict=False)
 def test_unknown_profile_falls_back_to_not_enterprise(
     hook_module, monkeypatch
 ) -> None:
@@ -136,14 +132,12 @@ def _would_bypass(hook_module, prompt: str, monkeypatch=None) -> bool:
     return not hook_module._is_enterprise_profile()
 
 
-@pytest.mark.xfail(reason="G-039: enterprise gate on auto-route self-reference bypass not yet back-ported to src/chuzom/hooks/auto-route.py", strict=False)
 def test_developer_profile_bypass_allowed(hook_module) -> None:
     """Pre-G-039 contract: a chuzom-debug prompt under developer
     profile skips routing entirely."""
     assert _would_bypass(hook_module, "chuzom is stuck again") is True
 
 
-@pytest.mark.xfail(reason="G-039: enterprise gate on auto-route self-reference bypass not yet back-ported to src/chuzom/hooks/auto-route.py", strict=False)
 def test_enterprise_profile_bypass_refused(
     hook_module, monkeypatch
 ) -> None:

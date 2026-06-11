@@ -29,6 +29,7 @@ import os
 
 from chuzom.enterprise.redaction import RedactionResult, redact_prompt
 from chuzom.logging import get_logger
+from chuzom.profile import is_enterprise
 
 log = get_logger("chuzom.redaction_routing")
 
@@ -38,7 +39,17 @@ _AFFIRMATIVE = {"on", "1", "true", "yes", "strict"}
 
 
 def _redaction_enabled() -> bool:
-    return (os.environ.get(_REDACTION_ENV) or "").strip().lower() in _AFFIRMATIVE
+    # G-012: an explicit affirmative env always enables; an explicit
+    # non-affirmative value (e.g. ``off``) always disables — including
+    # the documented enterprise operator opt-out. Only when the env is
+    # unset does the deployment profile decide: enterprise defaults
+    # redaction on, developer keeps it off.
+    raw = (os.environ.get(_REDACTION_ENV) or "").strip().lower()
+    if raw in _AFFIRMATIVE:
+        return True
+    if raw == "" and is_enterprise():
+        return True
+    return False
 
 
 def maybe_redact(prompt: str) -> tuple[str, dict[str, int]]:
