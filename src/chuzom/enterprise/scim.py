@@ -90,6 +90,61 @@ def extract_user_fields(payload: dict) -> dict:
     }
 
 
+def parse_role_map(raw: str) -> dict:
+    """Parse ``"manager-grp=manager,Admin=admin"`` → {attr_value: Role}.
+
+    Mirrors :func:`chuzom.enterprise.oidc._parse_role_map` so SCIM and OIDC
+    share one configuration idiom. Unknown role names are skipped (logged by
+    callers if desired) rather than crashing config. Matching is exact and
+    case-sensitive on the attribute value; role names are case-insensitive.
+    """
+    from chuzom.enterprise.rbac import Role
+
+    mapping: dict = {}
+    for pair in (raw or "").split(","):
+        pair = pair.strip()
+        if not pair or "=" not in pair:
+            continue
+        attr_value, _, role_name = pair.partition("=")
+        attr_value = attr_value.strip()
+        try:
+            mapping[attr_value] = Role(role_name.strip().lower())
+        except ValueError:
+            continue
+    return mapping
+
+
+def extract_role(payload: dict, role_map: dict):
+    """Map a SCIM User's ``roles``/``title`` attribute to a chuzom ``Role``.
+
+    SCIM 2.0 carries authorization signals in the multi-valued ``roles``
+    attribute (``[{"value": "...", "primary": true}]``) and the singular
+    ``title``. We try each candidate value against ``role_map`` (primary role
+    first, then other roles, then title) and fall back to EMPLOYEE — so an IdP
+    that doesn't send a mapped attribute provisions a least-privilege user
+    rather than failing, while a configured map promotes managers/admins.
+    """
+    from chuzom.enterprise.rbac import Role
+
+    candidates: list[str] = []
+    roles = payload.get("roles") or []
+    if isinstance(roles, list):
+        primary = [r for r in roles if isinstance(r, dict) and r.get("primary")]
+        rest = [r for r in roles if r not in primary]
+        for r in (*primary, *rest):
+            if isinstance(r, dict) and r.get("value"):
+                candidates.append(str(r["value"]).strip())
+            elif isinstance(r, str) and r.strip():
+                candidates.append(r.strip())
+    title = (payload.get("title") or "").strip()
+    if title:
+        candidates.append(title)
+    for value in candidates:
+        if value in role_map:
+            return role_map[value]
+    return Role.EMPLOYEE
+
+
 def patch_sets_inactive(payload: dict) -> bool:
     """True iff a SCIM PatchOp body replaces ``active`` with a falsey value.
 

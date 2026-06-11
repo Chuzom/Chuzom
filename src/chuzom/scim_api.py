@@ -23,7 +23,6 @@ from chuzom.enterprise.identity import (
     IdentityNotFound,
     IdentityStore,
 )
-from chuzom.enterprise.rbac import Role
 
 log = structlog.get_logger(__name__)
 
@@ -36,6 +35,12 @@ def scim_enabled() -> bool:
     flag = (os.environ.get("CHUZOM_SCIM_ENABLED") or "").strip().lower()
     token = (os.environ.get("CHUZOM_SCIM_TOKEN") or "").strip()
     return flag in {"on", "1", "true", "yes"} and bool(token)
+
+
+def _scim_role_map() -> dict:
+    """P1-6: parse ``CHUZOM_SCIM_ROLE_MAP`` (``"value=role,..."``) → {value: Role}.
+    Empty/unset → no map → all provisioned users default to EMPLOYEE."""
+    return scim.parse_role_map(os.environ.get("CHUZOM_SCIM_ROLE_MAP") or "")
 
 
 def _require_scim_auth(expected_token: str):
@@ -92,12 +97,17 @@ def build_scim_router(*, store: IdentityStore, scim_token: str) -> APIRouter:
         if not fields["email"]:
             raise HTTPException(status_code=400, detail="userName/email is required")
         org_id, team_id = _default_org_team()
+        # P1-6: map the SCIM roles/title attribute to a chuzom Role via
+        # CHUZOM_SCIM_ROLE_MAP (mirrors CHUZOM_OIDC_ROLE_MAP) instead of
+        # provisioning everyone as EMPLOYEE. Unmapped → EMPLOYEE (least priv).
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        role = scim.extract_role(body, _scim_role_map())
         try:
             user = store.get_or_create_by_external_id(
                 external_id=fields["external_id"] or fields["email"],
                 email=fields["email"],
                 display_name=fields["display_name"],
-                role=Role.EMPLOYEE,
+                role=role,
                 org_id=org_id,
                 team_id=team_id,
             )
