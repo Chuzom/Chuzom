@@ -521,6 +521,23 @@ async def _build_and_filter_chain(
             except Exception as _quota_err:
                 log.warning("QUOTA_BALANCED reordering failed: %s", _quota_err)
 
+    # ── Runtime admin disable (control-plane → data-plane, P0-1) ──────────────
+    # FINAL filter, after ALL chain construction (base chain, policy, pins, and
+    # the codex/ollama/gemini-cli injections + reorders above). A provider or
+    # model an operator disabled via the admin API
+    # (POST /v1/admin/providers/{p}:disable, /models/{m}:disable) must never be
+    # routed to — even if a later injection would re-add it. The admin API and
+    # the routing path share one process-wide RuntimeProviderRegistry (SQLite at
+    # CHUZOM_PROVIDER_REGISTRY_PATH), so the disable intent is read here on every
+    # turn. Without this, disabling a leaking/compromised provider is a no-op.
+    from chuzom.provider_registry import get_global_registry
+    _runtime_registry = get_global_registry()
+    models_to_try = [
+        m for m in models_to_try
+        if not _runtime_registry.is_disabled(provider_from_model(m))
+        and not _runtime_registry.is_model_disabled(m)
+    ]
+
     return models_to_try
 
 
