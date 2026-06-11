@@ -162,9 +162,13 @@ def test_admin_can_list_users(
 def test_admin_can_revoke_a_token(
     app_with_admin: TestClient, admin_token: str, store: IdentityStore
 ) -> None:
-    """Issue a token for a second user; admin revokes it; auth now fails."""
-    org = store.create_org(name="acme-target")
-    team = store.create_team(org.id, "ops")
+    """Issue a token for a second user IN THE ADMIN'S ORG; admin revokes it;
+    auth now fails. (P1-2: cross-org revoke is a separate 404 path covered in
+    tests/test_p1_2_cross_org_authz.py.)"""
+    # Reuse the admin's org ("acme", created by the admin_token fixture) so the
+    # revoke is in-org — the realistic scenario this test name describes.
+    org = store.get_or_create_org("acme")
+    team = store.get_or_create_team(org.id, "platform")
     target = store.create_user(
         org_id=org.id, team_id=team.id,
         email="target@acme.test", display_name="Target",
