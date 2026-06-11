@@ -138,3 +138,36 @@ jobs:
           result=$?
           kill $PYTEST_PID 2>/dev/null || true
           exit $result
+
+  postgres-budget:
+    # P1-5: run the real-Postgres multi-instance budget acceptance test
+    # (100 concurrent try_reserve across 4 processes against a $5 cap → exactly
+    # 50 succeed). The default `test` job skips it via importorskip("psycopg"),
+    # so the multi-instance enforcement claim was never CI-proven. The test uses
+    # testcontainers and Docker is available on ubuntu-latest, so it spins up
+    # postgres:16-alpine itself — no `services:` block needed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+        continue-on-error: true
+        id: uv-setup
+      - name: Retry uv setup
+        if: steps.uv-setup.outcome == 'failure'
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: false
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies (postgres integration extra)
+        run: uv sync --extra dev --extra postgres-test
+
+      - name: Run Postgres budget acceptance test
+        run: uv run pytest tests/test_t2_xl1_postgres_budget_backend.py -v
