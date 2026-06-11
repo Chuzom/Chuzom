@@ -81,6 +81,7 @@ class AuditEvent:
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS audit_events (
     id TEXT PRIMARY KEY,
+    seq INTEGER,
     timestamp REAL NOT NULL,
     type TEXT NOT NULL,
     severity TEXT NOT NULL,
@@ -94,9 +95,19 @@ CREATE TABLE IF NOT EXISTS audit_events (
     hash_hex TEXT NOT NULL UNIQUE
 );
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_seq ON audit_events(seq);
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_events(actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_events(type);
 CREATE INDEX IF NOT EXISTS idx_audit_org ON audit_events(org_id);
+
+-- P1-3: a single-row anchor recording the high-water seq + last hash so
+-- verify_chain can detect TAIL truncation (deleting the newest rows leaves a
+-- still-contiguous 1..k chain that a walk alone can't catch).
+CREATE TABLE IF NOT EXISTS audit_checkpoint (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    max_seq INTEGER NOT NULL,
+    last_hash TEXT NOT NULL
+);
 """
 
 
@@ -170,6 +181,30 @@ class AuditLog:
         )
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
+        self._migrate_seq()
+
+    def _migrate_seq(self) -> None:
+        """P1-3: backfill the ``seq`` column on a pre-existing audit.db.
+
+        New DBs get ``seq`` from the schema; older ones added it via the
+        schema's nullable column. Backfill in rowid (insertion) order so the
+        existing hash chain keeps its original, deterministic order, then seed
+        the checkpoint anchor. Idempotent — only rows with NULL seq are touched.
+        """
+        null_rows = self._conn.execute(
+            "SELECT rowid FROM audit_events WHERE seq IS NULL ORDER BY rowid ASC"
+        ).fetchall()
+        if null_rows:
+            base = self._conn.execute(
+                "SELECT COALESCE(MAX(seq), 0) FROM audit_events"
+            ).fetchone()[0]
+            for offset, (rid,) in enumerate(null_rows, start=1):
+                self._conn.execute(
+                    "UPDATE audit_events SET seq = ? WHERE rowid = ?",
+                    (base + offset, rid),
+                )
+            self._conn.commit()
+        self._refresh_checkpoint()
 
     # ── Append ────────────────────────────────────────────────────────
 
@@ -179,6 +214,10 @@ class AuditLog:
         prev = self._latest_hash()
         payload = _canonical_payload(event)
         h = _hash(prev, payload)
+        # P1-3: a monotonic seq makes append/verify order deterministic, immune
+        # to timestamp collisions or clock skew (the previous timestamp-order
+        # walk could link rows in a different order than they were appended).
+        seq = self._next_seq()
         filled = AuditEvent(
             type=event.type, actor_id=event.actor_id,
             actor_email=event.actor_email, org_id=event.org_id,
@@ -188,17 +227,50 @@ class AuditLog:
             prev_hash=prev, hash_hex=h,
         )
         self._conn.execute(
-            "INSERT INTO audit_events (id, timestamp, type, severity, "
+            "INSERT INTO audit_events (id, seq, timestamp, type, severity, "
             "actor_id, actor_email, org_id, resource, action, detail, "
             "prev_hash, hash_hex) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (filled.id, filled.timestamp, filled.type, filled.severity,
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (filled.id, seq, filled.timestamp, filled.type, filled.severity,
              filled.actor_id, filled.actor_email, filled.org_id,
              filled.resource, filled.action, json.dumps(filled.detail),
              filled.prev_hash, filled.hash_hex),
         )
+        self._conn.execute(
+            "INSERT INTO audit_checkpoint (id, max_seq, last_hash) VALUES (1, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET max_seq = excluded.max_seq, "
+            "last_hash = excluded.last_hash",
+            (seq, h),
+        )
         self._conn.commit()
         return filled
+
+    def _next_seq(self) -> int:
+        row = self._conn.execute(
+            "SELECT COALESCE(MAX(seq), 0) FROM audit_events"
+        ).fetchone()
+        return (row[0] or 0) + 1
+
+    def _refresh_checkpoint(self) -> None:
+        """Seed the checkpoint anchor ONCE if absent (e.g. first open of a
+        pre-P1-3 DB). It is NOT refreshed on later opens: append advances it,
+        but a restart must never reset it — otherwise truncating the tail and
+        reopening would silently re-baseline the anchor and hide the deletion."""
+        existing = self._conn.execute(
+            "SELECT 1 FROM audit_checkpoint WHERE id = 1"
+        ).fetchone()
+        if existing is not None:
+            return
+        row = self._conn.execute(
+            "SELECT seq, hash_hex FROM audit_events ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return
+        self._conn.execute(
+            "INSERT INTO audit_checkpoint (id, max_seq, last_hash) VALUES (1, ?, ?)",
+            (row[0], row[1]),
+        )
+        self._conn.commit()
 
     def append_with_auto_severity(
         self, event: AuditEvent, use_routing: bool = True
@@ -260,8 +332,10 @@ class AuditLog:
         return self.append(event_with_severity)
 
     def _latest_hash(self) -> str:
+        # P1-3: link by seq (insertion order), not timestamp — two events in the
+        # same millisecond must still chain in append order.
         row = self._conn.execute(
-            "SELECT hash_hex FROM audit_events ORDER BY timestamp DESC LIMIT 1"
+            "SELECT hash_hex FROM audit_events ORDER BY seq DESC LIMIT 1"
         ).fetchone()
         return row[0] if row else ""
 
@@ -300,20 +374,27 @@ class AuditLog:
     # ── Integrity ─────────────────────────────────────────────────────
 
     def verify_chain(self) -> bool:
-        """Walk the log in order and verify the hash chain. Raises
-        TamperDetected on the first inconsistency. Returns True when
-        the whole chain is intact."""
+        """Walk the log in seq order and verify the hash chain. Raises
+        TamperDetected on the first inconsistency (broken hash link, a seq gap
+        from a deleted middle row, or tail truncation vs the checkpoint anchor).
+        Returns True when the whole chain is intact."""
         cursor = self._conn.execute(
-            "SELECT id, timestamp, type, severity, actor_id, actor_email, "
+            "SELECT id, seq, timestamp, type, severity, actor_id, actor_email, "
             "org_id, resource, action, detail, prev_hash, hash_hex "
-            "FROM audit_events ORDER BY timestamp ASC"
+            "FROM audit_events ORDER BY seq ASC"
         )
         prev = ""
+        expected_seq = 1
+        last_seq = 0
         for idx, row in enumerate(cursor.fetchall()):
             (
-                id_, ts, type_, severity, actor_id, actor_email, org_id,
+                id_, seq, ts, type_, severity, actor_id, actor_email, org_id,
                 resource, action, detail_json, prev_hash, hash_hex,
             ) = row
+            # Contiguity: seq must be 1, 2, 3… A gap means a row was deleted
+            # from the middle of the chain.
+            if seq != expected_seq:
+                raise TamperDetected(idx, f"seq={expected_seq}", f"seq={seq}")
             event = AuditEvent(
                 type=type_, actor_id=actor_id, actor_email=actor_email,
                 org_id=org_id, resource=resource, action=action,
@@ -325,6 +406,18 @@ class AuditLog:
             if expected != hash_hex or prev_hash != prev:
                 raise TamperDetected(idx, expected, hash_hex)
             prev = hash_hex
+            expected_seq += 1
+            last_seq = seq
+        # Tail truncation: the checkpoint anchor records the high-water seq the
+        # log reached. If the current tail is below it, the newest rows were
+        # deleted — a walk alone can't see this (1..k stays contiguous).
+        anchor = self._conn.execute(
+            "SELECT max_seq, last_hash FROM audit_checkpoint WHERE id = 1"
+        ).fetchone()
+        if anchor is not None:
+            anchor_seq, anchor_hash = anchor
+            if last_seq < anchor_seq or (last_seq == anchor_seq and prev != anchor_hash):
+                raise TamperDetected(last_seq, f"seq={anchor_seq}", f"seq={last_seq}")
         return True
 
     # ── Export ────────────────────────────────────────────────────────
