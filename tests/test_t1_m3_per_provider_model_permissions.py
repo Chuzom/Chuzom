@@ -130,17 +130,22 @@ def test_warn_mode_reports_has_perm_false(
 # ── 2. check_model semantics ─────────────────────────────────────────────────
 
 
-def test_model_strict_matches_with_vendor_prefix(
+def test_model_strict_requires_exact_form_match(
     clean_rbac_env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Allow-list can be written with or without the vendor prefix;
-    both forms should match the same model id."""
+    """G-004: the allow-list entry and the candidate must match in the
+    SAME form — both ``provider/model`` or both bare. The provider
+    prefix is never stripped, so a forged prefix can't spoof a bare
+    entry. (Supersedes the pre-G-004 behaviour, which cross-matched the
+    two forms — exactly the gap G-004 closed.)"""
     monkeypatch.setenv("CHUZOM_RBAC_MODE", "strict")
-    ident_a = _IdentityWithLists(allowed_models={"claude-sonnet-4-6"})
-    assert check_model(ident_a, "anthropic/claude-sonnet-4-6") == ("strict", True)
+    # Exact prefixed entry matches the exact prefixed candidate.
     ident_b = _IdentityWithLists(allowed_models={"anthropic/claude-sonnet-4-6"})
     assert check_model(ident_b, "anthropic/claude-sonnet-4-6") == ("strict", True)
-    assert check_model(ident_b, "claude-sonnet-4-6") == ("strict", True)
+    # Cross-form never matches (the G-004 closure):
+    ident_a = _IdentityWithLists(allowed_models={"claude-sonnet-4-6"})
+    assert check_model(ident_a, "anthropic/claude-sonnet-4-6") == ("strict", False)
+    assert check_model(ident_b, "claude-sonnet-4-6") == ("strict", False)
 
 
 def test_model_strict_rejects_unlisted(
