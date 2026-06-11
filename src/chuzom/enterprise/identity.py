@@ -16,6 +16,7 @@ could host multiple orgs, but v0.0.2 assumes single-org deployments.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import secrets
 import sqlite3
@@ -64,6 +65,30 @@ class User:
     external_id: str = ""  # set when OIDC/SAML federation is wired
     active: bool = True
     created_at: float = field(default_factory=time.time)
+    # Phase 3b: per-identity routing allow-lists. ``None`` == unrestricted
+    # (no policy → the routing gates allow all candidates). A non-empty
+    # frozenset restricts routing to those providers / models. An empty
+    # set is normalised to ``None`` at the store boundary so an accidental
+    # empty list can never deny-all (deactivate the user for that instead).
+    # Sourced from SCIM/OIDC provisioning or the admin API; consumed by
+    # ``rbac_routing.check_provider`` / ``check_model`` via ``current_identity``.
+    allowed_providers: frozenset[str] | None = None
+    allowed_models: frozenset[str] | None = None
+
+
+def _dump_allowlist(values: frozenset[str] | None) -> str | None:
+    """Serialise an allow-list to a JSON array, or ``None`` for unrestricted.
+    Sorted for stable, diff-friendly storage."""
+    return json.dumps(sorted(values)) if values else None
+
+
+def _load_allowlist(raw: str | None) -> frozenset[str] | None:
+    """Inverse of :func:`_dump_allowlist`. NULL / empty → ``None``
+    (unrestricted) so a legacy row never resolves to deny-all."""
+    if not raw:
+        return None
+    parsed = json.loads(raw)
+    return frozenset(parsed) if parsed else None
 
 
 @dataclass(frozen=True)
@@ -149,7 +174,9 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL,
     external_id TEXT NOT NULL DEFAULT '',
     active INTEGER NOT NULL DEFAULT 1,
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    allowed_providers TEXT,
+    allowed_models TEXT
 );
 
 CREATE TABLE IF NOT EXISTS api_tokens (
@@ -218,6 +245,18 @@ class IdentityStore:
             str(self.db_path), check_same_thread=check_same_thread
         )
         self._conn.executescript(_SCHEMA)
+        # Phase 3b: idempotent ALTER TABLE migration for identity DBs that
+        # pre-date the per-user allow-list columns. PRAGMA introspects the
+        # live schema; we add only the missing columns (nullable → legacy
+        # rows resolve to ``None`` = unrestricted). Column names are fixed
+        # literals, never user input.
+        _user_cols = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        for _col in ("allowed_providers", "allowed_models"):
+            if _col not in _user_cols:
+                self._conn.execute(f"ALTER TABLE users ADD COLUMN {_col} TEXT")
         self._conn.commit()
 
     # ── Orgs ──────────────────────────────────────────────────────────
@@ -323,23 +362,32 @@ class IdentityStore:
         display_name: str,
         role: Role,
         external_id: str = "",
+        allowed_providers: frozenset[str] | None = None,
+        allowed_models: frozenset[str] | None = None,
     ) -> User:
         # Validate references
         self.get_org(org_id)
         self.get_team(team_id)
+        # ``or None`` normalises an empty set to unrestricted so an empty
+        # allow-list can never silently deny-all.
         user = User(
             id=str(uuid.uuid4()), org_id=org_id, team_id=team_id,
             email=email, display_name=display_name, role=role,
             external_id=external_id,
+            allowed_providers=allowed_providers or None,
+            allowed_models=allowed_models or None,
         )
         try:
             self._conn.execute(
                 "INSERT INTO users (id, org_id, team_id, email, display_name, "
-                "role, external_id, active, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "role, external_id, active, created_at, allowed_providers, "
+                "allowed_models) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (user.id, user.org_id, user.team_id, user.email,
                  user.display_name, user.role.value, user.external_id,
-                 1 if user.active else 0, user.created_at),
+                 1 if user.active else 0, user.created_at,
+                 _dump_allowlist(user.allowed_providers),
+                 _dump_allowlist(user.allowed_models)),
             )
             self._conn.commit()
         except sqlite3.IntegrityError as exc:
@@ -351,7 +399,8 @@ class IdentityStore:
     def get_user(self, user_id: str) -> User:
         row = self._conn.execute(
             "SELECT id, org_id, team_id, email, display_name, role, "
-            "external_id, active, created_at FROM users WHERE id = ?",
+            "external_id, active, created_at, allowed_providers, "
+            "allowed_models FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
         if not row:
@@ -360,6 +409,8 @@ class IdentityStore:
             id=row[0], org_id=row[1], team_id=row[2], email=row[3],
             display_name=row[4], role=Role(row[5]), external_id=row[6],
             active=bool(row[7]), created_at=row[8],
+            allowed_providers=_load_allowlist(row[9]),
+            allowed_models=_load_allowlist(row[10]),
         )
 
     def get_user_by_email(self, email: str) -> User:

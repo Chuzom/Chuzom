@@ -28,7 +28,11 @@ from __future__ import annotations
 
 import getpass
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from chuzom.enterprise.rbac import Permission
 
 
 # Env keys — kept here so callers (tests, doctor, install scripts) can
@@ -181,6 +185,9 @@ def _oidc_identity(token: str, store) -> "TurnIdentity":
         org_id=user.org_id,
         agent_id=agent_id,
         tenant_id=tenant_id,
+        permissions=frozenset(permissions_for_role(role)),
+        allowed_providers=user.allowed_providers,
+        allowed_models=user.allowed_models,
     )
 
 
@@ -246,6 +253,9 @@ def _enterprise_identity(store=None) -> "TurnIdentity":
         org_id=identity.user.org_id,
         agent_id=agent_id,
         tenant_id=tenant_id,
+        permissions=frozenset(identity.permissions),
+        allowed_providers=identity.user.allowed_providers,
+        allowed_models=identity.user.allowed_models,
     )
 
 
@@ -286,6 +296,18 @@ class TurnIdentity:
     # "no tenant attribution available" — the resolver's job to avoid
     # producing that state in production.
     tenant_id: str | None = None
+    # Phase 3b: the RBAC payload carried from the authenticated
+    # enterprise/OIDC identity so the wired routing gates enforce on the
+    # REAL principal. ``permissions`` feeds ``check_route_prompt`` (via
+    # ``has_permission``); the allow-lists feed ``check_provider`` /
+    # ``check_model``. Dev / Tier-1 env-trust leaves all three at their
+    # permissive defaults — empty perms only matter under strict mode,
+    # which the developer profile never activates.
+    permissions: frozenset[Permission] = field(default_factory=frozenset)
+    # ``None`` == unrestricted; a non-empty set restricts routing to those
+    # providers / models.
+    allowed_providers: frozenset[str] | None = None
+    allowed_models: frozenset[str] | None = None
 
 
 def current_identity() -> TurnIdentity:
