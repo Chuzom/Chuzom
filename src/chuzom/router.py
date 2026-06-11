@@ -24,6 +24,11 @@ if TYPE_CHECKING:
     from chuzom.agents.base import AgentRoutingPolicy
 from chuzom.audit_routing import audit_routing_turn
 from chuzom.quota_routing import check_quota, raise_quota_denied, record_consumption
+from chuzom.quota_envelope_routing import (
+    commit_envelope,
+    release_envelope,
+    reserve_envelope,
+)
 from chuzom.budget import get_budget_state, reserve_tokens, release_tokens
 from chuzom.identity import TurnIdentity, current_identity
 from chuzom.idempotency import get_store as _get_idempotency_store
@@ -2314,6 +2319,35 @@ async def route_and_call(
                 models_to_try, _routing_policy, effective_complexity
             )
 
+        # P0-3: distributed budget-envelope reservation. Enterprise-gated
+        # (CHUZOM_ENVELOPE_MODE; strict under enterprise, off in developer) and
+        # a no-op unless an operator registered an envelope for this turn's key.
+        # Reserve the estimate now; settle (release+commit / release) at the
+        # success / cancel / timeout seams below, mirroring the in-process
+        # _pending_spend reservation so a maintainer keeps them in lock-step.
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        _env_key = None
+        _env_mode, _env_ok, _env_key = await reserve_envelope(identity, _reservation)
+        if not _env_ok:
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=effective_complexity,
+                    model="(budget)", provider="(budget)",
+                    cost_usd=0.0, cached=False,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "budget_envelope_exceeded",
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_envelope_write_failed", error=str(_audit_err))
+            raise BudgetExceededError(
+                "Routed turn refused: budget envelope exhausted for this "
+                "identity's org/user rollup (CHUZOM_ENVELOPE_MODE=strict)."
+            )
+
         # Dispatch through the extracted model loop, which handles both primary
         # and emergency BUDGET fallback chains atomically.
         # T3-S2: optional wall-clock cap. ``asyncio.wait_for`` is used (not
@@ -2396,6 +2430,7 @@ async def route_and_call(
             elapsed = _t.monotonic() - _dispatch_started
             async with _budget_lock:
                 _pending_spend = max(0.0, _pending_spend - _reservation)
+            await release_envelope(_env_key, _reservation)
             try:
                 audit_routing_turn(
                     identity=identity,
@@ -2418,6 +2453,7 @@ async def route_and_call(
             elapsed = _t.monotonic() - _dispatch_started
             async with _budget_lock:
                 _pending_spend = max(0.0, _pending_spend - _reservation)
+            await release_envelope(_env_key, _reservation)
             # T3-M2: distinguish deadline-driven timeout from
             # wall-clock-driven timeout. ``_deadline_is_tighter`` was
             # computed at the start of the try block.
@@ -2495,6 +2531,11 @@ async def route_and_call(
         # F4: record real per-identity spend so the next over-cap turn is
         # refused. No-op off-mode / zero-cost (cached/local/free) turns.
         record_consumption(identity, float(getattr(response, "cost_usd", 0.0) or 0.0))
+        # P0-3: settle the budget envelope — release the estimate reservation and
+        # commit the actual spend so the shared envelope reflects true cost.
+        await commit_envelope(
+            _env_key, _reservation, float(getattr(response, "cost_usd", 0.0) or 0.0)
+        )
         # T3-M4: persist the result for a future replay under the same
         # idempotency_key. Best-effort; a write failure must not break
         # the success path the caller is about to receive.
