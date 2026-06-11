@@ -24,6 +24,27 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
+          {{- if .Values.probes.enabled }}
+          # P1-4: the default entrypoint serves SSE (mcp.sse_app()) with no
+          # unauthenticated /health route, so probe the listen port at the TCP
+          # layer — a successful connect proves the server accepts traffic. For
+          # the admin entrypoint (chuzom serve --admin) switch to an httpGet on
+          # /v1/admin/health.
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- end }}
           env:
             - name: CHUZOM_DEPLOYMENT_PROFILE
               value: {{ .Values.deploymentProfile | quote }}

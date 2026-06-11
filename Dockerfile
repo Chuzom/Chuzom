@@ -46,6 +46,12 @@ WORKDIR /home/chuzom
 
 EXPOSE 17891
 
+# P1-4: TCP healthcheck on the SSE listen port. The SSE app has no
+# unauthenticated HTTP /health route, so a successful TCP connect is the honest
+# liveness signal. Uses python (already in the image) — no curl dependency.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD python -c "import socket,sys; sys.exit(0) if socket.create_connection(('127.0.0.1', 17891), 3) else sys.exit(1)" || exit 1
+
 # The SSE server refuses 0.0.0.0 without CHUZOM_SSE_ALLOW_PUBLIC=on (set above).
 # Override the command for the admin API: `chuzom serve --admin --host 0.0.0.0`.
 ENTRYPOINT ["chuzom", "serve", "--host", "0.0.0.0", "--port", "17891"]
