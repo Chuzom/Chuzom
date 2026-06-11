@@ -239,8 +239,26 @@ class PolicyVersionStore:
         self._conn.close()
 
 
+_global_policy_store: "PolicyVersionStore | None" = None
+
+
+def get_global_policy_store() -> "PolicyVersionStore":
+    """Process-wide ``PolicyVersionStore`` at the default path
+    (``CHUZOM_POLICY_STORE_PATH`` or ``~/.chuzom/policy_versions.db``).
+
+    The admin API (``POST /v1/admin/policy``, rollback) and the routing
+    path share this instance so an admin policy push/rollback is actually
+    read on the next routed turn. Tests monkeypatch ``_global_policy_store``.
+    """
+    global _global_policy_store
+    if _global_policy_store is None:
+        _global_policy_store = PolicyVersionStore(check_same_thread=False)
+    return _global_policy_store
+
+
 __all__ = [
     "PolicyValidationError",
     "PolicyVersionNotFound",
     "PolicyVersionStore",
+    "get_global_policy_store",
 ]

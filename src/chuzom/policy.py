@@ -451,6 +451,43 @@ def load_org_policy(path: Path | None = None) -> OrgPolicy | None:
         return OrgPolicy(source="default")
 
 
+def _org_policy_from_yaml_text(yaml_text: str, *, source: str) -> OrgPolicy:
+    """Parse an org-policy YAML body (same schema as the file) into an
+    OrgPolicy. Permissive default on any parse error — policy resolution
+    must never break routing."""
+    try:
+        data = yaml.safe_load(yaml_text) or {}
+        return OrgPolicy(
+            block_providers=data.get("block_providers", []),
+            block_models=data.get("block_models", []),
+            allow_models=data.get("allow_models", []),
+            task_caps=data.get("task_caps", {}),
+            source=source,
+        )
+    except yaml.YAMLError:
+        return OrgPolicy(source="default")
+
+
+def load_active_org_policy() -> OrgPolicy:
+    """Resolve the effective org routing policy (P0-1).
+
+    Prefers the **admin-pushed versioned policy** — the active version in the
+    shared ``PolicyVersionStore`` (written by ``POST /v1/admin/policy`` and
+    its rollback endpoint) — so push/rollback actually changes routing.
+    Falls back to the local ``~/.chuzom/org-policy.yaml`` file, then to a
+    permissive default. Store errors never break routing.
+    """
+    try:
+        from chuzom.policy_versions import get_global_policy_store
+
+        active = get_global_policy_store().get_active()
+        if active and active.get("yaml_text"):
+            return _org_policy_from_yaml_text(active["yaml_text"], source="versioned")
+    except Exception:
+        pass  # versioned-policy unavailable → fall through to the file
+    return load_org_policy()
+
+
 def get_task_cap(task_type: str, org_policy: OrgPolicy | None) -> int | None:
     """Get per-task daily spend cap for a task type.
 

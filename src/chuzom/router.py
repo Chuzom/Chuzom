@@ -340,8 +340,10 @@ async def _build_and_filter_chain(
             ]
 
         # ── Policy engine ─────────────────────────────────────────────────────
-        from chuzom.policy import OrgPolicy, apply_policy, load_org_policy
-        _org = load_org_policy() or OrgPolicy()
+        # P0-1: prefer the admin-pushed versioned policy (PolicyVersionStore)
+        # over the local file, so a policy push/rollback changes routing.
+        from chuzom.policy import OrgPolicy, apply_policy, load_active_org_policy
+        _org = load_active_org_policy() or OrgPolicy()
         _merged_block = list({*_org.block_models, *repo_cfg.block_models})
         _merged_allow = list({*_org.allow_models, *repo_cfg.allow_models})
         _merged_block_prov = list({*_org.block_providers})
