@@ -9,6 +9,22 @@ service:
   type: ClusterIP
   port: 17891
 
+# P1-4: liveness/readiness probes. The SSE entrypoint has no unauthenticated
+# HTTP health route, so these are TCP probes on the listen port. For the admin
+# entrypoint you can swap to an httpGet on /v1/admin/health in deployment.yaml.
+probes:
+  enabled: true
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
 # Deployment posture. enterprise → RBAC strict, audit on, identity required.
 deploymentProfile: enterprise
 quotaMode: strict
