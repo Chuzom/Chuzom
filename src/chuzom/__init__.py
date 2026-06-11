@@ -10,19 +10,23 @@ to reduce session quota consumption by 60-70%.
 See README.md for full documentation.
 """
 
-# Version is read dynamically from pyproject.toml to maintain single source of truth
-import tomllib
-from pathlib import Path
-
-__version__ = "10.1.2"  # SYNCED FROM pyproject.toml — DO NOT EDIT MANUALLY
+# Single source of truth = the installed distribution's metadata. This is
+# correct for wheels (where pyproject.toml is NOT shipped); only fall back to
+# reading pyproject.toml when running from an un-installed source checkout.
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 try:
-    _pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
-    _pyproject_data = tomllib.load(_pyproject_path.open("rb"))
-    __version__ = _pyproject_data["project"]["version"]
-except Exception:
-    # Fallback to hardcoded version above if pyproject.toml is unavailable
-    pass
+    __version__ = _pkg_version("chuzom-router")
+except PackageNotFoundError:
+    try:
+        import tomllib
+        from pathlib import Path
+
+        _pp = Path(__file__).parent.parent.parent / "pyproject.toml"
+        __version__ = tomllib.load(_pp.open("rb"))["project"]["version"]
+    except Exception:
+        __version__ = "0.0.0+unknown"
 
 # Export response router for easy access
 from chuzom.response_router import route_response as route_response_explanations

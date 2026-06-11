@@ -1,7 +1,7 @@
 """Agno integration for chuzom — RouteredModel and RouteredTeam.
 
 Install:
-    pip install "claude-code-chuzom[agno]"
+    pip install "chuzom-router[agno]"
 
 Usage::
 
@@ -45,7 +45,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "agno is required for RouteredModel. "
-        "Install it with: pip install 'claude-code-chuzom[agno]'"
+        "Install it with: pip install 'chuzom-router[agno]'"
     ) from e
 
 

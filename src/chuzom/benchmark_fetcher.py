@@ -11,7 +11,7 @@ Sources:
   - LiteLLM model_cost dict (pricing — already installed as a dependency)
 
 This module requires the ``scripts`` optional dependency group:
-  ``pip install claude-code-chuzom[scripts]``
+  ``pip install chuzom-router[scripts]``
 """
 
 from __future__ import annotations
@@ -501,7 +501,7 @@ def generate_benchmarks_md(data: dict[str, Any], output_path: Path) -> None:
         "",
         "The router uses these benchmarks to dynamically reorder model chains so the best-performing",
         "model for each task type is tried first. Updated data is distributed automatically to all",
-        "users on the next `pip install --upgrade claude-code-chuzom` + server restart.",
+        "users on the next `pip install --upgrade chuzom-router` + server restart.",
         "",
         "---",
         "",

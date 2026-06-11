@@ -10,8 +10,8 @@ Add this to your VS Code `mcp.json`:
 {
   "servers": {
     "chuzom": {
-      "command": "uvx",
-      "args": ["claude-code-chuzom"]
+      "command": "chuzom",
+      "args": []
     }
   }
 }

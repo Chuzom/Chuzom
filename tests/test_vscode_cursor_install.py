@@ -52,7 +52,10 @@ class TestInstallVsCodeFiles:
         assert "servers" in data, "VS Code mcp.json must use 'servers' root key"
         assert "mcpServers" not in data, "VS Code mcp.json must NOT use 'mcpServers'"
         assert "chuzom" in data["servers"]
-        assert data["servers"]["chuzom"]["command"] == "uvx"
+        # P0-6: canonical stdio entry is `chuzom` (the console script), not the
+        # deprecated `uvx claude-code-chuzom` package.
+        assert data["servers"]["chuzom"]["command"] == "chuzom"
+        assert data["servers"]["chuzom"]["args"] == []
 
     def test_action_confirms_file_written(self, fake_home):
         from chuzom.cli import _install_vscode_files

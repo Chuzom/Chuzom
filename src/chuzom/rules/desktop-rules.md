@@ -10,8 +10,8 @@ Add this to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "chuzom": {
-      "command": "uvx",
-      "args": ["claude-code-chuzom"]
+      "command": "chuzom",
+      "args": []
     }
   }
 }
