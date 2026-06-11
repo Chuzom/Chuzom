@@ -1142,6 +1142,14 @@ async def _dispatch_model_loop(
 
         chain_attempts.append(model)
         await _notify(ctx, "info", f"Routing to: {model}")
+        # P1-7: reserve token pressure against the ACTUAL provider for the life
+        # of this provider call, released in the attempt's finally (success OR
+        # failure) so the reservation is symmetric, exactly-once, attributed to
+        # the right provider, and never leaks on fallback/exhaustion. Replaces
+        # the old hardcoded reserve_tokens("anthropic", 500) up front +
+        # scattered, asymmetric releases.
+        _res_tokens = max_tokens if isinstance(max_tokens, int) and max_tokens > 0 else 500
+        reserve_tokens(provider, _res_tokens)
         try:
             with traced_span(
                 "provider_call",
@@ -1243,9 +1251,7 @@ async def _dispatch_model_loop(
 
             tracker.record_success(provider)
             await cost.log_usage(response, task_type, profile, correlation_id=correlation_id)
-            release_tokens("anthropic", 500)
-            # Release the quota reservation as it is now reflected in the actual usage logs
-            release_tokens("anthropic", 500)
+            # P1-7: the token reservation is released in this attempt's finally.
 
             # ── Store receipt + track reclaimed tokens (v8.8.0) ────────────
             _receipt = compute_receipt(
@@ -1506,6 +1512,11 @@ async def _dispatch_model_loop(
             last_error = e
             chain_errors.append((model, f"{type(e).__name__}: {e}"))
             continue
+        finally:
+            # P1-7: release this attempt's reservation against the same provider
+            # it was reserved on — fires on success-return, fallback continue,
+            # and any unexpected exit, so the pressure oracle never leaks.
+            release_tokens(provider, _res_tokens)
 
     # ── Emergency fallback: try BUDGET chain when primary chain exhausts ────
     if profile != RoutingProfile.BUDGET and task_type not in MEDIA_TASK_TYPES:
@@ -1545,6 +1556,11 @@ async def _dispatch_model_loop(
                         cost_skipped.append((model, projected_eb))
                         continue
 
+                # P1-7: same per-attempt symmetric reservation as the primary
+                # loop — the emergency path previously never released, leaking
+                # the up-front reservation whenever a budget fallback succeeded.
+                _res_tokens = max_tokens if isinstance(max_tokens, int) and max_tokens > 0 else 500
+                reserve_tokens(provider, _res_tokens)
                 try:
                     await _notify(ctx, "info", f"⏳ {model_name} (emergency fallback) working...")
 
@@ -1597,6 +1613,8 @@ async def _dispatch_model_loop(
                     last_error = e
                     chain_errors.append((model, f"{type(e).__name__}: {e}"))
                     continue
+                finally:
+                    release_tokens(provider, _res_tokens)
 
     last_is_auth = last_error is not None and _is_auth_error(last_error)
     setup_hint = (
@@ -1613,7 +1631,8 @@ async def _dispatch_model_loop(
     )
     async with _budget_lock:
         _pending_spend = max(0.0, _pending_spend - _reservation)
-    release_tokens("anthropic", 500)
+    # P1-7: no hardcoded token release here — each attempt released its own
+    # reservation in its finally, so nothing is outstanding at chain exhaustion.
 
     # T3-S1: if the chain was exhausted *because* every candidate's
     # projected cost exceeded ``max_cost_per_task`` (no actual provider
@@ -2057,12 +2076,10 @@ async def route_and_call(
                 log.debug("cost_estimation_failed", error=str(e))
                 _reservation = 0.0
             _pending_spend += _reservation
-            reserve_tokens("anthropic", 500)
-            
-            # Quota reservation for subscriptions (v7.2.0)
-            # Reserve 500 tokens as a baseline for the session pressure oracle
-            _quota_reservation = 500
-            reserve_tokens("anthropic", _quota_reservation)
+            # P1-7: the in-process token-pressure reservation moved into the
+            # dispatch loop, where it's keyed to the ACTUAL provider and released
+            # symmetrically per attempt (was: two hardcoded
+            # reserve_tokens("anthropic", 500) here, asymmetrically released).
 
         # Structural compaction — shrink prompt before sending to external LLMs
         # Guard: compaction_mode/threshold may be MagicMock in test mocks
