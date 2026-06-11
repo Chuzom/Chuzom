@@ -856,6 +856,27 @@ def create_app() -> FastAPI:
             return audit_log.by_actor(actor_id, limit=limit)
         return audit_log.recent(limit=limit, org_id=org_id)
 
+    @app.get("/v1/admin/audit/verify")
+    def verify_audit_chain(
+        identity: Identity = Depends(require_perm(Permission.VIEW_ALL_AUDIT)),
+        audit_log: AuditLog = Depends(get_audit_log),
+    ) -> dict[str, Any]:
+        # Surface AuditLog.verify_chain() so a SIEM / dashboard can poll
+        # integrity. Tampering is reported as 200 + verified=false (with the
+        # offending row) rather than an error status, so monitoring can parse a
+        # stable schema and alert on the flag instead of catching an HTTP error.
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        from chuzom.enterprise.audit import TamperDetected
+        rows = audit_log.count()
+        try:
+            audit_log.verify_chain()
+        except TamperDetected as exc:
+            return {
+                "verified": False, "rows_checked": rows,
+                "tamper_row": exc.row_index, "detail": str(exc),
+            }
+        return {"verified": True, "rows_checked": rows, "tamper_row": None}
+
     # ── Policy (G-007 versioned) ────────────────────────────────────────
     @app.post("/v1/admin/policy", status_code=status.HTTP_200_OK)
     def push_policy(
