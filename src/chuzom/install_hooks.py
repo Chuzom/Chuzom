@@ -128,7 +128,7 @@ def check_and_update_hooks() -> list[str]:
 
     Returns a list of human-readable update messages (one per updated hook).
     Called automatically on MCP server startup so existing users get hook updates
-    after ``pip install --upgrade claude-code-chuzom`` without re-running install.
+    after ``pip install --upgrade chuzom-router`` without re-running install.
     Missing managed hooks are also restored. Existing files are only overwritten
     when the bundled version is newer, to avoid clobbering user-managed scripts.
     """
@@ -172,7 +172,7 @@ def check_and_update_rules() -> str | None:
 
     Returns a status message if an update was applied, None if already up-to-date.
     Called automatically on MCP server startup so existing users get rule updates
-    after ``pip install --upgrade claude-code-chuzom`` without re-running install.
+    after ``pip install --upgrade chuzom-router`` without re-running install.
     """
     rules_src = _RULES_SRC / "chuzom.md"
     rules_dst = _RULES_DST / "chuzom.md"

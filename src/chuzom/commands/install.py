@@ -58,14 +58,26 @@ def cmd_install(args: list[str]) -> int:
 
 # ── Main install logic ──────────────────────────────────────────────────────────
 
+# README headline uses `--host claude-code` / `claude-desktop`, neither of
+# which is a distinct snippet: claude-code IS the default Chuzom install
+# target, and claude-desktop maps onto the existing `desktop` snippet.
+_HOST_ALIASES = {"claude-desktop": "desktop", "claude_desktop": "desktop"}
+
+
 def _run_install(flags: list[str]) -> None:
     # --host <name> is handled before the regular install path — it prints
     # config snippets only (no file modifications to external tools).
     if "--host" in flags:
         idx = flags.index("--host")
-        host = flags[idx + 1] if idx + 1 < len(flags) else "all"
-        _install_host(host)
-        return
+        raw_host = (flags[idx + 1] if idx + 1 < len(flags) else "all").strip().lower()
+        host = _HOST_ALIASES.get(raw_host, raw_host)
+        # claude-code = the default install (hooks + rules + MCP for Claude
+        # Code), so route it through the full install path below rather than
+        # the snippet printer — this makes the documented headline command work.
+        if host != "claude-code":
+            _install_host(host)
+            return
+        flags = [f for i, f in enumerate(flags) if i not in (idx, idx + 1)]
 
     check_only = "--check" in flags
     force = "--force" in flags
@@ -222,7 +234,7 @@ def _run_install_headless() -> None:
   FROM python:3.12-slim
 
   # Install chuzom and wire in hooks
-  RUN pip install claude-code-chuzom && chuzom install
+  RUN pip install chuzom-router && chuzom install
 
   # Route to API providers — no Anthropic subscription in CI
   ENV CHUZOM_CLAUDE_SUBSCRIPTION=false
@@ -266,8 +278,8 @@ _HOST_SNIPPETS: dict[str, str] = {
    mcp:
      servers:
        chuzom:
-         command: uvx
-         args: [claude-code-chuzom]
+         command: chuzom
+         args: []
 
 2. Copy routing rules so Codex knows when to call llm_auto:
 
@@ -288,8 +300,8 @@ Add inside the top-level object:
 
   "mcpServers": {{
     "chuzom": {{
-      "command": "uvx",
-      "args": ["claude-code-chuzom"],
+      "command": "chuzom",
+      "args": [],
       "env": {{
         "CHUZOM_PROFILE": "balanced"
       }}
@@ -308,8 +320,8 @@ Note: cost-routing is not available in Desktop (no hook system).
    {{
      "servers": {{
        "chuzom": {{
-         "command": "uvx",
-         "args": ["claude-code-chuzom"]
+         "command": "chuzom",
+         "args": []
        }}
      }}
    }}
@@ -378,8 +390,8 @@ def _install_codex_files() -> list[str]:
         "\nmcp:\n"
         "  servers:\n"
         "    chuzom:\n"
-        "      command: uvx\n"
-        "      args: [claude-code-chuzom]\n"
+        "      command: chuzom\n"
+        "      args: []\n"
     )
     existing = config_yaml.read_text() if config_yaml.exists() else ""
     if "chuzom" not in existing:
@@ -535,7 +547,7 @@ def _install_opencode_files() -> list[str]:
     opencode_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. MCP server entry
-    server_entry = {"command": "uvx", "args": ["claude-code-chuzom"]}
+    server_entry = {"command": "chuzom", "args": []}
     actions += _merge_json_mcp_block(opencode_dir / "config.json", "chuzom", server_entry)
 
     # 2. Hook script
@@ -561,7 +573,7 @@ def _install_gemini_cli_files() -> list[str]:
     gemini_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. MCP server entry in ~/.gemini/settings.json
-    server_entry = {"command": "uvx", "args": ["claude-code-chuzom"]}
+    server_entry = {"command": "chuzom", "args": []}
     actions += _merge_json_mcp_block(gemini_dir / "settings.json", "chuzom", server_entry)
 
     # 2. Extension manifest + hooks directory
@@ -686,7 +698,7 @@ def _install_copilot_cli_files() -> list[str]:
     copilot_dir = home / ".config" / "gh" / "copilot"
     copilot_dir.mkdir(parents=True, exist_ok=True)
 
-    server_entry = {"command": "uvx", "args": ["claude-code-chuzom"]}
+    server_entry = {"command": "chuzom", "args": []}
     actions += _merge_json_mcp_block(copilot_dir / "mcp.json", "chuzom", server_entry)
 
     # Routing rules → ~/.config/gh/copilot/instructions.md
@@ -706,7 +718,7 @@ def _install_openclaw_files() -> list[str]:
     openclaw_dir = home / ".openclaw"
     openclaw_dir.mkdir(parents=True, exist_ok=True)
 
-    server_entry = {"command": "uvx", "args": ["claude-code-chuzom"]}
+    server_entry = {"command": "chuzom", "args": []}
     actions += _merge_json_mcp_block(openclaw_dir / "mcp.json", "chuzom", server_entry)
     actions += _append_routing_rules(openclaw_dir / "instructions.md", "openclaw-rules.md")
 
@@ -730,7 +742,7 @@ def _install_trae_files() -> list[str]:
         trae_dir = home / ".config" / "Trae"
     trae_dir.mkdir(parents=True, exist_ok=True)
 
-    server_entry = {"command": "uvx", "args": ["claude-code-chuzom"]}
+    server_entry = {"command": "chuzom", "args": []}
     actions += _merge_json_mcp_block(trae_dir / "mcp.json", "chuzom", server_entry)
 
     # .rules file in current project directory (Trae-specific pattern)
@@ -772,7 +784,7 @@ def _install_vscode_files() -> list[str]:
     else:
         mcp_json = home / ".config" / "Code" / "User" / "mcp.json"
 
-    server_entry = {"command": "uvx", "args": ["claude-code-chuzom"]}
+    server_entry = {"command": "chuzom", "args": []}
     actions += _merge_json_mcp_block(mcp_json, "chuzom", server_entry, root_key="servers")
 
     # Append routing guidance to .github/copilot-instructions.md in cwd (if it exists)
@@ -791,7 +803,7 @@ def _install_cursor_files() -> list[str]:
 
     # Global Cursor MCP config (applies across all projects)
     mcp_json = home / ".cursor" / "mcp.json"
-    server_entry = {"command": "uvx", "args": ["claude-code-chuzom"]}
+    server_entry = {"command": "chuzom", "args": []}
     actions += _merge_json_mcp_block(mcp_json, "chuzom", server_entry, root_key="mcpServers")
 
     # Append routing rules to ~/.cursor/rules/chuzom.md

@@ -80,7 +80,7 @@ def _merge_json_mcp_block(
     Args:
         config_path: Path to JSON config file
         server_name: Name of MCP server (e.g., "chuzom")
-        config_dict: Server config dict (e.g., {"command": "uvx"})
+        config_dict: Server config dict (e.g., {"command": "chuzom"})
         root_key: Root key for servers (default "mcpServers", VS Code uses "servers")
 
     Returns:
@@ -185,7 +185,7 @@ def _install_vscode_files() -> list[str]:
         _merge_json_mcp_block(
             mcp_json,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
             root_key="servers",
         )
     )
@@ -210,7 +210,7 @@ def _install_cursor_files() -> list[str]:
         _merge_json_mcp_block(
             mcp_json,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
             root_key="mcpServers",
         )
     )
@@ -233,7 +233,7 @@ def _install_opencode_files() -> list[str]:
         _merge_json_mcp_block(
             config,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
         )
     )
 
@@ -255,7 +255,7 @@ def _install_gemini_cli_files() -> list[str]:
         _merge_json_mcp_block(
             settings,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
         )
     )
 
@@ -300,7 +300,7 @@ def _install_copilot_cli_files() -> list[str]:
         _merge_json_mcp_block(
             mcp_json,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
         )
     )
 
@@ -322,7 +322,7 @@ def _install_openclaw_files() -> list[str]:
         _merge_json_mcp_block(
             mcp_json,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
         )
     )
 
@@ -344,7 +344,7 @@ def _install_trae_files() -> list[str]:
         _merge_json_mcp_block(
             mcp_json,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
         )
     )
 
@@ -363,8 +363,8 @@ def _install_pi_files() -> list[str]:
             mcp_json,
             "chuzom",
             {
-                "command": "uvx",
-                "args": ["claude-code-chuzom"],
+                "command": "chuzom",
+                "args": [],
                 "lifecycle": "lazy",
             },
         )
@@ -388,7 +388,7 @@ def _install_codex_cli_files() -> list[str]:
         _merge_json_mcp_block(
             config_json,
             "chuzom",
-            {"command": "uvx", "args": ["claude-code-chuzom"]},
+            {"command": "chuzom", "args": []},
         )
     )
 
@@ -404,8 +404,8 @@ def _print_claude_desktop_config() -> list[str]:
     config = {
         "mcpServers": {
             "chuzom": {
-                "command": "uvx",
-                "args": ["claude-code-chuzom"]
+                "command": "chuzom",
+                "args": []
             }
         }
     }
@@ -419,8 +419,8 @@ def _print_vs_code_copilot_config() -> list[str]:
     config = {
         "servers": {
             "chuzom": {
-                "command": "uvx",
-                "args": ["claude-code-chuzom"]
+                "command": "chuzom",
+                "args": []
             }
         }
     }
