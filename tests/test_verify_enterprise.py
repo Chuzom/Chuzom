@@ -124,7 +124,6 @@ def test_token_authenticates_check_fails_with_missing_token(
     assert "Permission.ROUTE_PROMPT" in r.remediation or "token" in r.remediation.lower()
 
 
-@pytest.mark.xfail(reason="INV-010: enterprise strict-default control plane not yet wired", strict=False)
 def test_rbac_strict_check_passes_under_enterprise(monkeypatch) -> None:
     monkeypatch.setenv("CHUZOM_PROFILE", "enterprise")
     r = ve._check_rbac_strict()
@@ -139,7 +138,6 @@ def test_rbac_strict_check_fails_under_developer() -> None:
     assert "off" in r.status.lower() or "warn" in r.status.lower()
 
 
-@pytest.mark.xfail(reason="INV-010: enterprise strict-default control plane not yet wired", strict=False)
 def test_audit_active_check_under_enterprise(monkeypatch) -> None:
     """Even with CHUZOM_AUDIT_DISABLED=1 set, enterprise ignores it
     and the check should still pass with a note."""
@@ -161,7 +159,6 @@ def test_audit_active_check_under_developer_with_disable_env(
     assert "unset" in r.remediation.lower()
 
 
-@pytest.mark.xfail(reason="INV-010: enterprise strict-default control plane not yet wired", strict=False)
 def test_redaction_check_under_enterprise(monkeypatch) -> None:
     monkeypatch.setenv("CHUZOM_PROFILE", "enterprise")
     r = ve._check_redaction_on()

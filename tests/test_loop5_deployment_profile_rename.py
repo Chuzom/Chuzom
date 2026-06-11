@@ -176,13 +176,11 @@ def hook_module():
     return mod
 
 
-@pytest.mark.xfail(reason="Loop-5: CHUZOM_DEPLOYMENT_PROFILE rename not yet wired into repo source (chuzom.profile / hooks/auto-route.py)", strict=False)
 def test_hook_detector_honours_new_env(hook_module, monkeypatch) -> None:
     monkeypatch.setenv("CHUZOM_DEPLOYMENT_PROFILE", "enterprise")
     assert hook_module._is_enterprise_profile() is True
 
 
-@pytest.mark.xfail(reason="Loop-5: CHUZOM_DEPLOYMENT_PROFILE rename not yet wired into repo source (chuzom.profile / hooks/auto-route.py)", strict=False)
 def test_hook_detector_falls_back_to_legacy_env(
     hook_module, monkeypatch,
 ) -> None:
@@ -190,7 +188,6 @@ def test_hook_detector_falls_back_to_legacy_env(
     assert hook_module._is_enterprise_profile() is True
 
 
-@pytest.mark.xfail(reason="Loop-5: CHUZOM_DEPLOYMENT_PROFILE rename not yet wired into repo source (chuzom.profile / hooks/auto-route.py)", strict=False)
 def test_hook_detector_new_env_takes_precedence(
     hook_module, monkeypatch,
 ) -> None:
@@ -202,7 +199,6 @@ def test_hook_detector_new_env_takes_precedence(
     assert hook_module._is_enterprise_profile() is False
 
 
-@pytest.mark.xfail(reason="Loop-5: CHUZOM_DEPLOYMENT_PROFILE rename not yet wired into repo source (chuzom.profile / hooks/auto-route.py)", strict=False)
 def test_hook_detector_both_unset_is_not_enterprise(
     hook_module,
 ) -> None:
@@ -212,7 +208,6 @@ def test_hook_detector_both_unset_is_not_enterprise(
 # ── 7. Cross-check: every slice-3-era consumer still works ──────────────
 
 
-@pytest.mark.xfail(reason="Loop-5: CHUZOM_DEPLOYMENT_PROFILE rename not yet wired into repo source (chuzom.profile / hooks/auto-route.py)", strict=False)
 def test_rbac_mode_honours_new_env(monkeypatch) -> None:
     """Mirror of ``test_enterprise_profile_flips_all_three_defaults``
     from the slice-3 test file, but using the new env name. Pin that
@@ -223,7 +218,6 @@ def test_rbac_mode_honours_new_env(monkeypatch) -> None:
     assert _resolve_mode() == "strict"
 
 
-@pytest.mark.xfail(reason="Loop-5: CHUZOM_DEPLOYMENT_PROFILE rename not yet wired into repo source (chuzom.profile / hooks/auto-route.py)", strict=False)
 def test_audit_disabled_honours_new_env(monkeypatch) -> None:
     monkeypatch.setenv("CHUZOM_DEPLOYMENT_PROFILE", "enterprise")
     monkeypatch.setenv("CHUZOM_AUDIT_DISABLED", "1")
@@ -233,7 +227,6 @@ def test_audit_disabled_honours_new_env(monkeypatch) -> None:
     assert _audit_disabled() is False
 
 
-@pytest.mark.xfail(reason="Loop-5: CHUZOM_DEPLOYMENT_PROFILE rename not yet wired into repo source (chuzom.profile / hooks/auto-route.py)", strict=False)
 def test_redaction_honours_new_env(monkeypatch) -> None:
     monkeypatch.setenv("CHUZOM_DEPLOYMENT_PROFILE", "enterprise")
     from chuzom.redaction_routing import _redaction_enabled

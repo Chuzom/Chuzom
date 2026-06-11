@@ -49,6 +49,7 @@ from typing import Protocol, runtime_checkable
 from chuzom.budget_envelope import BudgetEnvelope, BudgetEnvelopeManager
 from chuzom.budget_key import BudgetKey
 from chuzom.logging import get_logger
+from chuzom.profile import is_enterprise
 
 log = get_logger("chuzom.budget_backend")
 
@@ -141,10 +142,11 @@ def _forecast_mode() -> str:
     Invalid values fall back to ``off`` (fail-open). Parity with the
     policy / classification three-mode gate established this session.
     """
-    raw = os.environ.get("CHUZOM_BUDGET_FORECAST_MODE", "")
-    if not raw:
-        return _FORECAST_MODE_DEFAULT
-    normalised = raw.strip().lower()
+    normalised = os.environ.get("CHUZOM_BUDGET_FORECAST_MODE", "").strip().lower()
+    if not normalised:
+        # G-016: unset/blank → profile default. Enterprise flips the
+        # forecast tier strict-on; developer keeps the opt-in default off.
+        return "strict" if is_enterprise() else _FORECAST_MODE_DEFAULT
     if normalised not in _FORECAST_MODES:
         return _FORECAST_MODE_DEFAULT
     return normalised

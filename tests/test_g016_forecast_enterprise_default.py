@@ -50,13 +50,11 @@ def test_developer_profile_explicit_off(monkeypatch) -> None:
 # ── 2. Enterprise profile — default flips to strict ───────────────────────
 
 
-@pytest.mark.xfail(reason="INV-010/G-016: enterprise forecast strict-default not yet wired", strict=False)
 def test_enterprise_profile_defaults_strict(monkeypatch) -> None:
     monkeypatch.setenv("CHUZOM_PROFILE", "enterprise")
     assert _forecast_mode() == "strict"
 
 
-@pytest.mark.xfail(reason="INV-010/G-016: enterprise forecast strict-default not yet wired", strict=False)
 def test_enterprise_aliases_flip_too(monkeypatch) -> None:
     """Profile aliases (``prod`` / ``production``) flip the default
     the same way."""
@@ -112,7 +110,6 @@ def test_typo_falls_back_to_off_under_enterprise(monkeypatch) -> None:
     assert _forecast_mode() == "off"
 
 
-@pytest.mark.xfail(reason="INV-010/G-016: enterprise forecast strict-default not yet wired", strict=False)
 def test_blank_value_uses_profile_default(monkeypatch) -> None:
     """Empty / whitespace env is treated as unset (covers shell
     config gotchas where an env exports an empty string)."""
@@ -124,7 +121,6 @@ def test_blank_value_uses_profile_default(monkeypatch) -> None:
 # ── 5. Cross-profile parity with slice 3 ─────────────────────────────────
 
 
-@pytest.mark.xfail(reason="INV-010/G-016: enterprise forecast strict-default not yet wired", strict=False)
 def test_enterprise_profile_flips_forecast_alongside_other_safety_defaults(
     monkeypatch,
 ) -> None:
