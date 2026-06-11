@@ -20,7 +20,9 @@ via RedactionPolicy.with_patterns().
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+from chuzom.plugins.redaction import RedactionResult
 
 _LUHN_RE = re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)")
 
@@ -97,15 +99,6 @@ class RedactionPolicy:
             enabled=self.enabled,
             luhn_check_credit_cards=self.luhn_check_credit_cards,
         )
-
-
-@dataclass(frozen=True)
-class RedactionResult:
-    """Output of redact_prompt — the scrubbed text + a summary of what was found."""
-
-    text: str
-    counts: dict[str, int] = field(default_factory=dict)
-    any_redactions: bool = False
 
 
 def redact_prompt(

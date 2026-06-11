@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import os
 
-from chuzom.enterprise.redaction import RedactionResult, redact_prompt
 from chuzom.logging import get_logger
+from chuzom.plugins.redaction import get_redactor
 from chuzom.profile import is_enterprise
 
 log = get_logger("chuzom.redaction_routing")
@@ -58,7 +58,7 @@ def maybe_redact(prompt: str) -> tuple[str, dict[str, int]]:
     * Off (default) → returns the prompt unchanged and an empty
       counts dict. The caller can avoid extra audit-detail entries by
       checking ``if counts: ...``.
-    * On → calls ``redact_prompt`` with the default policy. The
+    * On → calls the registered redactor with the default policy. The
       redacted prompt is what the provider sees; the counts dict
       records how many of each pattern type fired.
 
@@ -70,8 +70,14 @@ def maybe_redact(prompt: str) -> tuple[str, dict[str, int]]:
     """
     if not _redaction_enabled():
         return prompt, {}
+
+    redactor = get_redactor()
+    if redactor is None:
+        log.warning("redaction_unavailable", reason="no_redactor_registered")
+        return prompt, {}
+
     try:
-        result: RedactionResult = redact_prompt(prompt)
+        result = redactor.redact_prompt(prompt)
     except Exception as err:  # noqa: BLE001 — fail-open
         log.warning("redaction_failed", error=str(err))
         return prompt, {}
