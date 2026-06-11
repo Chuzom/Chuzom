@@ -1,9 +1,15 @@
 name: Publish to PyPI
 
+# PyPI publishing is PAUSED — the project is not ready to publish yet.
+# The pipeline is kept fully intact (build, lint, version-check, OIDC publish)
+# but only runs on manual dispatch, so pushing a `v*` tag no longer triggers a
+# publish. To RESUME automated releases, restore the tag trigger:
+#   on:
+#     push:
+#       tags:
+#         - "v*"
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
