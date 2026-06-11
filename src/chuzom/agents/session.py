@@ -43,33 +43,68 @@ CREATE TABLE IF NOT EXISTS sessions (
     state TEXT NOT NULL,
     framework TEXT,
     max_iterations INTEGER,
-    max_recursion_depth INTEGER
+    max_recursion_depth INTEGER,
+    routing_policy_json TEXT,
+    tool_call_count INTEGER NOT NULL DEFAULT 0,
+    max_tool_calls INTEGER,
+    max_children_concurrent INTEGER,
+    last_activity_at REAL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);
 """
 
-# T3-M3 + T3-XL1: idempotent ALTER TABLE ADD COLUMN migration for sessions
-# DBs that pre-date the runaway-guard columns or the routing-policy column.
-# PRAGMA table_info introspects the live schema; we add only the missing
-# columns. SQLite accepts multiple statements separated by ';'.
+# Refinement #4: composite index serving both the state-only ledger
+# query and the (state, last_activity_at) "stuck" filter via the
+# leftmost-prefix rule. Created AFTER the column migration so it lands
+# on legacy DBs whose last_activity_at column is added at open time.
+_INDEX_STATE_ACTIVITY = (
+    "CREATE INDEX IF NOT EXISTS idx_sessions_state_activity "
+    "ON sessions(state, last_activity_at)"
+)
+
+# T3-M3 + T3-XL1 + G-029: idempotent ALTER TABLE ADD COLUMN migration for
+# sessions DBs that pre-date the runaway-guard, routing-policy, or ledger
+# columns. PRAGMA table_info introspects the live schema; we add only the
+# missing columns. SQLite accepts multiple statements separated by ';'.
 _MIGRATIONS_V2 = (
     ("max_iterations", "ALTER TABLE sessions ADD COLUMN max_iterations INTEGER"),
     ("max_recursion_depth", "ALTER TABLE sessions ADD COLUMN max_recursion_depth INTEGER"),
     ("routing_policy_json", "ALTER TABLE sessions ADD COLUMN routing_policy_json TEXT"),
+    ("tool_call_count", "ALTER TABLE sessions ADD COLUMN tool_call_count INTEGER NOT NULL DEFAULT 0"),
+    ("max_tool_calls", "ALTER TABLE sessions ADD COLUMN max_tool_calls INTEGER"),
+    ("max_children_concurrent", "ALTER TABLE sessions ADD COLUMN max_children_concurrent INTEGER"),
+    ("last_activity_at", "ALTER TABLE sessions ADD COLUMN last_activity_at REAL"),
+)
+
+# Full column list, in storage order. Shared by get() and recent() so the
+# positional unpacking in _row_to_session stays in lockstep with the SELECT.
+_SELECT_COLS = (
+    "session_id, agent_id, started_at, completed_at, parent_session_id, "
+    "budget_cap_usd, consumed_usd, step_count, state, framework, "
+    "max_iterations, max_recursion_depth, routing_policy_json, "
+    "tool_call_count, max_tool_calls, max_children_concurrent, last_activity_at"
 )
 
 _INSERT = """
 INSERT INTO sessions (
     session_id, agent_id, started_at, completed_at, parent_session_id,
     budget_cap_usd, consumed_usd, step_count, state, framework,
-    max_iterations, max_recursion_depth, routing_policy_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    max_iterations, max_recursion_depth, routing_policy_json,
+    tool_call_count, max_tool_calls, max_children_concurrent, last_activity_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _UPDATE_STEP = """
-UPDATE sessions SET consumed_usd = ?, step_count = ?, state = ? WHERE session_id = ?
+UPDATE sessions SET consumed_usd = ?, step_count = ?, state = ?,
+    last_activity_at = ? WHERE session_id = ?
+"""
+
+# Terminal transition that also stamps activity (cancel / cascade).
+_UPDATE_CANCEL = """
+UPDATE sessions SET state = ?, completed_at = ?, last_activity_at = ?
+    WHERE session_id = ?
 """
 
 _UPDATE_TERMINAL = """
@@ -131,6 +166,12 @@ def _row_to_session(row: tuple) -> AgentSession:
     max_iter = row[10] if len(row) > 10 else None
     max_depth = row[11] if len(row) > 11 else None
     policy_json = row[12] if len(row) > 12 else None
+    # G-029 ledger columns (positions 13–16). Short rows from the
+    # children()/by_agent() projections fall back to defaults.
+    tool_call_count = row[13] if len(row) > 13 and row[13] is not None else 0
+    max_tool_calls = row[14] if len(row) > 14 else None
+    max_children_concurrent = row[15] if len(row) > 15 else None
+    last_activity_at = row[16] if len(row) > 16 else None
     return AgentSession(
         session_id=row[0],
         agent_id=row[1],
@@ -145,6 +186,10 @@ def _row_to_session(row: tuple) -> AgentSession:
         max_iterations=max_iter,
         max_recursion_depth=max_depth,
         routing_policy=_policy_from_json(policy_json),
+        tool_call_count=tool_call_count,
+        max_tool_calls=max_tool_calls,
+        max_children_concurrent=max_children_concurrent,
+        last_activity_at=last_activity_at,
     )
 
 
@@ -179,6 +224,10 @@ class SessionStore:
         for col, ddl in _MIGRATIONS_V2:
             if col not in existing_cols:
                 self._conn.execute(ddl)
+        # Refinement #4: the composite (state, last_activity_at) index is
+        # created here — after the column migration above — so legacy DBs
+        # that just gained last_activity_at pick it up on open.
+        self._conn.execute(_INDEX_STATE_ACTIVITY)
         self._conn.commit()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
@@ -193,6 +242,8 @@ class SessionStore:
         max_iterations: int | None = None,
         max_recursion_depth: int | None = None,
         routing_policy: AgentRoutingPolicy | None = None,
+        max_tool_calls: int | None = None,
+        max_children_concurrent: int | None = None,
     ) -> AgentSession:
         """Open a new active session with the given budget cap.
 
@@ -226,6 +277,11 @@ class SessionStore:
         if parent_session_id is not None:
             self._enforce_recursion_depth(parent_session_id)
 
+        if max_tool_calls is not None and max_tool_calls <= 0:
+            raise ValueError("max_tool_calls must be positive when set")
+        if max_children_concurrent is not None and max_children_concurrent <= 0:
+            raise ValueError("max_children_concurrent must be positive when set")
+
         session_id = str(uuid.uuid4())
         now = time.time()
         session = AgentSession(
@@ -242,6 +298,12 @@ class SessionStore:
             max_iterations=max_iterations,
             max_recursion_depth=max_recursion_depth,
             routing_policy=routing_policy,
+            tool_call_count=0,
+            max_tool_calls=max_tool_calls,
+            max_children_concurrent=max_children_concurrent,
+            # Seed activity to creation time so a just-created session is
+            # never immediately flagged "stuck".
+            last_activity_at=now,
         )
         self._conn.execute(
             _INSERT,
@@ -259,6 +321,10 @@ class SessionStore:
                 session.max_iterations,
                 session.max_recursion_depth,
                 _policy_to_json(session.routing_policy),
+                session.tool_call_count,
+                session.max_tool_calls,
+                session.max_children_concurrent,
+                session.last_activity_at,
             ),
         )
         self._conn.commit()
@@ -266,11 +332,7 @@ class SessionStore:
 
     def get(self, session_id: str) -> AgentSession:
         cursor = self._conn.execute(
-            "SELECT session_id, agent_id, started_at, completed_at, "
-            "parent_session_id, budget_cap_usd, consumed_usd, step_count, "
-            "state, framework, max_iterations, max_recursion_depth, "
-            "routing_policy_json "
-            "FROM sessions WHERE session_id = ?",
+            f"SELECT {_SELECT_COLS} FROM sessions WHERE session_id = ?",
             (session_id,),
         )
         row = cursor.fetchone()
@@ -410,9 +472,11 @@ class SessionStore:
         new_consumed = s.consumed_usd + cost_usd
         new_step = s.step_count + 1
         new_state = SessionState.BUDGET_EXCEEDED if breached else SessionState.ACTIVE
-        completed_at = time.time() if breached else None
+        now_activity = time.time()
+        completed_at = now_activity if breached else None
         self._conn.execute(
-            _UPDATE_STEP, (new_consumed, new_step, new_state.value, session_id)
+            _UPDATE_STEP,
+            (new_consumed, new_step, new_state.value, now_activity, session_id),
         )
         if breached:
             self._conn.execute(
@@ -461,6 +525,79 @@ class SessionStore:
         self._conn.commit()
         return self.get(session_id)
 
+    def record_tool_call(self, session_id: str, tool_name: str) -> AgentSession:
+        """Increment ``tool_call_count`` and bump ``last_activity_at``.
+
+        ``tool_name`` is accepted for call-site clarity and future
+        per-tool telemetry; the ledger currently tracks only the count.
+        Terminal-state sessions refuse the mutation (parity with
+        ``record_step``) so a cancelled/completed run can't keep ticking.
+        """
+        s = self.get(session_id)
+        if s.state.is_terminal:
+            raise TerminalStateViolation(
+                f"session {session_id} is {s.state.value}; cannot record_tool_call"
+            )
+        self._conn.execute(
+            "UPDATE sessions SET tool_call_count = tool_call_count + 1, "
+            "last_activity_at = ? WHERE session_id = ?",
+            (time.time(), session_id),
+        )
+        self._conn.commit()
+        return self.get(session_id)
+
+    def cancel(
+        self,
+        session_id: str,
+        reason: str | None = None,
+        *,
+        cascade: bool = True,
+    ) -> AgentSession:
+        """Operator emergency stop (G-026/G-030).
+
+        Marks the session ``CANCELLED``. When ``cascade`` (default), walks
+        the descendant tree and marks every *non-terminal* child
+        ``CANCELLED`` in the same transaction — already-terminal branches
+        keep their real outcome. Idempotent: cancelling an already-terminal
+        session is a no-op that returns it unchanged.
+
+        ``reason`` is accepted for caller symmetry with the admin endpoint
+        (which records it in the admin-action audit); there is no reason
+        column on the session row itself.
+        """
+        s = self.get(session_id)  # raises SessionNotFound on unknown id
+        if s.state.is_terminal:
+            return s  # idempotent no-op — never rewrite a terminal outcome
+
+        now = time.time()
+        if cascade:
+            # BFS over descendants; a visited set guards against cyclic
+            # parent links in corrupt data (parity with the 1024-hop guard
+            # used elsewhere, but exact rather than bounded).
+            visited: set[str] = {session_id}
+            frontier = self.children(session_id)
+            while frontier:
+                next_frontier: list[AgentSession] = []
+                for child in frontier:
+                    if child.session_id in visited:
+                        continue
+                    visited.add(child.session_id)
+                    if not child.state.is_terminal:
+                        self._conn.execute(
+                            _UPDATE_CANCEL,
+                            (SessionState.CANCELLED.value, now, now,
+                             child.session_id),
+                        )
+                    next_frontier.extend(self.children(child.session_id))
+                frontier = next_frontier
+
+        self._conn.execute(
+            _UPDATE_CANCEL,
+            (SessionState.CANCELLED.value, now, now, session_id),
+        )
+        self._conn.commit()
+        return self.get(session_id)
+
     # ── Queries ───────────────────────────────────────────────────────────
 
     def children(self, parent_session_id: str) -> list[AgentSession]:
@@ -481,6 +618,42 @@ class SessionStore:
             "state, framework FROM sessions WHERE agent_id = ? "
             "ORDER BY started_at DESC LIMIT ?",
             (agent_id, limit),
+        )
+        return [_row_to_session(row) for row in cursor.fetchall()]
+
+    def recent(
+        self,
+        limit: int = 100,
+        state: str | None = None,
+        before: tuple[float, str] | None = None,
+    ) -> list[AgentSession]:
+        """Newest-first session ledger with optional state filter and
+        keyset pagination.
+
+        Ordering is ``(started_at DESC, session_id DESC)`` — a strict total
+        order so identical timestamps can't skip or duplicate a row across
+        pages. ``before`` is the ``(started_at, session_id)`` of the last
+        row on the previous page; rows strictly *older* than it in that
+        order are returned. ``state`` matches the lifecycle value exactly
+        (e.g. ``"active"``, ``"cancelled"``).
+        """
+        clauses: list[str] = []
+        params: list[object] = []
+        if state is not None:
+            clauses.append("state = ?")
+            params.append(state)
+        if before is not None:
+            before_ts, before_sid = before
+            clauses.append(
+                "(started_at < ? OR (started_at = ? AND session_id < ?))"
+            )
+            params.extend([before_ts, before_ts, before_sid])
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        cursor = self._conn.execute(
+            f"SELECT {_SELECT_COLS} FROM sessions {where} "
+            "ORDER BY started_at DESC, session_id DESC LIMIT ?",
+            params,
         )
         return [_row_to_session(row) for row in cursor.fetchall()]
 

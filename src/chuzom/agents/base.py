@@ -22,10 +22,18 @@ class SessionState(str, Enum):
     COMPLETED = "completed"
     ERRORED = "errored"
     BUDGET_EXCEEDED = "budget_exceeded"
+    # G-026/G-030: operator-initiated emergency stop. Distinct from
+    # ERRORED so the audit can separate "we killed it" from "it crashed".
+    CANCELLED = "cancelled"
 
     @property
     def is_terminal(self) -> bool:
-        return self in (SessionState.COMPLETED, SessionState.ERRORED, SessionState.BUDGET_EXCEEDED)
+        return self in (
+            SessionState.COMPLETED,
+            SessionState.ERRORED,
+            SessionState.BUDGET_EXCEEDED,
+            SessionState.CANCELLED,
+        )
 
 
 @dataclass(frozen=True)
@@ -181,6 +189,14 @@ class AgentSession:
     # session; the effective policy may still be inherited from a
     # parent via SessionStore.effective_policy.
     routing_policy: AgentRoutingPolicy | None = None
+    # G-029 ledger fields. tool_call_count increments via
+    # record_tool_call; last_activity_at is bumped on every state
+    # mutation and powers the admin "stuck" filter. Legacy rows
+    # predating the column surface last_activity_at=None.
+    tool_call_count: int = 0
+    max_tool_calls: int | None = None
+    max_children_concurrent: int | None = None
+    last_activity_at: float | None = None
 
     @property
     def remaining_usd(self) -> float:
