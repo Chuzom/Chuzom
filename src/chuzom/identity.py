@@ -52,6 +52,10 @@ CHUZOM_AGENT_ID_ENV = "CHUZOM_AGENT_ID"
 # (sidecar-per-tenant) where one chuzom process serves a tenant
 # distinct from its org. See Docs/audit/decisions/Q-P-2_multi-tenancy.md.
 CHUZOM_TENANT_ID_ENV = "CHUZOM_TENANT_ID"
+# P0-2: developer-mode team attribution for team-scope budgets. Enterprise /
+# OIDC paths derive team from the authenticated user instead; this env only
+# applies to the env-trust developer resolver and is usually unset (single-user).
+CHUZOM_TEAM_ID_ENV = "CHUZOM_TEAM_ID"
 
 # Default org for Tier-1 single-user mode. Picked to be obviously
 # non-SSO-derived so a future audit reader can tell at a glance that the
@@ -185,6 +189,7 @@ def _oidc_identity(token: str, store) -> "TurnIdentity":
         org_id=user.org_id,
         agent_id=agent_id,
         tenant_id=tenant_id,
+        team_id=user.team_id,
         permissions=frozenset(permissions_for_role(role)),
         allowed_providers=user.allowed_providers,
         allowed_models=user.allowed_models,
@@ -253,6 +258,7 @@ def _enterprise_identity(store=None) -> "TurnIdentity":
         org_id=identity.user.org_id,
         agent_id=agent_id,
         tenant_id=tenant_id,
+        team_id=identity.user.team_id,
         permissions=frozenset(identity.permissions),
         allowed_providers=identity.user.allowed_providers,
         allowed_models=identity.user.allowed_models,
@@ -296,6 +302,12 @@ class TurnIdentity:
     # "no tenant attribution available" — the resolver's job to avoid
     # producing that state in production.
     tenant_id: str | None = None
+    # P0-2: the team the actor belongs to, for team-scope budget enforcement.
+    # Enterprise / OIDC paths set this from the authenticated user's team;
+    # developer mode reads ``CHUZOM_TEAM_ID`` (usually None for single-user).
+    # ``None`` means "no team attribution" — quota_routing then enforces the
+    # user scope only, preserving pre-P0-2 behaviour.
+    team_id: str | None = None
     # Phase 3b: the RBAC payload carried from the authenticated
     # enterprise/OIDC identity so the wired routing gates enforce on the
     # REAL principal. ``permissions`` feeds ``check_route_prompt`` (via
@@ -378,12 +390,17 @@ def current_identity() -> TurnIdentity:
     tenant_id_raw = (os.environ.get(CHUZOM_TENANT_ID_ENV) or "").strip()
     tenant_id = tenant_id_raw or org_id
 
+    # P0-2: team is opt-in in developer mode (single-user installs have no
+    # team). None → quota_routing enforces the user scope only.
+    team_id = (os.environ.get(CHUZOM_TEAM_ID_ENV) or "").strip() or None
+
     return TurnIdentity(
         user_id=user_id,
         user_email=user_email,
         org_id=org_id,
         agent_id=agent_id,
         tenant_id=tenant_id,
+        team_id=team_id,
     )
 
 
@@ -393,6 +410,7 @@ __all__ = [
     "CHUZOM_ORG_ID_ENV",
     "CHUZOM_AGENT_ID_ENV",
     "CHUZOM_TENANT_ID_ENV",
+    "CHUZOM_TEAM_ID_ENV",
     "CHUZOM_TOKEN_ENV",
     "CHUZOM_OIDC_ISSUER_ENV",
     "CHUZOM_OIDC_DEFAULT_ORG_ENV",
