@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.3.0 — 2026-06-11 — Enterprise enforcement wired + honest packaging
+
+> Closes the audit's anchor finding (INV-010): the enterprise control plane is now **wired into and enforced on the routing path** under `CHUZOM_DEPLOYMENT_PROFILE=enterprise`, and the packaging/README are reconciled to reality. The developer router stays stable; the enterprise control plane is labelled **beta** with a per-feature status table in the README.
+
+### Enterprise control plane (now enforced under the enterprise profile)
+
+- **INV-010 closed.** RBAC (`check_route_prompt` / `check_provider` / `check_model`) and the audit chain are consulted on every routed turn. The enterprise profile flips RBAC→strict, audit→mandatory, redaction→on, forecast→strict (G-001/G-003/G-012/G-016). End-to-end enforcement proof added.
+- **Phase 3b — per-identity allow-lists.** The authenticated SSO/OIDC identity now carries `permissions` + per-identity `allowed_providers` / `allowed_models` from the `IdentityStore`, so a restricted token enforces through the wired gates. Empty lists normalise to `None` (unrestricted) — an empty allow-list can never silently deny-all.
+- **Loop-5 / G-039.** `CHUZOM_DEPLOYMENT_PROFILE` deployment-profile detection back-ported into the auto-route hook; the self-reference bypass is refused under the enterprise profile.
+- **G-029 agent ledger.** `SessionStore.recent()` / `cancel()` (cascade) / `record_tool_call()` + `last_activity_at`; admin agent status + cancel endpoints.
+
+### Security
+
+- **G-004 — RBAC allow-list prefix-spoof closed.** A forged `provider/forged-model` candidate could match a bare allow-list entry (the provider prefix was stripped before comparison). `check_model` now matches the full id exactly; the `provider/model` and bare forms never cross-match.
+
+### Packaging & docs (P0-6)
+
+- `chuzom --version` reports the **installed distribution's version** (installed wheels previously reported a stale hardcoded `10.1.2`).
+- `chuzom install --host claude-code` / `--host claude-desktop` now resolve; generated MCP configs invoke the canonical `chuzom` stdio entry instead of the deprecated `uvx claude-code-chuzom` package.
+- README rewritten concise + honest (806 → ~140 lines) with a real "How it works" section and a per-feature beta status table; the overclaimed SOC 2 / GDPR / OTEL badges were dropped.
+
+### Known gaps (on the roadmap; labelled beta in the README)
+
+- SCIM mounting + role/group mapping; team-budget enforcement; multi-instance (Postgres) HA; control-plane→routing wiring for provider-disable / policy-versioning; audit-chain verify CLI/endpoint.
+
 ## v0.2.0 — 2026-06-08 — Audit Tracks 1 & 2 + lineage API rewrite
 
 > **Security advisory + claims reconciliation + honest test signal + lineage API rewrite.** This release closes the developer-focused subset of the 2026-06 internal audit (`Docs/audit/FINDINGS.md`): **2 Critical** and **6 High** findings across security defaults (SEC-001/002/003), session isolation (INV-007 + ROU-001), truth-in-claims (INV-001/002), and test-suite integrity (TST-001). It also lands the **v0.2.x `LineageStore` API rewrite** that was implicit in TST-001's follow-up. Multi-tenancy / identity-layer items (INV-010, INV-011, ROU-002, PRI-001, OBS-001, TST-003) are deferred to Phase 2 pending the multi-tenancy product decision.
