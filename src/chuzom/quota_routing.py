@@ -18,9 +18,12 @@ G-001-style default flip: when ``CHUZOM_QUOTA_MODE`` is unset, enterprise profil
 defaults to **strict**, developer profile to **off**. An explicit value always
 wins so an operator can canary in ``warn`` before flipping to ``strict``.
 
-Scope note: enforced for the **user** scope today. ``TurnIdentity`` does not yet
-carry ``team_id``, so team-scope quota is a follow-up (thread team_id through
-identity resolution, then add a second ``would_exceed("team", ...)`` check).
+Scope note: enforced for the **user** AND **team** scopes (P0-2). ``TurnIdentity``
+now carries ``team_id`` (from the authenticated user in enterprise/OIDC mode,
+``CHUZOM_TEAM_ID`` in developer mode). Each populated scope is checked; the
+tightest breach denies. ``record_consumption`` charges every populated scope, so
+a *team* cap aggregates spend across all its users. A ``None`` team_id reduces to
+the pre-P0-2 user-only behaviour.
 
 🥷 Backslash-Security: using vibe-coding rules for secured Authentication & Authorization
 """
@@ -81,16 +84,33 @@ def check_quota(
     mode = _resolve_mode()
     if mode == "off":
         return ("off", False, {})
-    user_id = getattr(identity, "user_id", None)
-    if not user_id:
-        return (mode, False, {})
     t = tracker or _get_tracker()
-    try:
-        breached, info = t.would_exceed("user", user_id, prospective_cost_usd)
-    except Exception as exc:  # never let a quota-store hiccup break routing
-        log.warning("quota_check_failed", error=str(exc))
-        return (mode, False, {})
-    return (mode, breached, info)
+    # Check each populated scope, tightest attribution first (user → team).
+    # The first HARD breach denies; a team cap bites even when the user has
+    # none. A store hiccup on one scope never breaks routing.
+    for scope, ident in _scopes(identity):
+        try:
+            breached, info = t.would_exceed(scope, ident, prospective_cost_usd)
+        except Exception as exc:  # never let a quota-store hiccup break routing
+            log.warning("quota_check_failed", scope=scope, error=str(exc))
+            continue
+        if breached:
+            return (mode, True, info)
+    return (mode, False, {})
+
+
+def _scopes(identity: Any) -> list[tuple[str, str]]:
+    """The (scope, identifier) pairs to enforce for this turn, in deny-priority
+    order. Skips scopes the identity doesn't carry — ``team_id`` is None for
+    single-user developer installs, collapsing to user-only enforcement."""
+    pairs = []
+    user_id = getattr(identity, "user_id", None)
+    if user_id:
+        pairs.append(("user", user_id))
+    team_id = getattr(identity, "team_id", None)
+    if team_id:
+        pairs.append(("team", team_id))
+    return pairs
 
 
 def raise_quota_denied(info: dict):
@@ -123,11 +143,11 @@ def record_consumption(
         return
     if not actual_cost_usd or actual_cost_usd <= 0:
         return
-    user_id = getattr(identity, "user_id", None)
-    if not user_id:
-        return
     t = tracker or _get_tracker()
-    try:
-        t.consume("user", user_id, float(actual_cost_usd))
-    except Exception as exc:
-        log.warning("quota_consume_failed", error=str(exc))
+    # Charge every populated scope — the same spend counts against the user's
+    # cap and (when present) the team's cap, so a team budget aggregates.
+    for scope, ident in _scopes(identity):
+        try:
+            t.consume(scope, ident, float(actual_cost_usd))
+        except Exception as exc:
+            log.warning("quota_consume_failed", scope=scope, error=str(exc))
