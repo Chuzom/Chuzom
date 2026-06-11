@@ -47,7 +47,6 @@ def _clean_env(monkeypatch) -> None:
 # ── 1. Adversarial closure (the actual G-004 attack) ────────────────────────
 
 
-@pytest.mark.xfail(reason="G-004: RBAC prefix-spoof closure not yet implemented (security gap)", strict=False)
 def test_forged_prefix_does_not_match_bare_entry() -> None:
     """The core G-004 spoof. Pre-fix this returned ``True`` because
     ``"anthropic/openai-gpt-4o".split("/")[1]`` == ``"openai-gpt-4o"``."""
@@ -56,14 +55,12 @@ def test_forged_prefix_does_not_match_bare_entry() -> None:
     assert allowed is False
 
 
-@pytest.mark.xfail(reason="G-004: RBAC prefix-spoof closure not yet implemented (security gap)", strict=False)
 def test_forged_prefix_does_not_match_bare_entry_different_casing() -> None:
     identity = FakeIdentity(allowed_models=("openai-gpt-4o",))
     _, allowed = check_model(identity, "Anthropic/OpenAI-GPT-4o")
     assert allowed is False
 
 
-@pytest.mark.xfail(reason="G-004: RBAC prefix-spoof closure not yet implemented (security gap)", strict=False)
 def test_swapped_provider_does_not_match_prefixed_entry() -> None:
     """A forged candidate ``ollama/sonnet`` must NOT match a prefixed
     allow-list entry ``anthropic/sonnet``."""
@@ -95,7 +92,6 @@ def test_bare_entry_matches_bare_candidate() -> None:
     assert allowed is True
 
 
-@pytest.mark.xfail(reason="G-004: RBAC prefix-spoof closure not yet implemented (security gap)", strict=False)
 def test_prefixed_candidate_against_only_bare_allow_list_denied() -> None:
     """A prefixed candidate never falls back to bare matching."""
     identity = FakeIdentity(allowed_models=("claude-sonnet-4-6",))
@@ -103,7 +99,6 @@ def test_prefixed_candidate_against_only_bare_allow_list_denied() -> None:
     assert allowed is False
 
 
-@pytest.mark.xfail(reason="G-004: RBAC prefix-spoof closure not yet implemented (security gap)", strict=False)
 def test_bare_candidate_against_only_prefixed_allow_list_denied() -> None:
     """A bare candidate never falls back to a prefixed entry."""
     identity = FakeIdentity(allowed_models=("anthropic/claude-sonnet-4-6",))
@@ -111,7 +106,6 @@ def test_bare_candidate_against_only_prefixed_allow_list_denied() -> None:
     assert allowed is False
 
 
-@pytest.mark.xfail(reason="G-004: RBAC prefix-spoof closure not yet implemented (security gap)", strict=False)
 def test_mixed_allow_list_matches_correct_form() -> None:
     """Admin lists both forms — each form matches only itself."""
     identity = FakeIdentity(allowed_models=(
@@ -146,7 +140,6 @@ def test_no_allow_list_returns_true() -> None:
     assert allowed is True
 
 
-@pytest.mark.xfail(reason="G-004: RBAC prefix-spoof closure not yet implemented (security gap)", strict=False)
 def test_warn_mode_returns_actual_decision(monkeypatch) -> None:
     """Warn mode surfaces the real decision without raising. The
     caller decides whether to log+allow or deny."""

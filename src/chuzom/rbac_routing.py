@@ -174,11 +174,17 @@ def check_model(identity: TurnIdentity | Any, model: str) -> tuple[str, bool]:
     """T1-M3: per-model allow-list check for one candidate.
 
     Same semantics as :func:`check_provider` but on
-    ``identity.allowed_models``. Model id is matched against the set
-    case-insensitively; vendor prefixes (``anthropic/``,
-    ``openai/``, ``gemini/``, ``codex/`` etc.) are normalised away
-    before comparison so the allow-list can be written as either
-    ``"claude-sonnet-4-6"`` or ``"anthropic/claude-sonnet-4-6"``.
+    ``identity.allowed_models``. The full model id is matched
+    case-insensitively and **exactly** — a ``provider/model`` candidate
+    matches only a ``provider/model`` entry, a bare candidate matches
+    only a bare entry. The two forms never cross-match.
+
+    G-004: an earlier version normalised the provider prefix away on
+    both sides before comparing, which let a forged candidate
+    ``anthropic/openai-gpt-4o`` match a bare allow-list entry
+    ``openai-gpt-4o`` — the strip discarded the very provider
+    information the allow-list was implicitly trusting. The allow-list
+    must now name the exact form it intends to permit.
     """
     mode = _resolve_mode()
     if mode == "off":
@@ -186,11 +192,12 @@ def check_model(identity: TurnIdentity | Any, model: str) -> tuple[str, bool]:
     allowed_models = getattr(identity, "allowed_models", None)
     if allowed_models is None:
         return mode, True
-    normalised = model.split("/", 1)[1].lower() if "/" in model else model.lower()
-    allowed_norm = {
-        (m.split("/", 1)[1] if "/" in m else m).lower() for m in allowed_models
-    }
-    allowed = normalised in allowed_norm or model.lower() in {m.lower() for m in allowed_models}
+    # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+    # G-004 prefix-spoof closure — exact, case-insensitive match on the FULL
+    # model id. Never split off the provider prefix: doing so let a forged
+    # candidate (e.g. ``anthropic/openai-gpt-4o``) spoof a bare allow-list
+    # entry (``openai-gpt-4o``). Operators name the exact form they permit.
+    allowed = model.lower() in {m.lower() for m in allowed_models}
     if mode == "warn" and not allowed:
         log.warning(
             "rbac_warn_model_disallowed",
