@@ -54,15 +54,17 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from fastapi import Depends, FastAPI, HTTPException, status
+import structlog
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from chuzom.admin_actions import AdminActionLog
 from chuzom.agents.session import SessionStore
 from chuzom.enterprise.audit import AuditLog
+from chuzom.error_sanitization import sanitize_exception
 from chuzom.metrics import EXPOSITION_CONTENT_TYPE, collect_all
 from chuzom.policy_versions import (
     PolicyValidationError,
@@ -83,6 +85,8 @@ from chuzom.provider_registry import (
     RuntimeProviderRegistry,
     get_global_registry as _resolve_global_registry,
 )
+
+log = structlog.get_logger(__name__)
 
 __version__ = "0.1.0-skeleton"
 
@@ -469,6 +473,27 @@ def create_app() -> FastAPI:
             "docs/audit/post-remediation/GAP_ANALYSIS.md for scope."
         ),
     )
+
+    # ── P1-1: deny-by-default error boundary ────────────────────────────
+    # Any UNHANDLED exception escaping a route would otherwise surface its
+    # repr to the caller. Log the full error server-side and return a generic
+    # 500 with no internal detail (stack trace, SQL, paths). Explicit
+    # HTTPExceptions raised by routes (domain 404/409/400 with controlled
+    # messages) bypass this handler and keep their intended messages.
+    # 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request: Request, exc: Exception):
+        log.error(
+            "admin_api_unhandled_exception",
+            path=request.url.path,
+            method=request.method,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": sanitize_exception(exc, "internal server error")},
+        )
 
     # ── SCIM 2.0 provisioning (P0-4) ────────────────────────────────────
     # Mount the SCIM router on the SERVED admin app when enabled, so a
@@ -1232,10 +1257,13 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc),
             )
-        except Exception as exc:  # noqa: BLE001 — surface upstream
+        except Exception as exc:  # noqa: BLE001 — broad upstream failure
+            # P1-1: a provider/IO/DB failure here could leak internal detail
+            # (URLs, SQL, paths). Log the real error; return a sanitized message.
+            log.error("invoice_fetch_failed", period=month, error=str(exc))
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"failed to fetch invoice: {exc}",
+                detail=sanitize_exception(exc, "failed to fetch invoice from provider"),
             )
 
         chuzom_total_usd = 0.0
