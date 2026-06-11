@@ -1,5 +1,16 @@
 """T2-XL1: multi-instance budget coordination via Postgres.
 
+.. warning::
+
+   **EXPERIMENTAL (P0-3 scope decision).** Budget-envelope enforcement is wired
+   into the routing path and CI-proven against the **SQLite** backend
+   (single-instance, cross-process-safe). This Postgres backend's
+   *cross-instance* coordination is **not yet covered by a real-Postgres CI
+   test** — the atomicity contract below is verified only against a mock. Do not
+   rely on multi-instance envelope enforcement in production until a real
+   Postgres integration test lands (Phase D). ``get_budget_backend`` fails open
+   to SQLite when the ``postgres`` extra or DSN is missing.
+
 Ships :class:`PostgresBudgetBackend`, a drop-in implementation of the
 :class:`~chuzom.budget_backend.BudgetBackend` Protocol that coordinates
 budget reservations across N chuzom daemon processes (potentially on
