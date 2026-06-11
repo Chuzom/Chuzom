@@ -470,6 +470,24 @@ def create_app() -> FastAPI:
         ),
     )
 
+    # ── SCIM 2.0 provisioning (P0-4) ────────────────────────────────────
+    # Mount the SCIM router on the SERVED admin app when enabled, so a
+    # deployed instance actually exposes /scim/v2 for IdP-driven
+    # (de)provisioning. Previously SCIM only existed in a standalone app no
+    # process ran. Gated by CHUZOM_SCIM_ENABLED + CHUZOM_SCIM_TOKEN
+    # (constant-time bearer auth); a no-op when disabled.
+    from chuzom.scim_api import scim_enabled
+    if scim_enabled():
+        import os as _os
+
+        from chuzom.scim_api import build_scim_router
+        app.include_router(
+            build_scim_router(
+                store=get_identity_store(),
+                scim_token=(_os.environ.get("CHUZOM_SCIM_TOKEN") or "").strip(),
+            )
+        )
+
     # ── Health (no auth) ────────────────────────────────────────────────
     @app.get("/v1/admin/health")
     def health() -> dict[str, str]:

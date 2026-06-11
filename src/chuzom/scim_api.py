@@ -68,6 +68,16 @@ def create_scim_app(
         raise RuntimeError("CHUZOM_SCIM_TOKEN must be set to enable SCIM")
 
     app = FastAPI(title="chuzom SCIM 2.0", docs_url=None, redoc_url=None)
+    app.include_router(build_scim_router(store=store, scim_token=scim_token))
+    return app
+
+
+def build_scim_router(*, store: IdentityStore, scim_token: str) -> APIRouter:
+    """The SCIM 2.0 ``/scim/v2`` router (auth-gated). Shared by the standalone
+    SCIM app and the admin app's mount (P0-4) so a *deployed* Chuzom actually
+    exposes ``/scim/v2`` — previously the router was only built inside the
+    standalone app, which no served process ran, leaving IdP deprovisioning
+    unreachable."""
     router = APIRouter(prefix="/scim/v2", dependencies=[Depends(_require_scim_auth(scim_token))])
 
     def _default_org_team() -> tuple[str, str]:
@@ -143,8 +153,7 @@ def create_scim_app(
         log.info("scim_user_deleted", user_id=user_id)
         return Response(status_code=204)
 
-    app.include_router(router)
-    return app
+    return router
 
 
 def _json(payload: dict, *, status_code: int = 200) -> Response:
