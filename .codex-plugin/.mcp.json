@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "chuzom": {
+      "command": "uvx",
+      "args": ["chuzom-router"],
+      "env": {
+        "CHUZOM_PROFILE": "balanced"
+      }
+    }
+  }
+}

@@ -27,12 +27,9 @@ Thumbs.db
 .serena/
 .lore/
 
-# Editor / IDE caches
+# Editor / IDE caches (local development only; repo has plugin configs for tests)
 .claude/tasks/
 .claude/task-list.md
-.claude-plugin/
-.codex-plugin/
-.factory-plugin/
 .tasks.json
 .playwright-mcp/
 .playwright-cli/
