@@ -39,6 +39,7 @@ specialists: {}
 chains:
   budget:
     query:
+      - ollama/llama2
       - codex/gpt-4o-mini
       - gemini/gemini-2.5-flash
       - groq/llama-3.3-70b-versatile
@@ -46,10 +47,12 @@ chains:
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     research:
+      - ollama/llama2
       - anthropic/claude-haiku-4-5-20251001
       - gemini/gemini-2.5-flash
       - openai/gpt-4o-mini
     generate:
+      - ollama/llama2
       - codex/gpt-4o-mini
       - gemini/gemini-2.5-flash
       - deepseek/deepseek-chat
@@ -57,6 +60,7 @@ chains:
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     analyze:
+      - ollama/llama2
       - codex/gpt-4o-mini
       - gemini/gemini-2.5-flash
       - deepseek/deepseek-reasoner
@@ -64,6 +68,7 @@ chains:
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     code:
+      - ollama/llama2
       - codex/gpt-4o-mini
       - deepseek/deepseek-chat
       - gemini/gemini-2.5-flash
@@ -85,6 +90,7 @@ chains:
 
   balanced:
     query:
+      - ollama/llama2
       - codex/gpt-4o
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
@@ -92,10 +98,12 @@ chains:
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     research:
+      - ollama/llama2
       - anthropic/claude-sonnet-4-6
       - gemini/gemini-2.5-pro
       - openai/gpt-4o
     generate:
+      - ollama/llama2
       - codex/gpt-4o
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
@@ -104,6 +112,7 @@ chains:
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     analyze:
+      - ollama/llama2
       - codex/gpt-4o
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-reasoner
@@ -111,6 +120,7 @@ chains:
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     code:
+      - ollama/llama2
       - codex/gpt-4o
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
@@ -133,6 +143,7 @@ chains:
 
   premium:
     query:
+      - ollama/llama2
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
       - deepseek/deepseek-chat
@@ -141,10 +152,12 @@ chains:
       - openai/o3
       - xai/grok-3
     research:
+      - ollama/llama2
       - anthropic/claude-opus-4-6
       - gemini/gemini-2.5-pro
       - openai/o3
     generate:
+      - ollama/llama2
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
       - deepseek/deepseek-chat
@@ -152,12 +165,14 @@ chains:
       - openai/gpt-4o
       - openai/o3
     analyze:
+      - ollama/llama2
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
       - deepseek/deepseek-reasoner
       - gemini/gemini-2.5-pro
       - openai/o3
     code:
+      - ollama/llama2
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
       - deepseek/deepseek-reasoner
