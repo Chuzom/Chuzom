@@ -151,7 +151,14 @@ exclude = [
     "AUDIT_FINDINGS.txt",
     "CHUZOM_AUDIT_REPORT.md",
     "STUCK_PATTERNS_ANALYSIS.md",
+    "CHUZOM_ROADMAP.md",
     ".audit/",
+    # Infrastructure (deployment-only, not needed for pip install)
+    "Dockerfile",
+    "docker-compose.yml",
+    ".dockerignore",
+    # Enterprise source code (public distribution only includes public features)
+    "src/chuzom/enterprise/",
     # Dev-only directories
     "tests/",
     "scripts/",
