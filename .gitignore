@@ -30,6 +30,9 @@ Thumbs.db
 # Editor / IDE caches
 .claude/tasks/
 .claude/task-list.md
+.claude-plugin/
+.codex-plugin/
+.factory-plugin/
 .tasks.json
 .playwright-mcp/
 .playwright-cli/
