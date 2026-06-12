@@ -7,7 +7,6 @@ Enterprise code registers a concrete redactor at bootstrap time.
 from __future__ import annotations
 
 import os
-import pytest
 
 from chuzom.plugins.redaction import (
     Redactor,
@@ -140,6 +139,11 @@ class TestMaybeRedactFailureHandling:
         os.environ.pop("CHUZOM_REDACTION", None)
         register_redactor(FailingRedactor())
 
+    def teardown_method(self):
+        """Clear registry after test to avoid pollution."""
+        import chuzom.plugins.redaction as r
+        r._REDACTORS.clear()
+
     def test_failing_redactor_fails_open(self):
         """If plugin.redact_prompt() raises, return prompt unchanged."""
         os.environ["CHUZOM_REDACTION"] = "on"
@@ -152,23 +156,23 @@ class TestMaybeRedactFailureHandling:
 class TestEnterpriseBootstrap:
     """Test that enterprise bootstrap registers the redactor correctly."""
 
-    def test_enterprise_bootstrap_registers_redactor(self):
-        """After importing chuzom.enterprise, redactor is registered."""
-        # Clear registry first
+    def setup_method(self):
+        """Ensure registry has enterprise redactor."""
         import chuzom.plugins.redaction as r
         r._REDACTORS.clear()
+        # Re-import enterprise to re-run bootstrap
+        import importlib
+        import chuzom.enterprise
+        importlib.reload(chuzom.enterprise)
 
-        # Import enterprise (which calls bootstrap in __init__)
-        import chuzom.enterprise  # noqa: F401
-
-        # Redactor should now be registered
+    def test_enterprise_bootstrap_registers_redactor(self):
+        """Enterprise bootstrap registers redactor on module import."""
+        # After reload, redactor should be registered
         redactor = get_redactor()
         assert redactor is not None
 
     def test_enterprise_redactor_redacts_api_keys(self):
         """Enterprise redactor should redact known API key patterns."""
-        import chuzom.enterprise  # noqa: F401
-
         os.environ["CHUZOM_REDACTION"] = "on"
         prompt = "Use this key: sk-ant-abcd1234efgh5678ijkl9012"
         text, counts = maybe_redact(prompt)

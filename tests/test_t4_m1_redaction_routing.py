@@ -30,6 +30,9 @@ from typing import Any
 
 import pytest
 
+# Import enterprise to trigger redactor bootstrap (C-1 plugin seam)
+import chuzom.enterprise  # noqa: F401
+
 from chuzom import router as router_mod
 from chuzom.audit_routing import reset_audit_log_for_tests
 from chuzom.enterprise.audit import AuditLog
@@ -305,16 +308,16 @@ async def test_redaction_failure_does_not_break_turn(
 ) -> None:
     """A broken redactor must not break the turn — the original
     prompt is sent and the call proceeds."""
+    from chuzom.plugins.redaction import Redactor, RedactionResult, register_redactor
+
     monkeypatch.setenv("CHUZOM_REDACTION", "on")
 
-    def _boom(prompt: str, policy: Any = None) -> Any:
-        raise RuntimeError("redactor died")
+    class BrokenRedactor(Redactor):
+        def redact_prompt(self, prompt: str) -> RedactionResult:
+            raise RuntimeError("redactor died")
 
-    # Patch the underlying redact_prompt; maybe_redact swallows the
-    # exception and returns the original.
-    monkeypatch.setattr(
-        "chuzom.redaction_routing.redact_prompt", _boom
-    )
+    # Register a broken redactor; maybe_redact swallows the exception and returns original.
+    register_redactor(BrokenRedactor())
 
     captured: list[str] = []
 
