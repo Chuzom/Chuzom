@@ -12,7 +12,6 @@ from typing import Any
 from textual.message import Message
 
 
-@dataclass
 class StreamEventMessage(Message):
     """Message carrying a RouterStreamEvent for TUI display.
 
@@ -20,15 +19,12 @@ class StreamEventMessage(Message):
     Listeners can subscribe to specific event types via the event's type field.
     """
 
-    event: dict[str, Any]
-    correlation_id: str = ""
-    sequence: int = 0
-
-    def __post_init__(self) -> None:
-        """Extract event metadata for routing to handlers."""
+    def __init__(self, event: dict[str, Any]) -> None:
+        """Initialize with a router event."""
         super().__init__()
-        self.correlation_id = self.event.get("correlation_id", "")
-        self.sequence = self.event.get("seq", 0)
+        self.event = event
+        self.correlation_id = event.get("correlation_id", "")
+        self.sequence = event.get("seq", 0)
 
 
 @dataclass

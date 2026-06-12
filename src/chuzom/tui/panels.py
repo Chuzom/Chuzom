@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.reactive import reactive
-from textual.widgets import Static, RichLog
+from textual.widgets import Static, RichLog, DataTable
+from rich.console import RenderableType
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
@@ -30,7 +32,7 @@ class TimelinePanel(Static):
     """
 
     stages: reactive[list[dict[str, Any]]] = reactive(
-        default_factory=list, recompose=True
+        [], recompose=True
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -108,24 +110,18 @@ class OutputPanel(Static):
       - Scrollable with line wrapping
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize output panel."""
-        super().__init__(*args, **kwargs)
-        self.log: RichLog = RichLog(wrap=True, markup=True, highlight=True)
-        self.accumulated_text = ""
-        self.in_code_block = False
-        self.code_language = ""
-        self.code_buffer = ""
-        self.thinking_blocks: list[str] = []
+    accumulated_text: str = ""
+    in_code_block: bool = False
+    code_language: str = ""
+    code_buffer: str = ""
+    thinking_blocks: list[str] = []
+
+    def compose(self) -> ComposeResult:
+        """Compose the output panel with a RichLog."""
+        yield RichLog(wrap=True, markup=True, highlight=True, id="output-log")
 
     def append_text(self, text: str) -> None:
-        """Append text to the output stream.
-
-        Handles:
-          - Code block detection (```python ... ```)
-          - Thinking block extraction (<thinking>...</thinking>)
-          - Progressive rendering
-        """
+        """Append text to the output stream."""
         self.accumulated_text += text
 
         # Check for thinking blocks (Claude)
@@ -137,32 +133,27 @@ class OutputPanel(Static):
             self._handle_code_block()
         else:
             # Regular text output
-            self.log.write(Text(text, style="default"))
+            log: RichLog = self.query_one("#output-log", RichLog)
+            log.write(Text(text, style="default"))
 
     def _handle_code_block(self) -> None:
         """Handle code block formatting."""
-        # Simplified: in production, would properly parse and syntax highlight
+        log: RichLog = self.query_one("#output-log", RichLog)
         lines = self.accumulated_text.split("\n")
         for line in lines:
             if line.startswith("```"):
-                # Code block marker
                 self.in_code_block = not self.in_code_block
                 if self.in_code_block:
-                    # Extract language
                     parts = line.split("```")
                     self.code_language = parts[1].strip() if len(parts) > 1 else ""
             elif self.in_code_block:
-                # Inside code block
                 self.code_buffer += line + "\n"
             else:
-                # Regular text
-                self.log.write(Text(line + "\n", style="default"))
+                log.write(Text(line + "\n", style="default"))
 
-    def render(self) -> Panel:
-        """Render the output panel."""
-        return Panel(
-            self.log, title="💬 Live Output", border_style="cyan", expand=True
-        )
+    def render(self) -> RenderableType:
+        """Render the panel content."""
+        return Text(self.accumulated_text or "(Waiting for output...)", style="default")
 
 
 class MetricsPanel(Static):
