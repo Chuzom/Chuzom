@@ -1,0 +1,21 @@
+"""Chuzom TUI — Modern Terminal User Interface for v0.3.3+.
+
+Modern dashboard for real-time streaming visualization with:
+  - Live output streaming panel with syntax highlighting
+  - Route progress timeline with stage indicators
+  - Real-time metrics (tokens, cost, latency, throughput)
+  - Interactive session replay and cost analysis
+  - Full keyboard navigation
+
+Framework: Textual (TUI framework) + Rich (formatting) + Plotext (charts)
+"""
+
+from __future__ import annotations
+
+__version__ = "0.3.3"
+__all__ = [
+    "ChuzomDashboard",
+    "run_dashboard",
+]
+
+from chuzom.tui.app import ChuzomDashboard, run_dashboard

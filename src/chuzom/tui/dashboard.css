@@ -1,0 +1,175 @@
+/* Chuzom TUI Dashboard Styling */
+
+/* Overall app styling */
+App {
+    background: $surface;
+    color: $text;
+}
+
+/* Main grid layout */
+#main-grid {
+    grid-size: 2 2;
+    grid-template-columns: 1fr 2fr;
+    grid-template-rows: 3fr 1fr;
+    grid-gap: 1;
+    padding: 1;
+}
+
+/* Container styling */
+Container {
+    border: thick $accent;
+    background: $panel;
+}
+
+/* Panel titles */
+.panel-title {
+    color: $accent;
+    text-style: bold;
+    padding: 0 1;
+    background: $boost;
+}
+
+/* Timeline panel */
+#container-timeline {
+    grid-area: 1 / 1;
+}
+
+#timeline-panel {
+    width: 100%;
+    height: 100%;
+    color: $text;
+}
+
+/* Output panel */
+#container-output {
+    grid-area: 1 / 2;
+}
+
+#output-panel {
+    width: 100%;
+    height: 100%;
+}
+
+/* Metrics panel */
+#container-metrics {
+    grid-area: 2 / 1;
+}
+
+#metrics-panel {
+    width: 100%;
+}
+
+/* Actions panel */
+#container-actions {
+    grid-area: 2 / 2;
+    vertical-align: top;
+}
+
+/* Button styling */
+Button {
+    margin: 0 1;
+}
+
+Button:focus {
+    background: $accent;
+    color: $text;
+}
+
+Button.primary {
+    background: $success;
+    color: $text;
+}
+
+Button.primary:hover {
+    background: $accent;
+}
+
+/* RichLog widget */
+RichLog {
+    border: solid $primary;
+    scrollbar-color: $accent;
+}
+
+/* Header and Footer */
+Header {
+    background: $accent;
+    color: $text;
+}
+
+Footer {
+    background: $surface;
+    color: $text;
+}
+
+/* Status colors */
+.status-success {
+    color: $success;
+}
+
+.status-failed {
+    color: $error;
+}
+
+.status-pending {
+    color: $warning;
+}
+
+.status-committed {
+    color: $accent;
+    text-style: bold;
+}
+
+/* Tables */
+DataTable {
+    height: 100%;
+}
+
+DataTable > .datatable--header {
+    background: $boost;
+    color: $text;
+}
+
+DataTable > .datatable--cursor {
+    background: $accent;
+}
+
+/* Text styles */
+.error {
+    color: $error;
+}
+
+.success {
+    color: $success;
+}
+
+.warning {
+    color: $warning;
+}
+
+.info {
+    color: $accent;
+}
+
+/* Responsive layout - stack vertically on small screens */
+@media (max-width: 120) {
+    #main-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+    }
+
+    #container-timeline {
+        grid-area: 1 / 1;
+    }
+
+    #container-output {
+        grid-area: 2 / 1;
+    }
+
+    #container-metrics {
+        grid-area: 3 / 1;
+    }
+
+    #container-actions {
+        grid-area: 4 / 1;
+    }
+}

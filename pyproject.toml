@@ -64,6 +64,7 @@ code-context = [
 ]
 tui = [
     "textual>=0.80.0",
+    "plotext>=5.2.0",
 ]
 # Multi-instance budget coordination via Postgres (T2-XL1 / Phase 3b).
 # Pulled in lazily so the SQLite single-instance default stays minimal.
