@@ -27,8 +27,8 @@ Usage:
     chuzom savings-report --period week  — weekly savings report
     chuzom doctor           — check that everything is wired up correctly
     chuzom demo             — show routing decisions for sample prompts
-    chuzom dashboard        — start the web dashboard at localhost:7337
-    chuzom dashboard --port 7338  — use a custom port
+    chuzom dashboard        — launch interactive TUI dashboard (real-time monitoring)
+    chuzom dashboard --web [--port 7338]  — legacy web dashboard at localhost:7337
     chuzom set-enforce <mode>  — switch enforcement mode (smart|soft|hard|off)
     chuzom team report [period]  — show team savings report (default: week)
     chuzom team push [period]    — push report to Slack/Discord/Telegram/webhook

@@ -13,13 +13,11 @@ from __future__ import annotations
 
 import asyncio
 from typing import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from chuzom.providers import ProviderStreamEvent
 from chuzom.streaming_types import RouterStreamEvent
-from chuzom.types import TaskType, RoutingProfile, Complexity
 
 
 class MockProviderStream:

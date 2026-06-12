@@ -31,7 +31,6 @@ def maybe_launch_tui(
     Returns:
         Coroutine for the routing operation (TUI or text-based)
     """
-    import asyncio
 
     if not watch:
         # Classic text-based output

@@ -13,9 +13,8 @@ from typing import Optional
 
 from rich.console import Console
 from rich.status import Status
-from rich.text import Text
 
-from chuzom.ui.theme import PALETTE, styled_text, progress_bar
+from chuzom.ui.theme import PALETTE, progress_bar
 
 
 class RoutingStatusSpinner:

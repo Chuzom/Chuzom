@@ -14,7 +14,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.console import Group
 
-from chuzom.ui.theme import PALETTE, progress_bar, divider
+from chuzom.ui.theme import PALETTE, progress_bar
 
 
 class SessionSummaryDashboard:
@@ -26,7 +26,7 @@ class SessionSummaryDashboard:
 
     def render_header(self, timestamp: str = "") -> RenderableType:
         """Render header panel with title and timestamp."""
-        header_text = f"🎯  Routing Summary"
+        header_text = "🎯  Routing Summary"
         if timestamp:
             header_text += f"\n{timestamp}"
 

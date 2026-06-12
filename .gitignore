@@ -90,7 +90,8 @@ bench/results/
 .release-state.json
 release-notes-draft.md
 
-# Local documentation (user-specific internal notes)
+# Internal documentation (development, reports, demos — never commit)
+.internal/
 docs-private/
 private-docs/
 internal-notes.md

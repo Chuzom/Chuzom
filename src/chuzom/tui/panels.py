@@ -11,14 +11,12 @@ from __future__ import annotations
 from typing import Any
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
 from textual.reactive import reactive
-from textual.widgets import Static, RichLog, DataTable
+from textual.widgets import Static, RichLog
 from rich.console import RenderableType
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
-from rich.syntax import Syntax
 
 
 class TimelinePanel(Static):

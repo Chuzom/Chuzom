@@ -7,19 +7,15 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from rich.console import Console
-from rich.table import Table
 from rich.text import Text
 from rich.panel import Panel
 from rich.console import Group
 
-from chuzom.ui.theme import PALETTE, progress_bar, divider
-from chuzom.dashboard_data import query_window
+from chuzom.ui.theme import PALETTE, progress_bar
 
 
 class PremiumStatusCommand:

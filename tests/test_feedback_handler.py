@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
 
 from chuzom.feedback_handler import FeedbackHandler, TimelineEvent
 

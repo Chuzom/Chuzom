@@ -2725,16 +2725,7 @@ async def _call_media(
 #   - No recursion risk from streaming: each provider stream is independent
 
 from chuzom.streaming_types import (
-    EventType,
     RouterStreamEvent,
-    BaseEvent,
-    AttemptStarted,
-    AttemptCommitted,
-    OutputDelta,
-    AttemptFailed,
-    UsageFinal,
-    RouteCompleted,
-    RouteAborted,
 )
 
 
@@ -2836,8 +2827,8 @@ async def route_and_stream(
         except Exception as e:
             log.warning("RBAC audit write failed: %s", e)
         raise PermissionError(
-            f"RBAC: You don't have permission to route prompts. "
-            f"Contact your admin or set CHUZOM_RBAC_MODE=warn."
+            "RBAC: You don't have permission to route prompts. "
+            "Contact your admin or set CHUZOM_RBAC_MODE=warn."
         )
 
     # ── PREFLIGHT: Deadline check ─────────────────────────────────────────
@@ -2858,14 +2849,13 @@ async def route_and_stream(
     effective_complexity = c.value if hasattr(c, "value") else str(complexity_hint or "moderate")
 
     # ── Build model chain ──────────────────────────────────────────────────
-    models_to_try = await resolve_model_chain(
-        task_type=task_type,
-        profile=profile,
-        prompt=prompt,
-        model_override=model_override,
-        classification_data=classification_data,
-        complexity_hint=c,
-        config=config,
+    models_to_try = get_model_chain(
+        profile,
+        task_type,
+        failure_rates=None,
+        latency_stats=None,
+        acceptance_scores=None,
+        is_subscription_mode=config.chuzom_claude_subscription or config.chuzom_gemini_subscription,
     )
 
     if not models_to_try:

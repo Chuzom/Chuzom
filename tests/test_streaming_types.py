@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 
 from chuzom.streaming_types import (
-    BaseEvent,
     EventType,
-    OutputDelta,
-    RouteAborted,
-    RouteCompleted,
-    RouteStarted,
     is_valid_event_type,
     payload_type_for,
     required_keys_for,

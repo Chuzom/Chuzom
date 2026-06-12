@@ -41,8 +41,6 @@ def styled_text(text: str, style: str = "primary") -> str:
     Returns:
         ANSI-escaped text with color
     """
-    from rich.console import Console
-    from rich.text import Text
 
     colors = {
         "primary": PALETTE.text_primary,
@@ -84,8 +82,5 @@ def divider(width: int = 70) -> str:
 
 def header(title: str, width: int = 70) -> str:
     """Render a styled header."""
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.text import Text
 
     return f"[{PALETTE.accent}]█ {title}[/]"

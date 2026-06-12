@@ -3,12 +3,18 @@
 
 This script prevents wasted GitHub Actions minutes by catching common release
 issues in advance:
+- Code linting (ruff) — auto-fixes what it can
 - Version mismatches across plugin manifests
 - Uncommitted changes
 - Missing changelog entries
 - Common code issues (debug code, secrets)
+- Version-critical tests
 
 Run this BEFORE `python scripts/release.py <version>`
+
+Usage:
+  python scripts/pre-release-checklist.py        # Run all checks
+  python scripts/pre-release-checklist.py --skip-tests  # Skip expensive tests
 """
 
 from __future__ import annotations
@@ -285,6 +291,57 @@ def check_no_secrets() -> CheckResult:
     return result
 
 
+def check_linting() -> CheckResult:
+    """Run ruff linting and report issues."""
+    result = CheckResult("Code Linting (ruff)")
+
+    try:
+        # First, auto-fix what we can
+        fix_result = subprocess.run(
+            ["uv", "run", "ruff", "check", "src/", "tests/", "--fix"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        # Then check if there are remaining issues
+        check_result = subprocess.run(
+            ["uv", "run", "ruff", "check", "src/", "tests/"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if check_result.returncode == 0:
+            result.pass_check("All linting checks passed")
+            if fix_result.stdout:
+                result.info("Auto-fixed issues with --fix")
+        else:
+            # Parse ruff output to count errors
+            errors = check_result.stderr + check_result.stdout
+            error_count = len([line for line in errors.split("\n") if "error" in line.lower()])
+
+            result.fail_check(f"Linting failed with {error_count} errors")
+            result.info("Run: uv run ruff check src/ tests/ --fix")
+            result.info("Then fix remaining issues manually")
+
+            # Show first few errors
+            for line in errors.split("\n")[:5]:
+                if line.strip() and ("error" in line.lower() or "F401" in line or "E402" in line):
+                    result.info(f"  {line[:100]}")
+
+    except FileNotFoundError:
+        result.fail_check("ruff not found — install with: uv pip install ruff")
+    except subprocess.TimeoutExpired:
+        result.fail_check("Linting check timed out (>60s)")
+    except Exception as e:
+        result.fail_check(f"Linting check failed: {e}")
+
+    return result
+
+
 def check_tests_pass() -> CheckResult:
     """Run version-critical tests locally."""
     result = CheckResult("Version Tests (local)")
@@ -394,6 +451,7 @@ def main(argv: list[str] | None = None) -> int:
         check_git_status(),
         check_version_sync(),
         check_changelog(),
+        check_linting(),
         check_no_debug_code(),
         check_no_secrets(),
     ]

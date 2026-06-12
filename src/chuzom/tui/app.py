@@ -12,19 +12,13 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.containers import Container, Grid, Vertical
 from textual.reactive import reactive
-from textual.widgets import Header, Footer, Static, RichLog, Button
+from textual.widgets import Header, Footer, Static, Button
 from textual.binding import Binding
-from rich.panel import Panel
-from rich.text import Text
-from rich.table import Table
 
 from chuzom.tui.messages import (
     StreamEventMessage,
     MetricsUpdateMessage,
-    TimelineUpdateMessage,
-    OutputDeltaMessage,
     ModalOpenMessage,
-    ModalCloseMessage,
 )
 from chuzom.tui.panels import TimelinePanel, MetricsPanel, OutputPanel
 
