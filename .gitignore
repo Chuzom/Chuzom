@@ -13,6 +13,9 @@ dist/
 build/
 *.egg-info/
 .venv/
+.venv-*/
+venv/
+venv-*/
 .coverage*
 htmlcov/
 
@@ -20,12 +23,16 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Tessera local state (per-user)
-.tessera_cache/
-.tessera_lineage/
-*.tessera.sqlite*
-.serena/
-.lore/
+# IDE / Editor local state (not needed in repo)
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
 
 # Editor / IDE caches (local development only; repo has plugin configs for tests)
 .claude/tasks/
@@ -33,6 +40,13 @@ Thumbs.db
 .tasks.json
 .playwright-mcp/
 .playwright-cli/
+
+# Tessera local state (per-user)
+.tessera_cache/
+.tessera_lineage/
+*.tessera.sqlite*
+.serena/
+.lore/
 
 # Local-only architecture & internal design notes — NEVER commit
 # (User explicitly requested Docs/ stay local-only)
@@ -75,3 +89,32 @@ bench/results/
 .release-cache/
 .release-state.json
 release-notes-draft.md
+
+# Local documentation (user-specific internal notes)
+docs-private/
+private-docs/
+internal-notes.md
+*.local.md
+
+# Database files (local testing only)
+*.db
+*.sqlite
+*.sqlite3
+!chuzom.db.schema
+
+# Temporary test files
+test_*.txt
+*.tmp
+temp/
+tmp/
+
+# Local environment overrides
+.env.local
+.env.*.local
+
+# macOS specific
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
