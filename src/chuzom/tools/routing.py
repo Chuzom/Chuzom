@@ -307,9 +307,11 @@ async def llm_route(
     else:
         try:
             # Notify user that classification is starting (prevents silent hangs)
+            # Use animated spinner in interactive contexts, text feedback in MCP
             await ctx.info("🔍 Analyzing task complexity...")
             classification = await classify_complexity(prompt, timeout_seconds=10.0)
-            await ctx.info(f"✓ Task classified as {classification.complexity.value} (inferred: {classification.inferred_task_type or 'generic'})")
+            task_type_label = classification.inferred_task_type.value if classification.inferred_task_type else "generic"
+            await ctx.info(f"✓ Classified: {classification.complexity.value}/{task_type_label} ({classification.confidence:.0%} confidence)")
         except Exception as e:
             await ctx.warning(f"Classification failed: {e} — defaulting to moderate")
             classification = ClassificationResult(
@@ -400,6 +402,11 @@ async def llm_route(
         cost=resp.cost_usd,
         reason=classification.reasoning,
     )
+
+    # Show routing completion with model decision
+    model_short = resp.model.split("/")[-1] if "/" in resp.model else resp.model
+    await ctx.info(f"→ Routing to {model_short}")
+    await ctx.info(f"✓ Routed to {model_short} ({profile.value} profile)")
 
     # Log routing decision to database for savings tracking
     try:
