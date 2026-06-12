@@ -59,7 +59,7 @@ class FeedbackHandler:
         # Phase 1: Token Counter & ETA
         self.token_count: int = 0
         self.tokens_per_second: float = 0.0
-        self.estimated_total_tokens: Optional[int] = None
+        self.estimated_total_tokens: int = 0
 
         # Phase 2: Activity Timeline
         self.timeline: list[TimelineEvent] = []
