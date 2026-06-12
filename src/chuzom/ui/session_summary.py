@@ -272,6 +272,8 @@ class SessionSummaryDashboard:
 
             if total_saved > 0:
                 lines.append(Text(f"  Saved: ${total_saved:.2f} via routing", style=PALETTE.success))
+        else:
+            lines.append(Text("  No cost data for this period", style=PALETTE.text_dim))
 
         content = Group(*lines)
         return Panel(content, border_style=PALETTE.muted_border, expand=False)
@@ -410,24 +412,24 @@ class SessionSummaryDashboard:
             )
             panels.append(Text(""))
 
-        if daily_costs:
-            panels.append(self.render_cost_sparkline(daily_costs, total_saved))
-            panels.append(Text(""))
+        # Always show cost sparkline (even if empty, shows "No historical data yet")
+        panels.append(self.render_cost_sparkline(daily_costs or [], total_saved))
+        panels.append(Text(""))
 
-        if model_breakdown:
-            panels.append(self.render_model_breakdown(model_breakdown))
-            panels.append(Text(""))
+        # Always show model breakdown (even if empty, shows "No model data yet")
+        panels.append(self.render_model_breakdown(model_breakdown or {}))
+        panels.append(Text(""))
 
-        if claude_quota_pct > 0 or gemini_quota_pct > 0:
-            panels.append(
-                self.render_quota_status(
-                    claude_quota_pct=claude_quota_pct,
-                    gemini_quota_pct=gemini_quota_pct,
-                    claude_remaining=claude_remaining,
-                    gemini_remaining=gemini_remaining,
-                )
+        # Always show quota status (even if unused)
+        panels.append(
+            self.render_quota_status(
+                claude_quota_pct=claude_quota_pct,
+                gemini_quota_pct=gemini_quota_pct,
+                claude_remaining=claude_remaining,
+                gemini_remaining=gemini_remaining,
             )
-            panels.append(Text(""))
+        )
+        panels.append(Text(""))
 
         if daily_calls or daily_tokens:
             panels.append(
