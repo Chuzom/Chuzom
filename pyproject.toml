@@ -1,7 +1,7 @@
 [project]
 name = "chuzom-router"
-version = "0.3.1"
-description = "Lightweight signal-driven LLM router for Claude Code, Cursor, Codex, Gemini CLI, and Codex CLI."
+version = "0.3.2"
+description = "Lightweight signal-driven LLM router for Claude Code, Cursor, Codex, Gemini CLI, and Codex CLI. Now with real-time streaming dashboards!"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
