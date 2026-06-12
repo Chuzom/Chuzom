@@ -1,6 +1,64 @@
-# Public Chuzom v0.3.0 — Hardening Phases
+# Public Chuzom v0.3.0 — Option B Roadmap
 
-This document outlines the 5-phase hardening roadmap to take Chuzom from "feature-complete but rough" to "production-ready for developers."
+**Strategy: Complete Plugin Architecture → Benchmark → Release as Beta**
+
+This document outlines the revised roadmap: finish the plugin seam (C-1/C-2/C-3), validate with RouterArena, then release `v0.3.0-beta` with performance benchmarks.
+
+## Pre-Release: Plugin Architecture & Validation
+
+### C-1: Redaction Plugin Seam (✅ MERGED)
+- Inverted `redaction_routing.py` to use registry
+- All redaction tests pass
+
+### C-2: Audit Plugin Seam (🔄 PR #94, awaiting merge)
+- Inverted `audit_routing.py` to use registry
+- Lazy AuditLog initialization for test compatibility
+- All audit tests pass
+
+### C-3: Quota Plugin Seam (📋 PLANNED)
+**Scope:** Abstract quota backend so router logic is agnostic to storage (SQLite vs Postgres).
+
+**Deliverables:**
+- [ ] `QuotaBackend` Protocol in `src/chuzom/plugins/quotas.py`
+- [ ] Registry/factory pattern for backend selection
+- [ ] Refactor existing SQLite quota logic into `SQLiteQuotaBackend`
+- [ ] Refactor private Postgres backend to implement `QuotaBackend`
+- [ ] Integration into `route_and_call()` quota check
+- [ ] Tests for the protocol + both backends
+
+**Effort:** 3-5 days (similar scope to C-1/C-2)  
+**Merge criteria:** All quota tests pass, no enterprise code leaked into public
+
+### RouterArena Benchmark (📋 PLANNED)
+**Goal:** Validate chuzom's cost-saving claim with objective data vs alternatives.
+
+**Deliverables:**
+- [ ] `scripts/run_router_benchmark.py` — runs chuzom through benchmark dataset
+- [ ] Baseline comparisons (vs always-expensive, always-cheap)
+- [ ] Key metrics:
+  - **Pareto frontier chart** (cost vs quality) — PRIMARY
+  - **Cost savings %** — headline claim (e.g., "70% cost reduction")
+  - **Routing accuracy** — % of correct model choices
+  - **Latency overhead** — p95/p99 (target: <50ms)
+- [ ] `docs/benchmarks.md` — detailed methodology + results
+- [ ] README update with benchmark summary + embedded graph
+
+**Effort:** 4-6 days initial + 2-3 iterations (tune routing, re-run, analyze)  
+**Success criteria:** Results show chuzom in top-left quadrant (high quality, low cost)
+
+### Release: v0.3.0-beta
+**Why beta?** Signals feature-complete & validated, but API unstable + ongoing hardening.
+
+- [ ] Tag `v0.3.0-beta` on GitHub
+- [ ] Publish to PyPI
+- [ ] Announce with benchmark results as primary marketing asset
+- [ ] Gather early adopter feedback
+
+---
+
+## Post-Beta: Hardening Phases (v0.3.0 stable)
+
+Once beta is live and you're collecting user feedback, run hardening phases in parallel.
 
 ## Phase 1: Isolation & Cleanup (1-2 PRs)
 
@@ -95,37 +153,27 @@ This document outlines the 5-phase hardening roadmap to take Chuzom from "featur
 
 ---
 
-## Phase 5: Release (1 PR + release management)
+## Phase 5: Security & API Polish (1-2 PRs)
 
-**Goal:** Tag v0.3.0-public, publish to PyPI, launch.
+**Goal:** Ensure public API is production-ready (docs, types, security).
 
-- [ ] CHANGELOG.md updated with v0.3.0-public release notes
-- [ ] Tag v0.3.0-public on GitHub
-- [ ] Publish to PyPI: `python -m build && twine upload dist/*`
-- [ ] Verify installable: `pip install chuzom-router==0.3.0`
-- [ ] Smoke test public package
-- [ ] Announce on social channels (if desired)
-- [ ] Monitor for issues + performance reports in first week
-- [ ] Keep public GitHub issues enabled for feedback
+- [ ] Security audit of routing core (input validation, edge cases)
+- [ ] Full docstrings on all public functions
+- [ ] Full type hints on all public APIs
+- [ ] Remove any lingering enterprise dependencies
+- [ ] Phase 2-3 tests added for critical paths
 
-**Owner:** Yali (release lead)  
-**Timeline:** Week 4-5  
-**Merge criteria:** All prior phases complete, smoke tests pass
+**Owner:** Yali  
+**Timeline:** Week 3-4 (in parallel with beta usage feedback)  
+**Merge criteria:** Security audit complete, 90%+ API documented
 
 ---
 
-## Post-Release: Monitoring & Enterprise Backlog
+## Enterprise Backlog (Hidden, Post-Beta)
 
-### Public Monitoring
-- Watch GitHub issues for bug reports
-- Monitor PyPI download stats
-- Collect user feedback on API usability
-- Fast-track critical security fixes
-
-### Enterprise Backlog
 Keep private in `docs-private/` + private `chuzom-enterprise` repo:
 - SCIM/OIDC multi-tenant provisioning
-- RBAC + admin dashboard
+- RBAC + admin dashboard  
 - Hash-chained audit logging
 - Postgres multi-instance quota coordination
 - Advanced analytics + usage insights
@@ -134,24 +182,34 @@ This backlog remains **hidden from public GitHub** until enterprise license mode
 
 ---
 
-## Success Criteria
+## Timeline Summary (Option B)
 
-| Phase | Definition of Done |
-|-------|-------------------|
-| 1 | Public + enterprise cleanly separated, tests isolated |
-| 2 | Core routing hardened, 90%+ documented, security audit passed |
-| 3 | Comprehensive public docs, examples runnable |
-| 4 | 85%+ test coverage, benchmarks published, CI gates enforced |
-| 5 | v0.3.0-public live on PyPI, initial feedback collected |
+### Pre-Release (1-2 weeks)
+- **This week:** C-2 merge, C-3 implementation begins
+- **Week 1:** C-3 complete, RouterArena setup begins
+- **Week 1-2:** RouterArena benchmark runs + iterations
+- **End of Week 2:** **v0.3.0-beta released to PyPI**
+
+### Post-Beta (Parallel with Usage Feedback)
+- **Week 2-3:** Phase 5 hardening (security, docs, types)
+- **Week 3-4:** Collect early adopter feedback, iterate on API
+- **Week 4-5:** **v0.3.0 stable released**
 
 ---
 
-## Timeline Summary
+## Success Criteria
 
-- **This week:** Phase 1 (✓ mostly done)
-- **Week 1-2:** Phase 2 (hardening)
-- **Week 2-3:** Phase 3 (docs)
-- **Week 3-4:** Phase 4 (testing + CI)
-- **Week 4-5:** Phase 5 (release)
+| Milestone | Definition of Done |
+|-----------|-------------------|
+| **C-3** | Quota plugin seam complete, all quota tests pass |
+| **RouterArena** | Pareto frontier shows cost savings claim validated |
+| **v0.3.0-beta** | Live on PyPI, benchmark results in README |
+| **v0.3.0 stable** | Full API documented, security audit passed |
 
-**Target Public Release:** End of week 5
+---
+
+## Release Marketing Hook
+
+**v0.3.0-beta headline:** "35–70% cost reduction on LLM workloads. Routed to the cheapest model that can do the job. Benchmarked against Claude Opus."
+
+With RouterArena data, you have an objective foundation for this claim—not just marketing rhetoric.
