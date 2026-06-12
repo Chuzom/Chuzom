@@ -1540,10 +1540,40 @@ def main() -> None:
             # Create console to capture output
             console = Console(record=True, file=io.StringIO())
             dashboard = SessionSummaryDashboard(console=console)
+
+            # Gather 14-day cost data
+            daily_14d_data = report_data.get("daily_14d", [])
+            daily_costs = [d[3] for d in daily_14d_data]  # Extract costs from (day, calls, tokens, cost)
+            total_saved = sum(daily_costs)
+
+            # Gather model breakdown from report data
+            model_breakdown = {}
+            if report_data.get("paid_rows"):
+                tools_data = report_data.get("tools", {})
+                total_model_calls = sum(t["count"] for t in tools_data.values())
+                if total_model_calls > 0:
+                    for task, data in tools_data.items():
+                        for model, count in data.get("models", {}).items():
+                            pct = (count / total_model_calls) * 100
+                            model_breakdown[model] = model_breakdown.get(model, 0) + pct
+
+            # Gather quota data from Claude subscription
+            claude_quota_pct = current.get("weekly_pct", 0.0) * 100 if current else 0.0
+            gemini_quota_pct = 0.0  # Placeholder for future Gemini integration
+            claude_remaining = current.get("session_resets_at", "Unknown") if current else "Unknown"
+            gemini_remaining = "Unknown"
+
             dashboard.print_dashboard(
                 timestamp=f"Session · {datetime.now(timezone.utc).isoformat()}",
                 decisions=dashboard_decisions,
                 savings=dashboard_savings,
+                daily_costs=daily_costs if daily_costs else None,
+                total_saved=total_saved,
+                model_breakdown=model_breakdown if model_breakdown else None,
+                claude_quota_pct=claude_quota_pct,
+                gemini_quota_pct=gemini_quota_pct,
+                claude_remaining=claude_remaining,
+                gemini_remaining=gemini_remaining,
                 daily_calls=[],
                 daily_tokens=[],
                 models=[],
