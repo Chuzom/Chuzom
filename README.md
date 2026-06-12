@@ -133,7 +133,24 @@ chuzom --version
 
 ## Tests & contributing
 
-Full suite runs in CI on every push across Python 3.11 + 3.13. Contributions welcome — see [`CONTRIBUTING.md`](https://github.com/Chuzom/chuzom/blob/main/CONTRIBUTING.md).
+### Running tests
+
+This package is **public open-source** with an **enterprise control plane** as optional backlog (SCIM/OIDC, RBAC, Postgres multi-instance, etc.). The test suite is split accordingly:
+
+- **Public tests** (`tests/`): Developer router features (routing, quotas, redaction)
+- **Enterprise tests** (`tests/enterprise/`): RBAC, audit chain, admin API, SCIM/OIDC
+
+The default `pytest` runs only the **public** test suite:
+
+```bash
+pytest                    # Run public tests (fast)
+pytest tests/enterprise   # Run enterprise tests (requires Docker for Postgres)
+pytest tests/             # Run all tests
+```
+
+For CI on public distributions, only `tests/` is run. Enterprise CI runs the full suite.
+
+Full test suite runs in CI on every push across Python 3.11 + 3.13. Contributions welcome — see [`CONTRIBUTING.md`](https://github.com/Chuzom/chuzom/blob/main/CONTRIBUTING.md).
 
 ## License
 
