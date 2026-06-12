@@ -20,7 +20,14 @@ from chuzom.tui.messages import (
     MetricsUpdateMessage,
     ModalOpenMessage,
 )
-from chuzom.tui.panels import TimelinePanel, MetricsPanel, OutputPanel
+from chuzom.tui.panels import (
+    TimelinePanel,
+    MetricsPanel,
+    OutputPanel,
+    SparklinePanel,
+    ModelBreakdownPanel,
+    QuotaPanel,
+)
 
 
 class ChuzomDashboard(App[None]):
@@ -81,25 +88,35 @@ class ChuzomDashboard(App[None]):
                 id="container-timeline",
             )
 
-            # Output panel (right column, top + middle)
+            # Output panel (right column, spans 2 rows)
             yield Container(
                 OutputPanel(id="output-panel"),
                 id="container-output",
             )
 
-            # Metrics panel (left column, bottom)
+            # Metrics panel (left column, middle)
             yield Container(
                 MetricsPanel(id="metrics-panel"),
                 id="container-metrics",
             )
 
-            # Quick actions panel (right column, bottom)
-            with Container(id="container-actions"):
-                yield Static("Quick Actions", classes="panel-title")
-                with Vertical():
-                    yield Button("💾 Save Session", id="btn-save", variant="primary")
-                    yield Button("📊 Cost Breakdown", id="btn-cost", variant="default")
-                    yield Button("🔄 Session History", id="btn-history", variant="default")
+            # Sparkline panel (left column, bottom)
+            yield Container(
+                SparklinePanel(id="sparkline-panel"),
+                id="container-sparkline",
+            )
+
+            # Model breakdown panel (right column, bottom-left)
+            yield Container(
+                ModelBreakdownPanel(id="breakdown-panel"),
+                id="container-breakdown",
+            )
+
+            # Quota panel (right column, bottom-right)
+            yield Container(
+                QuotaPanel(id="quota-panel"),
+                id="container-quota",
+            )
 
         yield Footer()
 
@@ -108,6 +125,9 @@ class ChuzomDashboard(App[None]):
         # Set initial title
         self.title = "Chuzom Router v0.3.3 — Starting..."
         self.sub_title = "Ready to route requests"
+
+        # Load and display historical data
+        self._load_historical_data()
 
         # Set focus to output panel
         self.query_one("#output-panel", OutputPanel).focus()
@@ -274,6 +294,120 @@ class ChuzomDashboard(App[None]):
         # In production, would use a Toast widget or similar
         footer: Footer = self.query_one(Footer)
         # Notification would go to footer or a dedicated notification area
+
+    def _load_historical_data(self) -> None:
+        """Load and display historical data from database."""
+        try:
+            # Load 14-day cost history
+            daily_costs = self._get_14day_costs()
+            total_savings = self._get_total_savings()
+
+            sparkline: SparklinePanel = self.query_one("#sparkline-panel", SparklinePanel)
+            sparkline.update_sparkline(daily_costs, total_savings)
+
+            # Load model breakdown
+            model_stats = self._get_model_breakdown()
+            breakdown: ModelBreakdownPanel = self.query_one("#breakdown-panel", ModelBreakdownPanel)
+            breakdown.update_breakdown(model_stats)
+
+            # Load quota information
+            claude_quota, gemini_quota = self._get_quota_usage()
+            quota: QuotaPanel = self.query_one("#quota-panel", QuotaPanel)
+            quota.update_quotas(
+                claude_quota_pct=claude_quota.get("used_pct", 0),
+                gemini_quota_pct=gemini_quota.get("used_pct", 0),
+                claude_remaining=claude_quota.get("remaining", "Unknown"),
+                gemini_remaining=gemini_quota.get("remaining", "Unknown"),
+            )
+        except Exception as e:
+            # Silently fail if data isn't available
+            pass
+
+    def _get_14day_costs(self) -> list[float]:
+        """Get daily costs for the last 14 days."""
+        try:
+            from datetime import datetime, timedelta, timezone
+            from chuzom.storage.cost_db import get_cost_db
+
+            db = get_cost_db()
+            now = datetime.now(timezone.utc)
+            costs = []
+
+            for i in range(14):
+                day_start = (now - timedelta(days=i+1)).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                day_end = day_start + timedelta(days=1)
+
+                # Query cost for that day
+                daily_cost = db.get_daily_cost(day_start, day_end)
+                costs.insert(0, daily_cost)  # Insert at beginning to maintain chronological order
+
+            return costs
+        except Exception:
+            return [0.0] * 14
+
+    def _get_total_savings(self) -> float:
+        """Get total savings (Opus-equivalent cost minus actual cost)."""
+        try:
+            from chuzom.quota_savings import get_quota_savings_snapshot
+
+            snapshot = get_quota_savings_snapshot()
+            return snapshot.weekly_savings_usd if snapshot else 0.0
+        except Exception:
+            return 0.0
+
+    def _get_model_breakdown(self) -> dict[str, float]:
+        """Get model usage breakdown by percentage."""
+        try:
+            from chuzom.storage.cost_db import get_cost_db
+            from datetime import datetime, timedelta, timezone
+
+            db = get_cost_db()
+            now = datetime.now(timezone.utc)
+            week_start = now - timedelta(days=7)
+
+            # Query model usage for last 7 days
+            model_calls = db.get_model_call_counts(week_start, now)
+            total_calls = sum(model_calls.values())
+
+            if total_calls == 0:
+                return {}
+
+            # Convert to percentages
+            model_stats = {
+                model: (count / total_calls) * 100
+                for model, count in model_calls.items()
+            }
+
+            return model_stats
+        except Exception:
+            return {}
+
+    def _get_quota_usage(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Get current quota usage for Claude and Gemini."""
+        try:
+            from chuzom.quota_savings import get_quota_savings_snapshot
+            from chuzom.claude_usage import get_claude_pressure
+
+            claude_pressure = get_claude_pressure()
+            snapshot = get_quota_savings_snapshot()
+
+            # Claude quota
+            claude_quota = {
+                "used_pct": claude_pressure.weekly_pct if claude_pressure else 0,
+                "remaining": f"{100 - (claude_pressure.weekly_pct if claude_pressure else 0):.0f}%",
+            }
+
+            # Gemini quota (estimated)
+            gemini_quota = {
+                "used_pct": 0,  # Placeholder
+                "remaining": "Unknown",
+            }
+
+            return claude_quota, gemini_quota
+        except Exception:
+            return {"used_pct": 0, "remaining": "Unknown"}, {"used_pct": 0, "remaining": "Unknown"}
 
 
 async def run_dashboard(

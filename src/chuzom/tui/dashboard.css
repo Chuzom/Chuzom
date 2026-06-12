@@ -5,6 +5,12 @@ App {
     color: $text;
 }
 
+#main-grid {
+    grid-size: 2 3;
+    grid-columns: 1fr 1fr;
+    grid-rows: 1fr 1fr 1fr;
+}
+
 Container {
     border: solid $accent;
     background: $panel;
