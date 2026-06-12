@@ -1,9 +1,9 @@
 # Chuzom — Smart LLM Routing. Save 35–80% on API Costs.
 
-![PyPI](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&label=pypi&color=4F46E5)
-![Downloads](https://img.shields.io/pepy/dd/chuzom-router?style=flat-square&label=downloads&color=10B981)
-![Tests](https://img.shields.io/github/actions/workflow/status/Chuzom/chuzom/ci.yml?style=flat-square&label=tests&color=10B981)
-![Stars](https://img.shields.io/github/stars/Chuzom/chuzom?style=flat-square&label=stars&color=F59E0B)
+[![PyPI](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&label=pypi&color=4F46E5)](https://pypi.org/project/chuzom-router/)
+[![Downloads](https://img.shields.io/pepy/dd/chuzom-router?style=flat-square&label=downloads&color=10B981)](https://pepy.tech/project/chuzom-router)
+[![Tests](https://img.shields.io/github/actions/workflow/status/Chuzom/chuzom/ci.yml?branch=main&style=flat-square&label=tests&color=10B981)](https://github.com/Chuzom/chuzom/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/Chuzom/chuzom?style=flat-square&label=stars&color=F59E0B)](https://github.com/Chuzom/chuzom)
 ![Python](https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-10B981?style=flat-square)
 
