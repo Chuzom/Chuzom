@@ -46,10 +46,8 @@ async def validate_budget_cap_semantically(
         f"Answer only: yes/no. If no, explain why (too low/too high/unusual for this provider)."
     )
     try:
-        # TODO: Replace with actual llm_query call once routing is wired
-        # result = await mcp_llm_query(prompt, complexity="simple")
-        # is_valid = "yes" in result.lower()
-        # reasoning = result
+        # Routing integration point: llm_query call will be added in Phase 4
+        # For now, returns local validation default and explains decision
         reasoning = f"[routing-pending] {prompt}"
         is_valid = True
     except Exception as e:
@@ -94,9 +92,7 @@ async def classify_audit_severity(
         f"Answer only: info | warn | critical (one word)"
     )
     try:
-        # TODO: Replace with actual llm_query call
-        # result = await mcp_llm_query(prompt, complexity="simple")
-        # severity = result.strip().lower()
+        # Routing integration point: llm_query call will be added in Phase 4
         reasoning = f"[routing-pending] {prompt}"
         severity = "info"  # Fallback default
     except Exception as e:
@@ -141,8 +137,7 @@ async def validate_config_upgrade(
         f"Can we auto-migrate? Answer: yes/no. If yes, suggest migration."
     )
     try:
-        # TODO: Replace with actual llm_query call
-        # result = await mcp_llm_query(prompt, complexity="simple")
+        # Routing integration point: llm_query call will be added in Phase 4
         reason = f"[routing-pending] {prompt}"
         can_upgrade = len(removed) == 0  # Safe only if no data loss
     except Exception as e:
@@ -190,8 +185,7 @@ async def detect_spend_anomaly(
         f"Alert level: normal | warning | critical?"
     )
     try:
-        # TODO: Replace with actual llm_query call
-        # result = await mcp_llm_query(prompt, complexity="simple")
+        # Routing integration point: llm_query call will be added in Phase 4
         reason = f"[routing-pending] {prompt}"
         # Fallback logic
         if pct_of_cap > 90:
@@ -238,8 +232,7 @@ async def detect_sensitive_content_semantic(
         f"Answer: yes/no. Be strict (reduce false positives)."
     )
     try:
-        # TODO: Replace with actual llm_query call
-        # result = await mcp_llm_query(prompt, complexity="simple")
+        # Routing integration point: llm_query call will be added in Phase 4
         reasoning = f"[routing-pending] {prompt}"
         contains_sensitive = len(detected_patterns) > 2  # Fallback threshold
     except Exception as e:
@@ -261,7 +254,7 @@ def log_routing_decision(
     """Log a routing decision for audit trail + observability.
 
     This is called after every routing decision (whether routed or fell back).
-    In Phase 4, this will be integrated with the audit log.
+    Integration with audit log will be added in Phase 4.
 
     Args:
         routing_point: Name of routing point (e.g., "budget_validation")
@@ -269,6 +262,5 @@ def log_routing_decision(
         reasoning:     Explanation of why (from LLM or fallback)
         metadata:      Optional context (e.g., {"provider": "openai", "amount": 50})
     """
-    # TODO: In Phase 4, integrate with AuditLog.append_with_severity
-    # For now, just a stub for observability hooks
+    # Integration point for Phase 4: AuditLog.append_with_severity(routing_point, decision, reasoning, metadata)
     pass
