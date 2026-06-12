@@ -30,12 +30,15 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from chuzom.enterprise.audit import AuditEvent, AuditEventType, AuditLog
 from chuzom.identity import TurnIdentity, current_identity
 from chuzom.logging import get_logger
+from chuzom.plugins.audit import get_audit_handler
 from chuzom.profile import is_enterprise
+
+if TYPE_CHECKING:
+    from chuzom.enterprise.audit import AuditEvent, AuditEventType
 
 log = get_logger("chuzom.audit_routing")
 
@@ -46,12 +49,7 @@ _AUDIT_DISABLED_ENV = "CHUZOM_AUDIT_DISABLED"
 _AFFIRMATIVE = {"1", "on", "true", "yes"}
 
 
-# Module-level singleton + a lock to make first-call construction
-# thread-safe. ``threading.Lock`` is the right tool here even though
-# routing is asyncio-driven: the singleton is shared across whatever
-# concurrent tasks happen to call ``audit_routing_turn`` first.
-_audit_log: AuditLog | None = None
-_audit_log_lock = threading.Lock()
+_audit_disabled_env = "CHUZOM_AUDIT_DISABLED"
 
 
 def _audit_disabled() -> bool:
@@ -62,29 +60,25 @@ def _audit_disabled() -> bool:
     # profile preserves the env-driven opt-out for local/test use.
     if is_enterprise():
         return False
-    return (os.environ.get(_AUDIT_DISABLED_ENV) or "").strip().lower() in _AFFIRMATIVE
-
-
-def _get_audit_log() -> AuditLog:
-    """Return the process-wide :class:`AuditLog`, constructing on first call."""
-    global _audit_log
-    if _audit_log is None:
-        with _audit_log_lock:
-            if _audit_log is None:  # re-check under lock
-                _audit_log = AuditLog()
-    return _audit_log
+    return (os.environ.get(_audit_disabled_env) or "").strip().lower() in _AFFIRMATIVE
 
 
 def reset_audit_log_for_tests() -> None:
-    """Clear the module-level :class:`AuditLog` singleton.
+    """Reset audit state for tests.
 
-    Tests use this in their fixtures to force the next call to construct
-    a fresh log pointed at the test's ``tmp_path`` ``CHUZOM_AUDIT_PATH``.
-    Production code never calls this.
+    In plugin-based architecture, enterprise bootstrap registers a lazy
+    EnterpriseAuditHandler. This function forces its internal AuditLog
+    singleton to reset on the next append (via lazy init). Tests call
+    this in fixtures to point audits at tmp_path databases.
+
+    Note: Does NOT clear handler registration. Bootstrap happens at module
+    import time; tests never clear plugins.
     """
-    global _audit_log
-    with _audit_log_lock:
-        _audit_log = None
+    handler = get_audit_handler()
+    if handler is not None:
+        # Reset the handler's internal state if it's an EnterpriseAuditHandler
+        if hasattr(handler, '_log'):
+            handler._log = None
 
 
 def audit_routing_turn(
@@ -111,7 +105,15 @@ def audit_routing_turn(
     if _audit_disabled():
         return
 
+    handler = get_audit_handler()
+    if handler is None:
+        log.warning("audit_unavailable", reason="no_handler_registered")
+        return
+
     try:
+        # Import here to avoid circular dependency at module level
+        from chuzom.enterprise.audit import AuditEvent, AuditEventType
+
         actor = identity if identity is not None else current_identity()
 
         detail = {
@@ -146,7 +148,7 @@ def audit_routing_turn(
             detail=detail,
             severity="info",
         )
-        _get_audit_log().append(event)
+        handler.append(event)
     except Exception as audit_err:  # noqa: BLE001 — see module docstring
         # Best-effort. Never propagate; the routed turn already happened.
         log.warning("audit_write_failed", error=str(audit_err))

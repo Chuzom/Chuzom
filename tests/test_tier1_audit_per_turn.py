@@ -25,6 +25,9 @@ from pathlib import Path
 
 import pytest
 
+# Import enterprise to trigger audit handler bootstrap (C-2 plugin seam)
+import chuzom.enterprise  # noqa: F401
+
 from chuzom.audit_routing import (
     audit_routing_turn,
     reset_audit_log_for_tests,
