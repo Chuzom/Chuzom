@@ -59,36 +59,6 @@ def _savings_bar(saved: float, cost: float, width: int = 28) -> str:
     return "  " + _green("█" * save_w) + _yellow("░" * cost_w)
 
 
-def _query_routing_period(db_path: str, since_iso: str) -> tuple[int, float, float]:
-    """Return (calls, cost_usd, baseline_usd) for calls since *since_iso*."""
-    SONNET_IN = 3.0  # $/M tokens
-    SONNET_OUT = 15.0
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT provider, input_tokens, output_tokens, cost_usd FROM usage "
-            "WHERE timestamp >= ? AND success = 1",
-            (since_iso,),
-        ).fetchall()
-        conn.close()
-        calls, cost, baseline = 0, 0.0, 0.0
-        for r in rows:
-            calls += 1
-            cost += r["cost_usd"] or 0.0
-            
-            # Use tracked tokens if available, else use a conservative average for subscription
-            in_t = r["input_tokens"] or 0
-            out_t = r["output_tokens"] or 0
-            
-            if in_t == 0 and out_t == 0 and r["provider"] in ("subscription", "gemini_cli", "codex"):
-                # Fallback for untracked subscription calls
-                in_t, out_t = 1000, 500
-                
-            baseline += (in_t * SONNET_IN + out_t * SONNET_OUT) / 1_000_000
-        return calls, cost, baseline
-    except Exception:
-        return 0, 0.0, 0.0
 
 
 def _query_free_model_savings(db_path: str) -> list[dict]:
@@ -157,7 +127,7 @@ def _query_free_model_savings(db_path: str) -> list[dict]:
 
 def cmd_status(args: list[str]) -> int:
     """Execute: chuzom status
-    
+
     Display routing status, savings summary, subscription pressure, and top models.
     """
     state_dir = os.path.expanduser("~/.chuzom")
@@ -206,7 +176,7 @@ def cmd_status(args: list[str]) -> int:
             count = gemini_status.get("count", 0)
             limit = gemini_status.get("daily_limit", 1500)
             pressure = (count / limit) * 100
-            
+
             filled = max(0, min(20, round(pressure / 5)))
             bar = _green("█" * filled) + "░" * (20 - filled)
             color = _green if pressure < 70 else (_yellow if pressure < 90 else _red)
@@ -220,72 +190,80 @@ def cmd_status(args: list[str]) -> int:
     if not os.path.exists(db_path):
         print("    no data yet — route some tasks first\n")
     else:
-        now = datetime.now(timezone.utc)
-        periods = [
-            ("today", now.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")),
-            ("7 days", (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")),
-            ("30 days", (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")),
-            ("all time", "1970-01-01 00:00:00"),
-        ]
-
-        any_data = False
-        for label, since_iso in periods:
-            calls, cost, baseline = _query_routing_period(db_path, since_iso)
-            if calls == 0:
-                continue
-            any_data = True
-            saved = max(0.0, baseline - cost)
-            pct = 100 * saved / baseline if baseline > 0 else 0.0
-            bar = _savings_bar(saved, cost)
-            print(
-                f"    {_bold(label):<20}  {_green(f'${saved:.3f}')} saved  "
-                f"({_green(f'{pct:.0f}%')} cheaper)"
-            )
-            print(f"  {bar}  {calls} calls")
-
-        if not any_data:
-            print("    no external routing yet — route some tasks first")
-
-        # Top models used
         try:
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT model, COUNT(*) as n, COALESCE(SUM(cost_usd),0) as c "
-                "FROM usage WHERE success=1 AND provider!='subscription' "
-                "GROUP BY model ORDER BY n DESC LIMIT 4"
-            ).fetchall()
-            conn.close()
-            if rows:
-                print(f"\n  {_bold('Top models used')}")
-                for r in rows:
-                    short = r["model"].split("/")[-1] if "/" in r["model"] else r["model"]
-                    short = short[:30] + "…" if len(short) > 30 else short
-                    print(f"    {short:<32}  {r['n']:>4}×  ${r['c']:.4f}")
-        except Exception:
-            pass
+            from chuzom.dashboard_data import query_window
 
-        # Free model savings (Ollama + Codex)
-        free_rows = _query_free_model_savings(db_path)
-        if free_rows:
-            total_free_saved = sum(r["saved"] for r in free_rows)
-            total_free_calls = sum(r["calls"] for r in free_rows)
-            print(f"\n  {_bold('Free-model savings')}  {_dim('(Ollama / Codex — $0 API cost)')}")
-            for r in free_rows:
-                est_tag = _dim(" ~est") if r["estimated"] else ""
-                in_k = f"{r['in_tok'] // 1000}k" if r["in_tok"] >= 1000 else str(r["in_tok"])
-                out_k = f"{r['out_tok'] // 1000}k" if r["out_tok"] >= 1000 else str(r["out_tok"])
-                tok_str = f"{in_k}↑ {out_k}↓{est_tag}"
-                saved_str = f"${r['saved']:.4f}"
+            windows = [
+                ("today", "today"),
+                ("7 days", "week"),
+                ("30 days", "month"),
+                ("all time", "lifetime"),
+            ]
+
+            any_data = False
+            for label, window in windows:
+                totals = query_window(window, db_path=db_path)
+                if totals.calls == 0:
+                    continue
+                any_data = True
+                saved = totals.saved_usd
+                cost = (totals.tokens * 3.0 / 1_000_000) if totals.tokens > 0 else 0.0
+                baseline = (totals.tokens * 18.0 / 1_000_000) if totals.tokens > 0 else 0.0
+                pct = 100 * saved / baseline if baseline > 0 else 0.0
+                bar = _savings_bar(saved, cost)
                 print(
-                    f"    {r['provider']:<10}  {r['calls']:>4} calls  "
-                    f"{tok_str:<14}  {_green(saved_str)} saved"
+                    f"    {_bold(label):<20}  {_green(f'${saved:.3f}')} saved  "
+                    f"({_green(f'{pct:.0f}%')} cheaper)"
                 )
-            bar = _savings_bar(total_free_saved, 0.0)
-            print(
-                f"  {bar}  {total_free_calls} free calls  "
-                f"{_green(f'${total_free_saved:.4f}')} total saved vs Sonnet"
-            )
+                print(f"  {bar}  {totals.calls} calls")
+
+            if not any_data:
+                print("    no external routing yet — route some tasks first")
+
+            # Top models used
+            try:
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT final_model as model, COUNT(*) as n, COALESCE(SUM(cost_usd),0) as c "
+                    "FROM routing_decisions WHERE success=1 "
+                    "GROUP BY final_model ORDER BY n DESC LIMIT 4"
+                ).fetchall()
+                conn.close()
+                if rows:
+                    print(f"\n  {_bold('Top models used')}")
+                    for r in rows:
+                        short = r["model"].split("/")[-1] if "/" in r["model"] else r["model"]
+                        short = short[:30] + "…" if len(short) > 30 else short
+                        print(f"    {short:<32}  {r['n']:>4}×  ${r['c']:.4f}")
+            except Exception:
+                pass
+
+            # Free model savings (Ollama + Codex)
+            free_rows = _query_free_model_savings(db_path)
+            if free_rows:
+                total_free_saved = sum(r["saved"] for r in free_rows)
+                total_free_calls = sum(r["calls"] for r in free_rows)
+                print(f"\n  {_bold('Free-model savings')}  {_dim('(Ollama / Codex — $0 API cost)')}")
+                for r in free_rows:
+                    est_tag = _dim(" ~est") if r["estimated"] else ""
+                    in_k = f"{r['in_tok'] // 1000}k" if r["in_tok"] >= 1000 else str(r["in_tok"])
+                    out_k = f"{r['out_tok'] // 1000}k" if r["out_tok"] >= 1000 else str(r["out_tok"])
+                    tok_str = f"{in_k}↑ {out_k}↓{est_tag}"
+                    saved_str = f"${r['saved']:.4f}"
+                    print(
+                        f"    {r['provider']:<10}  {r['calls']:>4} calls  "
+                        f"{tok_str:<14}  {_green(saved_str)} saved"
+                    )
+                bar = _savings_bar(total_free_saved, 0.0)
+                print(
+                    f"  {bar}  {total_free_calls} free calls  "
+                    f"{_green(f'${total_free_saved:.4f}')} total saved vs Sonnet"
+                )
+        except ImportError:
+            print("    dashboard_data module not available — showing minimal stats\n")
+        except Exception as e:
+            print(f"    error querying savings: {e}\n")
 
     print(f"\n  {_bold('Subcommands')}")
     print(f"    {_bold('chuzom update')}     — update hooks to latest version")
