@@ -14,7 +14,7 @@ session stores — so you can audit what actually happened.
 | Passed | **24** |
 | Failed | **0** |
 | Total trace events | 200 |
-| Cumulative duration | 63 ms |
+| Cumulative duration | 81 ms |
 
 ### Per-CLI coverage
 
@@ -55,7 +55,7 @@ session stores — so you can audit what actually happened.
 
 ## fw-01 · Agno: code-reviewer agent runs 3 routed calls under budget
 
-**Status:** ✅ PASS · **Duration:** 12 ms · **CLI:** `claude-code` · **Framework:** `agno`
+**Status:** ✅ PASS · **Duration:** 15 ms · **CLI:** `claude-code` · **Framework:** `agno`
 
 ### Narrative
 An Agno agent (code-reviewer profile, budget=$0.50) is spawned by a Claude Code subagent context. The agent makes 3 routing calls: one to summarize src/auth.py, one to check src/login.py, one to produce the review. Each call is logged in lineage with session_id + step_index + framework='agno'. The session completes within budget.
@@ -66,7 +66,7 @@ An Agno agent (code-reviewer profile, budget=$0.50) is spawned by a Claude Code 
 1. **🧱 [framework]** Agno spawned code-reviewer agent
      · profile='code-reviewer'
 2. **🪑 [session]** session opened
-     · session_id='309f26d8' · budget=0.5 · state='active'
+     · session_id='407dd5e4' · budget=0.5 · state='active'
 3. **🧱 [framework]** Agno agent step 1
      · action='read src/auth.py via llm_code'
 4. **💵 [budget]** pre-check ok
@@ -74,7 +74,7 @@ An Agno agent (code-reviewer profile, budget=$0.50) is spawned by a Claude Code 
 5. **🤖 [model]** openai/gpt-4o succeeded
      · model='openai/gpt-4o' · success=True · cost_usd=0.018 · latency_ms=2400
 6. **📜 [lineage]** record persisted
-     · session_id='309f26d8' · step_index=0
+     · session_id='407dd5e4' · step_index=0
      › _step 1 logged with agno attribution_
 7. **🧱 [framework]** Agno agent step 2
      · action='read src/login.py via llm_code'
@@ -83,7 +83,7 @@ An Agno agent (code-reviewer profile, budget=$0.50) is spawned by a Claude Code 
 9. **🤖 [model]** openai/gpt-4o succeeded
      · model='openai/gpt-4o' · success=True · cost_usd=0.022 · latency_ms=2700
 10. **📜 [lineage]** record persisted
-     · session_id='309f26d8' · step_index=1
+     · session_id='407dd5e4' · step_index=1
      › _step 2 logged with agno attribution_
 11. **🧱 [framework]** Agno agent step 3
      · action='write review via llm_analyze'
@@ -92,7 +92,7 @@ An Agno agent (code-reviewer profile, budget=$0.50) is spawned by a Claude Code 
 13. **🤖 [model]** anthropic/claude-sonnet-4.6 succeeded
      · model='anthropic/claude-sonnet-4.6' · success=True · cost_usd=0.035 · latency_ms=3300
 14. **📜 [lineage]** record persisted
-     · session_id='309f26d8' · step_index=2
+     · session_id='407dd5e4' · step_index=2
      › _step 3 logged with agno attribution_
 15. **🪑 [session]** session COMPLETED
      · state='completed' · consumed=0.075 · steps=3
@@ -110,7 +110,7 @@ An Agno agent (code-reviewer profile, budget=$0.50) is spawned by a Claude Code 
 
 ## fw-02 · Agno: budget breach mid-session triggers BUDGET_EXCEEDED
 
-**Status:** ✅ PASS · **Duration:** 3 ms · **CLI:** `claude-code` · **Framework:** `agno`
+**Status:** ✅ PASS · **Duration:** 7 ms · **CLI:** `claude-code` · **Framework:** `agno`
 
 ### Narrative
 Agno spawns a researcher agent with a tight $0.10 budget. It makes a first call ($0.06) which succeeds, then a second call estimated at $0.08 which would push consumed past cap. Chuzom's budget envelope catches this, raises BudgetExceeded, session transitions to BUDGET_EXCEEDED. Agno can inspect the session state and surface a clear error to the user.
@@ -423,7 +423,7 @@ User says 'thanks, that helped' — no code or research signals. Default chain. 
 
 ## fw-attribution · All 7 framework slugs round-trip through lineage + sessions
 
-**Status:** ✅ PASS · **Duration:** 17 ms · **Framework:** `*all*`
+**Status:** ✅ PASS · **Duration:** 23 ms · **Framework:** `*all*`
 
 ### Narrative
 For each of Agno, Hermes, LangGraph, CrewAI, OpenAI Agents, Claude Agent SDK, Pydantic AI: write a lineage record + open a session tagged with the framework slug; verify by_framework() and SessionStore.get().framework return them correctly. This proves lineage attribution is uniform across frameworks regardless of concrete impl status.
@@ -646,7 +646,7 @@ A regional network issue takes Ollama, Codex, and OpenAI offline. Chuzom's selec
 
 ## x-02 · Routing inversion: complex prompt routed to local Ollama
 
-**Status:** ✅ PASS · **Duration:** 5 ms
+**Status:** ✅ PASS · **Duration:** 6 ms
 
 ### Narrative
 User asks a deeply complex architectural question. Classifier labels it complexity='complex', expected tier PREMIUM. But the selector starts at the free end, Ollama responds (with low quality), and the lineage detector flags an UP-inversion. The inversion rate over a rolling window is what drives v0.0.3's empirical lookup table re-derivation.
@@ -682,15 +682,15 @@ An orchestrator agent in Agno spawns two subagents in parallel — a researcher 
 
 ### What really happened
 1. **🪑 [session]** parent session opened
-     · session_id='eedcac2e' · role='orchestrator'
+     · session_id='58ea0cef' · role='orchestrator'
 2. **🧱 [framework]** orchestrator planning step
      · cost=0.02
 3. **🪑 [session]** child session: researcher
-     · parent='eedcac2e'
+     · parent='58ea0cef'
 4. **🧱 [framework]** researcher made 2 routed calls
      · cost=0.07
 5. **🪑 [session]** child session: writer
-     · parent='eedcac2e'
+     · parent='58ea0cef'
 6. **🧱 [framework]** writer made 2 routed calls
      · cost=0.11
 7. **🧱 [framework]** orchestrator requested rollup
@@ -734,7 +734,7 @@ A prompt scores 0.4 on code_keywords — below the 0.5 threshold. For a generic 
 
 ## x-05 · Pre-emptive budget refusal: route() refuses before spending
 
-**Status:** ✅ PASS · **Duration:** 3 ms
+**Status:** ✅ PASS · **Duration:** 6 ms
 
 ### Narrative
 A LangGraph-style agent calls chuzom_agent_route with estimated_cost=$0.30. The session has $0.20 remaining. The tool pre-checks via SessionStore.envelope() and returns a structured error {error: 'budget_would_exceed', cap_usd, consumed_usd, remaining_usd} — no spend happens. The agent can downsize, switch model, or abort.
@@ -743,7 +743,7 @@ A LangGraph-style agent calls chuzom_agent_route with estimated_cost=$0.30. The 
 
 ### What really happened
 1. **🪑 [session]** session opened via MCP tool
-     · budget=0.3 · sid='bd0361ca'
+     · budget=0.3 · sid='41cd983c'
 2. **💵 [budget]** step 1 consumed
      · consumed=0.1 · remaining=0.2
 3. **🧱 [framework]** route() returned
@@ -758,7 +758,7 @@ A LangGraph-style agent calls chuzom_agent_route with estimated_cost=$0.30. The 
 
 ## x-06 · Concurrent sessions: 2 frameworks, independent budgets
 
-**Status:** ✅ PASS · **Duration:** 10 ms
+**Status:** ✅ PASS · **Duration:** 11 ms
 
 ### Narrative
 An Agno code-reviewer and a (future) Pydantic AI summarizer are running side-by-side in the same Claude Code subprocess tree. Each has its own session_id, its own budget, its own lineage attribution. A failure in one must not poison the other; cost accounting stays separate.
@@ -767,9 +767,9 @@ An Agno code-reviewer and a (future) Pydantic AI summarizer are running side-by-
 
 ### What really happened
 1. **🪑 [session]** session A opened (agno)
-     · sid='66e7935a' · budget=0.5
+     · sid='48ce1877' · budget=0.5
 2. **🪑 [session]** session P opened (pydantic-ai)
-     · sid='38507220' · budget=0.3
+     · sid='11283ea3' · budget=0.3
 3. **🧱 [framework]** audit
      · agno_rows=1 · pydantic_ai_rows=1
 4. **🪑 [session]** session A

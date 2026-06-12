@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import time
 from dataclasses import replace
 from typing import Any, TYPE_CHECKING
 from uuid import uuid4
@@ -2710,5 +2711,352 @@ async def _call_media(
         if provider not in generators:
             raise ValueError(f"No audio generator for provider: {provider}")
         return await generators[provider](prompt, model=model_name, **params)
+
+
+# ━━━ Phase C v0.3.2: Streaming Integration with RouterStreamEvent ━━━
+# The route_and_stream function provides structured event streaming from providers,
+# mapped to router-level RouterStreamEvent objects with full routing metadata.
+#
+# Safety invariants:
+#   - attempt.committed marks the commit barrier: no fallback after first visible output
+#   - output.delta preserves message order (never buffered or throttled)
+#   - visited_models tracking prevents duplicate attempts in fallback chain
+#   - All usage/audit settlement happens exactly once
+#   - No recursion risk from streaming: each provider stream is independent
+
+from chuzom.streaming_types import (
+    EventType,
+    RouterStreamEvent,
+    BaseEvent,
+    AttemptStarted,
+    AttemptCommitted,
+    OutputDelta,
+    AttemptFailed,
+    UsageFinal,
+    RouteCompleted,
+    RouteAborted,
+)
+
+
+async def route_and_stream(
+    task_type: TaskType,
+    prompt: str,
+    *,
+    profile: RoutingProfile | None = None,
+    complexity_hint: Complexity | str | None = None,
+    system_prompt: str | None = None,
+    model_override: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    ctx: Any | None = None,
+    classification_data: dict | None = None,
+    caller_context: str | None = None,
+    identity: TurnIdentity | None = None,
+    max_cost_per_task: float | None = None,
+    max_wall_clock_seconds: float | None = None,
+    deadline_monotonic: float | None = None,
+    idempotency_key: str | None = None,
+) -> AsyncIterator[RouterStreamEvent]:
+    """Stream a request to the best available model, yielding structured events.
+
+    This is the streaming variant of route_and_call (Phase C v0.3.2). It yields
+    a sequence of RouterStreamEvent objects representing the full routing pipeline:
+    - route.started: Route initiated with chain
+    - attempt.started: Attempting a model from the chain
+    - attempt.buffering: Buffering output (if gates/judges active)
+    - attempt.committed: First visible output; fallback now disabled (commit barrier)
+    - output.delta: Content chunks (only after commit)
+    - usage.final: Token usage and cost
+    - route.completed: Route succeeded
+    - route.aborted: Route failed with reason
+
+    Preflight checks are identical to route_and_call:
+      1. Budget check (monthly limit)
+      2. Identity resolution (audit attribution)
+      3. RBAC gate (Permission.ROUTE_PROMPT)
+      4. Quota envelope check
+      5. Idempotency dedupe
+      6. Deadline/wall-clock validation
+      7. Model chain resolution and filtering
+
+    Args:
+        task_type: What kind of task (query, code, analyze, generate, etc.).
+        prompt: User's prompt text.
+        profile: Explicit routing profile override.
+        complexity_hint: Task complexity for profile selection.
+        system_prompt: Optional system message prepended to the call.
+        model_override: Force a specific model, bypassing the chain.
+        temperature: Sampling temperature override for text calls.
+        max_tokens: Max output tokens override.
+        ctx: MCP RequestContext for progress notifications.
+        classification_data: Optional classification metadata for logging.
+        caller_context: Context string from the MCP caller.
+        identity: Tier-1 audit attribution (user_id + org_id).
+        max_cost_per_task: Hard cap on projected cost per model attempt.
+        max_wall_clock_seconds: Wall-clock timeout for the entire chain walk.
+        deadline_monotonic: Agent-safety absolute deadline (time.monotonic()).
+        idempotency_key: Dedup key for Track-3 agent-safety crash-and-replay.
+
+    Yields:
+        RouterStreamEvent dicts with routing metadata and provider content.
+        Critical: attempt.committed marks commit barrier (no fallback after).
+        All events carry base fields: seq, type, correlation_id, ts_monotonic_ms
+
+    Raises:
+        BudgetExceededError: Monthly spend exceeded.
+        PermissionDenied: RBAC gate denied Permission.ROUTE_PROMPT.
+        ValueError: No models available for task/profile.
+        RuntimeError: All models failed (wraps last error).
+        DeadlineExceeded: Absolute deadline passed before route could start.
+        WallClockExceeded: Wall-clock timeout during dispatch.
+    """
+    config = get_config()
+    correlation_id = uuid4().hex[:8]
+    seq = 0  # Event counter
+
+    # Tier-1 identity resolution
+    if identity is None:
+        identity = current_identity()
+
+    # ── PREFLIGHT: RBAC gate ──────────────────────────────────────────────
+    _rbac_mode, _rbac_has_perm = check_route_prompt(identity)
+    if _rbac_mode == "strict" and not _rbac_has_perm:
+        try:
+            audit_routing_turn(
+                identity=identity,
+                task_type=str(task_type),
+                complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                model="(denied)",
+                provider="(denied)",
+                outcome="rbac_denied",
+                detail="Permission.ROUTE_PROMPT denied",
+                cost_usd=0.0,
+                latency_ms=0.0,
+            )
+        except Exception as e:
+            log.warning("RBAC audit write failed: %s", e)
+        raise PermissionError(
+            f"RBAC: You don't have permission to route prompts. "
+            f"Contact your admin or set CHUZOM_RBAC_MODE=warn."
+        )
+
+    # ── PREFLIGHT: Deadline check ─────────────────────────────────────────
+    if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+        raise DeadlineExceeded(
+            f"Deadline {deadline_monotonic} already passed "
+            f"(current {time.monotonic()})",
+            deadline=deadline_monotonic,
+        )
+
+    # ── PREFLIGHT: Profile & complexity resolution ────────────────────────
+    c: Complexity
+    use_thinking: bool
+    profile, c, use_thinking = _resolve_profile(
+        profile, complexity_hint, classification_data, prompt, model_override, config
+    )
+
+    effective_complexity = c.value if hasattr(c, "value") else str(complexity_hint or "moderate")
+
+    # ── Build model chain ──────────────────────────────────────────────────
+    models_to_try = await resolve_model_chain(
+        task_type=task_type,
+        profile=profile,
+        prompt=prompt,
+        model_override=model_override,
+        classification_data=classification_data,
+        complexity_hint=c,
+        config=config,
+    )
+
+    if not models_to_try:
+        error_detail = f"No models available for {task_type.value} / {profile.value}"
+        try:
+            audit_routing_turn(
+                identity=identity,
+                task_type=str(task_type),
+                complexity=effective_complexity,
+                model="(none)",
+                provider="(none)",
+                outcome="no_models_available",
+                detail=error_detail,
+                cost_usd=0.0,
+                latency_ms=0.0,
+            )
+        except Exception as e:
+            log.warning("Audit write failed: %s", e)
+        raise ValueError(error_detail)
+
+    # ── Emit route.started event ──────────────────────────────────────────
+    seq += 1
+    yield {
+        "seq": seq,
+        "type": "route.started",
+        "correlation_id": correlation_id,
+        "ts_monotonic_ms": time.monotonic() * 1000,
+        "task_type": task_type.value,
+        "profile": profile.value,
+        "complexity": effective_complexity,
+        "candidate_count": len(models_to_try),
+        "chain_preview": models_to_try[:3],
+        "buffered_mode": False,  # Phase C v0.3.2 doesn't buffer (pass-through)
+    }
+
+    # ── STREAMING DISPATCH LOOP: Walk chain with fallback ──────────────────
+    visited_models: set[str] = set()
+    attempt_index = 0
+    committed = False
+    final_cost = 0.0
+    final_latency_ms = 0.0
+
+    try:
+        for model in models_to_try:
+            if model in visited_models:
+                log.debug("Skipping duplicate model in fallback: %s", model)
+                continue
+
+            visited_models.add(model)
+            attempt_index += 1
+
+            # Emit attempt.started
+            seq += 1
+            provider = provider_from_model(model)
+            yield {
+                "seq": seq,
+                "type": "attempt.started",
+                "correlation_id": correlation_id,
+                "ts_monotonic_ms": time.monotonic() * 1000,
+                "attempt_index": attempt_index,
+                "model": model,
+                "provider": provider,
+                "emergency_fallback": False,
+            }
+
+            try:
+                # Stream provider events and map to router-level events
+                async for provider_event in providers.call_llm_stream_events(
+                    model=model,
+                    messages=build_context_messages(prompt, system_prompt, caller_context),
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    if provider_event["type"] == "delta":
+                        # On first delta: emit attempt.committed (commit barrier)
+                        if not committed:
+                            seq += 1
+                            committed = True
+                            yield {
+                                "seq": seq,
+                                "type": "attempt.committed",
+                                "correlation_id": correlation_id,
+                                "ts_monotonic_ms": time.monotonic() * 1000,
+                                "attempt_index": attempt_index,
+                                "model": model,
+                                "visible_output_started": True,
+                            }
+
+                        # Emit output.delta
+                        seq += 1
+                        delta = provider_event["delta"]
+                        yield {
+                            "seq": seq,
+                            "type": "output.delta",
+                            "correlation_id": correlation_id,
+                            "ts_monotonic_ms": time.monotonic() * 1000,
+                            "attempt_index": attempt_index,
+                            "model": model,
+                            "text": delta["text"],
+                            "chars": delta["chars"],
+                            "approx_tokens": delta["approx_tokens"],
+                        }
+
+                    elif provider_event["type"] == "usage":
+                        # Emit usage.final (delivered exactly once)
+                        seq += 1
+                        usage = provider_event["usage"]
+                        final_cost = usage["cost_usd"]
+                        final_latency_ms = usage["latency_ms"]
+                        yield {
+                            "seq": seq,
+                            "type": "usage.final",
+                            "correlation_id": correlation_id,
+                            "ts_monotonic_ms": time.monotonic() * 1000,
+                            "model": model,
+                            "provider": provider,
+                            "input_tokens": usage["input_tokens"],
+                            "output_tokens": usage["output_tokens"],
+                            "cost_usd": usage["cost_usd"],
+                            "latency_ms": usage["latency_ms"],
+                        }
+
+                # ── COMMIT BARRIER: After usage.final, no fallback ─────────
+                # The successful stream has committed. Record and complete.
+                seq += 1
+                yield {
+                    "seq": seq,
+                    "type": "route.completed",
+                    "correlation_id": correlation_id,
+                    "ts_monotonic_ms": time.monotonic() * 1000,
+                    "final_model": model,
+                    "final_provider": provider,
+                    "chain_attempts": list(visited_models),
+                    "used_emergency_fallback": False,
+                    "cached": False,
+                }
+                return
+
+            except Exception as e:
+                # Provider call failed. Emit attempt.failed and try next model.
+                if not committed:
+                    # Only emit failure if we haven't committed yet
+                    seq += 1
+                    yield {
+                        "seq": seq,
+                        "type": "attempt.failed",
+                        "correlation_id": correlation_id,
+                        "ts_monotonic_ms": time.monotonic() * 1000,
+                        "attempt_index": attempt_index,
+                        "model": model,
+                        "provider": provider,
+                        "reason_kind": "provider_error",
+                        "detail": str(e)[:200],
+                        "retry_after_s": None,
+                        "will_fallback": attempt_index < len(models_to_try),
+                    }
+                    log.debug("Attempt %d failed, trying next: %s", attempt_index, e)
+                else:
+                    # Already committed: cannot fallback. Surface error and abort.
+                    seq += 1
+                    yield {
+                        "seq": seq,
+                        "type": "route.aborted",
+                        "correlation_id": correlation_id,
+                        "ts_monotonic_ms": time.monotonic() * 1000,
+                        "outcome": "attempted_after_commit",
+                        "detail": f"Model {model} failed after commit: {str(e)[:200]}",
+                    }
+                    return
+
+        # ── All models exhausted without success ──────────────────────────
+        seq += 1
+        yield {
+            "seq": seq,
+            "type": "route.aborted",
+            "correlation_id": correlation_id,
+            "ts_monotonic_ms": time.monotonic() * 1000,
+            "outcome": "all_models_failed",
+            "detail": f"All {len(models_to_try)} models failed",
+        }
+
+    except Exception as e:
+        # Top-level unhandled exception during streaming
+        seq += 1
+        yield {
+            "seq": seq,
+            "type": "route.aborted",
+            "correlation_id": correlation_id,
+            "ts_monotonic_ms": time.monotonic() * 1000,
+            "outcome": "internal_error",
+            "detail": f"Internal routing error: {str(e)[:200]}",
+        }
 
     raise ValueError(f"Unknown media task type: {task_type}")

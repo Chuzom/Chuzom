@@ -3,12 +3,12 @@
   "owner": {
     "name": "Yali Pollak"
   },
-  "version": "0.3.0",
+  "version": "0.3.1",
   "plugins": [
     {
       "name": "chuzom",
       "description": "Route every Droid task to the cheapest capable model across 20+ AI providers. Tracks cross-session savings, enforces routing policy, and sends weekly Slack digests.",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "source": {
         "source": "github",
         "repo": "ypollak2/chuzom"
