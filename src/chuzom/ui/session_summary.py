@@ -241,6 +241,112 @@ class SessionSummaryDashboard:
 
         return Panel(table, border_style=PALETTE.muted_border, expand=False)
 
+    def render_cost_sparkline(
+        self,
+        daily_costs: list[float],
+        total_saved: float = 0.0,
+    ) -> RenderableType:
+        """Render 14-day cost trend sparkline.
+
+        Args:
+            daily_costs: Daily costs for last 14 days
+            total_saved: Total savings amount
+        """
+        lines = []
+        lines.append(Text("📊 14-Day Cost Trend", style=f"bold {PALETTE.accent}"))
+        lines.append(Text(""))
+
+        if daily_costs:
+            max_cost = max(daily_costs) if daily_costs else 1
+            sparkline = "".join(
+                ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][
+                    min(7, int((c / max_cost * 8))) if max_cost > 0 else 0
+                ]
+                for c in daily_costs[-14:]
+            )
+            total = sum(daily_costs)
+            avg = total / len(daily_costs) if daily_costs else 0
+
+            lines.append(Text(f"  Trend: {sparkline}", style=PALETTE.text_primary))
+            lines.append(Text(f"  Total: ${total:.2f}  |  Avg: ${avg:.2f}/day", style=PALETTE.text_primary))
+
+            if total_saved > 0:
+                lines.append(Text(f"  Saved: ${total_saved:.2f} via routing", style=PALETTE.success))
+
+        content = Group(*lines)
+        return Panel(content, border_style=PALETTE.muted_border, expand=False)
+
+    def render_model_breakdown(
+        self,
+        model_stats: dict[str, float],
+    ) -> RenderableType:
+        """Render model distribution breakdown.
+
+        Args:
+            model_stats: Dict of {model: percentage}
+        """
+        lines = []
+        lines.append(Text("🤖 Model Distribution", style=f"bold {PALETTE.accent}"))
+        lines.append(Text(""))
+
+        if model_stats:
+            sorted_models = sorted(model_stats.items(), key=lambda x: x[1], reverse=True)
+            for model, pct in sorted_models[:5]:  # Show top 5
+                bar_length = int(pct / 5)  # Max 20 chars
+                bar = "█" * bar_length + "░" * (20 - bar_length)
+                model_short = model.split("/")[-1][:25]
+                lines.append(
+                    Text(
+                        f"  {model_short:25} {bar} {pct:5.1f}%",
+                        style=PALETTE.text_primary,
+                    )
+                )
+
+        content = Group(*lines)
+        return Panel(content, border_style=PALETTE.muted_border, expand=False)
+
+    def render_quota_status(
+        self,
+        claude_quota_pct: float = 0.0,
+        gemini_quota_pct: float = 0.0,
+        claude_remaining: str = "Unknown",
+        gemini_remaining: str = "Unknown",
+    ) -> RenderableType:
+        """Render subscription quota status.
+
+        Args:
+            claude_quota_pct: Claude quota used (0-100)
+            gemini_quota_pct: Gemini quota used (0-100)
+            claude_remaining: Time remaining for Claude
+            gemini_remaining: Time remaining for Gemini
+        """
+        lines = []
+        lines.append(Text("📦 Subscription Quotas", style=f"bold {PALETTE.accent}"))
+        lines.append(Text(""))
+
+        # Claude quota
+        bar_length = int(claude_quota_pct / 5)
+        bar = "█" * bar_length + "░" * (20 - bar_length)
+        claude_status = "🟢 OK" if claude_quota_pct < 50 else "🟡 HIGH" if claude_quota_pct < 80 else "🔴 CRITICAL"
+        lines.append(
+            Text(f"  Claude Pro:  [{bar}] {claude_quota_pct:5.1f}% {claude_status}", style=PALETTE.text_primary)
+        )
+        lines.append(Text(f"              {claude_remaining}", style=PALETTE.text_dim))
+
+        lines.append(Text(""))
+
+        # Gemini quota
+        bar_length = int(gemini_quota_pct / 5)
+        bar = "█" * bar_length + "░" * (20 - bar_length)
+        gemini_status = "🟢 OK" if gemini_quota_pct < 50 else "🟡 HIGH" if gemini_quota_pct < 80 else "🔴 CRITICAL"
+        lines.append(
+            Text(f"  Gemini API:  [{bar}] {gemini_quota_pct:5.1f}% {gemini_status}", style=PALETTE.text_primary)
+        )
+        lines.append(Text(f"               {gemini_remaining}", style=PALETTE.text_dim))
+
+        content = Group(*lines)
+        return Panel(content, border_style=PALETTE.muted_border, expand=False)
+
     def render_footer(self) -> RenderableType:
         """Render footer with session complete status."""
         footer_text = "✨ Session Complete  ·  Ready for next prompt"
@@ -253,7 +359,14 @@ class SessionSummaryDashboard:
         savings: dict | None = None,
         daily_calls: list[int] | None = None,
         daily_tokens: list[int] | None = None,
+        daily_costs: list[float] | None = None,
+        total_saved: float = 0.0,
+        model_breakdown: dict[str, float] | None = None,
         models: list[dict] | None = None,
+        claude_quota_pct: float = 0.0,
+        gemini_quota_pct: float = 0.0,
+        claude_remaining: str = "Unknown",
+        gemini_remaining: str = "Unknown",
     ) -> RenderableType:
         """Render complete dashboard with all panels.
 
@@ -263,7 +376,14 @@ class SessionSummaryDashboard:
             savings: Savings data {today, week, month, lifetime, free_calls, free_saved}
             daily_calls: Daily call counts
             daily_tokens: Daily token counts
+            daily_costs: Daily costs for last 14 days
+            total_saved: Total savings amount
+            model_breakdown: Dict of model distribution
             models: Top models data
+            claude_quota_pct: Claude quota percentage
+            gemini_quota_pct: Gemini quota percentage
+            claude_remaining: Claude remaining time
+            gemini_remaining: Gemini remaining time
 
         Returns:
             Renderable group of all panels
@@ -286,6 +406,25 @@ class SessionSummaryDashboard:
                     lifetime=savings.get("lifetime", 0.0),
                     free_calls=savings.get("free_calls", 0),
                     free_saved=savings.get("free_saved", 0.0),
+                )
+            )
+            panels.append(Text(""))
+
+        if daily_costs:
+            panels.append(self.render_cost_sparkline(daily_costs, total_saved))
+            panels.append(Text(""))
+
+        if model_breakdown:
+            panels.append(self.render_model_breakdown(model_breakdown))
+            panels.append(Text(""))
+
+        if claude_quota_pct > 0 or gemini_quota_pct > 0:
+            panels.append(
+                self.render_quota_status(
+                    claude_quota_pct=claude_quota_pct,
+                    gemini_quota_pct=gemini_quota_pct,
+                    claude_remaining=claude_remaining,
+                    gemini_remaining=gemini_remaining,
                 )
             )
             panels.append(Text(""))
