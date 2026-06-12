@@ -11,7 +11,15 @@ import subprocess
 import sys
 import time
 import urllib.request
+import io
 from datetime import datetime, timezone
+
+try:
+    from rich.console import Console
+    from chuzom.ui.session_summary import SessionSummaryDashboard
+    HAS_RICH_DASHBOARD = True
+except ImportError:
+    HAS_RICH_DASHBOARD = False
 
 # Import timeout config from chuzom package if available
 try:
@@ -1502,36 +1510,53 @@ def main() -> None:
 
     has_cumulative = any(calls > 0 for _, calls, *_ in cumulative)
 
-    # Try Cyber-Grid (Rich) renderer; fall back to legacy ANSI
-    summary = None
-    try:
-        from chuzom.hooks.cyber_grid import render_cyber_grid
-        report_data = _collect_report_data(
-            session_start, paid_rows, cc_rows, free_rows, tools,
-            start, current, is_live, cumulative,
-        )
-        summary = render_cyber_grid(report_data)
-    except Exception:
-        pass
+    # Try SessionSummaryDashboard (Rich) renderer; fall back to legacy ANSI
+    final_summary_output = ""
 
-    if not summary:
-        if not tools and not cc_rows and not current and not free_rows and not has_cumulative:
-            # Minimal summary for inactive sessions
-            try:
-                from chuzom.dashboard.server import _get_or_create_token, DEFAULT_PORT
-                token = _get_or_create_token()
-                url = f"http://localhost:{DEFAULT_PORT}/?token={token}"
-                summary = (
-                    f"\n\033[2m{'─'*WIDTH}\033[0m\n"
-                    f"  \033[1m\ud83d\udcca Chuzom Session Summary Dashboard\033[0m\n"
-                    f"  No session activity detected\n"
-                    f"  \033[1mDashboard:\033[0m \033[4;34m{url}\033[0m\n"
-                    f"\033[2m{'─'*WIDTH}\033[0m\n"
-                )
-            except Exception:
-                sys.exit(0)
-        else:
-            summary = _format(tools, cc_rows, free_rows, paid_rows, start, current, is_live, cumulative, session_start)
+    if HAS_RICH_DASHBOARD:
+        try:
+            report_data = _collect_report_data(
+                session_start, paid_rows, cc_rows, free_rows, tools,
+                start, current, is_live, cumulative,
+            )
+
+            # Prepare data for SessionSummaryDashboard  
+            dashboard_decisions = [
+                {"method": d["reason"], "count": d["hits"]}
+                for d in report_data.get("routing_logic", [])
+            ]
+
+            dashboard_savings = {}
+            for label, calls, _, _, saved_usd in cumulative:
+                if label == "today":
+                    dashboard_savings["today"] = saved_usd
+                elif label == "this week":
+                    dashboard_savings["week"] = saved_usd
+                elif label == "this month":
+                    dashboard_savings["month"] = saved_usd
+                elif label == "all time":
+                    dashboard_savings["lifetime"] = saved_usd
+
+            # Create console to capture output
+            console = Console(record=True, file=io.StringIO())
+            dashboard = SessionSummaryDashboard(console=console)
+            dashboard.print_dashboard(
+                timestamp=f"Session · {datetime.now(timezone.utc).isoformat()}",
+                decisions=dashboard_decisions,
+                savings=dashboard_savings,
+                daily_calls=[],
+                daily_tokens=[],
+                models=[],
+            )
+            final_summary_output = console.file.getvalue()
+        except Exception as e:
+            # 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
+            print(f"Error rendering SessionSummaryDashboard: {e}", file=sys.stderr)
+            # Fall back to legacy ANSI formatting
+            final_summary_output = _format(tools, cc_rows, free_rows, paid_rows, start, current, is_live, cumulative, session_start)
+    else:
+        # Rich dashboard not available, use legacy ANSI formatting
+        final_summary_output = _format(tools, cc_rows, free_rows, paid_rows, start, current, is_live, cumulative, session_start)
 
     # Append session spend + real savings panel (v8.8.0)
     spend = _read_session_spend()
@@ -1582,7 +1607,7 @@ def main() -> None:
             pass
 
         spend_block = "\n".join(lines)
-        summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + "\n" + spend_block + "\n" + "  " + "═" * (WIDTH - 2)
+        final_summary_output = final_summary_output.rstrip("  " + "═" * (WIDTH - 2)) + "\n" + spend_block + "\n" + "  " + "═" * (WIDTH - 2)
 
     # Retrospective output removed per user preference
 
@@ -1595,7 +1620,7 @@ def main() -> None:
             if trends.get("snapshot_count", 0) > 0:
                 trend_output = format_trend_summary(trends)
                 if trend_output and "No snapshots" not in trend_output:
-                    summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + "\n【TRENDS】\n" + trend_output + "\n" + "  " + "═" * (WIDTH - 2)
+                    final_summary_output = final_summary_output.rstrip("  " + "═" * (WIDTH - 2)) + "\n【TRENDS】\n" + trend_output + "\n" + "  " + "═" * (WIDTH - 2)
     except Exception:
         pass  # Graceful failure — never break session-end
 
@@ -1607,7 +1632,7 @@ def main() -> None:
             if updated and changes:
                 changes_str = ", ".join(changes)
                 config_note = f"\n  🔄 Profile updated: {changes_str}"
-                summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + config_note + "\n" + "  " + "═" * (WIDTH - 2)
+                final_summary_output = final_summary_output.rstrip("  " + "═" * (WIDTH - 2)) + config_note + "\n" + "  " + "═" * (WIDTH - 2)
     except Exception:
         pass  # Graceful failure — never break session-end
 
@@ -1629,7 +1654,7 @@ def main() -> None:
                 loop.run_until_complete(evaluate_available_models(task_types=["reasoning"]))
                 loop.close()
                 eval_note = "\n  📊 Model benchmarks updated (next: 7 days)"
-                summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + eval_note + "\n" + "  " + "═" * (WIDTH - 2)
+                final_summary_output = final_summary_output.rstrip("  " + "═" * (WIDTH - 2)) + eval_note + "\n" + "  " + "═" * (WIDTH - 2)
             except Exception:
                 pass  # Don't fail session if eval fails
     except Exception:
@@ -1648,7 +1673,7 @@ def main() -> None:
         if session_id:
             quota_timeline = _render_quota_timeline(session_id, DB_PATH)
             if quota_timeline:
-                summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + quota_timeline + "\n" + "  " + "═" * (WIDTH - 2)
+                final_summary_output = final_summary_output.rstrip("  " + "═" * (WIDTH - 2)) + quota_timeline + "\n" + "  " + "═" * (WIDTH - 2)
     except Exception:
         pass  # Graceful failure — never break session-end
 
@@ -1659,11 +1684,11 @@ def main() -> None:
 
         routing_section = format_routing_section()
         if routing_section:
-            summary = summary.rstrip("  " + "═" * (WIDTH - 2)) + routing_section + "  " + "═" * (WIDTH - 2)
+            final_summary_output = final_summary_output.rstrip("  " + "═" * (WIDTH - 2)) + routing_section + "  " + "═" * (WIDTH - 2)
     except Exception:
         pass  # Graceful failure — never break session-end
 
-    print(json.dumps({"systemMessage": summary}))
+    print(json.dumps({"systemMessage": final_summary_output}))
 
     # Update the session-start snapshot AFTER the delta has been reported,
     # so the NEXT session starts from today's end-of-session baseline.
