@@ -56,7 +56,9 @@ async def llm_classify(
 
     # Classify complexity
     try:
-        classification = await classify_complexity(prompt)
+        await ctx.info("🔍 Analyzing task complexity...")
+        classification = await classify_complexity(prompt, timeout_seconds=10.0)
+        await ctx.info(f"✓ Classified as {classification.complexity.value} ({classification.confidence:.0%} confidence)")
     except Exception as e:
         await ctx.warning(f"Classification failed: {e}")
         classification = ClassificationResult(
@@ -304,7 +306,10 @@ async def llm_route(
         )
     else:
         try:
-            classification = await classify_complexity(prompt)
+            # Notify user that classification is starting (prevents silent hangs)
+            await ctx.info("🔍 Analyzing task complexity...")
+            classification = await classify_complexity(prompt, timeout_seconds=10.0)
+            await ctx.info(f"✓ Task classified as {classification.complexity.value} (inferred: {classification.inferred_task_type or 'generic'})")
         except Exception as e:
             await ctx.warning(f"Classification failed: {e} — defaulting to moderate")
             classification = ClassificationResult(
