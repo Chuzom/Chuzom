@@ -10,6 +10,13 @@ env:
   UV_HTTP_TIMEOUT: 30
 
 jobs:
+  public-import-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for forbidden enterprise imports
+        run: bash scripts/check_public_imports.sh
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -138,6 +145,41 @@ jobs:
           result=$?
           kill $PYTEST_PID 2>/dev/null || true
           exit $result
+
+  public-build-verify:
+    # PUBLIC-ONLY BUILD: Verify the public distribution contains no enterprise code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+        continue-on-error: true
+        id: uv-setup
+      - name: Retry uv setup
+        if: steps.uv-setup.outcome == 'failure'
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: false
+      - run: uv python install 3.11
+      - name: Build public package
+        run: uv run python -m build
+      - name: Verify enterprise code not in wheel
+        run: |
+          wheel_file=$(find dist -name "*.whl" | head -1)
+          if unzip -l "$wheel_file" | grep -q "chuzom/enterprise"; then
+            echo "❌ ERROR: Enterprise code found in wheel!"
+            exit 1
+          fi
+          echo "✓ Enterprise code not in wheel"
+      - name: Verify enterprise code not in sdist
+        run: |
+          sdist_file=$(find dist -name "*.tar.gz" | head -1)
+          if tar tzf "$sdist_file" | grep -q "chuzom/enterprise"; then
+            echo "❌ ERROR: Enterprise code found in sdist!"
+            exit 1
+          fi
+          echo "✓ Enterprise code not in sdist"
 
   postgres-budget:
     # P1-5: run the real-Postgres multi-instance budget acceptance test

@@ -65,29 +65,11 @@ code-context = [
 tui = [
     "textual>=0.80.0",
 ]
-# Multi-instance budget coordination via Postgres (T2-XL1 / Phase 3b).
-# Pulled in lazily so the SQLite single-instance default stays minimal.
-postgres = [
-    "psycopg[binary]>=3.2",
-]
-# Integration testing for the Postgres backend uses Testcontainers to spin
-# up a temporary Postgres in CI. Local runs use the same path. Skipped
-# automatically when Docker is unavailable.
-postgres-test = [
-    "psycopg[binary]>=3.2",
-    "testcontainers[postgres]>=4.0",
-]
 # Semantic response cache + embedding-based classifier (v0.1+).
 # Pulled in lazily so the bare router stays lightweight.
 semantic = [
     "sentence-transformers>=3.0",
     "sqlite-vec>=0.1.0",
-]
-# Federated identity — OIDC JWT validation (JWKS / RS256) + SCIM provisioning.
-# JWKS + introspection HTTP uses the already-present aiohttp; only PyJWT[crypto]
-# is added here so the bare router stays lightweight.
-sso = [
-    "pyjwt[crypto]>=2.8",
 ]
 
 [project.urls]
@@ -113,7 +95,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/chuzom"]
+# PUBLIC-ONLY: explicitly list only public packages, exclude enterprise
+packages = [
+    "src/chuzom",
+]
+# Hatchling package discovery: exclude the enterprise subpackage
+exclude = [
+    "src/chuzom/enterprise*",
+]
 
 [tool.hatch.build.targets.sdist]
 # CRITICAL: keep this list tight. Per CLAUDE.md package-distribution safety:
@@ -146,12 +135,15 @@ exclude = [
     "/skills/",
     # Internal docs (NEVER ship per CLAUDE.md)
     "Docs/",
+    "docs-private/",
     "CLAUDE.md",
     "SECURITY.md",
     "AUDIT_FINDINGS.txt",
     "CHUZOM_AUDIT_REPORT.md",
     "STUCK_PATTERNS_ANALYSIS.md",
     ".audit/",
+    # Enterprise source code (public distribution only includes public features)
+    "src/chuzom/enterprise/",
     # Dev-only directories
     "tests/",
     "scripts/",

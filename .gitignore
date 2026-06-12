@@ -34,18 +34,12 @@ Thumbs.db
 .playwright-mcp/
 .playwright-cli/
 
-# Local-only architecture & internal design notes — NEVER commit
-# (User explicitly requested Docs/ stay local-only)
-#
-# Note: Uppercase Docs/ remains ignored (the user's original convention
-# for internal scratch). Lowercase docs/ is the canonical home for
-# externally-visible operator + audit + architecture documentation —
-# the explicit negation closes G-019 from
-# docs/audit/post-remediation/GAP_ANALYSIS.md (the INV-013 finding
-# that kept the audit corpus invisible to outside readers on
-# case-sensitive filesystems). On macOS the two names resolve to the
-# same directory; the negation documents intent for Linux/CI.
+# LOCAL-ONLY DOCUMENTATION (NEVER COMMIT)
+# Uppercase Docs/ = internal scratch workspace
+# docs-private/ = enterprise-only documentation (hardened features, RBAC, audit chain, etc.)
 Docs/
+docs-private/
+# Lowercase docs/ IS committed — public operator documentation only
 !docs/
 !docs/**
 INTERNAL.md

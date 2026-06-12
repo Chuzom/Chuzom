@@ -1,0 +1,31 @@
+include README.md
+include pyproject.toml
+include LICENSE
+
+graft src
+graft tests
+
+# PUBLIC-ONLY BUILD: Exclude enterprise code completely
+prune src/chuzom/enterprise
+prune tests/enterprise
+prune docs-private
+
+# Exclude other development artifacts
+prune .claude
+prune .codex-plugin
+prune .cursor
+prune .github
+prune scripts
+prune research
+prune demo
+prune deprecation
+prune bench
+prune .audit
+prune Docs
+prune .venv
+prune build
+prune dist
+
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude *.egg-info
