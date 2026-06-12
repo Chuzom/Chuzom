@@ -69,3 +69,9 @@ bench/results/
 # Audit working dir — evidence ledger, batch checkpoints, remediation plan
 # (Per audit charter — read-only audit artifacts, never committed)
 .audit/
+
+# Release scripts — local-only state, never committed
+# Use pre-release-checklist.py to validate before releasing
+.release-cache/
+.release-state.json
+release-notes-draft.md
