@@ -1,0 +1,63 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: pip install build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Verify package contents
+        run: |
+          echo "=== Verifying sdist contents ==="
+          tar tzf dist/*.tar.gz | grep -iE "(Dockerfile|docker-compose|\.claude-plugin|\.codex-plugin|CLAUDE\.md|SECURITY\.md)" && {
+            echo "ERROR: Found excluded files in sdist"
+            exit 1
+          } || echo "✓ No excluded files found"
+          echo ""
+          echo "=== Package file list ==="
+          tar tzf dist/*.tar.gz | head -20
+
+      - name: Check version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PACKAGE_VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "ERROR: Tag version ($TAG_VERSION) does not match package version ($PACKAGE_VERSION)"
+            exit 1
+          fi
+          echo "✓ Version verified: $PACKAGE_VERSION"
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/* --skip-existing
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
