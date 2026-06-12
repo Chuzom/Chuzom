@@ -18,11 +18,16 @@ from chuzom.enterprise.identity import (
 from chuzom.enterprise.quotas import QuotaExceeded, QuotaPolicy, QuotaTracker
 from chuzom.enterprise.rbac import Permission, Role, has_permission
 from chuzom.enterprise.redaction import RedactionPolicy, redact_prompt
+from chuzom.plugins.redaction import RedactionResult
+from chuzom.enterprise.bootstrap import bootstrap as _bootstrap
 
 __all__ = [
     "APIToken", "Identity", "IdentityStore", "Org", "Team", "User",
     "Permission", "Role", "has_permission",
     "AuditEvent", "AuditLog",
-    "RedactionPolicy", "redact_prompt",
+    "RedactionPolicy", "redact_prompt", "RedactionResult",
     "QuotaExceeded", "QuotaPolicy", "QuotaTracker",
 ]
+
+# Register enterprise redactor into the core plugin system on import.
+_bootstrap()
