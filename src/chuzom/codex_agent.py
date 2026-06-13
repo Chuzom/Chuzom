@@ -10,6 +10,7 @@ Uses asyncio.create_subprocess_exec (not shell) for safe argument passing.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from dataclasses import dataclass
@@ -251,6 +252,7 @@ async def run_codex(
     model: str = "gpt-5.5",
     working_dir: str | None = None,
     timeout: int | None = None,
+    on_event: "Callable[[str, str], Awaitable[None]] | None" = None,
 ) -> CodexResult:
     """Run a task through the Codex CLI agent as a subprocess.
 
@@ -309,8 +311,10 @@ async def run_codex(
     # the router then logs as "Codex exited 1" and skips Codex for the
     # entire chain. Always-on is safe because we never ask Codex to mutate
     # the working tree.
+    # --json: emit JSONL events line-by-line for streaming progress visibility
     args = [
         binary, "exec",
+        "--json",
         "-m", model,
         "--color", "never",
         "--skip-git-repo-check",
@@ -331,12 +335,72 @@ async def run_codex(
             cwd=cwd,
             env=safe_env,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+
+        text_chunks: list[str] = []
+        stderr_buf: list[bytes] = []
+
+        async def _drain_stderr() -> None:
+            assert proc.stderr is not None
+            async for line in proc.stderr:
+                stderr_buf.append(line)
+
+        stderr_task = asyncio.create_task(_drain_stderr())
+
+        assert proc.stdout is not None
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + timeout
+
+        async for raw in proc.stdout:
+            if loop.time() > deadline:
+                proc.kill()
+                return CodexResult(
+                    content=f"Codex timed out after {timeout}s",
+                    model=model, exit_code=124,
+                    duration_sec=time.monotonic() - start,
+                )
+            line = raw.decode("utf-8", errors="replace").strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                text_chunks.append(line)
+                continue
+
+            ev_type = ev.get("type", "")
+            if ev_type == "item.completed":
+                text = ev.get("item", {}).get("text", "")
+                if text:
+                    text_chunks.append(text)
+                    if on_event:
+                        try:
+                            await on_event("item.completed", text[:120])
+                        except Exception:
+                            pass
+            elif ev_type == "turn.completed":
+                if on_event:
+                    usage = ev.get("usage", {})
+                    try:
+                        await on_event(
+                            "turn.completed",
+                            f"done — {usage.get('output_tokens','?')} tokens",
+                        )
+                    except Exception:
+                        pass
+            elif ev_type in ("turn.started", "thread.started"):
+                if on_event:
+                    try:
+                        await on_event(ev_type, "")
+                    except Exception:
+                        pass
+
+        await proc.wait()
+        await stderr_task
         duration = time.monotonic() - start
 
-        output = stdout.decode("utf-8", errors="replace").strip()
-        if not output and stderr:
-            output = stderr.decode("utf-8", errors="replace").strip()
+        output = "\n".join(text_chunks).strip()
+        if not output and stderr_buf:
+            output = b"".join(stderr_buf).decode("utf-8", errors="replace").strip()
 
         return CodexResult(
             content=output, model=model,

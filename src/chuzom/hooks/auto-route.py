@@ -85,8 +85,49 @@ _load_dotenv()
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-OLLAMA_MODEL = os.environ.get("CHUZOM_OLLAMA_MODEL", "gemma4:latest")
 OLLAMA_URL = os.environ.get("CHUZOM_OLLAMA_URL", "http://localhost:11434")
+
+
+def _load_discovered_ollama_models() -> list[str]:
+    """Return Ollama model short-names actually available right now.
+
+    Priority:
+      1. CHUZOM_OLLAMA_MODEL env var (single explicit override)
+      2. OLLAMA_BUDGET_MODELS env var (comma-separated list)
+      3. OLLAMA_MODELS env var (set by Ollama itself or the user)
+      4. ~/.chuzom/discovery.json (written by chuzom discover on startup)
+      5. Empty list (caller handles the no-Ollama case)
+    """
+    explicit = os.environ.get("CHUZOM_OLLAMA_MODEL", "").strip()
+    if explicit:
+        return [explicit]
+
+    for env_var in ("OLLAMA_BUDGET_MODELS", "OLLAMA_MODELS"):
+        raw = os.environ.get(env_var, "").strip()
+        if raw:
+            models = [m.strip() for m in raw.split(",") if m.strip()]
+            if models:
+                return models
+
+    try:
+        discovery_path = Path.home() / ".chuzom" / "discovery.json"
+        data = json.loads(discovery_path.read_text())
+        models = [
+            mid.removeprefix("ollama/")
+            for mid in data.get("models", {})
+            if mid.startswith("ollama/")
+        ]
+        if models:
+            return models
+    except Exception:
+        pass
+
+    return []
+
+
+_DISCOVERED_OLLAMA = _load_discovered_ollama_models()
+# First discovered model used as the single-model fallback (e.g. for tracking)
+OLLAMA_MODEL = _DISCOVERED_OLLAMA[0] if _DISCOVERED_OLLAMA else "qwen3.5:latest"
 OLLAMA_TIMEOUT = int(os.environ.get("CHUZOM_OLLAMA_TIMEOUT", "15"))
 CONFIDENCE_THRESHOLD = int(os.environ.get("CHUZOM_CONFIDENCE_THRESHOLD", "2"))  # v7.5.0: Aggressive routing — route more with lower threshold
 # Privacy-first: classify locally only (heuristic + Ollama) by default.
@@ -1059,19 +1100,12 @@ def _extract_category(raw: str) -> str | None:
     return None
 
 
-OLLAMA_MODELS = [
-    "qwen3.5:latest",      # Primary: best reasoning (Feb 2025)
-    "qwen3-coder-next",    # Code specialization
-    "qwen2.5:latest",      # Secondary fallback
-    "gemma4:latest",       # Lightweight validation
-]
-
-# Task-specific model selection (code tasks use specialized model)
-OLLAMA_CODE_MODELS = [
-    "kimi-k2.6:cloud",      # Primary: best for code (256K context, autonomous execution)
-    "qwen3-coder-next",     # Secondary: specialized code model
-    "qwen3.5:latest",       # Fallback: general reasoning
-]
+# Models are loaded dynamically from _DISCOVERED_OLLAMA (set near the top of this file).
+# OLLAMA_MODELS and OLLAMA_CODE_MODELS both use the same discovered list; there is no
+# longer a separate hard-coded "code specialization" list because we cannot know which
+# local models are code-focused without discovery metadata.
+OLLAMA_MODELS = _DISCOVERED_OLLAMA or ["qwen3.5:latest"]
+OLLAMA_CODE_MODELS = _DISCOVERED_OLLAMA or ["qwen3.5:latest"]
 
 
 def classify_with_ollama(text: str) -> str | None:
@@ -1876,15 +1910,9 @@ def _get_selected_model(task_type: str, complexity: str) -> tuple[str, str]:
         # Extract provider from "provider/model" format
         provider = selected.split("/")[0] if "/" in selected else selected
         
-        # For Ollama, enhance with the actual model name from auto-route config
+        # For Ollama, resolve to the first actually-available model
         if provider == "ollama":
-            # Read from OLLAMA_BUDGET_MODELS env var (set in .env)
-            ollama_models = os.environ.get("OLLAMA_BUDGET_MODELS", "").split(",")
-            if ollama_models and ollama_models[0].strip():
-                selected = f"ollama/{ollama_models[0].strip()}"
-            else:
-                # Fallback to configured model
-                selected = f"ollama/{OLLAMA_MODEL}"
+            selected = f"ollama/{OLLAMA_MODEL}"
         
         return selected, provider
     except Exception:

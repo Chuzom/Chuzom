@@ -187,7 +187,7 @@ class SessionSummaryDashboard:
         left_lines: list[RenderableType] = [
             Text(
                 f"ROUTING  today  {total_hits} decisions",
-                style=f"bold {PALETTE.text_primary}",
+                style=f"bold {PALETTE.accent}",
             ),
             Text(""),
         ]
@@ -221,7 +221,7 @@ class SessionSummaryDashboard:
 
         # ── Right: savings summary ───────────────────────────────────────────
         right_lines: list[RenderableType] = [
-            Text("SAVINGS  all sessions", style=f"bold {PALETTE.text_primary}"),
+            Text("SAVINGS  all sessions", style=f"bold {PALETTE.success}"),
             Text(""),
             Text(
                 f"  {_fmt_usd(lifetime_saved):<10} lifetime",
@@ -251,10 +251,10 @@ class SessionSummaryDashboard:
         if claude_quota_pct > 0 or claude_session_pct > 0:
             quota_lines.append(Text(""))
             quota_lines.append(
-                Text("  Claude Subscription  live", style=f"bold {PALETTE.text_primary}")
+                Text("  QUOTA  Claude Subscription  live", style=f"bold {PALETTE.warning}")
             )
 
-            if claude_session_pct >= 0:
+            if claude_session_pct > 0:
                 bar = self._colored_quota_bar(claude_session_pct)
                 delta_str = ""
                 if session_delta_pct is not None:
@@ -361,7 +361,7 @@ class SessionSummaryDashboard:
             # Real session data: show calls/tokens/cost per model
             model_lines.append(Text(""))
             model_lines.append(
-                Text("  MODELS  this session", style=f"bold {PALETTE.text_primary}")
+                Text("  MODELS  this session", style=f"bold {PALETTE.violet}")
             )
             total_m_calls = 0
             total_m_tokens = 0
@@ -409,7 +409,7 @@ class SessionSummaryDashboard:
             # No LLM calls this session — show 14-day mix as context
             model_lines.append(Text(""))
             model_lines.append(
-                Text("  MODELS  14-day mix (no LLM calls this session)", style=f"bold {PALETTE.text_dim}")
+                Text("  MODELS  14-day mix", style=f"bold {PALETTE.violet}")
             )
             for model, pct in sorted(model_breakdown.items(), key=lambda x: -x[1])[:5]:
                 short = model.split("/")[-1][:20]

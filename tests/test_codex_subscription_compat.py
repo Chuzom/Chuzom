@@ -83,8 +83,25 @@ def test_empty_env_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> Non
 class _FakeProc:
     returncode = 0
 
-    async def communicate(self) -> tuple[bytes, bytes]:
-        return (b"OK", b"")
+    async def wait(self) -> None:
+        pass
+
+    @property
+    def stdout(self):
+        return self._stdout_gen()
+
+    @property
+    def stderr(self):
+        return self._stderr_gen()
+
+    async def _stdout_gen(self):
+        # Emit one plain-text line so run_codex collects content
+        import json as _json
+        yield _json.dumps({"type": "item.completed", "item": {"text": "OK"}}).encode() + b"\n"
+
+    async def _stderr_gen(self):
+        return
+        yield  # make it an async generator
 
 
 @pytest.fixture
@@ -100,6 +117,7 @@ def _mock_codex_invoke(monkeypatch: pytest.MonkeyPatch) -> dict:
     monkeypatch.setattr(
         codex_agent.asyncio, "create_subprocess_exec", _fake_invoke,
     )
+    monkeypatch.setattr("chuzom.safe_subprocess.get_safe_env", lambda: {})
     return captured
 
 

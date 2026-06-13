@@ -1520,9 +1520,11 @@ def main() -> None:
                 start, current, is_live, cumulative,
             )
 
-            # Prepare data for SessionSummaryDashboard  
+            # Prepare data for SessionSummaryDashboard
+            # Use canonical "method" key (e.g. "heuristic", "ollama") not the human "reason"
+            # string — the renderer's _METHOD_SYMBOLS lookup requires canonical IDs.
             dashboard_decisions = [
-                {"method": d["reason"], "count": d["hits"]}
+                {"method": d["method"], "count": d["hits"]}
                 for d in report_data.get("routing_logic", [])
             ]
 
@@ -1615,8 +1617,11 @@ def main() -> None:
                             pct = (count / total_decisions) * 100
                             model_breakdown[method] = pct
 
-            # Gather quota data from Claude subscription
-            claude_quota_pct = current.get("weekly_pct", 0.0) * 100 if current else 0.0
+            # Gather quota data from Claude subscription.
+            # Both *_pct values are stored as 0-100 (not 0-1) — do NOT multiply by 100.
+            claude_quota_pct = current.get("weekly_pct", 0.0) if current else 0.0
+            claude_session_pct = current.get("session_pct", 0.0) if current else 0.0
+            claude_session_resets_at = current.get("session_resets_at", "") if current else ""
             gemini_quota_pct = 0.0  # Placeholder for future Gemini integration
             claude_remaining = current.get("session_resets_at", "Unknown") if current else "Unknown"
 
@@ -1628,6 +1633,37 @@ def main() -> None:
 
             gemini_remaining = "Unknown"
 
+            # Build daily_calls / daily_tokens from the 14-day data already computed above.
+            # daily_14d_data rows are (date_str, calls, tokens, cost_usd).
+            daily_calls_list = [d[1] for d in daily_14d_data] if daily_14d_data else []
+            daily_tokens_list = [d[2] for d in daily_14d_data] if daily_14d_data else []
+
+            # Build session_models from tools_data so the MODELS panel shows "this session".
+            # Format: [{"model": str, "calls": int, "tokens": int, "cost": float, "saved": float}]
+            session_models_list: list[dict] = []
+            if tools_data:
+                model_agg: dict[str, dict] = {}
+                for data in tools_data.values():
+                    if not isinstance(data, dict):
+                        continue
+                    in_tok = data.get("in", 0)
+                    out_tok = data.get("out", 0)
+                    cost = data.get("cost", 0.0)
+                    for model, count in data.get("models", {}).items():
+                        if model not in model_agg:
+                            model_agg[model] = {"calls": 0, "tokens": 0, "cost": 0.0}
+                        model_agg[model]["calls"] += count
+                        model_agg[model]["tokens"] += (in_tok + out_tok) * count
+                        model_agg[model]["cost"] += cost * count
+                for model, agg in sorted(model_agg.items(), key=lambda x: -x[1]["calls"]):
+                    session_models_list.append({
+                        "model": model,
+                        "calls": agg["calls"],
+                        "tokens": agg["tokens"],
+                        "cost": agg["cost"],
+                        "saved": 0.0,
+                    })
+
             dashboard.print_dashboard(
                 timestamp=f"Session · {datetime.now(timezone.utc).isoformat()}",
                 decisions=dashboard_decisions,
@@ -1635,13 +1671,15 @@ def main() -> None:
                 daily_costs=daily_costs if daily_costs else None,
                 total_saved=total_saved,
                 model_breakdown=model_breakdown if model_breakdown else None,
+                session_models=session_models_list if session_models_list else None,
                 claude_quota_pct=claude_quota_pct,
+                claude_session_pct=claude_session_pct,
+                claude_session_resets_at=claude_session_resets_at,
                 gemini_quota_pct=gemini_quota_pct,
                 claude_remaining=claude_remaining,
                 gemini_remaining=gemini_remaining,
-                daily_calls=[],
-                daily_tokens=[],
-                models=[],
+                daily_calls=daily_calls_list,
+                daily_tokens=daily_tokens_list,
             )
             final_summary_output = console.file.getvalue()
         except Exception as e:

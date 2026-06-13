@@ -119,3 +119,4 @@ tmp/
 ._*
 .Spotlight-V100
 .Trashes
+tests/fixtures/routing_expectations.local.yaml

@@ -1252,7 +1252,16 @@ async def _dispatch_model_loop(
                                                  _filter_media_params(task_type, media_params),
                                                  correlation_id=correlation_id)
                 elif provider == "codex":
-                    codex_result = await run_codex(prompt, model=model_name)
+                    async def _codex_on_event(ev_type: str, text: str) -> None:
+                        if ev_type == "item.completed" and text:
+                            await _notify(ctx, "info", f"⚡ codex: {text}")
+                        elif ev_type == "turn.started":
+                            await _notify(ctx, "info", f"⏳ {model_name} — generating...")
+                        elif ev_type == "turn.completed":
+                            await _notify(ctx, "info", f"✓ {model_name} — {text}")
+                    codex_result = await run_codex(
+                        prompt, model=model_name, on_event=_codex_on_event
+                    )
                     if not codex_result.success:
                         raise RuntimeError(
                             _format_subprocess_chain_error(
@@ -1271,7 +1280,12 @@ async def _dispatch_model_loop(
                         provider="codex",
                     )
                 elif provider == "gemini_cli":
-                    gemini_result = await run_gemini_cli(prompt, model=model_name)
+                    async def _gemini_on_event(ev_type: str, text: str) -> None:
+                        if text:
+                            await _notify(ctx, "info", f"⚡ gemini: {text}")
+                    gemini_result = await run_gemini_cli(
+                        prompt, model=model_name, on_event=_gemini_on_event
+                    )
                     if not gemini_result.success:
                         raise RuntimeError(
                             _format_subprocess_chain_error(

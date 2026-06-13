@@ -11,6 +11,7 @@ class TokyoNightPalette:
     success = "#9ece6a"          # Vivid Green — savings, success states
     warning = "#e0af68"          # Amber/Gold — alerts, warnings
     error = "#f7768e"            # Neon Pink — failures, issues
+    violet = "#bb9af7"           # Soft Purple — models section, LLM names
 
     # Structural & Text
     muted_border = "#3b4261"     # Deep Slate — frames, dividers, low contrast

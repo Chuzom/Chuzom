@@ -37,15 +37,15 @@ Your IDE (Claude Code, Cursor, etc)
     ↓
 [Chuzom Smart Router]  ← analyzes complexity
     ↓
-├─ Simple?   → Gemini Flash ($0.001/task)  ✅
-├─ Medium?   → GPT-4o ($0.003/task)        ✅
-└─ Complex?  → Claude Opus ($0.08/task)    ✅
+├─ Simple?   → Ollama (free, local)         ✅
+├─ Medium?   → Gemini Flash / Codex         ✅
+└─ Complex?  → Claude Opus / GPT-4o         ✅
     ↓
-Result + Savings Banner
-    🎯 chuzom → claude-3.5-sonnet · code/moderate · 342ms · saved $0.07
+Result + streaming progress + savings banner
+    🎯 chuzom → gemini-2.5-flash · code/moderate · 342ms · saved $0.07
 ```
 
-**Same answers. 80% lower costs.**
+**Same answers. 60–80% lower costs.**
 
 ---
 
@@ -168,13 +168,14 @@ Every prompt flows through a **smart classification pipeline**:
 ┌─────────────────────────────────────────┐
 │ 2️⃣  BUILD CHAIN                        │
 │ Ranked model candidates:                │
-│ • Cheapest capable first                │
+│ • Cheapest capable first (Ollama)       │
 │ • Fallback for failures                 │
 └──────────────┬──────────────────────────┘
                ↓
 ┌─────────────────────────────────────────┐
-│ 3️⃣  DISPATCH                           │
+│ 3️⃣  DISPATCH + STREAM                  │
 │ • Send to first qualified model         │
+│ • Live progress for Codex / Gemini CLI  │
 │ • Auto-failover if provider down        │
 │ • Log locally (zero telemetry)          │
 └──────────────┬──────────────────────────┘
@@ -188,88 +189,132 @@ Every prompt flows through a **smart classification pipeline**:
 
 ---
 
-## Savings: How It Works
+## Routing Chains
 
-### Proven Savings
-**60–80% cost reduction** · Actual vs baseline spend · Cumulative across sessions
+The model tried depends on task complexity. Chuzom tries each tier in order, falling back on failure or timeout:
 
-### Token Distribution
-- 🟢 **31% Free** (Ollama + Codex)
-- 🟡 **38% Budget** (Flash + GPT-4o-mini)
-- 🔴 **31% Premium** (GPT-4o + Claude)
+| Complexity | Tier 1 (cheapest) | Tier 2 | Tier 3 (fallback) |
+|---|---|---|---|
+| **simple** | Ollama (local/free) | Codex CLI | Gemini Flash |
+| **moderate** | Ollama (local/free) | Codex CLI | GPT-4o |
+| **complex** | Codex CLI | OpenAI o3 | Anthropic Claude |
 
-**Savings vary by workload** — code-heavy sessions route more to cheap models.
+### Ollama Dynamic Discovery
 
-### Methodology
+Chuzom never uses hardcoded model names. It discovers your installed Ollama models in this priority order:
 
-1. Each routed task logs: model used, tokens consumed, estimated cost
-2. A baseline cost is computed as if the same tokens were processed by the most expensive model in the chain
-3. **Savings = (baseline − actual) / baseline**
+1. `CHUZOM_OLLAMA_MODEL` env var (single model override)
+2. `OLLAMA_BUDGET_MODELS` env var (comma-separated list)
+3. `OLLAMA_MODELS` env var (comma-separated list)
+4. `~/.chuzom/discovery.json` (auto-populated by `chuzom doctor`)
+5. Safe default: `qwen3.5:latest`
 
-### Assumptions & Limitations
+```bash
+# Use your own model
+export CHUZOM_OLLAMA_MODEL=llama3.2:latest
 
-- Baseline assumes you would have used Opus/Sonnet for everything (worst case)
-- Token estimates use `len(text) / 4` approximation, not exact tokenizer counts
-- Cost data comes from LiteLLM's pricing tables (may lag provider price changes)
-- Savings vary significantly by workload — code-heavy sessions save more
-- The router itself adds small overhead (~$0.0001 per ambiguous task)
-
----
-
-## What You Get
-
-✅ **Drop-in for your dev tool** — no workflow changes  
-✅ **Automatic model selection** — based on task complexity  
-✅ **35–80% cost savings** — proven on real-world workloads  
-✅ **Local decision logging** — every choice stays on your machine (no telemetry)  
-✅ **Live savings dashboard** — `chuzom summary --watch` shows real-time spending  
-✅ **Intelligent failover** — if a provider is down, tries the next model  
-✅ **PII detection** — sensitive prompts route to local models only  
-✅ **Per-reply savings banner** — see which model ran and how much you saved  
+# Or let chuzom discover what's running
+chuzom doctor    # populates ~/.chuzom/discovery.json
+```
 
 ---
 
-## Live Dashboard Example
+## Real-Time Streaming Progress
+
+In v0.4.0, long-running model calls stream live progress into Claude Code. You'll see what's happening inside Codex and Gemini CLI instead of staring at a blank spinner.
+
+### Codex streaming (JSONL events)
+
+Codex CLI emits structured JSONL events line-by-line. Chuzom forwards them as MCP notifications:
 
 ```
-⚡ CHUZOM                                    quota ━━━─────── 26%
-63ef5927-49fc-4eae-bcef-e6e9b74a…
+⏺ Calling chuzom…
+  ✅ thread.started
+  ✅ turn.started
+  ⚡ item.completed  — Analyzing the error stack...
+  ⚡ item.completed  — The root cause is a missing null check in line 42
+  ✅ turn.completed  — done — 1024 tokens
+```
+
+No more 80-second silent waits. You'll know within seconds if Codex is processing or overloaded.
+
+### Gemini CLI streaming (line-by-line)
+
+Gemini CLI output streams line-by-line:
+
+```
+⏺ Calling chuzom…
+  ⚡ line  — The function signature should be...
+  ⚡ line  — Here's the corrected version:
+  ⚡ line  — def process(data: list[str]) -> dict:
+```
+
+### Heartbeat notifications
+
+For all models, Chuzom sends periodic heartbeat notifications during long waits:
+
+```
+⏺ Calling chuzom…
+  ⚠️  gpt-5.4 (codex) still waiting... 30s
+  ⚠️  gpt-5.4 (codex) still waiting... 60s — may be overloaded, will auto-fallback on timeout
+```
+
+---
+
+## Session Summary Dashboard
+
+At the end of every Claude Code session, Chuzom prints a full-color session summary in the terminal. The dashboard uses the **Tokyo Night** color palette for readability.
+
+```
+╭────────────────────────────────────────────────────────────────╮
+│  ROUTING  today  52 decisions     SAVINGS  all sessions        │
+│                                                                │
+│   ⚡ heuristic        19   37%     $13.98  lifetime            │
+│   🔗 ctx-inherit      11   21%     $7.66   today               │
+│   🔨 build-fast        7   13%                                 │
+│   📝 content-gen       2    4%                                 │
+│                                                                │
+│   Zero-cost: ██████████ 100%                                   │
+╰────────────────────────────────────────────────────────────────╯
 
 ╭────────────────────────────────────────────────────────────────╮
+│  QUOTA  Claude Subscription  live                              │
 │                                                                │
-│  ROUTING  today  52 decisions     SAVINGS  all sessions       │
+│    5h   ━━━━━━━━━───   67%  +2.0pp                            │
+│  resets in 1h 32m (4:00pm local)                              │
 │                                                                │
-│   ⚡ heuristic        19   37%     $13.98  lifetime           │
-│   🔗 ctx-inherit      11   21%     $7.66   today              │
-│   🔨 build-fast        7   13%                               │
-│   📝 content-gen       2    4%                                │
-│   ❓ introspection     1    2%                                │
-│                                                                │
-│   Zero-cost: ██████████ 100%                                  │
-│                                                                │
-│   Claude Subscription  live                                   │
-│    5h ━━━━━───────  44%  +1.0pp                              │
-│  resets in 1h 32m (4:00pm BST)                               │
-│                                                                │
+│  weekly ━━━━────────   33%                                     │
+│  resets Monday                                                │
+╰────────────────────────────────────────────────────────────────╯
+
+╭────────────────────────────────────────────────────────────────╮
+│  MODELS  this session                                          │
+│   gemini-2.5-flash     18   35%                               │
+│   gpt-5.5              14   27%                               │
+│   ollama/qwen3.5:7b     9   17%                               │
+│   claude-sonnet-4-6     9   17%                               │
 ╰────────────────────────────────────────────────────────────────╯
 
 ╭─ 14-DAY ACTIVITY ─────────────────────────────────────────────╮
 │ calls/day                                                     │
 │  391 ┤    █                                                   │
-│  335 ┤    █▁                                                  │
 │  279 ┤   ▄██                                                  │
-│  223 ┤ ▅ ███▃                                                │
-│  167 ┤ █▆████                                                │
-│  111 ┤ ██████                                                │
-│   55 ┤ ██████                                                │
-│    0 ┤ ███████                                               │
-│      └────────                                               │
+│  167 ┤ █▆████                                                 │
+│    0 ┤ ███████                                                │
 │       D1  D3  D5  D7                                          │
-│                                                                │
-│  1650 calls · 449.1k tok · $13.98 lifetime                   │
-│  avg 235/day · 0ms routing overhead                          │
+│  1650 calls · 449.1k tok · $13.98 lifetime                    │
 ╰────────────────────────────────────────────────────────────────╯
 ```
+
+### Dashboard panels
+
+| Panel | Color | What it shows |
+|---|---|---|
+| **ROUTING** | Cyan-blue | Decision method breakdown — heuristic, ctx-inherit, build-fast, etc. |
+| **SAVINGS** | Green | Lifetime, today, week, month savings vs always-Opus baseline |
+| **QUOTA** | Amber | Claude 5h + weekly quota bars with reset countdown; Gemini daily rate |
+| **MODELS** | Purple | Model usage share this session + 14-day rolling mix |
+| **14-DAY ACTIVITY** | Blue | Sparkline bar chart of daily call volume and spend |
 
 ---
 
@@ -280,8 +325,9 @@ Chuzom is an **MCP (Model Context Protocol) server** running on your workstation
 1. **Intercepts** model requests from your IDE
 2. **Analyzes** the prompt (task, complexity, sensitivity)
 3. **Routes** to the best-fit model (cheapest first)
-4. **Logs** the decision locally
-5. **Returns** your answer + savings metadata
+4. **Streams** live progress events back to the IDE
+5. **Logs** the decision locally
+6. **Returns** your answer + savings metadata
 
 **Zero data leaves your machine.** No proxy. No cloud. No telemetry.
 
@@ -299,6 +345,36 @@ chuzom summary [--watch]             # Cost dashboard (live or one-time snapshot
 
 chuzom --version                     # Show installed version
 ```
+
+---
+
+## Configuration
+
+| Env var | Default | Description |
+|---|---|---|
+| `CHUZOM_OLLAMA_MODEL` | auto-discovered | Override the Ollama model |
+| `OLLAMA_BUDGET_MODELS` | auto-discovered | Comma-separated budget model list |
+| `OLLAMA_MODELS` | auto-discovered | Comma-separated model list |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `CHUZOM_CODEX_MODELS` | `gpt-5.5,gpt-5.4` | Codex model fallback chain |
+| `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
+| `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription mode (no API key needed) |
+
+---
+
+## What You Get
+
+✅ **Drop-in for your dev tool** — no workflow changes  
+✅ **Automatic model selection** — based on task complexity  
+✅ **35–80% cost savings** — proven on real-world workloads  
+✅ **Local decision logging** — every choice stays on your machine (no telemetry)  
+✅ **Live savings dashboard** — `chuzom summary --watch` shows real-time spending  
+✅ **Session summary** — full-color Tokyo Night dashboard at session end  
+✅ **Intelligent failover** — if a provider is down, tries the next model  
+✅ **Streaming progress** — Codex and Gemini CLI stream events live; no silent waits  
+✅ **Ollama dynamic discovery** — no hardcoded models; uses what you have installed  
+✅ **PII detection** — sensitive prompts route to local models only  
+✅ **Per-reply savings banner** — see which model ran and how much you saved  
 
 ---
 
@@ -343,6 +419,12 @@ A: Chuzom works with 20+ providers: OpenAI, Anthropic, Google, Ollama, local mod
 **Q: How much can I actually save?**  
 A: Depends on your usage. Heavy Opus users see 70–80% savings. Mixed users see 35–50%. Most save $200–800/year.
 
+**Q: Why don't I see Ollama being used even though it's running?**  
+A: Chuzom uses 5-level dynamic discovery to find your installed models. Run `chuzom doctor` to populate `~/.chuzom/discovery.json`, or set `CHUZOM_OLLAMA_MODEL=your-model:tag` directly.
+
+**Q: Codex was taking 80+ seconds with no feedback — is that fixed?**  
+A: Yes. v0.4.0 streams Codex JSONL events in real time. You'll see `thread.started`, `item.completed`, and `turn.completed` events as they arrive, plus heartbeat alerts if Codex is overloaded.
+
 ---
 
 ## License
@@ -350,5 +432,3 @@ A: Depends on your usage. Heavy Opus users see 70–80% savings. Mixed users see
 MIT © [The Chuzom Contributors](https://github.com/Chuzom/chuzom/graphs/contributors)
 
 ---
-
-**Enjoy smarter routing. Enjoy lower bills.** ⚡
