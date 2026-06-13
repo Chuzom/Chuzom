@@ -1624,6 +1624,7 @@ def main() -> None:
 
             # Build session_models from tools_data so the MODELS panel shows "this session".
             # Format: [{"model": str, "calls": int, "tokens": int, "cost": float, "saved": float}]
+            tools_data = report_data.get("tools") or {}
             session_models_list: list[dict] = []
             if tools_data:
                 model_agg: dict[str, dict] = {}
