@@ -399,12 +399,11 @@ class RouterConfig(BaseSettings):
             or an empty list when Ollama is not configured.
         """
         import os
-        if not self.ollama_base_url:
-            return []
 
-        # Try live discovery cache first (Phase 1 of v5.0).
-        # Skip during tests to honour explicit ollama_budget_models values
-        # and avoid dependency on the real Ollama daemon or on-disk cache.
+        # Discovery cache takes priority — it represents what's actually running
+        # right now, regardless of whether OLLAMA_BASE_URL is explicitly set.
+        # This allows Ollama to be used as an answer model even when the URL is
+        # inferred from the daemon rather than configured explicitly.
         if not os.getenv("PYTEST_CURRENT_TEST"):
             try:
                 from chuzom.discover import get_cached_ollama_models
@@ -413,6 +412,10 @@ class RouterConfig(BaseSettings):
                     return cached_models
             except Exception:
                 pass
+
+        # Without a base URL we can't reach Ollama; nothing more to try.
+        if not self.ollama_base_url:
+            return []
 
         # Fall back to env var for backward compatibility
         return [f"ollama/{m.strip()}" for m in self.ollama_budget_models.split(",") if m.strip()]
