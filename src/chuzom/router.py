@@ -831,6 +831,34 @@ async def _notify(ctx: Any | None, level: str, message: str) -> None:
         log.debug("notify_failed", level=level, error=str(e))
 
 
+async def _heartbeat_notify(
+    ctx: Any | None,
+    model_name: str,
+    provider: str,
+    interval_s: float = 5.0,
+    warn_after_s: float = 30.0,
+) -> None:
+    """Emit periodic progress messages while waiting for a model API response.
+
+    Fires every ``interval_s`` seconds. Switches from info to warning level
+    after ``warn_after_s`` seconds so hung calls are visible without being
+    noisy for normal-latency responses. Designed to be cancelled as soon as
+    the API call completes.
+    """
+    elapsed = 0.0
+    while True:
+        await asyncio.sleep(interval_s)
+        elapsed += interval_s
+        if elapsed >= warn_after_s:
+            await _notify(
+                ctx, "warning",
+                f"⚠️  {model_name} ({provider}) still waiting... {elapsed:.0f}s — "
+                "may be overloaded, will auto-fallback on timeout",
+            )
+        else:
+            await _notify(ctx, "info", f"⏳ {model_name} — {elapsed:.0f}s elapsed")
+
+
 def _enrich_response(
     response: LLMResponse,
     classification_data: dict | None,
@@ -1152,6 +1180,12 @@ async def _dispatch_model_loop(
         # scattered, asymmetric releases.
         _res_tokens = max_tokens if isinstance(max_tokens, int) and max_tokens > 0 else 500
         reserve_tokens(provider, _res_tokens)
+        # Start heartbeat so the user sees progress during long API calls
+        # (e.g. Ollama local model, Codex subprocess, slow Gemini API call).
+        # Cancelled in the finally block regardless of success or failure.
+        _hb_task = asyncio.create_task(
+            _heartbeat_notify(ctx, model_name, provider, interval_s=5.0, warn_after_s=30.0)
+        )
         try:
             with traced_span(
                 "provider_call",
@@ -1515,6 +1549,12 @@ async def _dispatch_model_loop(
             chain_errors.append((model, f"{type(e).__name__}: {e}"))
             continue
         finally:
+            # Cancel heartbeat task — fires on success, failure, and unexpected exits.
+            _hb_task.cancel()
+            try:
+                await _hb_task
+            except asyncio.CancelledError:
+                pass
             # P1-7: release this attempt's reservation against the same provider
             # it was reserved on — fires on success-return, fallback continue,
             # and any unexpected exit, so the pressure oracle never leaks.
