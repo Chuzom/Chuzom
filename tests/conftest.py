@@ -221,15 +221,23 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("CHUZOM_PROFILE", "balanced")
     monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "false")
     monkeypatch.setenv("CHUZOM_GEMINI_SUBSCRIPTION", "false")
-    
-    # Reset singleton so config reads fresh env vars
+
+    # Reset config singleton so it reads fresh env vars
     import chuzom.config as config_module
     config_module._config = None
-    
+
+    # Reset dynamic routing table — it's a global singleton built at session
+    # startup. Without this, test ordering determines which providers appear in
+    # the chain (whichever env was active when the first test triggered server
+    # startup wins), making routing tests non-deterministic across CI runs.
+    from chuzom.dynamic_routing import reset_dynamic_routing
+    reset_dynamic_routing()
+
     yield
-    
-    # Reset again after test to avoid polluting other tests
+
+    # Restore clean state so subsequent tests start from a known baseline
     config_module._config = None
+    reset_dynamic_routing()
 
 
 @pytest.fixture

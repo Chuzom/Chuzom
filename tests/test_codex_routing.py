@@ -89,7 +89,9 @@ async def test_code_task_codex_after_first_claude_not_last(
     Chain after fix:   [Sonnet, Codex/gpt-5.4, Codex/o3, GPT-4o, Gemini Pro, DeepSeek, Haiku]
     """
     monkeypatch.setattr("chuzom.router.is_codex_available", lambda: True)
+    monkeypatch.setattr("chuzom.router.is_gemini_cli_available", lambda: False)
     monkeypatch.setattr("chuzom.claude_usage.get_claude_pressure", lambda: 0.2)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     # Disable Ollama to ensure Claude is first in chain
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
