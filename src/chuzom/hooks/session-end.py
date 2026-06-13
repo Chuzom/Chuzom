@@ -1508,7 +1508,7 @@ def main() -> None:
     cumulative                  = _query_cumulative_savings()
     _build_and_save_learned_profile()   # v6.1: build profile from corrections
 
-    has_cumulative = any(calls > 0 for _, calls, *_ in cumulative)
+
 
     # Try SessionSummaryDashboard (Rich) renderer; fall back to legacy ANSI
     final_summary_output = ""

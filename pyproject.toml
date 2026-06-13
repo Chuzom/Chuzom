@@ -1,6 +1,6 @@
 [project]
 name = "chuzom-router"
-version = "0.3.3"
+version = "0.3.5"
 description = "Lightweight signal-driven LLM router for Claude Code, Cursor, Codex, Gemini CLI, and Codex CLI. Now with real-time streaming dashboards!"
 readme = "README.md"
 license = "MIT"

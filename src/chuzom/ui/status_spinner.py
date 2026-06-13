@@ -83,7 +83,6 @@ class RoutingStatusSpinner:
         if not self.status:
             return
 
-        elapsed = time.time() - self.start_time
         reason = f" ({decision_reason})" if decision_reason else ""
         message = f"[{PALETTE.success}]✓[/] Routed to [bold]{model}[/bold]{reason}"
 

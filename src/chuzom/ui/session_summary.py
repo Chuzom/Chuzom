@@ -154,54 +154,72 @@ class SessionSummaryDashboard:
         avg_calls: int = 0,
         avg_tokens: int = 0,
     ) -> RenderableType:
-        """Render 14-day activity sparklines.
+        """Render 14-day activity sparklines with day labels.
 
         Args:
-            daily_calls: Calls per day for last 14 days
-            daily_tokens: Tokens per day for last 14 days
+            daily_calls: Calls per day for last 14 days (oldest first)
+            daily_tokens: Tokens per day for last 14 days (oldest first)
             avg_calls: Average calls per day
             avg_tokens: Average tokens per day
         """
-        lines = []
+        import datetime
 
-        lines.append(Text("14-Day Activity", style=f"bold {PALETTE.accent}"))
+        lines: list[Text] = []
+        lines.append(Text("📈 14-Day Activity", style=f"bold {PALETTE.accent}"))
         lines.append(Text(""))
 
-        # Simple sparkline (─────────────────────)
-        if daily_calls:
-            max_calls = max(daily_calls) if daily_calls else 1
-            sparkline = "".join(
-                ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][
-                    min(7, int((c / max_calls * 8))) if max_calls > 0 else 0
-                ]
-                for c in daily_calls[-14:]
-            )
+        BAR_CHARS = "▁▂▃▄▅▆▇█"
+
+        def spark(values: list[int | float]) -> str:
+            if not values:
+                return ""
+            mx = max(values) or 1
+            return "".join(BAR_CHARS[min(7, int(v / mx * 8))] for v in values[-14:])
+
+        def _day_labels(n: int) -> str:
+            today = datetime.date.today()
+            labels = []
+            for i in range(n - 1, -1, -1):
+                d = today - datetime.timedelta(days=i)
+                labels.append(d.strftime("%d"))
+            return " ".join(labels)
+
+        n = min(14, len(daily_calls) if daily_calls else len(daily_tokens) if daily_tokens else 0)
+
+        if n > 0:
+            # Date header row
+            day_labels = _day_labels(n)
+            lines.append(Text(f"  {day_labels}", style=PALETTE.text_dim))
+
+        if daily_calls and n > 0:
+            sp = spark(daily_calls[-n:])
+            # Space out sparkline chars to align with date labels (2 chars each)
+            sp_wide = " ".join(sp)
+            lines.append(Text(f"  {sp_wide}", style=PALETTE.accent))
             lines.append(
                 Text(
-                    f"  Calls: {sparkline}  {avg_calls} avg/day",
+                    f"  Calls  ·  avg {avg_calls}/day  ·  total {sum(daily_calls[-n:])}",
+                    style=PALETTE.text_primary,
+                )
+            )
+            lines.append(Text(""))
+
+        if daily_tokens and n > 0:
+            sp = spark(daily_tokens[-n:])
+            sp_wide = " ".join(sp)
+            lines.append(Text(f"  {sp_wide}", style=PALETTE.accent))
+            lines.append(
+                Text(
+                    f"  Tokens ·  avg {avg_tokens:,}/day  ·  total {sum(daily_tokens[-n:]):,}",
                     style=PALETTE.text_primary,
                 )
             )
 
-        if daily_tokens:
-            max_tokens = max(daily_tokens) if daily_tokens else 1
-            sparkline = "".join(
-                ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][
-                    min(7, int((t / max_tokens * 8))) if max_tokens > 0 else 0
-                ]
-                for t in daily_tokens[-14:]
-            )
-            lines.append(
-                Text(
-                    f"  Tokens: {sparkline}  {avg_tokens} avg/day",
-                    style=PALETTE.text_primary,
-                )
-            )
-
-        lines.append(Text("  · 100% uptime ✓", style=PALETTE.success))
+        if not daily_calls and not daily_tokens:
+            lines.append(Text("  No activity data for this period", style=PALETTE.text_dim))
 
         content = Group(*lines)
-        return Panel(content, border_style=PALETTE.muted_border, expand=False)
+        return Panel(content, border_style=PALETTE.muted_border, expand=True, title="14-Day Activity", title_align="left")
 
     def render_top_models(
         self,
@@ -246,37 +264,48 @@ class SessionSummaryDashboard:
         daily_costs: list[float],
         total_saved: float = 0.0,
     ) -> RenderableType:
-        """Render 14-day cost trend sparkline.
+        """Render 14-day cost trend sparkline with date labels.
 
         Args:
-            daily_costs: Daily costs for last 14 days
+            daily_costs: Daily costs for last 14 days (oldest first)
             total_saved: Total savings amount
         """
-        lines = []
+        import datetime
+
+        lines: list[Text] = []
         lines.append(Text("📊 14-Day Cost Trend", style=f"bold {PALETTE.accent}"))
         lines.append(Text(""))
 
-        if daily_costs:
-            max_cost = max(daily_costs) if daily_costs else 1
-            sparkline = "".join(
-                ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][
-                    min(7, int((c / max_cost * 8))) if max_cost > 0 else 0
-                ]
-                for c in daily_costs[-14:]
-            )
-            total = sum(daily_costs)
-            avg = total / len(daily_costs) if daily_costs else 0
+        BAR_CHARS = "▁▂▃▄▅▆▇█"
 
-            lines.append(Text(f"  Trend: {sparkline}", style=PALETTE.text_primary))
-            lines.append(Text(f"  Total: ${total:.2f}  |  Avg: ${avg:.2f}/day", style=PALETTE.text_primary))
+        n = min(14, len(daily_costs)) if daily_costs else 0
+
+        if n > 0:
+            today = datetime.date.today()
+            day_labels = " ".join(
+                (today - datetime.timedelta(days=n - 1 - i)).strftime("%d")
+                for i in range(n)
+            )
+            lines.append(Text(f"  {day_labels}", style=PALETTE.text_dim))
+
+            window = daily_costs[-n:]
+            mx = max(window) or 1
+            sp_wide = " ".join(BAR_CHARS[min(7, int(c / mx * 8))] for c in window)
+            lines.append(Text(f"  {sp_wide}", style=PALETTE.accent))
+
+            total = sum(window)
+            avg = total / n
+            lines.append(Text(""))
+            lines.append(Text(f"  Total: ${total:.2f}  ·  Avg: ${avg:.4f}/day", style=PALETTE.text_primary))
 
             if total_saved > 0:
-                lines.append(Text(f"  Saved: ${total_saved:.2f} via routing", style=PALETTE.success))
+                pct_saved = (total_saved / (total + total_saved) * 100) if (total + total_saved) > 0 else 0
+                lines.append(Text(f"  Saved: ${total_saved:.2f} via routing  ({pct_saved:.0f}% of gross)", style=PALETTE.success))
         else:
             lines.append(Text("  No cost data for this period", style=PALETTE.text_dim))
 
         content = Group(*lines)
-        return Panel(content, border_style=PALETTE.muted_border, expand=False)
+        return Panel(content, border_style=PALETTE.muted_border, expand=True, title="14-Day Cost Trend", title_align="left")
 
     def render_model_breakdown(
         self,
@@ -310,44 +339,166 @@ class SessionSummaryDashboard:
     def render_quota_status(
         self,
         claude_quota_pct: float = 0.0,
+        claude_session_pct: float = 0.0,
+        claude_session_resets_at: str = "",
+        claude_weekly_resets_at: str = "",
         gemini_quota_pct: float = 0.0,
+        codex_quota_pct: float = 0.0,
+        codex_remaining: str = "",
         claude_remaining: str = "Unknown",
         gemini_remaining: str = "Unknown",
+        subscriptions: list[dict] | None = None,
     ) -> RenderableType:
-        """Render subscription quota status.
+        """Render subscription quota status — flexible, shows active subscriptions only.
 
         Args:
-            claude_quota_pct: Claude quota used (0-100)
-            gemini_quota_pct: Gemini quota used (0-100)
-            claude_remaining: Time remaining for Claude
-            gemini_remaining: Time remaining for Gemini
+            claude_quota_pct: Claude weekly quota used (0-100)
+            claude_session_pct: Claude 5h session quota used (0-100)
+            claude_session_resets_at: ISO timestamp when 5h window resets
+            claude_weekly_resets_at: ISO timestamp when weekly window resets
+            gemini_quota_pct: Gemini API quota used (0-100)
+            codex_quota_pct: Codex quota used (0-100)
+            codex_remaining: Codex remaining calls/quota string
+            claude_remaining: Claude remaining text (legacy)
+            gemini_remaining: Gemini remaining time text
+            subscriptions: Optional list of {name, pct, resets_at, window} dicts
+                           for fully flexible rendering
         """
-        lines = []
+        import datetime
+
+        BAR_LEN = 20
+
+        def _status_icon(pct: float) -> str:
+            if pct < 50:
+                return "🟢"
+            if pct < 80:
+                return "🟡"
+            return "🔴"
+
+        def _bar(pct: float) -> str:
+            filled = min(BAR_LEN, int(pct / 100 * BAR_LEN))
+            return "█" * filled + "░" * (BAR_LEN - filled)
+
+        def _format_resets_at(iso_ts: str) -> str:
+            if not iso_ts:
+                return ""
+            try:
+                dt = datetime.datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+                now = datetime.datetime.now(datetime.timezone.utc)
+                delta = dt - now
+                if delta.total_seconds() <= 0:
+                    return "resets soon"
+                total_sec = int(delta.total_seconds())
+                hours, rem = divmod(total_sec, 3600)
+                minutes = rem // 60
+                if hours >= 24:
+                    days = hours // 24
+                    return f"resets in {days}d {hours % 24}h"
+                if hours > 0:
+                    return f"resets in {hours}h {minutes}m"
+                return f"resets in {minutes}m"
+            except Exception:
+                return iso_ts
+
+        lines: list[Text] = []
         lines.append(Text("📦 Subscription Quotas", style=f"bold {PALETTE.accent}"))
         lines.append(Text(""))
 
-        # Claude quota
-        bar_length = int(claude_quota_pct / 5)
-        bar = "█" * bar_length + "░" * (20 - bar_length)
-        claude_status = "🟢 OK" if claude_quota_pct < 50 else "🟡 HIGH" if claude_quota_pct < 80 else "🔴 CRITICAL"
-        lines.append(
-            Text(f"  Claude Pro:  [{bar}] {claude_quota_pct:5.1f}% {claude_status}", style=PALETTE.text_primary)
-        )
-        lines.append(Text(f"              {claude_remaining}", style=PALETTE.text_dim))
+        any_shown = False
 
-        lines.append(Text(""))
+        # ── Claude Pro (structured: 5h session + weekly windows) ──────────────
+        if claude_quota_pct > 0 or claude_session_pct > 0:
+            any_shown = True
+            lines.append(Text("  Claude Pro", style=f"bold {PALETTE.text_primary}"))
 
-        # Gemini quota
-        bar_length = int(gemini_quota_pct / 5)
-        bar = "█" * bar_length + "░" * (20 - bar_length)
-        gemini_status = "🟢 OK" if gemini_quota_pct < 50 else "🟡 HIGH" if gemini_quota_pct < 80 else "🔴 CRITICAL"
-        lines.append(
-            Text(f"  Gemini API:  [{bar}] {gemini_quota_pct:5.1f}% {gemini_status}", style=PALETTE.text_primary)
-        )
-        lines.append(Text(f"               {gemini_remaining}", style=PALETTE.text_dim))
+            # 5-hour session window
+            if claude_session_pct >= 0:
+                reset_str = _format_resets_at(claude_session_resets_at)
+                icon = _status_icon(claude_session_pct)
+                b = _bar(claude_session_pct)
+                lines.append(
+                    Text(
+                        f"    5h session  [{b}] {claude_session_pct:5.1f}%  {icon}",
+                        style=PALETTE.text_primary,
+                    )
+                )
+                if reset_str:
+                    lines.append(Text(f"                  {reset_str}", style=PALETTE.text_dim))
+
+            # Weekly window
+            icon = _status_icon(claude_quota_pct)
+            b = _bar(claude_quota_pct)
+            reset_str = _format_resets_at(claude_weekly_resets_at)
+            lines.append(
+                Text(
+                    f"    Weekly      [{b}] {claude_quota_pct:5.1f}%  {icon}",
+                    style=PALETTE.text_primary,
+                )
+            )
+            if reset_str:
+                lines.append(Text(f"                  {reset_str}", style=PALETTE.text_dim))
+            elif claude_remaining and claude_remaining != "Unknown":
+                lines.append(Text(f"                  {claude_remaining}", style=PALETTE.text_dim))
+
+            lines.append(Text(""))
+
+        # ── Gemini API ────────────────────────────────────────────────────────
+        if gemini_quota_pct > 0:
+            any_shown = True
+            icon = _status_icon(gemini_quota_pct)
+            b = _bar(gemini_quota_pct)
+            lines.append(Text("  Gemini API", style=f"bold {PALETTE.text_primary}"))
+            lines.append(
+                Text(
+                    f"    Daily rate   [{b}] {gemini_quota_pct:5.1f}%  {icon}",
+                    style=PALETTE.text_primary,
+                )
+            )
+            if gemini_remaining and gemini_remaining != "Unknown":
+                lines.append(Text(f"                  {gemini_remaining}", style=PALETTE.text_dim))
+            lines.append(Text(""))
+
+        # ── Codex / OpenAI ────────────────────────────────────────────────────
+        if codex_quota_pct > 0 or codex_remaining:
+            any_shown = True
+            icon = _status_icon(codex_quota_pct) if codex_quota_pct > 0 else "🟢"
+            b = _bar(codex_quota_pct)
+            lines.append(Text("  Codex (OpenAI)", style=f"bold {PALETTE.text_primary}"))
+            if codex_quota_pct > 0:
+                lines.append(
+                    Text(
+                        f"    Quota        [{b}] {codex_quota_pct:5.1f}%  {icon}",
+                        style=PALETTE.text_primary,
+                    )
+                )
+            if codex_remaining:
+                lines.append(Text(f"    {codex_remaining}", style=PALETTE.text_dim))
+            lines.append(Text(""))
+
+        # ── Flexible extra subscriptions ──────────────────────────────────────
+        for sub in (subscriptions or []):
+            name = sub.get("name", "Unknown")
+            pct = float(sub.get("pct", 0))
+            resets_at = sub.get("resets_at", "")
+            window = sub.get("window", "")
+            any_shown = True
+            icon = _status_icon(pct)
+            b = _bar(pct)
+            label = f"{window:12}" if window else f"{'Quota':12}"
+            lines.append(Text(f"  {name}", style=f"bold {PALETTE.text_primary}"))
+            lines.append(
+                Text(f"    {label} [{b}] {pct:5.1f}%  {icon}", style=PALETTE.text_primary)
+            )
+            reset_str = _format_resets_at(resets_at)
+            if reset_str:
+                lines.append(Text(f"                  {reset_str}", style=PALETTE.text_dim))
+            lines.append(Text(""))
+
+        if not any_shown:
+            lines.append(Text("  No active subscription quotas", style=PALETTE.text_dim))
 
         content = Group(*lines)
-        return Panel(content, border_style=PALETTE.muted_border, expand=False)
+        return Panel(content, border_style=PALETTE.muted_border, expand=True, title="Subscription Quotas", title_align="left")
 
     def render_footer(self) -> RenderableType:
         """Render footer with session complete status."""
@@ -366,9 +517,15 @@ class SessionSummaryDashboard:
         model_breakdown: dict[str, float] | None = None,
         models: list[dict] | None = None,
         claude_quota_pct: float = 0.0,
+        claude_session_pct: float = 0.0,
+        claude_session_resets_at: str = "",
+        claude_weekly_resets_at: str = "",
         gemini_quota_pct: float = 0.0,
+        codex_quota_pct: float = 0.0,
+        codex_remaining: str = "",
         claude_remaining: str = "Unknown",
         gemini_remaining: str = "Unknown",
+        subscriptions: list[dict] | None = None,
     ) -> RenderableType:
         """Render complete dashboard with all panels.
 
@@ -424,9 +581,15 @@ class SessionSummaryDashboard:
         panels.append(
             self.render_quota_status(
                 claude_quota_pct=claude_quota_pct,
+                claude_session_pct=claude_session_pct,
+                claude_session_resets_at=claude_session_resets_at,
+                claude_weekly_resets_at=claude_weekly_resets_at,
                 gemini_quota_pct=gemini_quota_pct,
+                codex_quota_pct=codex_quota_pct,
+                codex_remaining=codex_remaining,
                 claude_remaining=claude_remaining,
                 gemini_remaining=gemini_remaining,
+                subscriptions=subscriptions,
             )
         )
         panels.append(Text(""))

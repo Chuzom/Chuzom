@@ -16,7 +16,7 @@ import os
 import re
 import time
 from dataclasses import replace
-from typing import Any, TYPE_CHECKING
+from typing import Any, AsyncIterator, TYPE_CHECKING
 from uuid import uuid4
 
 from chuzom import cost, media, providers
@@ -46,6 +46,7 @@ from chuzom.contract import build_contract
 from chuzom.gates import run_gates
 from chuzom.gemini_cli_agent import GEMINI_MODELS, is_gemini_cli_available, run_gemini_cli
 from chuzom.logging import get_logger
+from chuzom.streaming_types import RouterStreamEvent
 from chuzom.compaction import compact_structural
 from chuzom.config import get_config
 from chuzom.repo_config import effective_config as get_repo_config
@@ -2724,10 +2725,6 @@ async def _call_media(
 #   - All usage/audit settlement happens exactly once
 #   - No recursion risk from streaming: each provider stream is independent
 
-from chuzom.streaming_types import (
-    RouterStreamEvent,
-)
-
 
 async def route_and_stream(
     task_type: TaskType,
@@ -2895,8 +2892,6 @@ async def route_and_stream(
     visited_models: set[str] = set()
     attempt_index = 0
     committed = False
-    final_cost = 0.0
-    final_latency_ms = 0.0
 
     try:
         for model in models_to_try:
@@ -2963,8 +2958,6 @@ async def route_and_stream(
                         # Emit usage.final (delivered exactly once)
                         seq += 1
                         usage = provider_event["usage"]
-                        final_cost = usage["cost_usd"]
-                        final_latency_ms = usage["latency_ms"]
                         yield {
                             "seq": seq,
                             "type": "usage.final",
@@ -2992,6 +2985,13 @@ async def route_and_stream(
                     "used_emergency_fallback": False,
                     "cached": False,
                 }
+                # Mark Ollama as warm so the next request skips classifier
+                if provider == "ollama":
+                    try:
+                        from chuzom.discover import mark_ollama_ok
+                        mark_ollama_ok()
+                    except Exception:
+                        pass
                 return
 
             except Exception as e:

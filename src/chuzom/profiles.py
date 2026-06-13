@@ -480,6 +480,31 @@ def get_model_chain(
     except AssertionError:
         raise  # Policy violations are critical — let them propagate
 
+    # Filter Ollama entries to only models actually installed — prevents
+    # 50-second LiteLLM hangs when the chain names a model that isn't present.
+    try:
+        from chuzom.discover import filter_ollama_by_installed
+        chain = filter_ollama_by_installed(chain)
+    except Exception:
+        pass  # Never let filter failures break routing
+
+    # Warm-path: if Ollama responded successfully within the last 60 seconds,
+    # ensure it leads the chain for simple/budget tasks (skip classifier overhead).
+    # Only applies when an Ollama model is already in the chain.
+    try:
+        from chuzom.discover import is_ollama_warm
+        if (
+            is_ollama_warm()
+            and profile == RoutingProfile.BUDGET
+            and task_type not in {TaskType.IMAGE, TaskType.VIDEO, TaskType.AUDIO}
+        ):
+            ollama_models = [m for m in chain if m.startswith("ollama/")]
+            rest = [m for m in chain if not m.startswith("ollama/")]
+            if ollama_models:
+                chain = ollama_models + rest
+    except Exception:
+        pass  # Never let warm-path failures break routing
+
     return chain
 
 

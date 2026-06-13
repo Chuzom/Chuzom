@@ -10,9 +10,9 @@ import asyncio
 from typing import Any
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Grid, Vertical
+from textual.containers import Container, Grid
 from textual.reactive import reactive
-from textual.widgets import Header, Footer, Static, Button
+from textual.widgets import Header, Footer
 from textual.binding import Binding
 
 from chuzom.tui.messages import (
@@ -51,7 +51,7 @@ class ChuzomDashboard(App[None]):
     """
 
     TITLE = "Chuzom Router — Real-time LLM Routing"
-    SUB_TITLE = "Session: Loading... | v0.3.3"
+    SUB_TITLE = "Session: Loading... | v0.3.5"
 
     CSS_PATH = "dashboard.css"
     BINDINGS = [
@@ -123,7 +123,7 @@ class ChuzomDashboard(App[None]):
     def on_mount(self) -> None:
         """Initialize dashboard after mount."""
         # Set initial title
-        self.title = "Chuzom Router v0.3.3 — Starting..."
+        self.title = "Chuzom Router v0.3.5 — Starting..."
         self.sub_title = "Ready to route requests"
 
         # Load and display historical data
@@ -202,7 +202,6 @@ class ChuzomDashboard(App[None]):
             return
 
         text = event.get("text", "")
-        model = event.get("model", self.current_model)
 
         self.tokens_received += event.get("approx_tokens", 0)
 
@@ -290,124 +289,51 @@ class ChuzomDashboard(App[None]):
         self, message: str, title: str = "Info", severity: str = "information"
     ) -> None:
         """Show a notification to the user."""
-        # Simple notification implementation
-        # In production, would use a Toast widget or similar
-        footer: Footer = self.query_one(Footer)
-        # Notification would go to footer or a dedicated notification area
+        # Notification would go to footer or a dedicated Toast widget
 
     def _load_historical_data(self) -> None:
         """Load and display historical data from database."""
         try:
+            from chuzom.dashboard_data import query_daily, query_window, query_model_distribution
+            from chuzom.claude_usage import get_claude_pressure
+
             # Load 14-day cost history
-            daily_costs = self._get_14day_costs()
-            total_savings = self._get_total_savings()
+            daily_rows = query_daily(days=14)
+            daily_costs = [row.saved_usd for row in daily_rows]
+
+            # Get total savings
+            total_row = query_window("week")
+            total_savings = total_row.saved_usd
 
             sparkline: SparklinePanel = self.query_one("#sparkline-panel", SparklinePanel)
             sparkline.update_sparkline(daily_costs, total_savings)
 
-            # Load model breakdown
-            model_stats = self._get_model_breakdown()
+            # Load model breakdown from 14-day usage
+            model_counts = query_model_distribution(days=14)
+            total_calls = sum(model_counts.values())
+            model_stats = {
+                model: (count / total_calls) * 100
+                for model, count in model_counts.items()
+            } if total_calls > 0 else {}
+
             breakdown: ModelBreakdownPanel = self.query_one("#breakdown-panel", ModelBreakdownPanel)
             breakdown.update_breakdown(model_stats)
 
             # Load quota information
-            claude_quota, gemini_quota = self._get_quota_usage()
+            claude_pressure = get_claude_pressure()
+            claude_pct = claude_pressure.weekly_pct if claude_pressure else 0.0
+            claude_remaining = f"{100 - claude_pct:.0f}%"
+
             quota: QuotaPanel = self.query_one("#quota-panel", QuotaPanel)
             quota.update_quotas(
-                claude_quota_pct=claude_quota.get("used_pct", 0),
-                gemini_quota_pct=gemini_quota.get("used_pct", 0),
-                claude_remaining=claude_quota.get("remaining", "Unknown"),
-                gemini_remaining=gemini_quota.get("remaining", "Unknown"),
+                claude_quota_pct=claude_pct,
+                gemini_quota_pct=0.0,
+                claude_remaining=claude_remaining,
+                gemini_remaining="Unknown",
             )
         except Exception as e:
-            # Silently fail if data isn't available
-            pass
-
-    def _get_14day_costs(self) -> list[float]:
-        """Get daily costs for the last 14 days."""
-        try:
-            from datetime import datetime, timedelta, timezone
-            from chuzom.storage.cost_db import get_cost_db
-
-            db = get_cost_db()
-            now = datetime.now(timezone.utc)
-            costs = []
-
-            for i in range(14):
-                day_start = (now - timedelta(days=i+1)).replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                day_end = day_start + timedelta(days=1)
-
-                # Query cost for that day
-                daily_cost = db.get_daily_cost(day_start, day_end)
-                costs.insert(0, daily_cost)  # Insert at beginning to maintain chronological order
-
-            return costs
-        except Exception:
-            return [0.0] * 14
-
-    def _get_total_savings(self) -> float:
-        """Get total savings (Opus-equivalent cost minus actual cost)."""
-        try:
-            from chuzom.quota_savings import get_quota_savings_snapshot
-
-            snapshot = get_quota_savings_snapshot()
-            return snapshot.weekly_savings_usd if snapshot else 0.0
-        except Exception:
-            return 0.0
-
-    def _get_model_breakdown(self) -> dict[str, float]:
-        """Get model usage breakdown by percentage."""
-        try:
-            from chuzom.storage.cost_db import get_cost_db
-            from datetime import datetime, timedelta, timezone
-
-            db = get_cost_db()
-            now = datetime.now(timezone.utc)
-            week_start = now - timedelta(days=7)
-
-            # Query model usage for last 7 days
-            model_calls = db.get_model_call_counts(week_start, now)
-            total_calls = sum(model_calls.values())
-
-            if total_calls == 0:
-                return {}
-
-            # Convert to percentages
-            model_stats = {
-                model: (count / total_calls) * 100
-                for model, count in model_calls.items()
-            }
-
-            return model_stats
-        except Exception:
-            return {}
-
-    def _get_quota_usage(self) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Get current quota usage for Claude and Gemini."""
-        try:
-            from chuzom.quota_savings import get_quota_savings_snapshot
-            from chuzom.claude_usage import get_claude_pressure
-
-            claude_pressure = get_claude_pressure()
-            snapshot = get_quota_savings_snapshot()
-
-            # Claude quota
-            claude_quota = {
-                "used_pct": claude_pressure.weekly_pct if claude_pressure else 0,
-                "remaining": f"{100 - (claude_pressure.weekly_pct if claude_pressure else 0):.0f}%",
-            }
-
-            # Gemini quota (estimated)
-            gemini_quota = {
-                "used_pct": 0,  # Placeholder
-                "remaining": "Unknown",
-            }
-
-            return claude_quota, gemini_quota
-        except Exception:
-            return {"used_pct": 0, "remaining": "Unknown"}, {"used_pct": 0, "remaining": "Unknown"}
+            import logging
+            logging.warning(f"Failed to load historical dashboard data: {e}")
 
 
 async def run_dashboard(
@@ -446,7 +372,7 @@ async def run_dashboard(
 
     async def run_app() -> None:
         """Run the app and stream worker concurrently."""
-        async with app.run_test() as pilot:
+        async with app.run_test():
             # Start streaming worker
             task = asyncio.create_task(stream_worker())
             try:

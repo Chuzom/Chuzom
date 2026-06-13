@@ -357,6 +357,52 @@ def query_by_platform(
 # ── Audit / canary ───────────────────────────────────────────────────────────
 
 
+def query_model_distribution(
+    days: int = 14,
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, int]:
+    """Return model usage counts for the last ``days`` days.
+
+    Aggregates model calls across all source tables (usage, claude_usage, etc.)
+    for dashboard visualization of which models are being used most.
+
+    Returns a dict mapping model names to call counts.
+    """
+    db = Path(db_path) if db_path else DEFAULT_DB_PATH
+    if not db.exists():
+        return {}
+
+    where = f"timestamp >= datetime('now', '-{int(days)} days')"
+    model_counts: dict[str, int] = {}
+
+    conn = sqlite3.connect(str(db))
+    try:
+        # Legacy usage table — keyed by 'model'
+        if _table_exists(conn, _LEGACY_TABLE):
+            rows = conn.execute(
+                f"SELECT model, COUNT(*) FROM {_LEGACY_TABLE} "
+                f"WHERE success=1 AND {where} GROUP BY model"
+            ).fetchall()
+            for model, count in rows:
+                model_counts[model] = model_counts.get(model, 0) + int(count)
+
+        # Platform tables — keyed by 'model'
+        for table in _PLATFORM_TABLES:
+            if not _table_exists(conn, table):
+                continue
+            rows = conn.execute(
+                f"SELECT model, COUNT(*) FROM {table} "
+                f"WHERE {where} GROUP BY model"
+            ).fetchall()
+            for model, count in rows:
+                model_counts[model] = model_counts.get(model, 0) + int(count)
+    finally:
+        conn.close()
+
+    return model_counts
+
+
 def audit_sources(
     window: WindowLiteral = "today",
     *,

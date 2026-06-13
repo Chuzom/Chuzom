@@ -17,7 +17,10 @@ prefer_ollama: true
 # single source of truth at read time. Test enforces these match the
 # corresponding chains entries.
 workhorses:
+  - ollama/qwen3.5:latest
   - codex/gpt-4o
+  - moonshot/moonshot-v1-128k
+  - zhipu/glm-4
   - gemini/gemini-2.5-pro
   - deepseek/deepseek-chat
   - openai/gpt-4o
@@ -25,6 +28,7 @@ workhorses:
   - anthropic/claude-haiku-4-5-20251001
 
 fallback_chain_complex:
+  - ollama/qwen3.6:27b
   - anthropic/claude-opus-4-6
   - anthropic/claude-sonnet-4-6
   - deepseek/deepseek-chat
@@ -39,37 +43,45 @@ specialists: {}
 chains:
   budget:
     query:
-      - ollama/llama2
+      - ollama/qwen2.5:7b
       - codex/gpt-4o-mini
+      - moonshot/moonshot-v1-8k
+      - minimax/MiniMax-Text-01
+      - zhipu/glm-4-flash
       - gemini/gemini-2.5-flash
       - groq/llama-3.3-70b-versatile
       - deepseek/deepseek-chat
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     research:
-      - ollama/llama2
+      - ollama/qwen2.5:7b
+      - minimax/MiniMax-Text-01
       - anthropic/claude-haiku-4-5-20251001
       - gemini/gemini-2.5-flash
       - openai/gpt-4o-mini
     generate:
-      - ollama/llama2
+      - ollama/qwen2.5:7b
       - codex/gpt-4o-mini
+      - moonshot/moonshot-v1-8k
+      - arcee/arcee-nova
       - gemini/gemini-2.5-flash
       - deepseek/deepseek-chat
       - mistral/mistral-small-latest
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     analyze:
-      - ollama/llama2
+      - ollama/qwen2.5:7b
       - codex/gpt-4o-mini
+      - zhipu/glm-4-flash
       - gemini/gemini-2.5-flash
       - deepseek/deepseek-reasoner
       - groq/llama-3.3-70b-versatile
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     code:
-      - ollama/llama2
+      - ollama/qwen2.5:7b
       - codex/gpt-4o-mini
+      - moonshot/moonshot-v1-8k
       - deepseek/deepseek-chat
       - gemini/gemini-2.5-flash
       - groq/llama-3.3-70b-versatile
@@ -90,21 +102,25 @@ chains:
 
   balanced:
     query:
-      - ollama/llama2
+      - ollama/qwen3.5:latest
       - codex/gpt-4o
+      - moonshot/moonshot-v1-128k
+      - zhipu/glm-4
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
       - openai/gpt-4o
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     research:
-      - ollama/llama2
+      - ollama/qwen3.5:latest
+      - minimax/MiniMax-Text-01
       - anthropic/claude-sonnet-4-6
       - gemini/gemini-2.5-pro
       - openai/gpt-4o
     generate:
-      - ollama/llama2
+      - ollama/qwen3.5:latest
       - codex/gpt-4o
+      - arcee/arcee-nova
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
       - openai/gpt-4o
@@ -112,16 +128,18 @@ chains:
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     analyze:
-      - ollama/llama2
+      - ollama/qwen3.5:latest
       - codex/gpt-4o
+      - zhipu/glm-4
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-reasoner
       - openai/gpt-4o
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     code:
-      - ollama/llama2
+      - ollama/qwen3.5:latest
       - codex/gpt-4o
+      - moonshot/moonshot-v1-128k
       - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
       - openai/gpt-4o
@@ -143,7 +161,7 @@ chains:
 
   premium:
     query:
-      - ollama/llama2
+      - ollama/qwen3.6:27b
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
       - deepseek/deepseek-chat
@@ -152,29 +170,33 @@ chains:
       - openai/o3
       - xai/grok-3
     research:
-      - ollama/llama2
+      - ollama/qwen3.6:27b
       - anthropic/claude-opus-4-6
+      - minimax/MiniMax-Text-01
       - gemini/gemini-2.5-pro
       - openai/o3
     generate:
-      - ollama/llama2
+      - ollama/qwen3.6:27b
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
+      - arcee/arcee-nova
       - deepseek/deepseek-chat
       - gemini/gemini-2.5-pro
       - openai/gpt-4o
       - openai/o3
     analyze:
-      - ollama/llama2
+      - ollama/qwen3.6:27b
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
+      - zhipu/glm-4
       - deepseek/deepseek-reasoner
       - gemini/gemini-2.5-pro
       - openai/o3
     code:
-      - ollama/llama2
+      - ollama/qwen3.6:27b
       - anthropic/claude-opus-4-6
       - anthropic/claude-sonnet-4-6
+      - moonshot/moonshot-v1-128k
       - deepseek/deepseek-reasoner
       - gemini/gemini-2.5-pro
       - openai/gpt-4o

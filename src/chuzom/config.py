@@ -81,6 +81,11 @@ class RouterConfig(BaseSettings):
     together_api_key: str = ""
     xai_api_key: str = ""
     cohere_api_key: str = ""
+    # ── New leaderboard providers (OpenAI-compatible) ──
+    moonshot_api_key: str = ""   # Kimi (Moonshot AI) — api.moonshot.cn/v1
+    minimax_api_key: str = ""    # MiniMax — api.minimax.chat/v1
+    zhipu_api_key: str = ""      # Z AI / Zhipu — open.bigmodel.cn/api/paas/v4
+    arcee_api_key: str = ""      # ArceeAI — conductor.arcee.ai/v1
     # Plan 06 Step 2 — OpenRouter aggregator (qwen/deepseek/gemini-flash-lite/etc).
     # LiteLLM reads OPENROUTER_API_KEY directly so no explicit env propagation needed;
     # we surface it here only to gate `available_providers` and to enable the
@@ -290,6 +295,10 @@ class RouterConfig(BaseSettings):
         "together_api_key": ("together", "TOGETHER_API_KEY"),
         "xai_api_key": ("xai", "XAI_API_KEY"),
         "cohere_api_key": ("cohere", "COHERE_API_KEY"),
+        "moonshot_api_key": ("moonshot", "MOONSHOT_API_KEY"),
+        "minimax_api_key": ("minimax", "MINIMAX_API_KEY"),
+        "zhipu_api_key": ("zhipu", "ZHIPU_API_KEY"),
+        "arcee_api_key": ("arcee", "ARCEE_API_KEY"),
         "openrouter_api_key": ("openrouter", "OPENROUTER_API_KEY"),
         "fal_key": ("fal", "FAL_KEY"),
         "stability_api_key": ("stability", "STABILITY_API_KEY"),
@@ -378,17 +387,21 @@ class RouterConfig(BaseSettings):
             List of LiteLLM model IDs like ``["ollama/qwen3.5:latest", "ollama/qwen3.6:27b"]``,
             or an empty list when Ollama is not configured.
         """
+        import os
         if not self.ollama_base_url:
             return []
 
-        # Try live discovery cache first (Phase 1 of v5.0)
-        try:
-            from chuzom.discover import get_cached_ollama_models
-            cached_models = get_cached_ollama_models()
-            if cached_models:
-                return cached_models
-        except Exception:
-            pass
+        # Try live discovery cache first (Phase 1 of v5.0).
+        # Skip during tests to honour explicit ollama_budget_models values
+        # and avoid dependency on the real Ollama daemon or on-disk cache.
+        if not os.getenv("PYTEST_CURRENT_TEST"):
+            try:
+                from chuzom.discover import get_cached_ollama_models
+                cached_models = get_cached_ollama_models()
+                if cached_models:
+                    return cached_models
+            except Exception:
+                pass
 
         # Fall back to env var for backward compatibility
         return [f"ollama/{m.strip()}" for m in self.ollama_budget_models.split(",") if m.strip()]
