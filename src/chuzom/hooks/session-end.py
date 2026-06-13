@@ -1682,16 +1682,22 @@ def main() -> None:
                 daily_tokens=daily_tokens_list,
             )
             colored_output = console.export_text(clear=False, styles=True)
-            # Write colored output to stderr — inherited from Claude Code's process,
-            # so it goes directly to the real terminal with ANSI colors intact.
+            # Save ANSI version to disk — Claude Code UI can't render terminal
+            # colors, but the user can view it with: cat ~/.chuzom/last_summary.ansi
+            import re as _re
             try:
-                sys.stderr.write(colored_output)
-                sys.stderr.flush()
+                import pathlib
+                _chuzom_dir = pathlib.Path.home() / ".chuzom"
+                _chuzom_dir.mkdir(parents=True, exist_ok=True)
+                (_chuzom_dir / "last_summary.ansi").write_text(colored_output, encoding="utf-8")
             except Exception:
                 pass
             # systemMessage gets plain text (ANSI codes stripped) for Claude Code UI.
-            import re as _re
             final_summary_output = _re.sub(r"\x1b\[[0-9;]*[mGKHF]", "", colored_output)
+            # Append color hint so user knows how to view the colored version.
+            final_summary_output = final_summary_output.rstrip() + (
+                "\n\n🎨  Full colored summary: cat ~/.chuzom/last_summary.ansi  (or: chuzom summary)\n"
+            )
         except Exception as e:
             # 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
             print(f"Error rendering SessionSummaryDashboard: {e}", file=sys.stderr)

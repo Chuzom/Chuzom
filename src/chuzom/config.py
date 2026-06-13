@@ -400,20 +400,27 @@ class RouterConfig(BaseSettings):
         """
         import os
 
-        # Discovery cache takes priority — it represents what's actually running
-        # right now, regardless of whether OLLAMA_BASE_URL is explicitly set.
-        # This allows Ollama to be used as an answer model even when the URL is
-        # inferred from the daemon rather than configured explicitly.
+        # Resolve the effective base URL: explicit config > env var > localhost default.
+        effective_url = (
+            self.ollama_base_url
+            or os.getenv("OLLAMA_BASE_URL", "")
+            or "http://localhost:11434"
+        )
+
+        # Discovery cache takes priority — it represents what's actually running.
+        # Only trust the cache if Ollama is also reachable at the effective URL.
         if not os.getenv("PYTEST_CURRENT_TEST"):
             try:
                 from chuzom.discover import get_cached_ollama_models
                 cached_models = get_cached_ollama_models()
-                if cached_models:
+                if cached_models and probe_ollama(effective_url):
+                    # Ensure OLLAMA_API_BASE is set so LiteLLM knows where to send calls.
+                    os.environ.setdefault("OLLAMA_API_BASE", effective_url)
                     return cached_models
             except Exception:
                 pass
 
-        # Without a base URL we can't reach Ollama; nothing more to try.
+        # Without an explicit base URL we can't reach Ollama; nothing more to try.
         if not self.ollama_base_url:
             return []
 
