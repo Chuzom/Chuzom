@@ -14,6 +14,20 @@ from chuzom.router import route_and_call
 from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
 
+async def _announce_routing(ctx: Context, task_type: str, complexity: str) -> None:
+    """Fire an immediate notification so users see activity within ~1s of tool call.
+
+    Claude Code shows a "Calling chuzom..." spinner but gives no further feedback
+    until the tool returns. This fires before any routing work begins so the user
+    knows which task/complexity pair was received, and that routing is starting.
+    """
+    try:
+        await ctx.info(f"⚡ chuzom routing {task_type}/{complexity}...")
+        await ctx.report_progress(0, 100, f"routing {task_type}/{complexity}")
+    except Exception:
+        pass
+
+
 def _read_hook_complexity_hint(max_age_sec: float = 120.0) -> str | None:
     """Return the complexity classified by the auto-route hook, or None.
 
@@ -445,6 +459,7 @@ async def llm_query(
         context: Optional conversation context to help the model understand the broader task.
     """
     effective = _effective_complexity(complexity)
+    await _announce_routing(ctx, "query", effective or "auto")
     resp = await route_and_call(
         TaskType.QUERY, prompt,
         complexity_hint=effective,
@@ -476,6 +491,7 @@ async def llm_research(
     """
     _cfg = get_config()
     no_perplexity = not _cfg.perplexity_api_key
+    await _announce_routing(ctx, "research", "moderate")
 
     resp = await route_and_call(
         TaskType.RESEARCH, prompt,
@@ -526,6 +542,7 @@ async def llm_generate(
         context: Optional conversation context to help the model understand the broader task.
     """
     effective = _effective_complexity(complexity)
+    await _announce_routing(ctx, "generate", effective or "auto")
     resp = await route_and_call(
         TaskType.GENERATE, prompt,
         complexity_hint=effective,
@@ -564,6 +581,7 @@ async def llm_analyze(
     effective_complexity = _effective_complexity(complexity, floor="moderate")
     if effective_complexity == "simple":
         effective_complexity = "moderate"
+    await _announce_routing(ctx, "analyze", effective_complexity)
     resp = await route_and_call(
         TaskType.ANALYZE, prompt,
         complexity_hint=effective_complexity,
@@ -597,6 +615,7 @@ async def llm_code(
         context: Optional conversation context to help the model understand the broader task.
     """
     effective = _effective_complexity(complexity)
+    await _announce_routing(ctx, "code", effective or "auto")
     resp = await route_and_call(
         TaskType.CODE, prompt,
         complexity_hint=effective,

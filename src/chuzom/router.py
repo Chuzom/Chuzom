@@ -835,28 +835,37 @@ async def _heartbeat_notify(
     ctx: Any | None,
     model_name: str,
     provider: str,
-    interval_s: float = 5.0,
+    interval_s: float = 3.0,
     warn_after_s: float = 30.0,
 ) -> None:
     """Emit periodic progress messages while waiting for a model API response.
 
-    Fires every ``interval_s`` seconds. Switches from info to warning level
-    after ``warn_after_s`` seconds so hung calls are visible without being
-    noisy for normal-latency responses. Designed to be cancelled as soon as
-    the API call completes.
+    Fires every ``interval_s`` seconds. Uses both ctx.info() (log notification)
+    and ctx.report_progress() (progress notification) so at least one channel
+    reaches the Claude Code UI. Switches to warning level after ``warn_after_s``
+    seconds to flag potential hangs.
     """
     elapsed = 0.0
     while True:
         await asyncio.sleep(interval_s)
         elapsed += interval_s
         if elapsed >= warn_after_s:
-            await _notify(
-                ctx, "warning",
+            msg = (
                 f"⚠️  {model_name} ({provider}) still waiting... {elapsed:.0f}s — "
-                "may be overloaded, will auto-fallback on timeout",
+                "may be overloaded, will auto-fallback on timeout"
             )
+            await _notify(ctx, "warning", msg)
         else:
-            await _notify(ctx, "info", f"⏳ {model_name} — {elapsed:.0f}s elapsed")
+            msg = f"⏳ {model_name} — {elapsed:.0f}s elapsed"
+            await _notify(ctx, "info", msg)
+        # Belt-and-suspenders: also send a progress notification, which uses
+        # a different MCP protocol path and may be more visible in some clients.
+        if ctx is not None:
+            try:
+                pct = min(95.0, elapsed / max(1.0, warn_after_s) * 100)
+                await ctx.report_progress(pct, 100, msg)
+            except Exception:
+                pass
 
 
 def _enrich_response(
@@ -1180,11 +1189,11 @@ async def _dispatch_model_loop(
         # scattered, asymmetric releases.
         _res_tokens = max_tokens if isinstance(max_tokens, int) and max_tokens > 0 else 500
         reserve_tokens(provider, _res_tokens)
-        # Start heartbeat so the user sees progress during long API calls
-        # (e.g. Ollama local model, Codex subprocess, slow Gemini API call).
-        # Cancelled in the finally block regardless of success or failure.
+        # Start heartbeat so the user sees progress during long API calls.
+        # 3s interval means first beat at 3s — within the "10s before any
+        # indication" threshold the user cares about. Cancelled in finally.
         _hb_task = asyncio.create_task(
-            _heartbeat_notify(ctx, model_name, provider, interval_s=5.0, warn_after_s=30.0)
+            _heartbeat_notify(ctx, model_name, provider, interval_s=3.0, warn_after_s=30.0)
         )
         try:
             with traced_span(
@@ -2269,7 +2278,13 @@ async def route_and_call(
             model_chain=chain_display,
             candidate_count=len(models_to_try),
         )
-        await _notify(ctx, "info", f"🤖 Routing: {chain_display} ({task_type.value}/{effective_complexity})")
+        _chain_msg = f"🤖 Routing: {chain_display} ({task_type.value}/{effective_complexity})"
+        await _notify(ctx, "info", _chain_msg)
+        if ctx is not None:
+            try:
+                await ctx.report_progress(5, 100, _chain_msg)
+            except Exception:
+                pass
 
         # Warn when a RESEARCH task falls back to a non-web-grounded model.
         # Perplexity is the only model in the chain with real-time web access.
