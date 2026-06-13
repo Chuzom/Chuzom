@@ -1529,15 +1529,19 @@ def main() -> None:
             ]
 
             dashboard_savings = {}
-            for label, calls, _, _, saved_usd in cumulative:
+            for label, calls, total_tokens, _, saved_usd in cumulative:
                 if label == "today":
                     dashboard_savings["today"] = saved_usd
+                    dashboard_savings["today_tokens"] = total_tokens
                 elif label == "this week":
                     dashboard_savings["week"] = saved_usd
+                    dashboard_savings["week_tokens"] = total_tokens
                 elif label == "this month":
                     dashboard_savings["month"] = saved_usd
+                    dashboard_savings["month_tokens"] = total_tokens
                 elif label == "all time":
                     dashboard_savings["lifetime"] = saved_usd
+                    dashboard_savings["lifetime_tokens"] = total_tokens
 
             # Redirect to StringIO so Rich doesn't pollute stdout.
             # Console(record=True) without file= defaults to sys.stdout AND records;
