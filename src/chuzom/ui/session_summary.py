@@ -331,13 +331,10 @@ class SessionSummaryDashboard:
 
         # ── Models section: per-model calls / tokens / cost / savings ─────────
         model_lines: list[RenderableType] = []
-        effective_models = session_models or []
-        if not effective_models and model_breakdown:
-            # Fallback to pct-only breakdown
-            for model, pct in sorted(model_breakdown.items(), key=lambda x: -x[1])[:5]:
-                effective_models.append({"model": model, "pct": pct})
+        effective_models = [m for m in (session_models or []) if m.get("calls", 0) > 0]
 
         if effective_models:
+            # Real session data: show calls/tokens/cost per model
             model_lines.append(Text(""))
             model_lines.append(
                 Text("  MODELS  this session", style=f"bold {PALETTE.text_primary}")
@@ -375,14 +372,30 @@ class SessionSummaryDashboard:
                         style=PALETTE.text_primary,
                     )
                 )
-            if len(effective_models) > 0:
+            model_lines.append(
+                Text(
+                    f"  {'total':<20} {total_m_calls:>3}×  "
+                    f"{_fmt_tok(total_m_tokens):>6}  "
+                    f"{_fmt_usd(total_m_cost):<6}  "
+                    f"saved {_fmt_usd(total_m_saved)}",
+                    style=PALETTE.success,
+                )
+            )
+        elif model_breakdown:
+            # No LLM calls this session — show 14-day mix as context
+            model_lines.append(Text(""))
+            model_lines.append(
+                Text("  MODELS  14-day mix (no LLM calls this session)", style=f"bold {PALETTE.text_dim}")
+            )
+            for model, pct in sorted(model_breakdown.items(), key=lambda x: -x[1])[:5]:
+                short = model.split("/")[-1][:20]
+                bar_w = 14
+                filled = min(bar_w, round(pct / 100 * bar_w))
+                bar = "━" * filled + "─" * (bar_w - filled)
                 model_lines.append(
                     Text(
-                        f"  {'total':<20} {total_m_calls:>3}×  "
-                        f"{_fmt_tok(total_m_tokens):>6}  "
-                        f"{_fmt_usd(total_m_cost):<6}  "
-                        f"saved {_fmt_usd(total_m_saved)}",
-                        style=PALETTE.success,
+                        f"  {short:<20}  {bar}  {pct:.0f}%",
+                        style=PALETTE.text_dim,
                     )
                 )
 
