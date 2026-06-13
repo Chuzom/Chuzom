@@ -1235,7 +1235,7 @@ async def _dispatch_model_loop(
         # 3s interval means first beat at 3s — within the "10s before any
         # indication" threshold the user cares about. Cancelled in finally.
         _hb_task = asyncio.create_task(
-            _heartbeat_notify(ctx, model_name, provider, interval_s=3.0, warn_after_s=30.0)
+            _heartbeat_notify(ctx, model_name, provider, interval_s=5.0, warn_after_s=30.0)
         )
         try:
             with traced_span(

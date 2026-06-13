@@ -81,6 +81,32 @@ class SessionSummaryDashboard:
         filled = min(width, int(pct / 100 * width))
         return "━" * filled + "─" * (width - filled)
 
+    def _colored_quota_bar(self, pct: float, width: int = 16) -> Text:
+        """Progress bar with green→orange→red stripes based on usage %.
+
+        Segment colour is determined by its *position* in the bar, not the
+        current fill level, so the colour zones are always visible:
+          0–70 % of bar width → green   (safe zone)
+         70–90 % of bar width → yellow  (caution zone)
+         90–100% of bar width → red     (danger zone)
+        Filled segments use the zone colour; unfilled segments are dim ─.
+        """
+        filled = min(width, int(pct / 100 * width))
+        bar = Text()
+        for i in range(width):
+            seg_end_pct = (i + 1) / width * 100
+            if seg_end_pct <= 70:
+                zone = "bold green"
+            elif seg_end_pct <= 90:
+                zone = "bold yellow"
+            else:
+                zone = "bold red"
+            if i < filled:
+                bar.append("━", style=zone)
+            else:
+                bar.append("─", style="dim")
+        return bar
+
     def _format_resets_at(self, iso_ts: str) -> str:
         if not iso_ts:
             return ""
@@ -185,13 +211,13 @@ class SessionSummaryDashboard:
             )
 
         left_lines.append(Text(""))
-        zc_bar = self._quota_bar(zero_pct, width=12)
-        left_lines.append(
-            Text(
-                f"  Zero-cost: {zc_bar} {zero_pct:.0f}%",
-                style=PALETTE.success,
-            )
+        zc_bar = self._colored_quota_bar(zero_pct, width=12)
+        zc_line = Text.assemble(
+            ("  Zero-cost: ", PALETTE.success),
+            zc_bar,
+            (f" {zero_pct:.0f}%", PALETTE.success),
         )
+        left_lines.append(zc_line)
 
         # ── Right: savings summary ───────────────────────────────────────────
         right_lines: list[RenderableType] = [
@@ -229,17 +255,16 @@ class SessionSummaryDashboard:
             )
 
             if claude_session_pct >= 0:
-                bar = self._quota_bar(claude_session_pct)
+                bar = self._colored_quota_bar(claude_session_pct)
                 delta_str = ""
                 if session_delta_pct is not None:
                     sign = "+" if session_delta_pct >= 0 else ""
                     delta_str = f"  {sign}{session_delta_pct:.1f}pp"
-                quota_lines.append(
-                    Text(
-                        f"   5h {bar}  {claude_session_pct:.0f}%{delta_str}",
-                        style=PALETTE.text_primary,
-                    )
-                )
+                quota_lines.append(Text.assemble(
+                    ("   5h ", PALETTE.text_primary),
+                    bar,
+                    (f"  {claude_session_pct:.0f}%{delta_str}", PALETTE.text_primary),
+                ))
                 reset_str = self._format_resets_at(claude_session_resets_at)
                 if reset_str:
                     try:
@@ -254,17 +279,16 @@ class SessionSummaryDashboard:
                         quota_lines.append(Text(f"  {reset_str}", style=PALETTE.text_dim))
 
             if claude_quota_pct > 0:
-                bar = self._quota_bar(claude_quota_pct)
+                bar = self._colored_quota_bar(claude_quota_pct)
                 delta_str = ""
                 if weekly_delta_pct is not None:
                     sign = "+" if weekly_delta_pct >= 0 else ""
                     delta_str = f"  {sign}{weekly_delta_pct:.1f}pp"
-                quota_lines.append(
-                    Text(
-                        f"   weekly {bar}  {claude_quota_pct:.0f}%{delta_str}",
-                        style=PALETTE.text_primary,
-                    )
-                )
+                quota_lines.append(Text.assemble(
+                    ("   weekly ", PALETTE.text_primary),
+                    bar,
+                    (f"  {claude_quota_pct:.0f}%{delta_str}", PALETTE.text_primary),
+                ))
                 reset_str = self._format_resets_at(claude_weekly_resets_at)
                 if reset_str:
                     quota_lines.append(Text(f"  {reset_str}", style=PALETTE.text_dim))
@@ -274,13 +298,12 @@ class SessionSummaryDashboard:
             quota_lines.append(
                 Text("  Gemini API", style=f"bold {PALETTE.text_primary}")
             )
-            bar = self._quota_bar(gemini_quota_pct)
-            quota_lines.append(
-                Text(
-                    f"   daily rate {bar}  {gemini_quota_pct:.0f}%",
-                    style=PALETTE.text_primary,
-                )
-            )
+            bar = self._colored_quota_bar(gemini_quota_pct)
+            quota_lines.append(Text.assemble(
+                ("   daily rate ", PALETTE.text_primary),
+                bar,
+                (f"  {gemini_quota_pct:.0f}%", PALETTE.text_primary),
+            ))
             gemini_reset = gemini_resets_at
             if not gemini_reset:
                 # Gemini daily quota resets at midnight UTC
@@ -299,13 +322,12 @@ class SessionSummaryDashboard:
             quota_lines.append(
                 Text("  Codex (OpenAI)", style=f"bold {PALETTE.text_primary}")
             )
-            bar = self._quota_bar(codex_quota_pct)
-            quota_lines.append(
-                Text(
-                    f"   quota {bar}  {codex_quota_pct:.0f}%",
-                    style=PALETTE.text_primary,
-                )
-            )
+            bar = self._colored_quota_bar(codex_quota_pct)
+            quota_lines.append(Text.assemble(
+                ("   quota ", PALETTE.text_primary),
+                bar,
+                (f"  {codex_quota_pct:.0f}%", PALETTE.text_primary),
+            ))
             if codex_resets_at:
                 reset_str = self._format_resets_at(codex_resets_at)
                 if reset_str:
@@ -321,10 +343,12 @@ class SessionSummaryDashboard:
             quota_lines.append(
                 Text(f"  {name}", style=f"bold {PALETTE.text_primary}")
             )
-            bar = self._quota_bar(pct)
-            quota_lines.append(
-                Text(f"   {window:<10} {bar}  {pct:.0f}%", style=PALETTE.text_primary)
-            )
+            bar = self._colored_quota_bar(pct)
+            quota_lines.append(Text.assemble(
+                (f"   {window:<10} ", PALETTE.text_primary),
+                bar,
+                (f"  {pct:.0f}%", PALETTE.text_primary),
+            ))
             reset_str = self._format_resets_at(resets_at)
             if reset_str:
                 quota_lines.append(Text(f"  {reset_str}", style=PALETTE.text_dim))
@@ -389,15 +413,12 @@ class SessionSummaryDashboard:
             )
             for model, pct in sorted(model_breakdown.items(), key=lambda x: -x[1])[:5]:
                 short = model.split("/")[-1][:20]
-                bar_w = 14
-                filled = min(bar_w, round(pct / 100 * bar_w))
-                bar = "━" * filled + "─" * (bar_w - filled)
-                model_lines.append(
-                    Text(
-                        f"  {short:<20}  {bar}  {pct:.0f}%",
-                        style=PALETTE.text_dim,
-                    )
-                )
+                bar = self._colored_quota_bar(pct, width=14)
+                model_lines.append(Text.assemble(
+                    (f"  {short:<20}  ", PALETTE.text_dim),
+                    bar,
+                    (f"  {pct:.0f}%", PALETTE.text_dim),
+                ))
 
         return Panel(
             Group(grid, *quota_lines, *model_lines),
