@@ -30,28 +30,46 @@ _DISCOVERY_CACHE = os.path.expanduser("~/.chuzom/discovery.json")
 
 def is_ollama_available() -> bool:
     """Check if Ollama is configured and reachable.
-    
+
     Returns:
         True if OLLAMA_BASE_URL is set and Ollama responds to /api/tags
     """
     import time
-    
+
     config = get_config()
     if not config.ollama_base_url:
         return False
-    
+
     now = time.monotonic()
-    
+
     # Check cache
     if config.ollama_base_url in _ollama_cache:
         cached_result, cached_time = _ollama_cache[config.ollama_base_url]
         if (now - cached_time) < _OLLAMA_CACHE_TTL:
             return cached_result
-    
-    # Probe Ollama and cache discovered models
+
+    # Probe Ollama with connection timeout to prevent indefinite hangs.
+    # On network errors or timeouts, conservatively assume Ollama is unavailable
+    # but cache the result so we don't retry on every request.
+    result = False
     try:
         import json
+        import socket
         import urllib.request
+
+        # Extract host:port from the URL to validate before attempting connection
+        from urllib.parse import urlparse
+        parsed = urlparse(config.ollama_base_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 11434
+
+        # Quick socket check (more reliable timeout than urlopen)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)  # 1-second socket timeout
+        sock.connect((host, port))
+        sock.close()
+
+        # Socket connected, now try the actual HTTP call
         with urllib.request.urlopen(
             f"{config.ollama_base_url}/api/tags",
             timeout=2
@@ -60,7 +78,14 @@ def is_ollama_available() -> bool:
             result = True
             # Write discovery cache with actual model names
             _update_discovery_cache(data.get("models", []))
-    except Exception:
+    except socket.timeout:
+        log.debug("Ollama connection timeout: %s", config.ollama_base_url)
+        result = False
+    except (socket.gaierror, socket.error, ConnectionRefusedError, TimeoutError) as e:
+        log.debug("Ollama connection failed (expected if not running): %s — %s", config.ollama_base_url, type(e).__name__)
+        result = False
+    except Exception as e:
+        log.debug("Ollama probe failed: %s", e)
         result = False
 
     _ollama_cache[config.ollama_base_url] = (result, now)

@@ -37,6 +37,53 @@ _routing_lock = threading.Lock()  # Protects _dynamic_routing_table and _discove
 PROFILE_PATH = Path.home() / ".chuzom" / "profile.yaml"
 
 
+def _get_available_providers_fast() -> set[str]:
+    """Get available providers without blocking on Ollama health checks.
+
+    This is a fast version of get_available_providers() that:
+    - Checks API keys (instant)
+    - Checks cached Ollama status (instant)
+    - DOES NOT probe Ollama (would block if Ollama is slow/down)
+
+    Used during server initialization to prevent startup hangs.
+    The full Ollama probe is deferred to a background thread.
+    """
+    from chuzom.config import get_config
+
+    config = get_config()
+    providers = set()
+
+    # Check configured API keys (instant)
+    if config.openai_api_key:
+        providers.add("openai")
+    if config.gemini_api_key:
+        providers.add("gemini")
+    if config.perplexity_api_key:
+        providers.add("perplexity")
+    if config.anthropic_api_key and not config.chuzom_claude_subscription:
+        # In subscription mode, Claude is intentionally excluded
+        providers.add("anthropic")
+    if config.mistral_api_key:
+        providers.add("mistral")
+    if config.deepseek_api_key:
+        providers.add("deepseek")
+    if config.groq_api_key:
+        providers.add("groq")
+    if config.together_api_key:
+        providers.add("together")
+    if config.xai_api_key:
+        providers.add("xai")
+    if config.cohere_api_key:
+        providers.add("cohere")
+
+    # Check Ollama without blocking: if OLLAMA_BASE_URL is set, assume it's available
+    # (fast, cached check will happen on first routing request)
+    if config.ollama_base_url:
+        providers.add("ollama")
+
+    return providers
+
+
 def _load_user_profile() -> dict | None:
     """Load the user's auto-generated profile.yaml if it exists.
     
@@ -201,35 +248,41 @@ def build_dynamic_routing_table(
 
 def initialize_dynamic_routing(available_providers: set[str] | None = None) -> None:
     """Initialize dynamic routing tables at session startup.
-    
+
     Call this once when the server starts. It discovers available providers,
     loads quota information from profile.yaml, and builds custom routing tables
     that will be used for all subsequent routing decisions.
-    
+
     Args:
         available_providers: Optional set of providers. If None, discovers automatically.
+
+    NOTE: To prevent server startup hangs, this now uses a fast discovery path that
+    relies on cached data and API keys. The expensive Ollama health check is deferred
+    to a background thread that runs asynchronously after startup.
     """
+    import threading
     import time
     import traceback
-    
+
     global _dynamic_routing_table, _discovery_complete
-    
+
     with _routing_lock:
         if _discovery_complete:
             return  # Already initialized
-        
+
         try:
             if available_providers is None:
-                available_providers = get_available_providers()
-            
+                # Use fast discovery that doesn't block on Ollama checks
+                available_providers = _get_available_providers_fast()
+
             _dynamic_routing_table = build_dynamic_routing_table(available_providers)
             _discovery_complete = True
-            
+
             # Log summary
             provider_names = ", ".join(sorted(available_providers))
             total_chains = len(ROUTING_TABLE)
             dynamic_chains = sum(1 for chain in _dynamic_routing_table.values() if chain)
-            
+
             # Log quota pressure if available
             quota_pressure = _get_quota_pressure()
             if quota_pressure:
@@ -253,6 +306,22 @@ def initialize_dynamic_routing(available_providers: set[str] | None = None) -> N
                     total_chains=total_chains,
                     usable_chains=dynamic_chains,
                 )
+
+            # Start background Ollama health check (non-blocking)
+            # This allows the server to start immediately even if Ollama is slow
+            try:
+                def _background_ollama_check():
+                    try:
+                        from chuzom.discover import is_ollama_available
+                        is_ollama_available()  # Will be cached for future use
+                    except Exception as e:
+                        log.debug("Background Ollama check failed (non-blocking): %s", e)
+
+                background_thread = threading.Thread(target=_background_ollama_check, daemon=True)
+                background_thread.start()
+            except Exception as bg_err:
+                log.debug("Failed to start background Ollama check: %s", bg_err)
+
         except Exception as e:
             # Log failure with full traceback for debugging
             log.warning(
@@ -260,7 +329,7 @@ def initialize_dynamic_routing(available_providers: set[str] | None = None) -> N
                 e, traceback.format_exc()
             )
             _discovery_complete = True
-            
+
             # Schedule a retry after 10 minutes for transient failures (network, timeouts, etc.)
             # This prevents permanently disabling dynamic routing due to one-time infrastructure issues
             try:
@@ -270,7 +339,7 @@ def initialize_dynamic_routing(available_providers: set[str] | None = None) -> N
                         global _discovery_complete
                         _discovery_complete = False
                     log.info("Retrying dynamic routing discovery after 10-minute delay")
-                
+
                 retry_thread = threading.Thread(target=_retry_after_delay, daemon=True)
                 retry_thread.start()
             except Exception as retry_err:
