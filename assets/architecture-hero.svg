@@ -1,0 +1,318 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" width="1200" height="500" role="img" aria-label="Chuzom architecture diagram">
+  <title>Chuzom — Smart LLM Routing Architecture</title>
+
+  <defs>
+    <!-- ── Theme ── -->
+    <style>
+      :root {
+        --bg:          #f8f9fa;
+        --bg2:         #ffffff;
+        --border:      #d1d5db;
+        --border2:     #e5e7eb;
+        --text:        #111827;
+        --text2:       #374151;
+        --text3:       #6b7280;
+        --accent1:     #4f46e5;
+        --accent2:     #10b981;
+        --accent3:     #f59e0b;
+        --accent4:     #ef4444;
+        --dot1:        #4f46e5;
+        --dot2:        #10b981;
+        --dot3:        #f59e0b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg:          #0d1117;
+          --bg2:         #161b22;
+          --border:      #30363d;
+          --border2:     #21262d;
+          --text:        #e6edf3;
+          --text2:       #c9d1d9;
+          --text3:       #8b949e;
+          --accent1:     #7c6ff7;
+          --accent2:     #3fb950;
+          --accent3:     #d29922;
+          --accent4:     #f85149;
+        }
+      }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+      .label-sm  { font-size: 11px; fill: var(--text3); }
+      .label-md  { font-size: 13px; fill: var(--text2); font-weight: 500; }
+      .label-lg  { font-size: 15px; fill: var(--text);  font-weight: 700; }
+      .caption   { font-size: 10px; fill: var(--text3); }
+      .card      { fill: var(--bg2); stroke: var(--border); stroke-width: 1.5; rx: 10; }
+      .card-hi   { fill: var(--bg2); stroke: var(--accent1); stroke-width: 2; }
+      .arrow     { fill: none; stroke: var(--border); stroke-width: 1.5; marker-end: url(#arr); }
+      .arrow-hi  { fill: none; stroke: var(--accent1); stroke-width: 1.5; stroke-dasharray: 4 2; marker-end: url(#arr-hi); }
+    </style>
+
+    <!-- Arrow markers -->
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#9ca3af"/>
+    </marker>
+    <marker id="arr-hi" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="var(--accent1)"/>
+    </marker>
+
+    <!-- Gradients -->
+    <linearGradient id="g-router" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="g-free" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="g-budget" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="g-premium" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ef4444" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ef4444" stop-opacity="0.03"/>
+    </linearGradient>
+
+    <!-- Animated dot paths (main routing flow) -->
+    <!-- Client → Router -->
+    <path id="p1" d="M 200,250 H 315"/>
+    <!-- Router → Free -->
+    <path id="p2" d="M 600,180 H 780"/>
+    <!-- Router → Budget -->
+    <path id="p3" d="M 600,250 H 780"/>
+    <!-- Router → Premium -->
+    <path id="p4" d="M 600,320 H 780"/>
+    <!-- Models → Response -->
+    <path id="p5" d="M 990,250 H 1070"/>
+  </defs>
+
+  <!-- ══ Background ══ -->
+  <rect width="1200" height="500" fill="var(--bg)" rx="12"/>
+
+  <!-- ══ Title ══ -->
+  <text x="600" y="34" text-anchor="middle" class="label-lg" font-size="17">Chuzom — Smart LLM Routing</text>
+  <text x="600" y="53" text-anchor="middle" class="caption" font-size="11">Classify → Select → Dispatch → Save</text>
+
+  <!-- ════════════════════════════════════════════════
+       COLUMN 1 — Client (MCP callers)
+  ════════════════════════════════════════════════ -->
+  <g id="col-client">
+    <!-- Card -->
+    <rect x="20" y="80" width="180" height="340" rx="10" fill="var(--bg2)" stroke="var(--border)" stroke-width="1.5"/>
+    <text x="110" y="106" text-anchor="middle" class="label-md" font-size="12">MCP Clients</text>
+    <line x1="20" y1="116" x2="200" y2="116" stroke="var(--border2)" stroke-width="1"/>
+
+    <!-- Claude Code -->
+    <rect x="36" y="128" width="148" height="44" rx="7" fill="var(--bg)" stroke="var(--border2)" stroke-width="1"/>
+    <circle cx="58" cy="150" r="10" fill="#4f46e5" fill-opacity="0.15"/>
+    <text x="58" y="154" text-anchor="middle" font-size="13" fill="#4f46e5">⬡</text>
+    <text x="78" y="147" class="label-md" font-size="12">Claude Code</text>
+    <text x="78" y="162" class="caption">/ Claude Desktop</text>
+
+    <!-- Cursor -->
+    <rect x="36" y="182" width="148" height="44" rx="7" fill="var(--bg)" stroke="var(--border2)" stroke-width="1"/>
+    <circle cx="58" cy="204" r="10" fill="#9333ea" fill-opacity="0.15"/>
+    <text x="58" y="208" text-anchor="middle" font-size="12" fill="#9333ea">◆</text>
+    <text x="78" y="201" class="label-md" font-size="12">Cursor</text>
+    <text x="78" y="216" class="caption">AI code editor</text>
+
+    <!-- Codex CLI -->
+    <rect x="36" y="236" width="148" height="44" rx="7" fill="var(--bg)" stroke="var(--border2)" stroke-width="1"/>
+    <circle cx="58" cy="258" r="10" fill="#10b981" fill-opacity="0.15"/>
+    <text x="58" y="262" text-anchor="middle" font-size="12" fill="#10b981">▶</text>
+    <text x="78" y="255" class="label-md" font-size="12">Codex CLI</text>
+    <text x="78" y="270" class="caption">OpenAI agent</text>
+
+    <!-- Gemini CLI -->
+    <rect x="36" y="290" width="148" height="44" rx="7" fill="var(--bg)" stroke="var(--border2)" stroke-width="1"/>
+    <circle cx="58" cy="312" r="10" fill="#2563eb" fill-opacity="0.15"/>
+    <text x="58" y="316" text-anchor="middle" font-size="11" fill="#2563eb">G</text>
+    <text x="78" y="309" class="label-md" font-size="12">Gemini CLI</text>
+    <text x="78" y="324" class="caption">Google agent</text>
+
+    <!-- Other -->
+    <rect x="36" y="344" width="148" height="38" rx="7" fill="var(--bg)" stroke="var(--border2)" stroke-width="1"/>
+    <text x="110" y="367" text-anchor="middle" class="label-sm" font-size="11">Any MCP-compatible client</text>
+  </g>
+
+  <!-- ══ Arrow: Client → Router ══ -->
+  <path d="M 200,250 H 312" class="arrow"/>
+  <text x="254" y="242" text-anchor="middle" class="caption" font-size="10">prompt</text>
+
+  <!-- ════════════════════════════════════════════════
+       COLUMN 2 — Chuzom Router (centre)
+  ════════════════════════════════════════════════ -->
+  <g id="col-router">
+    <!-- Outer card highlight -->
+    <rect x="315" y="70" width="280" height="360" rx="12" fill="url(#g-router)" stroke="var(--accent1)" stroke-width="2"/>
+    <text x="455" y="97" text-anchor="middle" class="label-lg" font-size="14" fill="var(--accent1)">⚡ Chuzom Router</text>
+    <text x="455" y="114" text-anchor="middle" class="caption" font-size="10">MCP server · chuzom-router</text>
+    <line x1="315" y1="123" x2="595" y2="123" stroke="var(--accent1)" stroke-width="0.8" stroke-opacity="0.4"/>
+
+    <!-- Stage 1: Classify -->
+    <rect x="332" y="134" width="246" height="64" rx="8" fill="var(--bg2)" stroke="var(--border)" stroke-width="1.2"/>
+    <text x="362" y="154" class="label-md" font-size="12" fill="var(--accent1)">① Classify</text>
+    <text x="362" y="170" class="caption">task type · complexity · sensitivity</text>
+    <text x="362" y="184" class="caption">context size · tool requirements</text>
+
+    <!-- Arrow between stages -->
+    <path d="M 455,198 V 213" class="arrow"/>
+
+    <!-- Stage 2: Build Chain -->
+    <rect x="332" y="214" width="246" height="64" rx="8" fill="var(--bg2)" stroke="var(--border)" stroke-width="1.2"/>
+    <text x="362" y="234" class="label-md" font-size="12" fill="var(--accent1)">② Build Chain</text>
+    <text x="362" y="250" class="caption">cheapest-capable-first ordering</text>
+    <text x="362" y="264" class="caption">Ollama → Codex → Gemini → Claude</text>
+
+    <!-- Arrow between stages -->
+    <path d="M 455,278 V 293" class="arrow"/>
+
+    <!-- Stage 3: Dispatch -->
+    <rect x="332" y="294" width="246" height="64" rx="8" fill="var(--bg2)" stroke="var(--border)" stroke-width="1.2"/>
+    <text x="362" y="314" class="label-md" font-size="12" fill="var(--accent1)">③ Dispatch + Stream</text>
+    <text x="362" y="330" class="caption">live progress · auto-failover</text>
+    <text x="362" y="344" class="caption">budget enforcement · zero telemetry</text>
+
+    <!-- Secondary caps (bottom) -->
+    <rect x="332" y="370" width="114" height="30" rx="6" fill="var(--bg)" stroke="var(--border2)" stroke-width="1"/>
+    <text x="389" y="389" text-anchor="middle" class="caption" font-size="10">💰 Cost tracking</text>
+
+    <rect x="454" y="370" width="124" height="30" rx="6" fill="var(--bg)" stroke="var(--border2)" stroke-width="1"/>
+    <text x="516" y="389" text-anchor="middle" class="caption" font-size="10">🛡 Quota guard</text>
+  </g>
+
+  <!-- ══ Arrows: Router → Tiers ══ -->
+  <!-- to Free -->
+  <path d="M 595,180 H 778" class="arrow"/>
+  <!-- to Budget -->
+  <path d="M 595,250 H 778" class="arrow"/>
+  <!-- to Premium -->
+  <path d="M 595,320 H 778" class="arrow"/>
+
+  <!-- Tier labels on arrows -->
+  <text x="686" y="171" text-anchor="middle" class="caption" fill="var(--accent2)" font-size="10">simple</text>
+  <text x="686" y="241" text-anchor="middle" class="caption" fill="var(--accent3)" font-size="10">moderate</text>
+  <text x="686" y="311" text-anchor="middle" class="caption" fill="var(--accent4)" font-size="10">complex</text>
+
+  <!-- ════════════════════════════════════════════════
+       COLUMN 3 — Model Tiers
+  ════════════════════════════════════════════════ -->
+  <g id="col-tiers">
+
+    <!-- Free / Local tier -->
+    <rect x="780" y="130" width="200" height="100" rx="10" fill="url(#g-free)" stroke="var(--accent2)" stroke-width="1.5"/>
+    <text x="880" y="153" text-anchor="middle" class="label-md" font-size="12" fill="var(--accent2)">Free / Local</text>
+    <text x="880" y="170" text-anchor="middle" class="caption">🦙 Ollama (local GPU)</text>
+    <text x="880" y="185" text-anchor="middle" class="caption">Qwen · Llama · Mistral</text>
+    <text x="880" y="200" text-anchor="middle" class="caption">$0 per call · &lt;1s P50</text>
+    <text x="880" y="218" text-anchor="middle" class="caption" font-size="9" fill="var(--accent2)">AUTO-DISCOVERED via chuzom doctor</text>
+
+    <!-- Budget cloud tier -->
+    <rect x="780" y="198" width="200" height="100" rx="10" fill="url(#g-budget)" stroke="var(--accent3)" stroke-width="1.5"/>
+    <text x="880" y="221" text-anchor="middle" class="label-md" font-size="12" fill="var(--accent3)">Budget Cloud</text>
+    <text x="880" y="238" text-anchor="middle" class="caption">⚡ Codex CLI (OpenAI sub)</text>
+    <text x="880" y="253" text-anchor="middle" class="caption">🔶 Gemini Flash / CLI</text>
+    <text x="880" y="268" text-anchor="middle" class="caption">≈$0 prepaid · 5–15s P50</text>
+    <text x="880" y="286" text-anchor="middle" class="caption" font-size="9" fill="var(--accent3)">FREE with OpenAI / Google subscription</text>
+
+    <!-- Premium reasoning tier -->
+    <rect x="780" y="266" width="200" height="100" rx="10" fill="url(#g-premium)" stroke="var(--accent4)" stroke-width="1.5"/>
+    <text x="880" y="289" text-anchor="middle" class="label-md" font-size="12" fill="var(--accent4)">Premium / Reasoning</text>
+    <text x="880" y="306" text-anchor="middle" class="caption">⬡ Claude Sonnet / Opus</text>
+    <text x="880" y="321" text-anchor="middle" class="caption">★ GPT-4o / o3</text>
+    <text x="880" y="336" text-anchor="middle" class="caption">$0.01–$0.08 / call · 30–90s</text>
+    <text x="880" y="354" text-anchor="middle" class="caption" font-size="9" fill="var(--accent4)">ONLY when complexity demands it</text>
+
+    <!-- Fallback indicator -->
+    <path d="M 880,230 V 240 M 880,298 V 308" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 2"/>
+    <text x="990" y="240" class="caption" font-size="9" fill="var(--text3)">fallback</text>
+    <text x="990" y="308" class="caption" font-size="9" fill="var(--text3)">fallback</text>
+  </g>
+
+  <!-- ══ Arrows: Tiers → Response ══ -->
+  <path d="M 980,180 H 1068" class="arrow"/>
+  <path d="M 980,250 H 1068" class="arrow"/>
+  <path d="M 980,320 H 1068" class="arrow"/>
+
+  <!-- ════════════════════════════════════════════════
+       COLUMN 4 — Response + savings
+  ════════════════════════════════════════════════ -->
+  <g id="col-response">
+    <rect x="1070" y="130" width="110" height="228" rx="10" fill="var(--bg2)" stroke="var(--border)" stroke-width="1.5"/>
+    <text x="1125" y="154" text-anchor="middle" class="label-md" font-size="11">Response</text>
+    <line x1="1070" y1="163" x2="1180" y2="163" stroke="var(--border2)" stroke-width="1"/>
+
+    <!-- Stats -->
+    <text x="1125" y="183" text-anchor="middle" font-size="19">✅</text>
+    <text x="1125" y="208" text-anchor="middle" class="label-sm" font-size="10">model · task · ms</text>
+
+    <line x1="1085" y1="220" x2="1165" y2="220" stroke="var(--border2)" stroke-width="1"/>
+
+    <text x="1125" y="240" text-anchor="middle" class="label-lg" font-size="16" fill="var(--accent2)">60–80%</text>
+    <text x="1125" y="256" text-anchor="middle" class="caption">cheaper</text>
+
+    <line x1="1085" y1="268" x2="1165" y2="268" stroke="var(--border2)" stroke-width="1"/>
+
+    <text x="1125" y="286" text-anchor="middle" class="label-lg" font-size="16" fill="var(--accent1)">3×</text>
+    <text x="1125" y="302" text-anchor="middle" class="caption">longer</text>
+    <text x="1125" y="316" text-anchor="middle" class="caption">session</text>
+
+    <line x1="1085" y1="328" x2="1165" y2="328" stroke="var(--border2)" stroke-width="1"/>
+    <text x="1125" y="346" text-anchor="middle" class="caption" font-size="9">session summary</text>
+    <text x="1125" y="358" text-anchor="middle" class="caption" font-size="9">shown on exit</text>
+
+    <!-- Return arrow back to client -->
+    <path d="M 1070,420 Q 600,470 200,420 L 200,370" fill="none" stroke="var(--border)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+    <text x="620" y="468" text-anchor="middle" class="caption" font-size="10" fill="var(--text3)">response + savings report returned to client</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════════
+       Animated routing dots
+  ════════════════════════════════════════════════ -->
+
+  <!-- Dot: Client → Router -->
+  <circle r="4" fill="var(--dot1)" opacity="0.9">
+    <animateMotion dur="2.5s" repeatCount="indefinite" begin="0s">
+      <mpath href="#p1"/>
+    </animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" dur="2.5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Dot: Router → Free tier -->
+  <circle r="4" fill="var(--dot2)" opacity="0.9">
+    <animateMotion dur="1.8s" repeatCount="indefinite" begin="1.0s">
+      <mpath href="#p2"/>
+    </animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite" begin="1.0s"/>
+  </circle>
+
+  <!-- Dot: Router → Budget tier -->
+  <circle r="4" fill="var(--dot3)" opacity="0.9">
+    <animateMotion dur="1.8s" repeatCount="indefinite" begin="2.0s">
+      <mpath href="#p3"/>
+    </animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite" begin="2.0s"/>
+  </circle>
+
+  <!-- Dot: Free tier → Response -->
+  <circle r="4" fill="var(--dot2)" opacity="0.9">
+    <animateMotion dur="1.5s" repeatCount="indefinite" begin="3.2s">
+      <mpath href="#p5"/>
+    </animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" repeatCount="indefinite" begin="3.2s"/>
+  </circle>
+
+  <!-- ════════════════════════════════════════════════
+       Bottom legend
+  ════════════════════════════════════════════════ -->
+  <g transform="translate(20, 445)">
+    <rect width="6" height="6" fill="var(--accent2)" rx="1"/>
+    <text x="12" y="7" class="caption">Free / local (Ollama)</text>
+    <rect x="130" width="6" height="6" fill="var(--accent3)" rx="1"/>
+    <text x="142" y="7" class="caption">Budget (Codex / Gemini CLI)</text>
+    <rect x="310" width="6" height="6" fill="var(--accent4)" rx="1"/>
+    <text x="322" y="7" class="caption">Premium (Claude / GPT-4o / o3)</text>
+    <rect x="510" width="6" height="6" fill="var(--accent1)" rx="1"/>
+    <text x="522" y="7" class="caption">Chuzom routing core</text>
+    <text x="750" y="7" class="caption" fill="var(--text3)">github.com/Chuzom/chuzom · pip install chuzom-router</text>
+  </g>
+</svg>

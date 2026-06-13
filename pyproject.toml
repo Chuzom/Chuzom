@@ -92,8 +92,8 @@ sso = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Chuzom/chuzom"
-Repository = "https://github.com/Chuzom/chuzom"
+Homepage = "https://github.com/Chuzom/Chuzom"
+Repository = "https://github.com/Chuzom/Chuzom"
 Issues = "https://github.com/ypollak2/chuzom/issues"
 Changelog = "https://github.com/ypollak2/chuzom/blob/main/CHANGELOG.md"
 

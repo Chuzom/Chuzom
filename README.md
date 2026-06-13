@@ -2,15 +2,15 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&color=4F46E5)](https://pypi.org/project/chuzom-router/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/chuzom-router?style=flat-square&color=10B981&label=downloads%2Fmo)](https://pypi.org/project/chuzom-router/)
-[![CI](https://img.shields.io/github/actions/workflow/status/Chuzom/chuzom/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Chuzom/chuzom/actions/workflows/ci.yml)
-[![GitHub Stars](https://img.shields.io/github/stars/Chuzom/chuzom?style=flat-square&color=F59E0B)](https://github.com/Chuzom/chuzom/stargazers)
+[![CI](https://img.shields.io/github/actions/workflow/status/Chuzom/Chuzom/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Chuzom/Chuzom/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/Chuzom/Chuzom?style=flat-square&color=F59E0B)](https://github.com/Chuzom/Chuzom/stargazers)
 [![Python](https://img.shields.io/pypi/pyversions/chuzom-router?style=flat-square&color=3572A5)](https://pypi.org/project/chuzom-router/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-10B981?style=flat-square)](https://github.com/Chuzom/chuzom/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-10B981?style=flat-square)](https://github.com/Chuzom/Chuzom/blob/main/LICENSE)
 
 ---
 
 <p align="center">
-  <img src="docs/assets/architecture-hero.svg" alt="Chuzom architecture — classify, route, save" width="100%"/>
+  <img src="assets/architecture-hero.svg" alt="Chuzom architecture — classify, route, save" width="100%"/>
 </p>
 
 <p align="center">
@@ -514,8 +514,8 @@ Run your own: `python -m chuzom benchmark`
 
 Full test suite runs on every push (Python 3.10+). Contributions welcome!
 
-- 🐛 [Report bugs](https://github.com/Chuzom/chuzom/issues)
-- 💡 [Start discussions](https://github.com/Chuzom/chuzom/discussions)
+- 🐛 [Report bugs](https://github.com/Chuzom/Chuzom/issues)
+- 💡 [Start discussions](https://github.com/Chuzom/Chuzom/discussions)
 - 🔧 [View `CONTRIBUTING.md`](./CONTRIBUTING.md)
 
 ---
@@ -544,6 +544,6 @@ A: Yes. v0.4.0 streams Codex JSONL events in real time. You'll see `thread.start
 
 ## License
 
-MIT © [The Chuzom Contributors](https://github.com/Chuzom/chuzom/graphs/contributors)
+MIT © [The Chuzom Contributors](https://github.com/Chuzom/Chuzom/graphs/contributors)
 
 ---
