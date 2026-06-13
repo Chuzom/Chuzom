@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
 import re
+import subprocess
+import threading
 import time
 from dataclasses import replace
 from typing import Any, AsyncIterator, TYPE_CHECKING
@@ -807,6 +810,34 @@ def _extract_retry_after(exc: Exception) -> int | None:
     return None
 
 
+def _native_notify(message: str, title: str = "chuzom ⚡") -> None:
+    """Fire-and-forget OS desktop notification.
+
+    Runs in a daemon thread so it never blocks the async event loop.
+    Works on macOS (osascript) and Linux (notify-send). No-op on failure.
+    Used for routing progress because Claude Code does not render MCP
+    log/progress notifications during the "Called chuzom..." spinner.
+    """
+    def _fire() -> None:
+        try:
+            sys_name = platform.system()
+            if sys_name == "Darwin":
+                subprocess.run(
+                    ["osascript", "-e",
+                     f'display notification "{message}" with title "{title}"'],
+                    timeout=2.0, capture_output=True,
+                )
+            elif sys_name == "Linux":
+                subprocess.run(
+                    ["notify-send", "--urgency=low", f"--app-name={title}", message],
+                    timeout=2.0, capture_output=True,
+                )
+        except Exception:
+            pass
+
+    threading.Thread(target=_fire, daemon=True).start()
+
+
 async def _notify(ctx: Any | None, level: str, message: str) -> None:
     """Send a log notification to the MCP client if a context object is available.
 
@@ -846,6 +877,7 @@ async def _heartbeat_notify(
     seconds to flag potential hangs.
     """
     elapsed = 0.0
+    _warn_fired = False  # only send one native hang-warning per call
     while True:
         await asyncio.sleep(interval_s)
         elapsed += interval_s
@@ -855,6 +887,12 @@ async def _heartbeat_notify(
                 "may be overloaded, will auto-fallback on timeout"
             )
             await _notify(ctx, "warning", msg)
+            if not _warn_fired:
+                _native_notify(
+                    f"⚠️ {model_name} still waiting — {elapsed:.0f}s",
+                    title="chuzom slow call",
+                )
+                _warn_fired = True
         else:
             msg = f"⏳ {model_name} — {elapsed:.0f}s elapsed"
             await _notify(ctx, "info", msg)
@@ -1181,6 +1219,10 @@ async def _dispatch_model_loop(
 
         chain_attempts.append(model)
         await _notify(ctx, "info", f"Routing to: {model}")
+        # Fire a native OS desktop notification so the user sees the routing
+        # target immediately, bypassing Claude Code's silent MCP notification
+        # layer which never renders ctx.info() during tool execution.
+        _native_notify(f"⚡ Routing → {model_name} ({provider})")
         # P1-7: reserve token pressure against the ACTUAL provider for the life
         # of this provider call, released in the attempt's finally (success OR
         # failure) so the reservation is symmetric, exactly-once, attributed to
@@ -1436,10 +1478,16 @@ async def _dispatch_model_loop(
 
             # Enhanced notification showing provider for QUOTA_BALANCED
             provider_tag = f" [{response.provider.upper()}]" if profile == RoutingProfile.QUOTA_BALANCED else ""
-            await _notify(
-                ctx, "info",
-                f"✅ {model_name}{provider_tag} — {response.latency_ms:.0f}ms · ${response.cost_usd:.6f}"
-            )
+            _done_msg = f"✅ {model_name}{provider_tag} — {response.latency_ms:.0f}ms · ${response.cost_usd:.6f}"
+            await _notify(ctx, "info", _done_msg)
+            latency_s = response.latency_ms / 1000
+            if latency_s >= 10.0:
+                # Only notify completion for calls that took long enough that the user
+                # was likely wondering what happened (< 10s is fast, no notification needed).
+                _native_notify(
+                    f"✅ {model_name} done — {latency_s:.0f}s",
+                    title="chuzom ⚡",
+                )
 
             # Log routing decision with quota context
             route_log.info(
