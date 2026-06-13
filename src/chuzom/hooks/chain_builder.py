@@ -176,19 +176,20 @@ def build_chain(complexity: str, zone: str, task_type: str) -> list[ModelSpec]:
     if complexity in ("complex", "deep_reasoning"):
         if zone == "green":
             # Plenty of quota — Claude Opus leads for max quality
-            return [_CLAUDE_OPUS] + ollama + mid_externals
+            return [_CLAUDE_OPUS] + mid_externals + ollama
         elif zone == "yellow":
-            # Comfortable — try externals first, Claude Opus as strong option
-            return ollama + mid_externals + [_CLAUDE_OPUS]
+            # Comfortable — mid-tier externals lead, Claude Opus as premium fallback
+            # (ollama after mid_externals to avoid UP-inversion: qwen3.5 winning complex tasks)
+            return mid_externals + ollama + [_CLAUDE_OPUS]
         elif zone == "orange":
-            # Getting tight — externals first, Claude Sonnet (cheaper) as fallback
-            return ollama + mid_externals + [_CLAUDE_SONNET]
+            # Getting tight — mid-tier externals lead, Claude Sonnet as last resort
+            return mid_externals + ollama + [_CLAUDE_SONNET]
         elif zone == "red":
-            # Preserve Claude — externals only
-            return ollama + mid_externals + cheap_externals
+            # Preserve Claude — mid-tier first, Ollama as local fallback
+            return mid_externals + ollama + cheap_externals
         else:
-            # Critical — no Claude at all
-            return ollama + mid_externals + cheap_externals
+            # Critical — no Claude at all; mid-tier before Ollama for quality
+            return mid_externals + ollama + cheap_externals
 
     # Fallback for unknown complexity
     return ollama + cheap_externals

@@ -157,6 +157,10 @@ def tier_for_model(model_id: str) -> Tier:
     m = model_id.lower()
     if any(k in m for k in ("ollama", "qwen3.5", "gemma", "llama3", "phi-3")):
         return Tier.LOCAL
+    # Codex and Gemini CLI run via free subscriptions — treat as CHEAP to avoid
+    # false DOWN-inversions when they handle simple tasks after Ollama fails.
+    if m.startswith("codex/") or m.startswith("gemini_cli/"):
+        return Tier.CHEAP
     if any(k in m for k in (
         "haiku", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.1-flash",
         "gpt-4o-mini", "gpt-5-nano", "groq",
