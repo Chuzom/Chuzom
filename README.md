@@ -319,16 +319,16 @@ The active policy is shown in the session summary dashboard alongside quota bars
   Policy 🏠 local-first
 ```
 
-### Policy emoji reference
+### Policy reference
 
-| Policy | Symbol |
-|---|---|
-| `balanced` | ⚖️ |
-| `local-first` | 🏠 |
-| `cost` | 💰 |
-| `quality` | 🏆 |
-| `quota-exhaustion` | 📊 |
-| `dynamic` | 🔀 |
+| Policy | Symbol | What it does |
+|---|---|---|
+| `balanced` | ⚖️ | **Default.** Best cost/quality trade-off — cheap models first, Claude only when complexity demands it. |
+| `local-first` | 🏠 | Always try local Ollama models before any cloud provider, even for complex tasks. Ideal for offline or air-gapped work. |
+| `cost` | 💰 | Ruthlessly picks the cheapest capable model for every request — ignores latency and quality differences between similarly-priced tiers. |
+| `quality` | 🏆 | Routes to the highest-quality available model regardless of cost — skips cheaper tiers even when they could handle the task. |
+| `quota-exhaustion` | 📊 | Avoids any provider whose quota is above 85% consumed, automatically shifting load to providers with headroom. Good for end-of-billing-cycle crunches. |
+| `dynamic` | 🔀 | Round-robins across providers that are within ±10% of each other in quota usage — balances load evenly over long sessions. |
 
 ---
 
