@@ -1,9 +1,10 @@
 # Chuzom Router — RouterArena Submission
 
 Router version: **v0.4.1** (Chuzom v0.4.1).
-Predictions file: generated from v0.1.0 classifier against a 6202-entry
-snapshot of the dataset. **Must be regenerated against the full 8400-entry
-`router_data.json` before submitting a PR** (see "How to PR" below).
+Predictions: generated from v0.4.1 classifier against the full 8400-entry
+dataset via RouterArena's `generate_prediction_file.py` (includes optimality
+entries). Pre-flight check passes (`check_config_prediction_files.py full +
+robustness`).
 
 This directory mirrors the layout of [`RouteWorks/RouterArena`](https://github.com/RouteWorks/RouterArena)'s
 `router_inference/` tree so the files can be dropped into a fork verbatim.
@@ -18,7 +19,7 @@ routerarena_submission/
 ├── router/
 │   └── chuzom_router.py                      ← BaseRouter implementation (v0.4.1)
 └── predictions/
-    ├── chuzom-router.json                    ← full split snapshot (6202 entries — needs regen)
+    ├── chuzom-router.json                    ← full split (8400 regular + 7281 optimality)
     └── chuzom-router-robustness.json         ← robustness split (420 prompts)
 ```
 
@@ -74,31 +75,35 @@ The v0.4.1 router uses a **4-step cascade**:
 
 ## Model-selection distribution
 
-### `full` split — stored predictions (6202-entry v0.1.0 snapshot)
+### `full` split (8400 regular entries + 7281 optimality = 15681 total)
+
+Generated from `prompt_formatted` — includes the `\boxed{X}` MCQ instruction,
+so the fast-path fires correctly on all MCQ datasets.
 
 | Model | Calls | Share |
 |---|---:|---:|
-| `google/gemini-3.1-flash-lite` | 1955 | 31.5% |
-| `gpt-4o-mini` | 1852 | 29.9% |
-| `qwen/qwen3-235b-a22b-2507` | 1515 | 24.4% |
-| `Qwen/Qwen3-Coder-Next` | 477 | 7.7% |
-| `deepseek/deepseek-v4-flash` | 403 | 6.5% |
+| `google/gemini-3.1-flash-lite` | 7365 | 87.7% |
+| `gpt-4o-mini` | 473 | 5.6% |
+| `Qwen/Qwen3-Coder-Next` | 395 | 4.7% |
+| `qwen/qwen3-235b-a22b-2507` | 162 | 1.9% |
+| `deepseek/deepseek-v4-flash` | 5 | 0.1% |
 
-Note: the `\boxed{X}` fast-path does not fire on the stored `prompt` field
-(which contains the raw question text). When RouterArena runs
-`generate_prediction_file.py` against `prompt_formatted`, the fast-path
-catches all MCQ prompts and shifts ~26% more queries to gemini-flash-lite.
+87.7% cheap routing. `\boxed{X}` fast-path catches all MCQ datasets
+(MMLU, ArcMMLU, OpenTDB, GeoBench, PubMedQA, MedMCQA, Ethics, SocialiQA, etc.).
+Hard math (`\boxed{}` with empty braces — AIME, MATH) is NOT caught by the
+fast-path and correctly routes to `qwen/qwen3-235b-a22b-2507`.
 
-### `robustness` split (420 prompts — v0.1.0 snapshot, still valid)
+### `robustness` split (420 prompts)
 
 | Model | Calls | Share |
 |---|---:|---:|
-| `qwen/qwen3-235b-a22b-2507` | 252 | 60.0% |
-| `gpt-4o-mini` | 126 | 30.0% |
-| `google/gemini-3.1-flash-lite` | 42 | 10.0% |
+| `google/gemini-3.1-flash-lite` | 345 | 82.1% |
+| `qwen/qwen3-235b-a22b-2507` | 33 | 7.9% |
+| `gpt-4o-mini` | 28 | 6.7% |
+| `Qwen/Qwen3-Coder-Next` | 10 | 2.4% |
+| `deepseek/deepseek-v4-flash` | 4 | 1.0% |
 
-Robustness prompts are reasoning-heavy (longer, math/derivation), so the
-heuristic correctly skews toward `complex` complexity and the frontier model.
+Robustness prompts use the same `\boxed{X}` MCQ format — correctly routed cheap.
 
 ## How to PR this to RouterArena
 
