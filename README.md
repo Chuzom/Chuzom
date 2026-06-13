@@ -219,6 +219,67 @@ chuzom doctor    # populates ~/.chuzom/discovery.json
 
 ---
 
+## Routing Policies
+
+Chuzom v0.5.0 introduces **user-selectable routing policies** so you can tune the cost/quality/freedom tradeoff to match how you work. Set once via env var and forget:
+
+```bash
+export CHUZOM_ROUTING_POLICY=local-first   # in ~/.zshrc / ~/.bashrc
+```
+
+Or add it to your `.env`:
+
+```
+CHUZOM_ROUTING_POLICY=cost
+```
+
+### Available policies
+
+| Policy | Purpose | Best for |
+|---|---|---|
+| `balanced` | **Default.** Standard chain order — cost/quality sweet spot | Most users; no change from prior behavior |
+| `local-first` | Prefer free local providers first: Ollama → Codex → Gemini CLI → paid APIs | Offline-first workflows; maximize zero-cost ratio |
+| `cost` | Cheapest available model first, using live per-token pricing | Budget-constrained teams; billing-sensitive projects |
+| `quality` | Highest benchmark score for the task type first (see [artificialanalysis.ai](https://artificialanalysis.ai/leaderboards/models)) | Best-output scenarios: docs, complex analysis, code review |
+| `quota-exhaustion` | Route away from providers whose quota is > 85% consumed | End-of-month crunch; uneven quota distribution across providers |
+| `dynamic` | Round-robin across providers within ±10% quota usage of each other | Long sessions; balancing load across Ollama, Codex, and Gemini CLI equally |
+
+### How policies work
+
+Policies are applied **after** the full routing chain is built (after Ollama discovery, Codex injection, Gemini CLI injection). Each policy sees the complete candidate list and reorders it — it does not filter models out, so fallback always works.
+
+```
+Built chain:  [claude-sonnet-4, codex/gpt-5.5, gpt-4o, gemini-2.5-flash]
+Policy cost:  [codex/gpt-5.5, gemini-2.5-flash, gpt-4o, claude-sonnet-4]
+                ^free (prepaid)    ^cheaper API       ^mid       ^most expensive
+```
+
+### Quality scores (artificialanalysis.ai)
+
+The `quality` policy uses benchmark scores per task type (`code`, `query`, `analyze`, `generate`, `research`) cached in `data/benchmarks.json`. Scores are sourced from [artificialanalysis.ai](https://artificialanalysis.ai/leaderboards/models) — a third-party leaderboard that re-runs independent evaluations across providers.
+
+### Session summary policy indicator
+
+The active policy is shown in the session summary dashboard alongside quota bars:
+
+```
+  Zero-cost: ━━━━━━━━━─── 82%
+  Policy 🏠 local-first
+```
+
+### Policy emoji reference
+
+| Policy | Symbol |
+|---|---|
+| `balanced` | ⚖️ |
+| `local-first` | 🏠 |
+| `cost` | 💰 |
+| `quality` | 🏆 |
+| `quota-exhaustion` | 📊 |
+| `dynamic` | 🔀 |
+
+---
+
 ## Real-Time Streaming Progress
 
 In v0.4.0, long-running model calls stream live progress into Claude Code. You'll see what's happening inside Codex and Gemini CLI instead of staring at a blank spinner.
@@ -359,6 +420,7 @@ chuzom --version                     # Show installed version
 | `CHUZOM_CODEX_MODELS` | `gpt-5.5,gpt-5.4` | Codex model fallback chain |
 | `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
 | `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription mode (no API key needed) |
+| `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |
 
 ---
 
@@ -375,6 +437,7 @@ chuzom --version                     # Show installed version
 ✅ **Ollama dynamic discovery** — no hardcoded models; uses what you have installed  
 ✅ **PII detection** — sensitive prompts route to local models only  
 ✅ **Per-reply savings banner** — see which model ran and how much you saved  
+✅ **Routing policies** — 6 policies (local-first, cost, quality, quota-exhaustion, dynamic, balanced) for one-line tradeoff control  
 
 ---
 

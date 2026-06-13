@@ -200,6 +200,17 @@ class RouterConfig(BaseSettings):
     # Use CHUZOM_MAX_AGENT_DEPTH to override. Default: 3.
     chuzom_max_agent_depth: int = 3  # CHUZOM_MAX_AGENT_DEPTH
 
+    # ── Routing policy (v0.5.0) ──
+    # Controls the model-selection strategy applied to every routing request.
+    # Set CHUZOM_ROUTING_POLICY to one of:
+    #   balanced        (default) — cost/quality sweet spot; standard chain order
+    #   local-first     — Ollama → Codex → Gemini CLI → paid APIs
+    #   cost            — cheapest available model first
+    #   quality         — highest-quality model first (from benchmarks.json scores)
+    #   quota-exhaustion — route away from providers near their quota limit
+    #   dynamic         — round-robin between models within ±10% quota usage
+    chuzom_routing_policy: str = "balanced"  # CHUZOM_ROUTING_POLICY
+
     # ── HuggingFace Inference API ──
     # Used by the discovery layer to access free-tier hosted models.
     # Accepts HF_TOKEN or HUGGINGFACE_API_KEY from environment.

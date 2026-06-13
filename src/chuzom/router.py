@@ -490,6 +490,23 @@ async def _build_and_filter_chain(
             models_to_try, active_agent, c,
         )
 
+        # ── User routing policy (v0.5.0) ──────────────────────────────────────
+        # Applied after agent-context reordering so the policy operates on the
+        # full candidate list (including injected Codex / Gemini CLI / Ollama).
+        _routing_policy = config.chuzom_routing_policy
+        if _routing_policy and _routing_policy != "balanced":
+            from chuzom.user_routing_policy import apply_routing_policy
+            models_to_try = apply_routing_policy(
+                models_to_try,
+                _routing_policy,
+                task_type=task_type.value,
+            )
+            log.debug(
+                "Routing policy '%s' applied — top model: %s",
+                _routing_policy,
+                models_to_try[0] if models_to_try else "(none)",
+            )
+
         # ── Quality-based reordering removed (Plan 07 Cat E) ──────────────────
         # The judge.reorder_by_quality call was a hard-threshold demotion
         # (judge_score < 0.7 → end of chain). It is superseded by the

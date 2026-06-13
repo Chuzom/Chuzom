@@ -58,6 +58,36 @@ _FREE_METHODS = frozenset({
     "introspection-fast-path",
 })
 
+# Per-method rich color — makes the routing breakdown scannable at a glance.
+# Zero-cost methods → cool/green tones; paid/fallback → warm tones.
+_METHOD_COLORS: dict[str, str] = {
+    "heuristic":                       "#9ece6a",  # vivid green — free path
+    "heuristic-weak":                  "#73daca",  # teal — free path
+    "build-fast-path":                 "#41a6b5",  # cyan-blue — build fast
+    "content-generation-fast-path":    "#7dcfff",  # sky blue — content gen
+    "ollama":                          "#9ece6a",  # green — local/free
+    "llm":                             "#7aa2f7",  # blue — classified
+    "context-inherit":                 "#bb9af7",  # violet — inherited
+    "code-context-inherit":            "#bb9af7",  # violet — inherited
+    "override":                        "#ff9e64",  # orange — manual override
+    "intent-override-display":         "#ff9e64",  # orange — display override
+    "fallback":                        "#e0af68",  # amber — fallback path
+    "unknown":                         "#565f89",  # dim — unknown
+    "introspection":                   "#73daca",  # teal — introspect
+    "introspect":                      "#73daca",
+    "introspection-fast-path":         "#73daca",
+}
+
+# Policy display metadata — symbol + accent color
+_POLICY_STYLES: dict[str, tuple[str, str]] = {
+    "balanced":        ("⚖️",  "#7aa2f7"),   # blue
+    "local-first":     ("🏠",  "#9ece6a"),   # green
+    "cost":            ("💰",  "#e0af68"),   # amber
+    "quality":         ("🏆",  "#bb9af7"),   # violet
+    "quota-exhaustion": ("📊", "#f7768e"),   # pink/red
+    "dynamic":         ("🔀",  "#73daca"),   # teal
+}
+
 
 def _fmt_tok(n: int) -> str:
     if n >= 1_000_000:
@@ -168,6 +198,7 @@ class SessionSummaryDashboard:
         model_breakdown: dict[str, float] | None = None,
         session_models: list[dict] | None = None,
         subscriptions: list[dict] | None = None,
+        routing_policy: str = "balanced",
     ) -> RenderableType:
         """Single panel: routing decisions (left) + savings (right) + quota + models."""
         decisions = decisions or []
@@ -184,10 +215,12 @@ class SessionSummaryDashboard:
         lifetime_saved = savings.get("lifetime", 0.0)
 
         # ── Left: routing breakdown ──────────────────────────────────────────
+        policy_sym, policy_color = _POLICY_STYLES.get(
+            routing_policy, ("⚙️", PALETTE.text_dim)
+        )
         left_lines: list[RenderableType] = [
-            Text(
-                f"ROUTING  today  {total_hits} decisions",
-                style=f"bold {PALETTE.accent}",
+            Text.assemble(
+                (f"ROUTING  today  {total_hits} decisions", f"bold {PALETTE.accent}"),
             ),
             Text(""),
         ]
@@ -203,12 +236,18 @@ class SessionSummaryDashboard:
             pct = (count / total_hits * 100) if total_hits > 0 else 0
             symbol = d.get("symbol") or _METHOD_SYMBOLS.get(method, "❓")
             short = d.get("short") or _METHOD_SHORT.get(method, method[:12])
-            left_lines.append(
-                Text(
-                    f"  {symbol} {short:<{max_name_len}}  {count:>3}   {pct:>3.0f}%",
-                    style=PALETTE.text_primary,
-                )
+            method_color = _METHOD_COLORS.get(method, PALETTE.text_primary)
+            pct_str = f"{pct:>3.0f}%"
+            # color the percentage bar segment by how dominant the method is
+            pct_color = PALETTE.success if pct >= 50 else (
+                PALETTE.warning if pct >= 20 else PALETTE.text_dim
             )
+            left_lines.append(Text.assemble(
+                (f"  {symbol} ", PALETTE.text_dim),
+                (f"{short:<{max_name_len}}", method_color),
+                (f"  {count:>3}  ", PALETTE.text_primary),
+                (pct_str, pct_color),
+            ))
 
         left_lines.append(Text(""))
         zc_bar = self._colored_quota_bar(zero_pct, width=12)
@@ -218,6 +257,14 @@ class SessionSummaryDashboard:
             (f" {zero_pct:.0f}%", PALETTE.success),
         )
         left_lines.append(zc_line)
+
+        # Policy indicator
+        left_lines.append(Text(""))
+        left_lines.append(Text.assemble(
+            ("  Policy ", PALETTE.text_dim),
+            (f"{policy_sym} ", PALETTE.text_dim),
+            (routing_policy, policy_color),
+        ))
 
         # ── Right: savings summary ───────────────────────────────────────────
         right_lines: list[RenderableType] = [
@@ -357,8 +404,20 @@ class SessionSummaryDashboard:
         model_lines: list[RenderableType] = []
         effective_models = [m for m in (session_models or []) if m.get("calls", 0) > 0]
 
+        # Quality tier → color: top-tier (green), mid-tier (accent/blue), budget (dim)
+        def _model_tier_color(model_name: str, provider: str) -> str:
+            if provider in {"ollama", "codex", "gemini_cli"}:
+                return PALETTE.success          # free local → green
+            top_tier = {"claude-opus", "o3", "gpt-5", "gemini-2.5-pro", "grok-3"}
+            mid_tier = {"claude-sonnet", "gpt-4o", "gemini-2.5-flash", "deepseek"}
+            lower = model_name.lower()
+            if any(t in lower for t in top_tier):
+                return PALETTE.violet           # premium → violet
+            if any(t in lower for t in mid_tier):
+                return PALETTE.accent           # balanced → blue
+            return PALETTE.text_primary         # budget → default
+
         if effective_models:
-            # Real session data: show calls/tokens/cost per model
             model_lines.append(Text(""))
             model_lines.append(
                 Text("  MODELS  this session", style=f"bold {PALETTE.violet}")
@@ -380,33 +439,37 @@ class SessionSummaryDashboard:
                 total_m_cost += cost
                 total_m_saved += saved
                 tok_str = _fmt_tok(tokens) if tokens else "—"
+                tier_color = _model_tier_color(short, provider)
                 if provider == "subscription":
                     cost_str = "sub"
+                    cost_color = PALETTE.success
                 elif cost == 0 and saved > 0:
                     cost_str = "free"
+                    cost_color = PALETTE.success
                 elif cost > 0:
                     cost_str = _fmt_usd(cost)
+                    cost_color = PALETTE.warning
                 else:
                     cost_str = "—"
-                saved_str = f"saved {_fmt_usd(saved)}" if saved > 0.001 else ""
-                model_lines.append(
-                    Text(
-                        f"  {short:<20} {calls:>3}×  {tok_str:>6}  "
-                        f"{cost_str:<6}  {saved_str}",
-                        style=PALETTE.text_primary,
-                    )
-                )
-            model_lines.append(
-                Text(
-                    f"  {'total':<20} {total_m_calls:>3}×  "
-                    f"{_fmt_tok(total_m_tokens):>6}  "
-                    f"{_fmt_usd(total_m_cost):<6}  "
-                    f"saved {_fmt_usd(total_m_saved)}",
-                    style=PALETTE.success,
-                )
-            )
+                    cost_color = PALETTE.text_dim
+                saved_str = f"+{_fmt_usd(saved)}" if saved > 0.001 else ""
+                model_lines.append(Text.assemble(
+                    ("  ", PALETTE.text_dim),
+                    (f"{short:<20}", tier_color),
+                    (f" {calls:>3}×", PALETTE.text_primary),
+                    (f"  {tok_str:>6}", PALETTE.text_dim),
+                    (f"  {cost_str:<6}", cost_color),
+                    (f"  {saved_str}", PALETTE.success),
+                ))
+            model_lines.append(Text.assemble(
+                ("  ", PALETTE.text_dim),
+                (f"{'total':<20}", PALETTE.text_primary),
+                (f" {total_m_calls:>3}×", PALETTE.text_primary),
+                (f"  {_fmt_tok(total_m_tokens):>6}", PALETTE.text_dim),
+                (f"  {_fmt_usd(total_m_cost):<6}", PALETTE.warning if total_m_cost > 0 else PALETTE.success),
+                (f"  saved {_fmt_usd(total_m_saved)}", PALETTE.success),
+            ))
         elif model_breakdown:
-            # No LLM calls this session — show 14-day mix as context
             model_lines.append(Text(""))
             model_lines.append(
                 Text("  MODELS  14-day mix", style=f"bold {PALETTE.violet}")
@@ -414,8 +477,11 @@ class SessionSummaryDashboard:
             for model, pct in sorted(model_breakdown.items(), key=lambda x: -x[1])[:5]:
                 short = model.split("/")[-1][:20]
                 bar = self._colored_quota_bar(pct, width=14)
+                tier_color = _model_tier_color(short, "")
                 model_lines.append(Text.assemble(
-                    (f"  {short:<20}  ", PALETTE.text_dim),
+                    ("  ", PALETTE.text_dim),
+                    (f"{short:<20}", tier_color),
+                    ("  ", PALETTE.text_dim),
                     bar,
                     (f"  {pct:.0f}%", PALETTE.text_dim),
                 ))
@@ -674,6 +740,12 @@ class SessionSummaryDashboard:
         quota_samples: list[tuple[str, float]] | None = None,
     ) -> RenderableType:
         """Two-panel dashboard: main summary + 14-day activity + quota timeline."""
+        try:
+            from chuzom.config import get_config
+            _routing_policy = get_config().chuzom_routing_policy
+        except Exception:
+            _routing_policy = "balanced"
+
         main = self.render_main_panel(
             timestamp=timestamp,
             decisions=decisions,
@@ -691,6 +763,7 @@ class SessionSummaryDashboard:
             model_breakdown=model_breakdown,
             session_models=session_models,
             subscriptions=subscriptions,
+            routing_policy=_routing_policy,
         )
         activity = self.render_activity_panel(
             daily_calls=daily_calls or [],
