@@ -1540,7 +1540,7 @@ def main() -> None:
                     dashboard_savings["lifetime"] = saved_usd
 
             # Create console to capture output
-            console = Console(record=True, file=io.StringIO())
+            console = Console(record=True, file=io.StringIO(), force_terminal=True, color_system="truecolor")
             dashboard = SessionSummaryDashboard(console=console)
 
             # Gather 14-day cost data from report
@@ -1681,7 +1681,17 @@ def main() -> None:
                 daily_calls=daily_calls_list,
                 daily_tokens=daily_tokens_list,
             )
-            final_summary_output = console.file.getvalue()
+            colored_output = console.file.getvalue()
+            # Write colored Rich output directly to the terminal (stderr bypasses
+            # Claude Code's stdout capture, so ANSI codes render in the real terminal).
+            try:
+                sys.stderr.write(colored_output)
+                sys.stderr.flush()
+            except Exception:
+                pass
+            # systemMessage gets plain text (ANSI escape codes stripped) for Claude Code UI.
+            import re as _re
+            final_summary_output = _re.sub(r"\x1b\[[0-9;]*[mGKHF]", "", colored_output)
         except Exception as e:
             # 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
             print(f"Error rendering SessionSummaryDashboard: {e}", file=sys.stderr)

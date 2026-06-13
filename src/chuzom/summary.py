@@ -345,7 +345,8 @@ def render(data: SessionSummaryData, *, console=None) -> None:
     from rich.text import Text
 
     if console is None:
-        console = Console()
+        import sys
+        console = Console(force_terminal=sys.stdout.isatty(), color_system="truecolor")
 
     # ── STATUS BANNER — wordmark + tagline + health glyph ─────────────
     # Three-line banner so the dashboard's identity is unmistakable: a
