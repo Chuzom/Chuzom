@@ -1550,12 +1550,16 @@ def main() -> None:
                 # Find "today's" savings and use as reference point
                 today_saved = 0.0
                 for label, _, _, _, saved_usd in cumulative:
-                    if label == "today":
+                    # Try multiple label variations (case-insensitive)
+                    if label == "today" or label.lower().startswith("today"):
                         today_saved = saved_usd
                         break
+                    # Fallback: use first non-zero savings if "today" not found
+                    if saved_usd > 0 and today_saved == 0.0:
+                        today_saved = saved_usd
 
                 # Create 7-day trend using today's value
-                if today_saved > 0:
+                if today_saved > 0.0001:  # Use small threshold to avoid floating point 0
                     daily_costs = [
                         today_saved * 0.3,   # 7 days ago
                         today_saved * 0.35,  # 6 days ago
@@ -1592,13 +1596,24 @@ def main() -> None:
                             "context-inherit": "Context Inherit",
                             "ollama": "Ollama (Local)",
                             "fallback": "Fallback",
+                            "code-context-inherit": "Code Context",
                         }
                         for r in routing_logic:
                             method = r.get("method", "unknown")
                             hits = r.get("hits", 0)
-                            model_name = method_to_model.get(method, method)
-                            pct = (hits / total_hits) * 100
-                            model_breakdown[model_name] = model_breakdown.get(model_name, 0) + pct
+                            if hits > 0:
+                                model_name = method_to_model.get(method, method)
+                                pct = (hits / total_hits) * 100
+                                model_breakdown[model_name] = model_breakdown.get(model_name, 0) + pct
+                # Even if routing_logic empty, create basic breakdown from decisions
+                if not model_breakdown and dashboard_decisions:
+                    total_decisions = sum(d.get("count", 0) for d in dashboard_decisions)
+                    if total_decisions > 0:
+                        for decision in dashboard_decisions:
+                            method = decision.get("method", "Unknown")
+                            count = decision.get("count", 0)
+                            pct = (count / total_decisions) * 100
+                            model_breakdown[method] = pct
 
             # Gather quota data from Claude subscription
             claude_quota_pct = current.get("weekly_pct", 0.0) * 100 if current else 0.0
