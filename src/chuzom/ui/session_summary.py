@@ -267,31 +267,29 @@ class SessionSummaryDashboard:
         ))
 
         # ── Right: savings summary ───────────────────────────────────────────
-        def _savings_line(usd: float, tokens: int, label: str, style: str) -> Text:
-            tok_str = f" {_fmt_tok(tokens)} tok" if tokens > 0 else ""
-            return Text(f"  {_fmt_usd(usd):<8}{tok_str:<10} {label}", style=style)
+        def _savings_entry(usd: float, tokens: int, label: str,
+                           style: str) -> list[RenderableType]:
+            lines: list[RenderableType] = [
+                Text(f"  {_fmt_usd(usd):<10} {label}", style=style),
+            ]
+            if tokens > 0:
+                lines.append(Text(f"    {_fmt_tok(tokens)} tok", style=PALETTE.text_dim))
+            return lines
 
         right_lines: list[RenderableType] = [
             Text("SAVINGS  all sessions", style=f"bold {PALETTE.success}"),
             Text(""),
-            _savings_line(
-                lifetime_saved,
-                savings.get("lifetime_tokens", 0),
-                "lifetime",
-                PALETTE.success,
-            ),
-            _savings_line(
-                today_saved,
-                savings.get("today_tokens", 0),
-                "today",
-                PALETTE.text_primary,
-            ),
+            *_savings_entry(lifetime_saved, savings.get("lifetime_tokens", 0),
+                            "lifetime", PALETTE.success),
+            *_savings_entry(today_saved, savings.get("today_tokens", 0),
+                            "today", PALETTE.text_primary),
         ]
         for key, label in (("week", "week"), ("month", "month")):
             amount = savings.get(key, 0.0)
             if amount > 0:
-                right_lines.append(
-                    _savings_line(amount, savings.get(f"{key}_tokens", 0), label, PALETTE.text_dim)
+                right_lines.extend(
+                    _savings_entry(amount, savings.get(f"{key}_tokens", 0),
+                                   label, PALETTE.text_dim)
                 )
 
         # ── Grid: left + right columns ───────────────────────────────────────
