@@ -19,14 +19,13 @@ same order.  ``balanced`` is a no-op (returns the chain unchanged).
 
 from __future__ import annotations
 
-import itertools
 import json
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from chuzom.types import TaskType
+    pass
 
 _BENCHMARKS_PATH = Path(__file__).parent / "data" / "benchmarks.json"
 _PROFILE_PATH = Path.home() / ".chuzom" / "profile.yaml"

@@ -1,13 +1,13 @@
 {
   "name": "chuzom",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Smart LLM routing with Claude subscription monitoring, complexity-first model selection, and 20+ AI providers",
   "author": {
     "name": "ypollak2",
     "url": "https://github.com/ypollak2"
   },
-  "homepage": "https://github.com/ypollak2/chuzom",
-  "repository": "https://github.com/ypollak2/chuzom",
+  "homepage": "https://github.com/Chuzom/chuzom",
+  "repository": "https://github.com/Chuzom/chuzom",
   "license": "MIT",
   "skills": "skills/",
   "mcpServers": ".mcp.json",

@@ -12,7 +12,7 @@ Framework: Textual (TUI framework) + Rich (formatting) + Plotext (charts)
 
 from __future__ import annotations
 
-__version__ = "0.3.3"
+__version__ = "0.4.1"
 __all__ = [
     "ChuzomDashboard",
     "run_dashboard",

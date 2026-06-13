@@ -1,13 +1,13 @@
 {
   "name": "chuzom",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Route every Codex task to the cheapest capable model \u2014 Gemini Flash, Haiku, Ollama, Perplexity, and 20+ providers. Tracks cross-session savings, enforces routing policy.",
   "author": {
     "name": "ypollak2",
     "url": "https://github.com/ypollak2"
   },
-  "homepage": "https://github.com/ypollak2/chuzom",
-  "repository": "https://github.com/ypollak2/chuzom",
+  "homepage": "https://github.com/Chuzom/chuzom",
+  "repository": "https://github.com/Chuzom/chuzom",
   "license": "MIT",
   "skills": "skills/",
   "mcpServers": ".mcp.json",

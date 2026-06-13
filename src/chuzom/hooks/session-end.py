@@ -1539,8 +1539,11 @@ def main() -> None:
                 elif label == "all time":
                     dashboard_savings["lifetime"] = saved_usd
 
-            # Create console to capture output
-            console = Console(record=True, force_terminal=True, color_system="truecolor")
+            # Redirect to StringIO so Rich doesn't pollute stdout.
+            # Console(record=True) without file= defaults to sys.stdout AND records;
+            # that mix would corrupt the JSON envelope Claude Code reads from stdout.
+            _rich_buf = io.StringIO()
+            console = Console(record=True, force_terminal=True, color_system="truecolor", file=_rich_buf)
             dashboard = SessionSummaryDashboard(console=console)
 
             # Gather 14-day cost data from report

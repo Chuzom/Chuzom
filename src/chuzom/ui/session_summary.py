@@ -585,7 +585,6 @@ class SessionSummaryDashboard:
             quota_samples: list of (iso_timestamp, pct_0_to_100) pairs
             label: quota label shown in footer
         """
-        PLOT_LEFT = 5
         PLOT_W = 58
         PLOT_H = 7
 

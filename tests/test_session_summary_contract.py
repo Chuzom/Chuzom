@@ -7,9 +7,7 @@ Tests the 4 bugs fixed in session-end.py:
   4. session_models is built from tools_data, not hardcoded []
 """
 
-import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import yaml

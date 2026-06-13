@@ -85,7 +85,6 @@ class TestEventSequencing:
         """All events must have BaseEvent fields."""
         # This is more of a type-check test in real code,
         # but we verify the schema has them
-        base_keys = {"seq", "type", "correlation_id", "ts_monotonic_ms"}
         route_started_keys = required_keys_for("route.started")
 
         # BaseEvent fields should be added to every payload

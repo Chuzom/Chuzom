@@ -1,7 +1,7 @@
 [project]
 name = "chuzom-router"
-version = "0.4.0"
-description = "Lightweight signal-driven LLM router for Claude Code, Cursor, Codex, Gemini CLI, and Codex CLI. Now with real-time streaming dashboards!"
+version = "0.4.1"
+description = "Smart LLM router for Claude Code: save 60-80% of tokens and keep your session alive 3x longer. Auto-routes to Ollama, Codex, and Gemini CLI before spending Claude quota."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -92,8 +92,8 @@ sso = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ypollak2/chuzom"
-Repository = "https://github.com/ypollak2/chuzom"
+Homepage = "https://github.com/Chuzom/chuzom"
+Repository = "https://github.com/Chuzom/chuzom"
 Issues = "https://github.com/ypollak2/chuzom/issues"
 Changelog = "https://github.com/ypollak2/chuzom/blob/main/CHANGELOG.md"
 

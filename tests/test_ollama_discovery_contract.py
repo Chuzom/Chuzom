@@ -8,7 +8,6 @@ live source (env var or discovery.json) is available.
 import importlib.util
 import json
 import os
-import sys
 import types
 from pathlib import Path
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.4.1 — 2026-06-13 — CI fixes, session summary visible, deadline guard
+
+### Bug fixes
+
+- **Session summary now visible in Claude Code UI.** Root cause: `Console(record=True)` without `file=` defaults to writing to stdout AND recording simultaneously. Claude Code's Stop hook contract requires exactly one JSON line on stdout — anything else on stdout before the `{"systemMessage": ...}` line is silently discarded, causing the summary to never appear. Fixed by redirecting Rich to `io.StringIO()` (`file=_rich_buf`) so stdout stays clean for the JSON envelope. Colored output is saved to `~/.chuzom/last_summary.ansi` and visible via `cat ~/.chuzom/last_summary.ansi` or `chuzom summary` in a real terminal.
+
+- **`test_min_cap_wins_when_both_set` deadline guard.** When a workflow deadline expires *during routing setup* (chain-build, idempotency check, budget lock acquisition) rather than during dispatch, the computed `_dl_remaining_at_dispatch` went negative. The `_effective_timeout > 0` guard then silently skipped `asyncio.wait_for`, running the dispatch coroutine without any timeout and never raising `DeadlineExceeded`. Fixed by adding a pre-dispatch deadline re-check that raises `DeadlineExceeded` immediately when remaining time ≤ 0 at dispatch entry. Test deadline increased from 50 ms to 500 ms to reliably exercise the `asyncio.wait_for` path.
+
+- **`test_code_task_codex_after_first_claude_not_last` routing mock.** The test's `_selective_fail` mock only failed `anthropic/*` models, but the dynamic routing table for `(BALANCED, CODE)` starts with `ollama/qwen3.5:latest` before Claude. The Ollama model succeeded via the litellm mock, so the router returned before reaching Codex. Fixed by failing ALL litellm models so only `run_codex` (the Codex CLI path) can succeed.
+
+- **Ollama models gated behind reachability probe.** `build_dynamic_routing_table` previously always added `ollama` to the available-providers set regardless of actual Ollama availability. Routing chains could include Ollama models that immediately timed out on every request. Now guarded by `probe_ollama()` (1-second HTTP check with 60-second TTL cache); Ollama only enters the chain when the server is reachable.
+
+### Packaging
+
+- Description updated to emphasize token savings and session preservation for Claude Code/subscription users.
+- PyPI `Homepage`/`Repository` URLs corrected from `ypollak2/chuzom` to `Chuzom/chuzom`.
+- README: added "For Claude Code / Claude Pro / Max Subscribers" section explaining 3× session extension.
+
+### Linting
+
+- Fixed all 16 ruff errors: F821 (missing `Callable`/`Awaitable` imports in `codex_agent.py` and `gemini_cli_agent.py`), F841 (unused `PLOT_LEFT` in `session_summary.py`), F401/F841 in test files.
+
+---
+
 ## v0.3.0 — 2026-06-11 — Enterprise enforcement wired + honest packaging
 
 > Closes the audit's anchor finding (INV-010): the enterprise control plane is now **wired into and enforced on the routing path** under `CHUZOM_DEPLOYMENT_PROFILE=enterprise`, and the packaging/README are reconciled to reality. The developer router stays stable; the enterprise control plane is labelled **beta** with a per-feature status table in the README.

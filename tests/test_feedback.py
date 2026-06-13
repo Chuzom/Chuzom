@@ -189,7 +189,7 @@ class TestFeedbackStore:
     def test_feedback_store_creates_db(self, tmp_path: Path):
         """FeedbackStore._init_schema() creates database."""
         db_path = tmp_path / "feedback.db"
-        store = FeedbackStore(db_path=db_path)
+        FeedbackStore(db_path=db_path)
 
         assert db_path.exists()
 

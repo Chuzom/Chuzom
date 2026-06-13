@@ -3,15 +3,15 @@
   "owner": {
     "name": "Yali Pollak"
   },
-  "version": "0.4.0",
+  "version": "0.4.1",
   "plugins": [
     {
       "name": "chuzom",
       "description": "Route every Codex task to the cheapest capable model across 20+ AI providers. Tracks cross-session savings, enforces routing policy.",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "source": {
         "source": "github",
-        "repo": "ypollak2/chuzom"
+        "repo": "Chuzom/chuzom"
       }
     }
   ]

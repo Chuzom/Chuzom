@@ -224,15 +224,21 @@ async def test_min_cap_wins_when_both_set(
     isolated_audit_db: Path,
     isolated_idempotency_db,
 ) -> None:
-    """With both deadline (50ms remaining) AND max_wall_clock_seconds
-    (5s), the deadline wins — DeadlineExceeded raised."""
+    """With both deadline (500ms remaining) AND max_wall_clock_seconds
+    (5s), the deadline wins — DeadlineExceeded raised.
+
+    Uses 500ms (not 50ms) so routing setup overhead doesn't exhaust the
+    deadline before dispatch on slow machines — the deadline must still
+    be in the future when asyncio.wait_for is called for the 'tighter cap'
+    logic to be exercised. 500ms < 2s (_slow) << 5s (wall-clock cap).
+    """
 
     async def _slow(**kwargs: Any) -> LLMResponse:
         await asyncio.sleep(2)
 
     monkeypatch.setattr(router_mod, "_dispatch_model_loop", _slow)
 
-    near_deadline = time.monotonic() + 0.05
+    near_deadline = time.monotonic() + 0.5
     with pytest.raises(DeadlineExceeded):
         await route_and_call(
             task_type=TaskType.QUERY,

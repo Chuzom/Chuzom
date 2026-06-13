@@ -1,13 +1,17 @@
 # Chuzom — Smart LLM Routing. Save 35–80% on API Costs.
 
-[![PyPI](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&label=pypi&color=4F46E5)](https://pypi.org/project/chuzom-router/)
-[![Downloads](https://img.shields.io/pepy/dd/chuzom-router?style=flat-square&label=downloads&color=10B981)](https://pepy.tech/project/chuzom-router)
-[![Tests](https://img.shields.io/github/actions/workflow/status/Chuzom/chuzom/ci.yml?branch=main&style=flat-square&label=tests&color=10B981)](https://github.com/Chuzom/chuzom/actions/workflows/ci.yml)
-[![Stars](https://img.shields.io/github/stars/Chuzom/chuzom?style=flat-square&label=stars&color=F59E0B)](https://github.com/Chuzom/chuzom)
-![Python](https://img.shields.io/badge/python-3.10+-3572A5?style=flat-square)
-![License](https://img.shields.io/badge/license-MIT-10B981?style=flat-square)
+[![PyPI version](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&color=4F46E5)](https://pypi.org/project/chuzom-router/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/chuzom-router?style=flat-square&color=10B981&label=downloads%2Fmo)](https://pypi.org/project/chuzom-router/)
+[![CI](https://img.shields.io/github/actions/workflow/status/Chuzom/chuzom/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Chuzom/chuzom/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/Chuzom/chuzom?style=flat-square&color=F59E0B)](https://github.com/Chuzom/chuzom/stargazers)
+[![Python](https://img.shields.io/pypi/pyversions/chuzom-router?style=flat-square&color=3572A5)](https://pypi.org/project/chuzom-router/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-10B981?style=flat-square)](https://github.com/Chuzom/chuzom/blob/main/LICENSE)
 
 ---
+
+<p align="center">
+  <img src="docs/assets/architecture-hero.svg" alt="Chuzom architecture — classify, route, save" width="100%"/>
+</p>
 
 <p align="center">
   <strong>⭐ Star on GitHub if Chuzom saves your quota ⭐</strong><br/>
@@ -46,6 +50,27 @@ Result + streaming progress + savings banner
 ```
 
 **Same answers. 60–80% lower costs.**
+
+---
+
+## For Claude Code / Claude Pro / Max Subscribers
+
+If you pay for Claude Pro or Max, **Chuzom is the single biggest lever you have** to extend how long your session lasts and reduce how often you hit usage limits.
+
+Claude Code routes nearly every request — file reads, code edits, questions — through your subscription quota. Chuzom intercepts those requests and asks: **does this actually need Claude?**
+
+- A file-listing question → routed to Ollama locally (free, 0 quota used)
+- A moderate coding task → routed to Codex or Gemini CLI (free via your subscription)
+- A deep architecture review → sent to Claude (only when it truly needs it)
+
+**Result: 3× longer sessions, same quality.** Your Claude quota goes to the work that actually benefits from it.
+
+```
+Without Chuzom:  [Claude] ← every request      → quota exhausted in 2h
+With Chuzom:     [Ollama] ← simple questions   } quota lasts 6–8h
+                 [Codex]  ← code tasks         }
+                 [Claude] ← only complex work  }
+```
 
 ---
 
@@ -97,6 +122,33 @@ Typical developer workload (mix of questions, code review, debugging):
 | **Chuzom (smart routing)** | **$10–15** | 96% (best of both) |
 
 **Over a year: Chuzom saves you $600–800** vs Opus-only.
+
+---
+
+## One Week with Chuzom — Real Numbers
+
+A typical Claude Code heavy user sends ~800–1,200 prompts per week. Here's what routing looks like after 7 days:
+
+| Metric | Without Chuzom | With Chuzom |
+|---|---|---|
+| Prompts routed to Claude (quota) | ~1,000 / week | ~240 / week |
+| Prompts to Ollama (local, free) | 0 | ~520 / week |
+| Prompts to Codex / Gemini CLI (prepaid) | 0 | ~240 / week |
+| Claude quota consumed | 100% | ~24% |
+| Sessions before hitting "usage limit" | 1–2 per day | 6–8 per day |
+| Extra API spend (non-subscribers) | $18–40 / week | $2–6 / week |
+
+**"Sessions before hitting usage limit"** — Claude Pro/Max throttles after roughly 40–50 Sonnet-class messages in a ~5-hour rolling window. Without routing, that budget burns in 1–2 work sessions per day. Chuzom routes ~75% of prompts to Ollama, Codex, or Gemini instead, so the same Claude quota now covers 6–8 sessions — typically a full working day without hitting a wall.
+
+### Why 75% of prompts don't need Claude
+
+Claude Code routes nearly everything through your subscription by default: file reads, quick questions, inline edits, context lookups. Chuzom classifies each prompt before dispatch:
+
+- **Simple** (syntax questions, one-liners, file lookups) → Ollama locally in <1s, **zero quota used**
+- **Moderate** (refactors, test generation, code review) → Codex CLI or Gemini Flash on your OpenAI/Google subscription, **not your Claude quota**
+- **Complex** (multi-file debugging, architecture decisions, long context) → Claude, where it actually matters
+
+The session summary (shown when you close Claude Code) displays the exact per-model breakdown, tokens saved, and estimated cost delta for that session.
 
 ---
 

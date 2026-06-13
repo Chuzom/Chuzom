@@ -2552,6 +2552,39 @@ async def route_and_call(
             (deadline_monotonic - _dispatch_started)
             if deadline_monotonic is not None else None
         )
+        # Deadline may have expired during routing setup (chain-build, audit, locks).
+        # Re-check before dispatch rather than passing a negative timeout to wait_for
+        # (negative timeout skips wait_for entirely, defeating the deadline).
+        if _dl_remaining_at_dispatch is not None and _dl_remaining_at_dispatch <= 0:
+            async with _budget_lock:
+                _pending_spend = max(0.0, _pending_spend - _reservation)
+            await release_envelope(_env_key, _reservation)
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=effective_complexity,
+                    model="(deadline)",
+                    provider="(deadline)",
+                    cost_usd=0.0,
+                    cached=False,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "deadline_exceeded",
+                        "deadline_monotonic": deadline_monotonic,
+                        "elapsed_seconds": _dispatch_started - (_dispatch_started + _dl_remaining_at_dispatch),
+                        "over_by_seconds": -_dl_remaining_at_dispatch,
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_pre_dispatch_deadline_write_failed", error=str(_audit_err))
+            raise DeadlineExceeded(
+                f"Routed turn exceeded workflow deadline during routing setup "
+                f"(deadline_monotonic={deadline_monotonic:.3f}, "
+                f"expired {-_dl_remaining_at_dispatch:.3f}s before dispatch).",
+                deadline_monotonic=deadline_monotonic,
+                over_by_seconds=-_dl_remaining_at_dispatch,
+            )
         if _wc_cap is not None and _dl_remaining_at_dispatch is not None:
             _effective_timeout = min(_wc_cap, _dl_remaining_at_dispatch)
             _deadline_is_tighter = _dl_remaining_at_dispatch < _wc_cap
