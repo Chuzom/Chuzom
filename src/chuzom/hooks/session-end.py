@@ -1540,7 +1540,7 @@ def main() -> None:
                     dashboard_savings["lifetime"] = saved_usd
 
             # Create console to capture output
-            console = Console(record=True, file=io.StringIO(), force_terminal=True, color_system="truecolor")
+            console = Console(record=True, force_terminal=True, color_system="truecolor")
             dashboard = SessionSummaryDashboard(console=console)
 
             # Gather 14-day cost data from report
@@ -1681,15 +1681,16 @@ def main() -> None:
                 daily_calls=daily_calls_list,
                 daily_tokens=daily_tokens_list,
             )
-            colored_output = console.file.getvalue()
-            # Write colored Rich output directly to the terminal (stderr bypasses
-            # Claude Code's stdout capture, so ANSI codes render in the real terminal).
+            colored_output = console.export_text(clear=False, styles=True)
+            # Write colored output directly to the terminal — /dev/tty bypasses
+            # Claude Code's stdout capture so ANSI codes render in the real terminal.
             try:
-                sys.stderr.write(colored_output)
-                sys.stderr.flush()
+                with open("/dev/tty", "w") as _tty:
+                    _tty.write(colored_output)
+                    _tty.flush()
             except Exception:
                 pass
-            # systemMessage gets plain text (ANSI escape codes stripped) for Claude Code UI.
+            # systemMessage gets plain text (ANSI codes stripped) for Claude Code UI.
             import re as _re
             final_summary_output = _re.sub(r"\x1b\[[0-9;]*[mGKHF]", "", colored_output)
         except Exception as e:
