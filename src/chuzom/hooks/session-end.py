@@ -1577,48 +1577,29 @@ def main() -> None:
 
             total_saved = sum(daily_costs) if daily_costs else 0.0
 
-            # Gather model breakdown from report data
-            model_breakdown = {}
-            tools_data = report_data.get("tools", {})
-            if tools_data:
-                total_model_calls = sum(t.get("count", 0) for t in tools_data.values())
-                if total_model_calls > 0:
-                    for task, data in tools_data.items():
-                        if isinstance(data, dict):
-                            for model, count in data.get("models", {}).items():
-                                pct = (count / total_model_calls) * 100
-                                model_breakdown[model] = model_breakdown.get(model, 0) + pct
-
-            # Fallback: if no model breakdown, use routing logic to estimate
-            if not model_breakdown:
-                routing_logic = report_data.get("routing_logic", [])
-                if routing_logic:
-                    total_hits = sum(r.get("hits", 0) for r in routing_logic)
-                    if total_hits > 0:
-                        # Map routing methods to models
-                        method_to_model = {
-                            "heuristic": "Cache/Heuristic",
-                            "context-inherit": "Context Inherit",
-                            "ollama": "Ollama (Local)",
-                            "fallback": "Fallback",
-                            "code-context-inherit": "Code Context",
-                        }
-                        for r in routing_logic:
-                            method = r.get("method", "unknown")
-                            hits = r.get("hits", 0)
-                            if hits > 0:
-                                model_name = method_to_model.get(method, method)
-                                pct = (hits / total_hits) * 100
-                                model_breakdown[model_name] = model_breakdown.get(model_name, 0) + pct
-                # Even if routing_logic empty, create basic breakdown from decisions
-                if not model_breakdown and dashboard_decisions:
-                    total_decisions = sum(d.get("count", 0) for d in dashboard_decisions)
-                    if total_decisions > 0:
-                        for decision in dashboard_decisions:
-                            method = decision.get("method", "Unknown")
-                            count = decision.get("count", 0)
-                            pct = (count / total_decisions) * 100
-                            model_breakdown[method] = pct
+            # Gather 14-day model breakdown directly from routing_decisions.final_model.
+            # This is the authoritative source — previous code fell through to routing
+            # method names (heuristic, build-fast-path) because it never queried here.
+            model_breakdown: dict[str, float] = {}
+            try:
+                if os.path.exists(DB_PATH):
+                    _mb_conn = sqlite3.connect(DB_PATH)
+                    _mb_rows = _mb_conn.execute(
+                        "SELECT final_model, COUNT(*) AS cnt "
+                        "FROM routing_decisions "
+                        "WHERE final_model IS NOT NULL AND final_model != '' "
+                        "  AND date(timestamp) >= date('now', '-14 days') "
+                        "GROUP BY final_model "
+                        "ORDER BY cnt DESC "
+                        "LIMIT 8"
+                    ).fetchall()
+                    _mb_conn.close()
+                    _mb_total = sum(r[1] for r in _mb_rows)
+                    if _mb_total > 0:
+                        for _model, _cnt in _mb_rows:
+                            model_breakdown[_model] = (_cnt / _mb_total) * 100
+            except Exception:
+                pass
 
             # Gather quota data from Claude subscription.
             # Both *_pct values are stored as 0-100 (not 0-1) — do NOT multiply by 100.
