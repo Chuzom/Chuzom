@@ -1682,12 +1682,11 @@ def main() -> None:
                 daily_tokens=daily_tokens_list,
             )
             colored_output = console.export_text(clear=False, styles=True)
-            # Write colored output directly to the terminal — /dev/tty bypasses
-            # Claude Code's stdout capture so ANSI codes render in the real terminal.
+            # Write colored output to stderr — inherited from Claude Code's process,
+            # so it goes directly to the real terminal with ANSI colors intact.
             try:
-                with open("/dev/tty", "w") as _tty:
-                    _tty.write(colored_output)
-                    _tty.flush()
+                sys.stderr.write(colored_output)
+                sys.stderr.flush()
             except Exception:
                 pass
             # systemMessage gets plain text (ANSI codes stripped) for Claude Code UI.
