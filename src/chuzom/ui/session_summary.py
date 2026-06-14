@@ -643,7 +643,7 @@ class SessionSummaryDashboard:
             max_val = max(values)
             y_width = max(len(str(max_val)), 3)
             for i, row_chars in enumerate(self._bar_chart_rows(values, n_rows=N_ROWS)):
-                y_val = int(max_val * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1))
+                y_val = int(max_val * (N_ROWS - 1 - i) / N_ROWS)
                 calls_lines.append(Text(f"{y_val:>{y_width}} ┤ {row_chars}", style=PALETTE.accent))
             calls_lines.extend(_date_xaxis(n, y_width + 2))
         else:
@@ -658,7 +658,7 @@ class SessionSummaryDashboard:
             scaled = [int(v * 100_000) for v in save_values]
             y_width_s = 7
             for i, row_chars in enumerate(self._bar_chart_rows(scaled, n_rows=N_ROWS)):
-                y_val = max_saved_day * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1)
+                y_val = max_saved_day * (N_ROWS - 1 - i) / N_ROWS
                 y_str = _fmt_usd(y_val) if y_val >= 0.0001 else "$0"
                 save_lines.append(Text.assemble(
                     (f"{y_str:>{y_width_s}} ┤ ", PALETTE.text_dim),
@@ -676,7 +676,7 @@ class SessionSummaryDashboard:
             max_ts = max(tok_saved_values)
             y_width_ts = max(len(_fmt_tok(max_ts)), 4)
             for i, row_chars in enumerate(self._bar_chart_rows(tok_saved_values, n_rows=N_ROWS)):
-                y_val = int(max_ts * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1))
+                y_val = int(max_ts * (N_ROWS - 1 - i) / N_ROWS)
                 tok_lines.append(Text.assemble(
                     (f"{_fmt_tok(y_val):>{y_width_ts}} ┤ ", PALETTE.text_dim),
                     (row_chars, PALETTE.accent),
