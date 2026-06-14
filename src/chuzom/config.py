@@ -130,6 +130,13 @@ class RouterConfig(BaseSettings):
     ollama_base_url: str = ""               # empty = Ollama disabled
     ollama_budget_models: str = ""          # comma-separated model names
 
+    # ── OpenAI-compatible local inference (llama.cpp, vLLM, TGI, LM Studio) ──
+    # Any server that speaks /v1/chat/completions (OpenAI wire format) works here.
+    # Example: openai_compat_base_url="http://localhost:8080/v1"
+    #          openai_compat_models="llama-3.2-8b,mistral-7b"
+    openai_compat_base_url: str = ""        # empty = disabled
+    openai_compat_models: str = ""          # comma-separated model names
+
     # ── Media providers ──
     fal_key: str = ""               # fal.ai — Flux, video, audio
     stability_api_key: str = ""     # Stability AI — Stable Diffusion
@@ -338,6 +345,8 @@ class RouterConfig(BaseSettings):
                 providers.add(provider_name)
         if self.ollama_base_url and probe_ollama(self.ollama_base_url):
             providers.add("ollama")
+        if self.openai_compat_base_url:
+            providers.add("openai_compat")
         # In subscription mode, home providers are intentionally excluded:
         # we never route back via API when already inside the subscription agent.
         # Routing back would require a separate API key AND add duplicate
@@ -361,7 +370,7 @@ class RouterConfig(BaseSettings):
         return self.available_providers & {
             "openai", "gemini", "perplexity", "anthropic",
             "mistral", "deepseek", "groq", "together", "xai", "cohere", "ollama",
-            "huggingface", "openrouter",
+            "huggingface", "openrouter", "openai_compat",
         }
 
     @property
@@ -426,6 +435,23 @@ class RouterConfig(BaseSettings):
 
         # Fall back to env var for backward compatibility
         return [f"ollama/{m.strip()}" for m in self.ollama_budget_models.split(",") if m.strip()]
+
+    def all_openai_compat_models(self) -> list[str]:
+        """Return model IDs for the configured OpenAI-compatible local server.
+
+        Returns ``["openai_compat/model-name", ...]`` so the router can inject
+        them into the chain. The quirk layer (``OpenAICompatQuirks``) rewrites
+        the prefix to ``openai/`` and injects ``api_base`` before the LiteLLM call.
+
+        Returns an empty list when ``openai_compat_base_url`` is not set.
+        """
+        if not self.openai_compat_base_url or not self.openai_compat_models:
+            return []
+        return [
+            f"openai_compat/{m.strip()}"
+            for m in self.openai_compat_models.split(",")
+            if m.strip()
+        ]
 
     def model_post_init(self, __context: dict) -> None:
         # Skip in test mode (pytest sets this env var)

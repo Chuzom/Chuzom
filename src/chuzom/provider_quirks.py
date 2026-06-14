@@ -37,6 +37,7 @@ __all__ = [
     "OpenAIReasoningQuirks",
     "OllamaQuirks",
     "OpenRouterQuirks",
+    "OpenAICompatQuirks",
     "register_quirk",
     "get_quirk",
     "registered_providers",
@@ -199,6 +200,44 @@ class OpenRouterQuirks:
         return raw
 
 
+class OpenAICompatQuirks:
+    """OpenAI-compatible local servers (llama.cpp, vLLM, TGI, LM Studio).
+
+    These servers speak the OpenAI ``/v1/chat/completions`` wire format but
+    run locally at a configurable base URL. Two transforms are needed:
+
+    1. ``transform_model_name``: rewrite ``openai_compat/model`` → ``openai/model``
+       so LiteLLM routes via its OpenAI transport (which honours ``api_base``).
+    2. ``transform_request``: inject ``api_base`` from config into the payload so
+       LiteLLM sends to the local server instead of api.openai.com.
+    """
+
+    def transform_model_name(self, name: str) -> str:
+        if name.startswith("openai_compat/"):
+            return "openai/" + name[len("openai_compat/"):]
+        return name
+
+    def transform_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # This quirk is only invoked for openai_compat/ models (the provider prefix
+        # routes the lookup). By the time we're here, transform_model_name has
+        # already rewritten the model to openai/X. Just inject api_base.
+        if "api_base" in payload:
+            return payload
+        try:
+            from chuzom.config import get_config
+            base_url = get_config().openai_compat_base_url
+        except Exception:
+            return payload
+        if not base_url:
+            return payload
+        out = dict(payload)
+        out["api_base"] = base_url.rstrip("/")
+        return out
+
+    def transform_response(self, raw: dict[str, Any]) -> dict[str, Any]:
+        return raw
+
+
 # ── Registry ────────────────────────────────────────────────────────────────
 
 
@@ -207,6 +246,7 @@ _REGISTRY: dict[str, ProviderQuirk] = {
     "openai": OpenAIReasoningQuirks(),
     "ollama": OllamaQuirks(),
     "openrouter": OpenRouterQuirks(),
+    "openai_compat": OpenAICompatQuirks(),
 }
 
 

@@ -388,6 +388,25 @@ async def _build_and_filter_chain(
             else:
                 models_to_try = ollama_models + models_to_try
 
+        # ── OpenAI-compat injection ───────────────────────────────────────────
+        # Local servers (llama.cpp, vLLM, TGI, LM Studio) speaking the OpenAI
+        # wire format. Treated as free/local — injected after Ollama, before
+        # paid externals. Uses openai_compat/ prefix; quirk rewrites to openai/
+        # + injects api_base before the LiteLLM call.
+        compat_models = config.all_openai_compat_models()
+        if compat_models:
+            # Insert after any Ollama models but before paid providers.
+            first_paid = next(
+                (i for i, m in enumerate(models_to_try)
+                 if provider_from_model(m) not in {"ollama", "openai_compat"}),
+                len(models_to_try),
+            )
+            models_to_try = (
+                models_to_try[:first_paid]
+                + [m for m in compat_models if m not in models_to_try]
+                + models_to_try[first_paid:]
+            )
+
         # ── Codex injection ───────────────────────────────────────────────────
         # Codex is free (uses OpenAI subscription) — inject for ALL profiles
         # including BUDGET to maximize free-first routing.

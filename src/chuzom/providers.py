@@ -210,7 +210,7 @@ async def call_llm(
         from chuzom.calibration import cost_for_tokens
         cost = cost_for_tokens(model, _prompt_tokens, _completion_tokens)
     if cost == 0 and not any(
-        model.startswith(p) for p in ("ollama", "codex", "gemini_cli")
+        model.startswith(p) for p in ("ollama", "codex", "gemini_cli", "openai_compat")
     ):
         # Unknown paid model. Bias high so anomaly detection has a signal.
         # 0.01 USD per 1K output tokens matches session_spend's legacy rate.
