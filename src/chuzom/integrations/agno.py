@@ -70,6 +70,7 @@ _PROFILE_MAP: dict[str, RoutingProfile] = {
     "budget": RoutingProfile.BUDGET,
     "balanced": RoutingProfile.BALANCED,
     "premium": RoutingProfile.PREMIUM,
+    "reasoning": RoutingProfile.REASONING,
 }
 
 
@@ -169,7 +170,7 @@ class RouteredModel(Model):
         Hint for the classifier.  One of: query, research, generate, analyze,
         code, image, video, audio.  Default: ``"query"`` (auto-classified).
     profile:
-        Routing profile.  One of: budget, balanced, premium.
+        Routing profile.  One of: budget, balanced, premium, reasoning.
         Default: ``"balanced"``.
     model_override:
         Pin a specific model (e.g. ``"openai/gpt-4o"``).  Bypasses routing.

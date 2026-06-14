@@ -83,7 +83,7 @@ _COMPLEXITY_TO_PROFILE: dict[Complexity, RoutingProfile] = {
     Complexity.SIMPLE: RoutingProfile.BUDGET,
     Complexity.MODERATE: RoutingProfile.BALANCED,
     Complexity.COMPLEX: RoutingProfile.PREMIUM,
-    Complexity.DEEP_REASONING: RoutingProfile.PREMIUM,  # Extended thinking — same chain as PREMIUM
+    Complexity.DEEP_REASONING: RoutingProfile.REASONING,  # Dedicated reasoning chain (R1/o3/thinking)
 }
 
 log = get_logger("chuzom.router")
@@ -660,12 +660,12 @@ def _reorder_for_agent_context(
             return ollama + gemini_cli + codex + rest + claude
         else:  # claude_code
             return ollama + codex + gemini_cli + rest + claude
-    else:  # COMPLEX / DEEP_REASONING
+    else:  # COMPLEX / DEEP_REASONING / REASONING
         if agent == "codex":
             return codex + gemini_cli + claude + rest + ollama
         elif agent == "gemini_cli":
             return gemini_cli + codex + claude + rest + ollama
-        else:  # claude_code — Claude preferred for complex
+        else:  # claude_code — Claude preferred for complex/deep reasoning
             return claude + ollama + codex + gemini_cli + rest
 
 # Guards the check-then-spend budget sequence so concurrent calls cannot
@@ -2808,14 +2808,25 @@ async def _call_text(
     if task_type == TaskType.RESEARCH and "perplexity" in model.lower():
         extra["extra_body"] = {"search_recency_filter": "week"}
 
-    # Extended thinking — enabled for deep_reasoning complexity on Claude models.
-    # Anthropic's extended thinking lets the model reason for longer before
-    # responding, improving accuracy on proofs, derivations, and complex analysis.
-    # Only supported on claude-sonnet-4+ and claude-opus-4+; other providers ignore it.
-    if use_thinking and model.startswith("anthropic/"):
-        extra["thinking"] = {"type": "enabled", "budget_tokens": 16000}
-        # Extended thinking requires temperature=1 (Anthropic API constraint)
-        temperature = 1
+    # Extended thinking — enabled for deep_reasoning complexity.
+    # Each provider exposes a different API surface:
+    #   • Anthropic claude-sonnet-4+ / claude-opus-4+:
+    #       extra["thinking"] = {type: enabled, budget_tokens: 16000}
+    #       temperature MUST be 1 (API constraint).
+    #   • Google Gemini 2.5 Pro:
+    #       extra["thinkingConfig"] = {thinkingBudget: 8192}
+    #       No temperature constraint — leave caller's temperature untouched.
+    #   • OpenAI o3, DeepSeek-R1: reason natively; no extra parameter needed.
+    if use_thinking:
+        if model.startswith("anthropic/"):
+            extra["thinking"] = {"type": "enabled", "budget_tokens": 16000}
+            # Extended thinking requires temperature=1 (Anthropic API constraint)
+            temperature = 1
+        elif "gemini-2.5" in model:
+            # Gemini 2.5 Pro / Flash support thinkingConfig via the LiteLLM passthrough.
+            # budget 8192 ≈ half the Anthropic budget — sufficient for most proofs without
+            # the cost overhead of the full 16K allocation.
+            extra["thinkingConfig"] = {"thinkingBudget": 8192}
 
     if config.prompt_cache_enabled:
         from chuzom.prompt_cache import inject_cache_control

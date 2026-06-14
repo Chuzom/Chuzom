@@ -5,13 +5,16 @@ fallback chain. For every (RoutingProfile, TaskType) pair, there is an ordered
 list of models to try. The router walks this list top-to-bottom, skipping
 unhealthy providers, until one succeeds.
 
-Three profile tiers exist:
+Four profile tiers exist:
   - **BUDGET**: cheapest models that still produce usable results. Prioritizes
     free/low-cost providers (Gemini Flash, Groq, DeepSeek).
   - **BALANCED**: quality/cost sweet spot. Uses mid-tier models from major
     providers (GPT-4o, Claude Sonnet, Gemini Pro).
   - **PREMIUM**: best available quality, cost secondary. Uses frontier models
     (o3, Claude Opus, Gemini Pro).
+  - **REASONING**: dedicated extended-thinking chain for deep_reasoning
+    complexity. Prioritises native reasoning models (DeepSeek-R1, o3) and
+    activates extended-thinking flags on Claude Opus and Gemini 2.5 Pro.
 
 Model IDs use LiteLLM's ``provider/model`` format for text models and the
 same convention for media models (though media bypasses LiteLLM).
@@ -177,6 +180,14 @@ MODELS_PER_PROFILE: dict[RoutingProfile, dict[str, list[str]]] = {
             "anthropic/claude-haiku-4-5-20251001",
         ],
     },
+    RoutingProfile.REASONING: {
+        "forbidden": [],  # Reasoning chain allows all models (reasoning specialists first)
+        "discouraged": ["anthropic/claude-haiku-4-5-20251001"],  # Haiku lacks extended thinking
+        "allowed_claude": [
+            "anthropic/claude-opus-4-6",   # Primary Claude pick — extended thinking supported
+            "anthropic/claude-sonnet-4-6",  # Fallback — extended thinking supported on Sonnet 4+
+        ],
+    },
 }
 
 
@@ -210,6 +221,9 @@ def _validate_chain_invariants(
     if profile == RoutingProfile.QUOTA_BALANCED:
         # QUOTA_BALANCED uses BALANCED constraints as its base
         profile_for_check = RoutingProfile.BALANCED
+    elif profile == RoutingProfile.SUBSCRIPTION_LOCAL:
+        # SUBSCRIPTION_LOCAL has no dedicated constraints — skip validation
+        return
     else:
         profile_for_check = profile
 
@@ -250,7 +264,7 @@ COMPLEXITY_TO_PROFILE: dict[Complexity, RoutingProfile] = {
     Complexity.SIMPLE: RoutingProfile.BUDGET,
     Complexity.MODERATE: RoutingProfile.BALANCED,
     Complexity.COMPLEX: RoutingProfile.PREMIUM,
-    Complexity.DEEP_REASONING: RoutingProfile.PREMIUM,  # Extended thinking — same chain as PREMIUM
+    Complexity.DEEP_REASONING: RoutingProfile.REASONING,  # Dedicated reasoning chain (R1/o3/thinking)
 }
 
 
@@ -404,7 +418,8 @@ def get_model_chain(
     Returns:
         Ordered list of model IDs to try, best-fit first.
     """
-    # QUOTA_BALANCED uses BALANCED as base chain — reordering happens in router.py
+    # QUOTA_BALANCED uses BALANCED as base chain; REASONING uses its own chain.
+    # Reordering for QUOTA_BALANCED happens in router.py.
     profile_for_lookup = RoutingProfile.BALANCED if profile == RoutingProfile.QUOTA_BALANCED else profile
 
     # Plan 06 Step 1 — consult the active policy's chains first so non-standard

@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.5.0 — 2026-06-14 — Deep Reasoning tier (DeepSeek-R1 · o3 · Gemini thinking)
+
+### New features
+
+- **`RoutingProfile.REASONING` — dedicated 4th routing tier.** `Complexity.DEEP_REASONING` previously mapped to `PREMIUM` (identical chain to `complex`). It now maps to a dedicated `REASONING` profile with a cost-ordered chain prioritising native reasoning models:
+  `ollama/qwen3.6:27b → deepseek/deepseek-reasoner → openai/o3 → gemini/gemini-2.5-pro → anthropic/claude-opus-4-6 → anthropic/claude-sonnet-4-6`.
+  DeepSeek-R1 costs $0.0014/1K vs $0.04/1K for general frontier models — 28× cheaper for deep-reasoning tasks.
+
+- **`llm_reason` MCP tool (6th text tool).** Always routes with `complexity="deep_reasoning"`. No caller-supplied complexity parameter — the tool always invokes the REASONING chain. Best for: formal proofs, mathematical derivations, step-by-step reasoning, root-cause analysis.
+
+- **Gemini 2.5 Pro extended thinking via `thinkingConfig`.** When `use_thinking=True` (set automatically for `deep_reasoning` tasks), Gemini 2.5 Pro now receives `thinkingConfig: {thinkingBudget: 8192}` in addition to the existing Anthropic `thinking: {type: enabled, budget_tokens: 16000}` block. No temperature constraint is needed for Gemini (unlike Anthropic which requires `temperature=1`).
+
+- **Expanded `COMPLEXITY_DEEP_REASONING` regex.** Natural-language chain-of-thought triggers added alongside the existing formal/academic vocabulary: `step by step`, `think through`, `walk me through the reasoning`, `chain of thought`, `root cause analysis`, `show your work`, `first principles`, and more. Same regex applied in both `auto-route.py` and the RouterArena submission router.
+
+- **`CHUZOM_REASONING_TIMEOUT` env var (default: 300s).** Dedicated timeout for deep reasoning API calls. DeepSeek-R1 and o3 can take 60–300s for complex proofs; the existing `CHUZOM_REQUEST_TIMEOUT` (120s) was insufficient.
+
+### Architecture SVG
+
+- Hero diagram updated with a 4th tier card (purple, "🧠 Deep Reasoning") and animated routing dot.
+
+### Migration notes
+
+> **If you use `match profile:` with exhaustive case arms**, add a `case RoutingProfile.REASONING:` branch.
+> The new value is the string `"reasoning"`. Code that passes `profile="reasoning"` to `ChuzomAgent` or `_resolve_profile()` will now correctly resolve to the REASONING chain rather than falling back to BALANCED.
+
+### Internal
+
+- `agno.py`: `_PROFILE_MAP` now includes `"reasoning": RoutingProfile.REASONING`.
+- `memory/profiles.py`: `tool_to_task` map now includes `"llm_reason": TaskType.ANALYZE`.
+- `tools/routing.py`: `valid_tools` set in `llm_reroute` now includes `"llm_reason"`.
+- `release.py`: `_EXTRA_VERSION_FILES` now wires `tui/__init__.py` into the release script so its hardcoded `__version__` is never left behind.
+
+---
+
 ## v0.4.2 — 2026-06-14 — Dashboard polish, inversion fix, routing signals
 
 ### Bug fixes

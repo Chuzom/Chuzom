@@ -841,7 +841,7 @@ async def llm_reroute(
         original_model: The model that was selected (for logging purposes).
     """
     valid_tools = {
-        "llm_query", "llm_code", "llm_analyze", "llm_research",
+        "llm_query", "llm_code", "llm_analyze", "llm_reason", "llm_research",
         "llm_generate", "llm_route", "llm_auto", "llm_classify",
         "llm_stream", "llm_edit",
     }

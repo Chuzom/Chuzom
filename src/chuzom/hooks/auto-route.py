@@ -1010,17 +1010,30 @@ COORDINATION_MAX_LEN = 150
 # ── Complexity Patterns ──────────────────────────────────────────────────────
 
 COMPLEXITY_DEEP_REASONING = re.compile(
+    # Formal academic / mathematical triggers (original)
     r"\b(?:prove (?:that|mathematically|formally)|"
     r"mathematical(?:ly)? (?:prove|derive|show)|"
     r"formal proof|theorem|lemma|axiom|corollary|"
-    r"derive from first principles?|first[- ]principles? (?:derivation|analysis|explanation)|"
+    r"derive from first principles?|first[- ]principles?\b|"
     r"from (?:the )?fundamentals?|foundational(?:ly)?|"
-    r"philosophical(?:ly)? (?:analyze|examine|argue|discuss)|"
+    r"philosophical(?:ly)? (?:analyze|examine|argue|discuss|analysis)|"
     r"what does it mean (?:fundamentally|philosophically|at its core)|"
     r"synthesize (?:the )?research|comprehensive literature review|"
-    r"rigorous(?:ly)? (?:analyze|prove|derive|examine)|"
+    r"rigorous(?:ly)? (?:analyze|prove|derive|examine|analysis)|"
     r"formal(?:ly)? (?:specify|verify|prove)|"
-    r"induction|deduction|proof by contradiction|reductio ad absurdum)\b",
+    r"induction|deduction|proof by contradiction|reductio ad absurdum|"
+    # Natural-language chain-of-thought triggers (new — catches everyday deep-think requests)
+    r"step[- ]by[- ]step|think (?:this )?through|reason (?:through|about|carefully)|"
+    r"chain[- ]of[- ]thought|think (?:carefully|deeply|step[- ]by[- ]step)|"
+    r"walk me through (?:the )?(?:reasoning|logic|steps|derivation)|"
+    r"explain (?:your )?reasoning|show (?:your )?work|"
+    r"think (?:out )?loud|reason (?:out )?loud|"
+    r"let me (?:reason|think)|think aloud|"
+    # Explicit deep-dive triggers
+    r"deep[- ]dive|root[- ]cause analysis|"
+    r"understand (?:why|how exactly)|exactly (?:why|how)|"
+    r"what is (?:the )?(?:root cause|underlying reason)|"
+    r"trace (?:through|the (?:logic|reasoning|chain)))\b",
     re.IGNORECASE,
 )
 

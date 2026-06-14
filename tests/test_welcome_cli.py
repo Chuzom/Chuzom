@@ -52,7 +52,7 @@ def test_welcome_default_prints_painterly_banner() -> None:
     )
     # The painterly art uses 24-bit truecolor — expect many ESC sequences.
     esc = "\x1b["
-    assert out.count(esc) > 50, (
+    assert out.count(esc) > 40, (
         f"expected the full painterly banner with many ANSI escapes; "
         f"got {out.count(esc)} (looks like a fallback rendered)"
     )

@@ -1,7 +1,7 @@
 # Chuzom — Extend Your Claude Quota. 3× Longer Sessions.
 
 [![PyPI version](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&color=4F46E5)](https://pypi.org/project/chuzom-router/)
-[![PyPI downloads](https://img.shields.io/pypi/dm/chuzom-router?style=flat-square&color=10B981&label=downloads%2Fmo)](https://pypi.org/project/chuzom-router/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/chuzom-router?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=ORANGE&left_text=downloads)](https://pepy.tech/projects/chuzom-router)
 [![CI](https://img.shields.io/github/actions/workflow/status/Chuzom/Chuzom/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Chuzom/Chuzom/actions/workflows/ci.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/Chuzom/Chuzom?style=flat-square&color=F59E0B)](https://github.com/Chuzom/Chuzom/stargazers)
 [![Python](https://img.shields.io/pypi/pyversions/chuzom-router?style=flat-square&color=3572A5)](https://pypi.org/project/chuzom-router/)
@@ -237,11 +237,35 @@ Every prompt flows through a **smart classification pipeline**:
 
 The model tried depends on task complexity. Chuzom tries each tier in order, falling back on failure or timeout:
 
-| Complexity | Tier 1 (cheapest) | Tier 2 | Tier 3 (fallback) |
-|---|---|---|---|
-| **simple** | Ollama (local/free) | Codex CLI | Gemini Flash |
-| **moderate** | Ollama (local/free) | Codex CLI | GPT-4o |
-| **complex** | Codex CLI | OpenAI o3 | Anthropic Claude |
+| Complexity | Profile | Tier 1 (cheapest) | Tier 2 | Tier 3 | Fallback |
+|---|---|---|---|---|---|
+| **simple** | BUDGET | Ollama (local/free) | Codex CLI | Gemini Flash | Haiku |
+| **moderate** | BALANCED | Ollama (local/free) | Codex CLI | GPT-4o | Sonnet |
+| **complex** | PREMIUM | Codex CLI | OpenAI o3 | Claude Opus | Gemini 2.5 Pro |
+| **deep_reasoning** 🧠 | REASONING | Ollama qwen3 | DeepSeek-R1 | OpenAI o3 | Claude Opus + thinking |
+
+### The REASONING profile (new in v0.5.0)
+
+When Chuzom detects a prompt that requires extended chain-of-thought reasoning — formal proofs, first-principles derivations, multi-step deductive chains, or explicit "think step-by-step" requests — it routes to the dedicated **REASONING profile** instead of the generic PREMIUM chain.
+
+What makes REASONING different:
+- **DeepSeek-R1** (`deepseek-reasoner`) leads the chain — it costs **$0.0014/1K tokens** (28× cheaper than o3) and matches frontier reasoning quality on math and logic benchmarks
+- **Extended thinking** is activated for every model that supports it: Gemini 2.5 Pro receives `thinkingConfig: {thinkingBudget: 8192}` and Claude Opus receives `thinking: {type: enabled, budget_tokens: 16000}`
+- **OpenAI o3** handles problems R1 can't solve at R1's budget
+
+**Trigger patterns** (auto-detected — no configuration needed):
+```
+Prove that...        →  🧠 deep_reasoning → DeepSeek-R1
+Step by step...      →  🧠 deep_reasoning → DeepSeek-R1
+Think through...     →  🧠 deep_reasoning → DeepSeek-R1
+Walk me through...   →  🧠 deep_reasoning → DeepSeek-R1
+Root cause analysis  →  🧠 deep_reasoning → DeepSeek-R1
+```
+
+Or call `llm_reason` directly from any MCP-compatible IDE:
+```
+llm_reason("Why does Dijkstra's algorithm fail with negative weights? Walk me through it.")
+```
 
 ### Ollama Dynamic Discovery
 

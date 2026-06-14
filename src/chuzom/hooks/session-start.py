@@ -780,8 +780,11 @@ def main() -> None:
     _warm_ollama_bg()
 
     # Visible UI signal — Claude Code surfaces stderr as
-    # "SessionStart:startup hook success: <msg>". Multi-line greeting renders
-    # under that header so the user sees a real Chuzom welcome on session open.
+    # "SessionStart:startup hook success: <msg>". Print the BANNER box first
+    # so the prominent ╔═══╗ routing summary is the first thing users see,
+    # then the painting/welcome below it.
+    print(banner, file=sys.stderr)
+    print("", file=sys.stderr)
     print(_render_welcome(is_subscription), file=sys.stderr)
 
     print(json.dumps({

@@ -1,6 +1,6 @@
 {
   "name": "chuzom",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Route every Droid task to the cheapest capable model across 20+ AI providers. Tracks cross-session savings, enforces routing policy, and sends weekly Slack digests.",
   "author": {
     "name": "ypollak2",

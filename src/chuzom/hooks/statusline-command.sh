@@ -138,7 +138,7 @@ fi
 if [ -f "$USAGE_JSON" ]; then
     session_pct=$(python3 -c "import json; d=json.load(open('$USAGE_JSON')); print(f\"{d.get('session_pct',0):.0f}\")" 2>/dev/null)
     weekly_pct=$(python3 -c "import json; d=json.load(open('$USAGE_JSON')); print(f\"{d.get('weekly_pct',0):.0f}\")" 2>/dev/null)
-    if [ -n "$session_pct" ] && [ "$session_pct" != "0" ]; then
+    if [ -n "$session_pct" ]; then
         s_color=$(_pct_color "$session_pct")
         w_color=$(_pct_color "$weekly_pct")
         # Append a ° marker when the displayed numbers are stale beyond

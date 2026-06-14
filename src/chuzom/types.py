@@ -98,6 +98,7 @@ class RoutingProfile(str, Enum):
     BUDGET = "budget"       # Cheapest viable models
     BALANCED = "balanced"   # Quality/cost sweet spot (default)
     PREMIUM = "premium"     # Best available, cost secondary
+    REASONING = "reasoning"  # Dedicated reasoning chain: R1 → o1 → Gemini thinking → Opus+thinking
     QUOTA_BALANCED = "quota_balanced"  # Balance usage across Claude/Gemini CLI/Codex
     SUBSCRIPTION_LOCAL = "subscription_local"  # One paid seat + free local/internal bucket; cost-inverted reorder (see subscription_local_routing.py)
 
@@ -140,7 +141,7 @@ class Complexity(str, Enum):
     MODERATE = "moderate"           # Multi-step reasoning, code gen, writing
     COMPLEX = "complex"             # Architecture, research synthesis, novel algorithms
     DEEP_REASONING = "deep_reasoning"  # Formal proofs, philosophical analysis, first-principles
-                                        # derivation — routes to PREMIUM with extended thinking
+                                        # derivation — routes to REASONING profile (R1/o1/thinking)
 
 
 COMPLEXITY_ICONS: dict[str, str] = {

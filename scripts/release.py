@@ -20,7 +20,11 @@ INIT_PATH = ROOT / "src" / "chuzom" / "__init__.py"
 CHANGELOG_PATH = ROOT / "CHANGELOG.md"
 PLUGIN_DIRS = (".claude-plugin", ".codex-plugin", ".factory-plugin")
 # Extra files that embed a version string and must be kept in sync.
-_EXTRA_VERSION_FILES: list[tuple[Path, re.Pattern, str]] = []  # populated below
+_TUI_VERSION_RE = re.compile(r'(?m)^__version__ = "([^"]+)"$')
+_EXTRA_VERSION_FILES: list[tuple[Path, re.Pattern, str]] = [
+    # TUI package has its own hardcoded __version__ (not read from package metadata).
+    (ROOT / "src" / "chuzom" / "tui" / "__init__.py", _TUI_VERSION_RE, '__version__ = "{version}"'),
+]
 
 _PYPROJECT_VERSION_RE = re.compile(r'(?m)^version = "([^"]+)"$')
 _INIT_VERSION_RE = re.compile(r'(?m)^__version__ = "([^"]+)"(.*)$')
@@ -87,7 +91,10 @@ def bump_versions(version: str, *, root: Path = ROOT) -> None:
     pyproject_path.write_text(update_pyproject_text(pyproject_text, version), encoding="utf-8")
 
     init_text = init_path.read_text(encoding="utf-8")
-    init_path.write_text(update_init_version_text(init_text, version), encoding="utf-8")
+    if _INIT_VERSION_RE.search(init_text):
+        # __init__.py has a static __version__ = "x.y.z" literal — update it.
+        init_path.write_text(update_init_version_text(init_text, version), encoding="utf-8")
+    # else: __init__.py uses dynamic version detection (importlib.metadata) — skip.
 
     for plugin_dir in PLUGIN_DIRS:
         plugin_path = root / plugin_dir / "plugin.json"
@@ -106,19 +113,28 @@ def bump_versions(version: str, *, root: Path = ROOT) -> None:
         updated = _ROUTERARENA_VERSION_RE.sub(rf"\g<1>v{version}", text)
         routerarena_path.write_text(updated, encoding="utf-8")
 
+    # Keep extra version-embedding files in sync.
+    for extra_path, pattern, template in _EXTRA_VERSION_FILES:
+        extra_path = root / extra_path.relative_to(ROOT) if extra_path.is_absolute() else root / extra_path
+        if extra_path.exists():
+            text = extra_path.read_text(encoding="utf-8")
+            replacement = template.format(version=version)
+            updated, count = pattern.subn(replacement, text, count=1)
+            if count == 1:
+                extra_path.write_text(updated, encoding="utf-8")
+
 
 def read_versions(*, root: Path = ROOT) -> dict[str, str]:
     pyproject_path = root / "pyproject.toml"
     init_path = root / "src" / "chuzom" / "__init__.py"
     pyproject_version = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))["project"]["version"]
-    init_match = _INIT_VERSION_RE.search(init_path.read_text(encoding="utf-8"))
-    if init_match is None:
-        raise ValueError(f"Could not find __version__ in {init_path}")
+    init_text = init_path.read_text(encoding="utf-8")
+    init_match = _INIT_VERSION_RE.search(init_text)
 
-    versions = {
-        "pyproject": pyproject_version,
-        "__init__": init_match.group(1),
-    }
+    versions: dict[str, str] = {"pyproject": pyproject_version}
+    if init_match is not None:
+        versions["__init__"] = init_match.group(1)
+    # else: __init__.py uses dynamic version detection — not included in version check.
     for plugin_dir in PLUGIN_DIRS:
         plugin_path = root / plugin_dir / "plugin.json"
         marketplace_path = root / plugin_dir / "marketplace.json"

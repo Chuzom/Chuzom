@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Chuzom (github.com/ypollak2/chuzom)
 # SPDX-License-Identifier: MIT
-"""Chuzom router for RouterArena — v0.4.2.
+"""Chuzom router for RouterArena — v0.5.0.
 
 Self-contained heuristic classifier + model-tier selector.
 RouterArena's evaluation environment only needs this file and the JSON
@@ -300,17 +300,28 @@ def _score_categories(text: str) -> dict[str, int]:
 # ── Complexity ────────────────────────────────────────────────────────────────
 
 _COMPLEXITY_DEEP_REASONING = re.compile(
+    # Formal academic / mathematical triggers
     r"\b(?:prove (?:that|mathematically|formally)|"
     r"mathematical(?:ly)? (?:prove|derive|show)|"
     r"formal proof|theorem|lemma|axiom|corollary|"
-    r"derive from first principles?|first[- ]principles? (?:derivation|analysis|explanation)|"
+    r"derive from first principles?|first[- ]principles?\b|"
     r"from (?:the )?fundamentals?|foundational(?:ly)?|"
-    r"philosophical(?:ly)? (?:analyze|examine|argue|discuss)|"
+    r"philosophical(?:ly)? (?:analyze|examine|argue|discuss|analysis)|"
     r"what does it mean (?:fundamentally|philosophically|at its core)|"
     r"synthesize (?:the )?research|comprehensive literature review|"
-    r"rigorous(?:ly)? (?:analyze|prove|derive|examine)|"
+    r"rigorous(?:ly)? (?:analyze|prove|derive|examine|analysis)|"
     r"formal(?:ly)? (?:specify|verify|prove)|"
-    r"induction|deduction|proof by contradiction|reductio ad absurdum)\b",
+    r"induction|deduction|proof by contradiction|reductio ad absurdum|"
+    # Natural-language chain-of-thought triggers
+    r"step[- ]by[- ]step|think (?:this )?through|reason (?:through|about|carefully)|"
+    r"chain[- ]of[- ]thought|think (?:carefully|deeply|step[- ]by[- ]step)|"
+    r"walk me through (?:the )?(?:reasoning|logic|steps|derivation)|"
+    r"explain (?:your )?reasoning|show (?:your )?work|"
+    r"think (?:out )?loud|reason (?:out )?loud|"
+    r"deep[- ]dive|root[- ]cause analysis|"
+    r"understand (?:why|how exactly)|exactly (?:why|how)|"
+    r"what is (?:the )?(?:root cause|underlying reason)|"
+    r"trace (?:through|the (?:logic|reasoning|chain)))\b",
     re.IGNORECASE,
 )
 
@@ -404,7 +415,14 @@ class ChuzomRouter(BaseRouter):
         return self._tier(task_type, complexity)
 
     def _tier(self, task_type: str, complexity: str) -> str:
-        """Map (task_type, complexity) → model from self.models pool."""
+        """Map (task_type, complexity) → model from self.models pool.
+
+        Complexity tiers (v0.4.2+):
+          simple        → gemini-flash-lite (cheapest)
+          moderate      → gpt-4o-mini
+          complex       → qwen3-235b (frontier general)
+          deep_reasoning → REASONING profile: R1 first, then o3, then frontier
+        """
 
         # Code specialist for all coding tasks.
         if task_type == "code":
@@ -418,8 +436,19 @@ class ChuzomRouter(BaseRouter):
             if "google/gemini-3.1-flash-lite" in self.models:
                 return "google/gemini-3.1-flash-lite"
 
-        # Deep analysis → frontier model.
-        if complexity in {"deep_reasoning", "complex"} and task_type == "analyze":
+        # REASONING profile — dedicated chain for deep_reasoning complexity.
+        # Prefer native reasoning models (R1, o3) over frontier general models.
+        if complexity == "deep_reasoning":
+            for reasoning_model in (
+                "deepseek/deepseek-reasoner",  # R1 — cheapest, $0.0014/1K
+                "openai/o3",                   # frontier reasoning
+                "qwen/qwen3-235b-a22b-2507",   # frontier general fallback
+            ):
+                if reasoning_model in self.models:
+                    return reasoning_model
+
+        # Complex analysis → frontier general model.
+        if complexity == "complex" and task_type == "analyze":
             if "qwen/qwen3-235b-a22b-2507" in self.models:
                 return "qwen/qwen3-235b-a22b-2507"
 
@@ -433,7 +462,7 @@ class ChuzomRouter(BaseRouter):
             "simple": "google/gemini-3.1-flash-lite",
             "moderate": "gpt-4o-mini",
             "complex": "qwen/qwen3-235b-a22b-2507",
-            "deep_reasoning": "qwen/qwen3-235b-a22b-2507",
+            "deep_reasoning": "deepseek/deepseek-reasoner",  # REASONING profile head
         }
         model = tier.get(complexity, "gpt-4o-mini")
         if model in self.models:

@@ -206,6 +206,7 @@ async def get_primary_model_for_tool(tool_name: str) -> str:
         "llm_research": TaskType.RESEARCH,
         "llm_generate": TaskType.GENERATE,
         "llm_analyze": TaskType.ANALYZE,
+        "llm_reason": TaskType.ANALYZE,  # reason uses ANALYZE task type with deep_reasoning profile
         "llm_code": TaskType.CODE,
         "llm_edit": TaskType.CODE,  # edit uses CODE routing
     }

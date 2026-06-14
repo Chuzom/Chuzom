@@ -1,4 +1,4 @@
-"""Text LLM tools — llm_query, llm_research, llm_generate, llm_analyze, llm_code, llm_edit."""
+"""Text LLM tools — llm_query, llm_research, llm_generate, llm_analyze, llm_reason, llm_code, llm_edit."""
 
 from __future__ import annotations
 
@@ -593,6 +593,48 @@ async def llm_analyze(
     return await _apply_response_router(_format_response(resp, "analyze"))
 
 
+async def llm_reason(
+    prompt: str,
+    ctx: Context,
+    system_prompt: str | None = None,
+    max_tokens: int | None = None,
+    context: str | None = None,
+) -> str:
+    """Deep reasoning task — routes to extended-thinking models with the REASONING profile.
+
+    Best for: formal proofs, mathematical derivations, multi-step deductive chains,
+    philosophical analysis, first-principles explanations, and any task that requires
+    explicit step-by-step chain-of-thought reasoning to be correct.
+
+    Unlike ``llm_analyze`` (which floors at moderate and uses the BALANCED→PREMIUM chain),
+    ``llm_reason`` always uses ``complexity="deep_reasoning"`` which routes to the
+    dedicated REASONING profile:
+      • DeepSeek-R1 (cheapest native reasoner, $0.0014/1K)
+      • OpenAI o3 (frontier reasoning for the hardest problems)
+      • Gemini 2.5 Pro (thinkingConfig enabled, 8192 thinking-token budget)
+      • Claude Opus (use_thinking=True, 16K extended-thinking budget)
+
+    Args:
+        prompt: The reasoning task or question requiring step-by-step deduction.
+        system_prompt: Optional system instructions (e.g. "Think step-by-step").
+        max_tokens: Maximum output tokens (defaults to model maximum).
+        context: Optional conversation context to help the model understand the broader task.
+    """
+    await _announce_routing(ctx, "analyze", "deep_reasoning")
+    resp = await route_and_call(
+        TaskType.ANALYZE, prompt,
+        complexity_hint="deep_reasoning",
+        system_prompt=system_prompt,
+        temperature=0.3,
+        max_tokens=max_tokens,
+        ctx=ctx,
+        caller_context=context,
+    )
+    _cache_result(prompt, resp, "analyze", "deep_reasoning")
+    _record_quality(resp, "analyze", "deep_reasoning")
+    return await _apply_response_router(_format_response(resp, "analyze"))
+
+
 async def llm_code(
     prompt: str,
     ctx: Context,
@@ -706,6 +748,8 @@ def register(mcp, should_register=None) -> None:
         mcp.tool()(llm_generate)
     if gate("llm_analyze"):
         mcp.tool()(llm_analyze)
+    if gate("llm_reason"):
+        mcp.tool()(llm_reason)
     if gate("llm_code"):
         mcp.tool()(llm_code)
     if gate("llm_edit"):
