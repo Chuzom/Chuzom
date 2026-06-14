@@ -18,6 +18,7 @@ Usage:
     chuzom install --host desktop     — print Claude Desktop config snippet
     chuzom install --host copilot     — install VS Code / GitHub Copilot pull-routing configs
     chuzom install --host windsurf    — install Windsurf / Cascade pull-routing configs
+    chuzom install --host kimi        — install Kimi Code (Moonshot AI) pull-routing configs
     chuzom install --host all         — install / print all host configs
     chuzom uninstall        — remove hooks and MCP registration
     chuzom uninstall --purge — also delete ~/.chuzom/ (usage DB, .env, logs)
@@ -427,6 +428,91 @@ def _install_windsurf_files() -> list[str]:
     return actions
 
 
+def _install_kimi_files() -> list[str]:
+    """Install chuzom MCP config for Kimi Code CLI (Moonshot AI) — pull routing.
+
+    Kimi Code is an MCP client (like Claude Code) but has no UserPromptSubmit hook,
+    so routing is pull-based: the model chooses when to call Chuzom tools.
+
+    Installs:
+    1. Global ~/.kimi/mcp.json — available in all Kimi Code sessions.
+    2. Workspace .kimi/mcp.json — project-scoped, committable to repo.
+    3. KIMI.md in cwd — Kimi Code reads this as project-level instructions,
+       like CLAUDE.md for Claude Code.
+    """
+    actions = []
+    home = Path.home()
+
+    # Global Kimi Code MCP config
+    global_mcp = home / ".kimi" / "mcp.json"
+    global_mcp.parent.mkdir(parents=True, exist_ok=True)
+    actions.extend(
+        _merge_json_mcp_block(
+            global_mcp,
+            "chuzom",
+            {"command": "chuzom", "args": [], "description": (
+                "Chuzom smart LLM router — routes tasks to the cheapest capable model. "
+                "Call before answering to save 60–90% of token cost."
+            )},
+            root_key="mcpServers",
+        )
+    )
+
+    # Workspace .kimi/mcp.json (project-scoped, commit to repo)
+    workspace_mcp = Path.cwd() / ".kimi" / "mcp.json"
+    workspace_mcp.parent.mkdir(parents=True, exist_ok=True)
+    actions.extend(
+        _merge_json_mcp_block(
+            workspace_mcp,
+            "chuzom",
+            {"command": "chuzom", "args": []},
+            root_key="mcpServers",
+        )
+    )
+
+    # KIMI.md — project-level instructions (Kimi Code's equivalent of CLAUDE.md)
+    kimi_md = Path.cwd() / "KIMI.md"
+    kimi_rules = """\
+
+## Chuzom routing — cost-aware LLM routing
+
+Chuzom MCP tools route each task to the cheapest capable model (Ollama → Flash → GPT-4o → Claude).
+Call the relevant tool BEFORE generating your own answer — relay the routed result to the user.
+
+> **Pull routing note:** Unlike Claude Code (which intercepts prompts via hooks automatically),
+> Kimi Code uses pull routing: YOU must call the tool. The tool returns the response.
+
+| Task | Tool |
+|---|---|
+| Code generation, refactors, tests | `llm_code` |
+| Questions, explanations, how-to | `llm_query` |
+| Debug, review, analysis | `llm_analyze` |
+| Research, current events, docs | `llm_research` |
+| Prose, docs, email | `llm_generate` |
+| Deep reasoning, proofs, root cause | `llm_reason` |
+
+Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable model, saving 60–90%.
+"""
+    if kimi_md.exists():
+        content = kimi_md.read_text()
+        if "chuzom" not in content.lower():
+            kimi_md.write_text(content + kimi_rules)
+            actions.append(f"Appended: Chuzom routing rules to {kimi_md}")
+        else:
+            actions.append(f"Skipped: {kimi_md} already has Chuzom rules")
+    else:
+        kimi_md.write_text(f"# Project Instructions\n{kimi_rules}")
+        actions.append(f"Created: {kimi_md} with Chuzom routing rules")
+
+    actions.append(
+        "NOTE (pull routing): Kimi Code has no UserPromptSubmit hook. "
+        "Chuzom tools are available in the MCP tool menu; the model decides when to call them. "
+        "For guaranteed routing, use Claude Code (chuzom-install-hooks)."
+    )
+
+    return actions
+
+
 def _install_openclaw_files() -> list[str]:
     """Install chuzom MCP config for OpenClaw."""
     actions = []
@@ -610,8 +696,13 @@ def _install_host(host: str) -> None:
         print("Windsurf / Cascade configuration (pull routing):")
         for action in actions:
             print(f"  {action}")
+    elif host in ("kimi", "kimi-code", "moonshot"):
+        actions = _install_kimi_files()
+        print("Kimi Code / Moonshot AI configuration (pull routing):")
+        for action in actions:
+            print(f"  {action}")
     elif host == "all":
-        for h in ["vscode", "cursor", "windsurf", "opencode", "gemini-cli", "copilot-cli", "openclaw", "trae", "pi", "codex", "desktop", "copilot"]:
+        for h in ["vscode", "cursor", "windsurf", "kimi", "opencode", "gemini-cli", "copilot-cli", "openclaw", "trae", "pi", "codex", "desktop", "copilot"]:
             _install_host(h)
             print()
     else:

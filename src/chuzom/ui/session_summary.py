@@ -508,10 +508,12 @@ class SessionSummaryDashboard:
         overhead_ms: float = 0.0,
         cache_hit_pct: float = 0.0,
     ) -> RenderableType:
-        """14-day activity panel with vertical bar chart and Y-axis labels."""
+        """14-day activity panel: calls/day bar chart + savings/day bar chart."""
         n = min(14, len(daily_calls)) if daily_calls else 0
         values = daily_calls[-n:] if n > 0 else []
         N_ROWS = 8
+        today = datetime.date.today()
+
         lines: list[RenderableType] = [
             Text("calls/day", style=PALETTE.text_dim)
         ]
@@ -537,7 +539,6 @@ class SessionSummaryDashboard:
             )
 
             # X-axis: actual dates, every other day
-            today = datetime.date.today()
             x_parts: list[str] = []
             for i in range(n):
                 d = today - datetime.timedelta(days=n - 1 - i)
@@ -551,11 +552,53 @@ class SessionSummaryDashboard:
         else:
             lines.append(Text("  No activity data for this period", style=PALETTE.text_dim))
 
+        # ── Savings/day bar chart ─────────────────────────────────────────────
+        n_s = min(14, len(daily_costs)) if daily_costs else 0
+        save_values = daily_costs[-n_s:] if n_s > 0 else []
+
+        lines.append(Text(""))
+        lines.append(Text("savings/day  (vs premium-only)", style=PALETTE.text_dim))
+
+        if save_values and max(save_values) > 0.0001:
+            max_saved_day = max(save_values)
+            # _bar_chart_rows works with any numerics; scale to ints for clarity
+            scaled = [int(v * 100_000) for v in save_values]
+            save_rows = self._bar_chart_rows(scaled, n_rows=N_ROWS)
+            y_width_s = 7  # "$0.0123" = 7 chars
+
+            for i, row_chars in enumerate(save_rows):
+                y_val = max_saved_day * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1)
+                y_str = _fmt_usd(y_val) if y_val >= 0.0001 else "$0"
+                lines.append(
+                    Text.assemble(
+                        (f"  {y_str:>{y_width_s}} ┤ ", PALETTE.text_dim),
+                        (row_chars, PALETTE.success),
+                    )
+                )
+            lines.append(
+                Text(f"  {' ' * y_width_s}  └{'─' * n_s}", style=PALETTE.text_dim)
+            )
+
+            x_parts_s: list[str] = []
+            for i in range(n_s):
+                d = today - datetime.timedelta(days=n_s - 1 - i)
+                x_parts_s.append(d.strftime("%-d") if i % 2 == 0 else " ")
+            lines.append(
+                Text(
+                    f"  {' ' * (y_width_s + 3)}" + "  ".join(x_parts_s),
+                    style=PALETTE.text_dim,
+                )
+            )
+        else:
+            lines.append(Text("  No savings data for this period", style=PALETTE.text_dim))
+
+        # ── Summary stats line ────────────────────────────────────────────────
         lines.append(Text(""))
 
         total_calls = sum(daily_calls[-n:]) if daily_calls and n > 0 else 0
         total_tokens = sum(daily_tokens[-n:]) if daily_tokens and n > 0 else 0
         avg_calls = total_calls // max(n, 1)
+        avg_saved = (total_saved / max(n, 1)) if n > 0 and total_saved > 0 else 0.0
 
         lines.append(
             Text(
@@ -566,6 +609,8 @@ class SessionSummaryDashboard:
         )
 
         stats: list[str] = [f"avg {avg_calls}/day"]
+        if avg_saved > 0.0001:
+            stats.append(f"avg {_fmt_usd(avg_saved)}/day saved")
         if overhead_ms > 0:
             stats.append(f"{overhead_ms:.0f}ms routing overhead")
         if cache_hit_pct > 0:
