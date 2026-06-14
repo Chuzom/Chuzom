@@ -336,19 +336,42 @@ class SessionSummaryDashboard:
             *_savings_entry(today_saved, savings.get("today_tokens", 0),
                             "today", PALETTE.text_primary),
         ]
-        for key, label in (("week", "week"), ("month", "month")):
-            amount = savings.get(key, 0.0)
-            if amount > 0:
-                right_lines.extend(
-                    _savings_entry(amount, savings.get(f"{key}_tokens", 0),
-                                   label, PALETTE.text_dim)
-                )
+        # Show 14-day actuals + projections derived from rolling average
+        saved_14d = savings.get("14d", 0.0)
+        if saved_14d > 0:
+            right_lines.extend(
+                _savings_entry(saved_14d, savings.get("14d_tokens", 0),
+                               "14-day", PALETTE.text_dim)
+            )
+            daily_avg = saved_14d / 14
+            projected_monthly = daily_avg * 30
+            projected_yearly = daily_avg * 365
+            right_lines.append(Text(""))
+            right_lines.append(
+                Text("  projected (14-day avg)", style=PALETTE.text_dim)
+            )
+            right_lines.append(Text.assemble(
+                (f"  ~{_fmt_usd(projected_monthly):<8}", PALETTE.success),
+                ("/month", PALETTE.text_dim),
+            ))
+            right_lines.append(Text.assemble(
+                (f"  ~{_fmt_usd(projected_yearly):<8}", PALETTE.success),
+                ("/year", PALETTE.text_dim),
+            ))
+        else:
+            # Fallback: show week/month if no 14-day data yet
+            for key, label in (("week", "week"), ("month", "month")):
+                amount = savings.get(key, 0.0)
+                if amount > 0:
+                    right_lines.extend(
+                        _savings_entry(amount, savings.get(f"{key}_tokens", 0),
+                                       label, PALETTE.text_dim)
+                    )
 
         # Burn rate + projected spend
         if burn_rate_per_hr > 0:
             right_lines.append(Text(""))
             hr_str = f"{_fmt_usd(burn_rate_per_hr)}/hr"
-            # Assume ~8h active/day (not 24/7) for a realistic forecast
             projected_day = burn_rate_per_hr * 8
             proj_str = f"~{_fmt_usd(projected_day)}/active-day"
             burn_color = (

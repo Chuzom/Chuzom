@@ -265,6 +265,7 @@ def _query_session_data(session_start: float) -> tuple[list[dict], list[dict], l
 _PERIODS = [
     ("today",     "date(timestamp, 'localtime') = date('now', 'localtime')"),
     ("this week", "timestamp >= datetime('now', '-7 days')"),
+    ("14 days",   "timestamp >= datetime('now', '-14 days')"),
     ("this month","timestamp >= datetime('now', 'start of month')"),
     ("all time",  "1=1"),
 ]
@@ -360,6 +361,7 @@ def _query_cumulative_savings() -> list[tuple[str, int, int, int, float]]:
     label_to_window = {
         "today":      "today",
         "this week":  "week",
+        "14 days":    "14d",
         "this month": "month",
         "all time":   "lifetime",
     }
@@ -1090,26 +1092,33 @@ def _format_cumulative_section(periods: list[tuple[str, int, int, int, float]]) 
             f"  {call_str:>6}"
         )
 
-    # Yearly projection
+    # Yearly projection — prefer 14-day rolling average for stability
     from datetime import datetime as _dt
     days_this_month = max(1, _dt.now().day)
+    data_14d = period_map.get("14 days", (0, 0, 0, 0.0))
     month_saved = month_d[3]
     weekly_data = period_map.get("this week", (0, 0, 0, 0.0))
     weekly_saved = weekly_data[3]
     today_saved = today_d[3]
+    saved_14d = data_14d[3]
+    tok_14d = data_14d[1] + data_14d[2]
     month_tok = month_d[1] + month_d[2]
     weekly_tok = weekly_data[1] + weekly_data[2]
     today_tok = today_d[1] + today_d[2]
     rate_usd = 0.0
-    if month_saved > 0:
+    if saved_14d > 0:
+        rate_usd, rate_tok, basis = saved_14d / 14, tok_14d / 14, "14-day avg"
+    elif month_saved > 0:
         rate_usd, rate_tok, basis = month_saved / days_this_month, month_tok / days_this_month, "30-day avg"
     elif weekly_saved > 0:
         rate_usd, rate_tok, basis = weekly_saved / 7, weekly_tok / 7, "7-day avg"
     elif today_saved > 0:
         rate_usd, rate_tok, basis = today_saved, today_tok, "today"
     if rate_usd > 0:
+        proj_mo = rate_usd * 30
+        proj_yr = rate_usd * 365
         lines.append(
-            f"    ≈ ${rate_usd * 365:.0f}/yr · {_fmt_tok(int(rate_tok * 365))} tok/yr  {_C_MUTED}({basis}){_RESET}"
+            f"    ≈ ${proj_mo:.2f}/mo · ${proj_yr:.0f}/yr · {_fmt_tok(int(rate_tok * 365))} tok/yr  {_C_MUTED}({basis}){_RESET}"
         )
 
     # 14-day sparkline
@@ -1670,6 +1679,9 @@ def main() -> None:
                 elif label == "this week":
                     dashboard_savings["week"] = saved_usd
                     dashboard_savings["week_tokens"] = total_tokens
+                elif label == "14 days":
+                    dashboard_savings["14d"] = saved_usd
+                    dashboard_savings["14d_tokens"] = total_tokens
                 elif label == "this month":
                     dashboard_savings["month"] = saved_usd
                     dashboard_savings["month_tokens"] = total_tokens
