@@ -600,6 +600,7 @@ class SessionSummaryDashboard:
         cache_hit_pct: float = 0.0,
         p95_latency: dict[str, float] | None = None,
         daily_cache_trend: list[float] | None = None,
+        daily_tokens_saved: list[int] | None = None,
     ) -> RenderableType:
         """14-day activity panel: calls/day bar chart + savings/day bar chart."""
         n = min(14, len(daily_calls)) if daily_calls else 0
@@ -684,6 +685,44 @@ class SessionSummaryDashboard:
             )
         else:
             lines.append(Text("  No savings data for this period", style=PALETTE.text_dim))
+
+        # ── Tokens saved/day bar chart ────────────────────────────────────────
+        tok_saved_values = (daily_tokens_saved or [])[-14:]
+        n_ts = len(tok_saved_values)
+
+        lines.append(Text(""))
+        lines.append(Text("tokens saved/day  (cheap routes, not burned on premium)", style=PALETTE.text_dim))
+
+        if tok_saved_values and max(tok_saved_values) > 0:
+            max_ts = max(tok_saved_values)
+            ts_rows = self._bar_chart_rows(tok_saved_values, n_rows=N_ROWS)
+            y_width_ts = max(len(_fmt_tok(max_ts)), 4)
+
+            for i, row_chars in enumerate(ts_rows):
+                y_val = int(max_ts * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1))
+                y_str = _fmt_tok(y_val)
+                lines.append(
+                    Text.assemble(
+                        (f"  {y_str:>{y_width_ts}} ┤ ", PALETTE.text_dim),
+                        (row_chars, PALETTE.accent),
+                    )
+                )
+            lines.append(
+                Text(f"  {' ' * y_width_ts}  └{'─' * n_ts}", style=PALETTE.text_dim)
+            )
+
+            x_parts_ts: list[str] = []
+            for i in range(n_ts):
+                d = today - datetime.timedelta(days=n_ts - 1 - i)
+                x_parts_ts.append(d.strftime("%-d") if i % 2 == 0 else " ")
+            lines.append(
+                Text(
+                    f"  {' ' * (y_width_ts + 3)}" + "  ".join(x_parts_ts),
+                    style=PALETTE.text_dim,
+                )
+            )
+        else:
+            lines.append(Text("  No token savings data for this period", style=PALETTE.text_dim))
 
         # ── Summary stats line ────────────────────────────────────────────────
         lines.append(Text(""))
@@ -934,6 +973,7 @@ class SessionSummaryDashboard:
         session_calls_ratio: float | None = None,
         p95_latency: dict[str, float] | None = None,
         daily_cache_trend: list[float] | None = None,
+        daily_tokens_saved: list[int] | None = None,
     ) -> RenderableType:
         """Two-panel dashboard: main summary + 14-day activity + quota timeline."""
         try:
@@ -979,6 +1019,7 @@ class SessionSummaryDashboard:
             cache_hit_pct=cache_hit_pct,
             p95_latency=p95_latency,
             daily_cache_trend=daily_cache_trend,
+            daily_tokens_saved=daily_tokens_saved,
         )
         panels: list[RenderableType] = [Text(""), main, Text(""), activity]
         if quota_samples:

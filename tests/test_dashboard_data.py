@@ -203,11 +203,12 @@ def test_session_end_daily_matches_query_daily(fake_db, monkeypatch):
     canonical = query_daily(14, db_path=fake_db)
 
     assert len(legacy) == len(canonical)
-    for (l_day, l_calls, l_tokens, l_saved), c in zip(legacy, canonical):
+    for (l_day, l_calls, l_tokens, l_saved, l_tok_saved), c in zip(legacy, canonical):
         assert l_day == c.day
         assert l_calls == c.calls
         assert l_tokens == c.tokens
         assert abs(l_saved - c.saved_usd) < 1e-9
+        assert l_tok_saved == c.tokens_saved
 
 
 # ── 3. CI canary ─────────────────────────────────────────────────────────────

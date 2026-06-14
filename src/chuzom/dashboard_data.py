@@ -113,6 +113,7 @@ class DailyRow:
     calls: int
     tokens: int
     saved_usd: float
+    tokens_saved: int = 0   # tokens handled by cheap providers (not burned on premium)
 
 
 @dataclass(frozen=True)
@@ -261,9 +262,11 @@ def query_daily(
     where = f"timestamp >= datetime('now', '-{int(days)} days')"
     daily: dict[str, dict] = {}
 
+    _CHEAP_PROVIDERS = frozenset({"ollama", "codex", "gemini_cli", "subscription", "gemini"})
+
     def _bucket(day: str) -> dict:
         if day not in daily:
-            daily[day] = {"calls": 0, "tokens": 0, "saved": 0.0}
+            daily[day] = {"calls": 0, "tokens": 0, "saved": 0.0, "tokens_saved": 0}
         return daily[day]
 
     conn = sqlite3.connect(str(db))
@@ -314,11 +317,33 @@ def query_daily(
                 b = _bucket(day)
                 b["calls"] += int(calls)
                 b["saved"] += float(saved)
+
+        # Tokens routed to cheap providers per day (not burned on premium quota).
+        if _table_exists(conn, _LEGACY_TABLE):
+            cols = _columns(conn, _LEGACY_TABLE)
+            if "provider" in cols and "input_tokens" in cols:
+                cheap_placeholders = ",".join("?" * len(_CHEAP_PROVIDERS))
+                rows = conn.execute(
+                    f"SELECT date(timestamp,'localtime'), "
+                    f"COALESCE(SUM(input_tokens),0) + COALESCE(SUM(output_tokens),0) "
+                    f"FROM {_LEGACY_TABLE} "
+                    f"WHERE success=1 AND {where} AND provider IN ({cheap_placeholders}) "
+                    f"GROUP BY date(timestamp,'localtime')",
+                    list(_CHEAP_PROVIDERS),
+                ).fetchall()
+                for day, tok_saved in rows:
+                    _bucket(day)["tokens_saved"] += int(tok_saved)
     finally:
         conn.close()
 
     return [
-        DailyRow(day=day, calls=d["calls"], tokens=d["tokens"], saved_usd=d["saved"])
+        DailyRow(
+            day=day,
+            calls=d["calls"],
+            tokens=d["tokens"],
+            saved_usd=d["saved"],
+            tokens_saved=d["tokens_saved"],
+        )
         for day, d in sorted(daily.items())
     ]
 

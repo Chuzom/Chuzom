@@ -982,8 +982,8 @@ def _query_savings_by_task_type() -> list[dict]:
         return []
 
 
-def _query_daily_14d() -> list[tuple[str, int, int, float]]:
-    """Return last 14 days of daily usage: [(date_label, calls, tokens, saved), ...].
+def _query_daily_14d() -> list[tuple[str, int, int, float, int]]:
+    """Return last 14 days of daily usage: [(date_label, calls, tokens, saved, tokens_saved), ...].
 
     v10.1.6: delegates to ``chuzom.dashboard_data.query_daily``. The
     UNION across ``usage`` + v9.3 per-platform tables + ``savings_stats``
@@ -995,7 +995,7 @@ def _query_daily_14d() -> list[tuple[str, int, int, float]]:
     try:
         from chuzom.dashboard_data import query_daily
         rows = query_daily(14, db_path=DB_PATH)
-        return [(r.day, r.calls, r.tokens, r.saved_usd) for r in rows]
+        return [(r.day, r.calls, r.tokens, r.saved_usd, r.tokens_saved) for r in rows]
     except Exception:
         return []
 
@@ -1756,9 +1756,10 @@ def main() -> None:
             gemini_remaining = "Unknown"
 
             # Build daily_calls / daily_tokens from the 14-day data already computed above.
-            # daily_14d_data rows are (date_str, calls, tokens, cost_usd).
+            # daily_14d_data rows are (date_str, calls, tokens, cost_usd, tokens_saved).
             daily_calls_list = [d[1] for d in daily_14d_data] if daily_14d_data else []
             daily_tokens_list = [d[2] for d in daily_14d_data] if daily_14d_data else []
+            daily_tokens_saved_list = [d[4] for d in daily_14d_data] if daily_14d_data else []
 
             # Gather session-level metrics: burn rate, fallback %, p95 latency, etc.
             session_metrics = _query_session_metrics(session_start)
@@ -1807,6 +1808,7 @@ def main() -> None:
                 gemini_remaining=gemini_remaining,
                 daily_calls=daily_calls_list,
                 daily_tokens=daily_tokens_list,
+                daily_tokens_saved=daily_tokens_saved_list,
                 # New session-level metrics
                 burn_rate_per_hr=session_metrics.get("burn_rate_per_hr", 0.0),
                 session_cost_usd=session_metrics.get("session_cost_usd", 0.0),
