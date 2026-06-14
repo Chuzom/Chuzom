@@ -893,10 +893,138 @@ def uninstall_claw_code() -> list[str]:
     return actions
 
 
+# ── IDE config installation (pull-routing: VS Code/Copilot, Windsurf, Cursor) ──
+
+_VSCODE_MCP_CONTENT = """\
+{
+  "servers": {
+    "chuzom": {
+      "type": "stdio",
+      "command": "chuzom",
+      "args": [],
+      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call saves 60-90% vs sending directly to Claude."
+    }
+  }
+}
+"""
+
+_WINDSURF_MCP_CONTENT = """\
+{
+  "mcpServers": {
+    "chuzom": {
+      "command": "chuzom",
+      "args": [],
+      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call saves 60-90% vs sending directly to Claude."
+    }
+  }
+}
+"""
+
+_CURSOR_RULE_CONTENT = """\
+---
+description: Route tasks through Chuzom to save tokens and cost
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Chuzom routing — use MCP tools before answering directly
+
+Chuzom MCP tools route each task to the cheapest model that can handle it.
+Calling them before generating your own answer saves 60–90% of token cost.
+
+> **Important — pull routing:** Unlike Claude Code (which intercepts prompts
+> automatically via hooks), Cursor uses pull routing: YOU must call the tool.
+> The tool returns the response; relay it to the user instead of generating
+> your own answer.
+
+## When to call which tool
+
+| User request type | Tool to call first |
+|---|---|
+| Write / refactor / fix code | `llm_code(prompt=..., complexity="moderate")` |
+| Quick question / definition / how-to | `llm_query(prompt=..., complexity="simple")` |
+| Debug / analyze / review code | `llm_analyze(prompt=...)` |
+| Research / current events / docs | `llm_research(prompt=...)` |
+| Write prose / docs / email | `llm_generate(prompt=...)` |
+| Deep reasoning / proofs / root cause | `llm_reason(prompt=...)` |
+
+## Rules
+
+1. Call the matching tool **before** generating your own response.
+2. Return the tool's output to the user **as-is** (don't paraphrase).
+3. Only use native Cursor intelligence for file navigation, terminal commands,
+   or when all Chuzom MCP servers are unavailable.
+4. If `llm_code` or similar is unavailable, proceed normally and note it.
+"""
+
+
+def install_ide_configs(project_dir: Path | None = None) -> list[str]:
+    """Write pull-routing IDE config files into the given project directory.
+
+    Creates:
+      <project_dir>/.vscode/mcp.json          — VS Code / GitHub Copilot Chat
+      <project_dir>/.windsurf/mcp.json        — Windsurf / Cascade
+      <project_dir>/.cursor/rules/use-chuzom.mdc — Cursor agent rules
+
+    Pull routing note: these IDEs call Chuzom tools only when the model decides
+    to (unlike Claude Code's UserPromptSubmit hooks which intercept every prompt
+    automatically). The Cursor rule file nudges the model to call Chuzom first,
+    approximating push routing without a true hook mechanism.
+
+    Args:
+        project_dir: Root of the target project. Defaults to the current directory.
+
+    Returns:
+        List of human-readable action strings describing what was written.
+    """
+    root = Path(project_dir) if project_dir else Path.cwd()
+    actions: list[str] = []
+
+    configs: list[tuple[Path, str]] = [
+        (root / ".vscode" / "mcp.json", _VSCODE_MCP_CONTENT),
+        (root / ".windsurf" / "mcp.json", _WINDSURF_MCP_CONTENT),
+        (root / ".cursor" / "rules" / "use-chuzom.mdc", _CURSOR_RULE_CONTENT),
+    ]
+
+    for path, content in configs:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            existing = path.read_text(encoding="utf-8")
+            if existing == content:
+                actions.append(f"Already up-to-date: {path}")
+                continue
+        path.write_text(content, encoding="utf-8")
+        actions.append(f"Wrote {path}")
+
+    return actions
+
+
+def uninstall_ide_configs(project_dir: Path | None = None) -> list[str]:
+    """Remove Chuzom-managed IDE config files from the given project directory."""
+    root = Path(project_dir) if project_dir else Path.cwd()
+    actions: list[str] = []
+
+    targets = [
+        root / ".vscode" / "mcp.json",
+        root / ".windsurf" / "mcp.json",
+        root / ".cursor" / "rules" / "use-chuzom.mdc",
+    ]
+
+    for path in targets:
+        if path.exists():
+            path.unlink()
+            actions.append(f"Removed {path}")
+
+    return actions
+
+
 def main() -> None:
     """CLI entry point for chuzom-install-hooks."""
 
-    if len(sys.argv) > 1 and sys.argv[1] == "uninstall":
+    args = sys.argv[1:]
+    cmd = args[0] if args else "install"
+
+    if cmd == "uninstall":
         print("\nUninstalling Chuzom hooks...\n")
         actions = uninstall()
         for a in actions:
@@ -904,6 +1032,25 @@ def main() -> None:
         print("\nDone. Restart Claude Code to apply changes.\n")
         return
 
+    if cmd == "ide":
+        # Install pull-routing configs into the current project directory
+        project_dir = Path(args[1]) if len(args) > 1 else Path.cwd()
+        print("\n╔══════════════════════════════════════════╗")
+        print( "║   Chuzom — Install IDE Configs       ║")
+        print( "╚══════════════════════════════════════════╝\n")
+        print(f"  Target: {project_dir}\n")
+        ide_actions = install_ide_configs(project_dir)
+        for a in ide_actions:
+            print(f"  {a}")
+        print()
+        _print_pull_routing_notice()
+        return
+
+    if cmd in ("--help", "-h", "help"):
+        _print_help()
+        return
+
+    # Default: install Claude Code hooks + IDE configs
     print("\n╔══════════════════════════════════════════╗")
     print("║   Chuzom — Install Global Hooks      ║")
     print("╚══════════════════════════════════════════╝\n")
@@ -915,7 +1062,91 @@ def main() -> None:
     print("\n✓ Chuzom hooks installed globally.")
     print("  Every Claude Code session will now auto-route tasks.")
     print("  Restart Claude Code to activate.\n")
+
+    # Also write IDE configs into cwd if it looks like a project root
+    cwd = Path.cwd()
+    if (cwd / "pyproject.toml").exists() or (cwd / "package.json").exists() or (cwd / ".git").exists():
+        print("  Installing pull-routing IDE configs for this project...\n")
+        ide_actions = install_ide_configs(cwd)
+        for a in ide_actions:
+            print(f"  {a}")
+        print()
+        _print_pull_routing_notice()
+
     print("  To uninstall: chuzom-install-hooks uninstall\n")
+
+
+def _print_pull_routing_notice() -> None:
+    print("  ╔──────────────────────────────────────────────────────────────╗")
+    print("  │  Push vs Pull routing — important difference                │")
+    print("  │                                                              │")
+    print("  │  Claude Code (push):  hooks intercept EVERY prompt          │")
+    print("  │    → routing is automatic, transparent, zero effort         │")
+    print("  │                                                              │")
+    print("  │  Copilot / Cursor / Windsurf (pull):  the model DECIDES     │")
+    print("  │    → tools appear in the model's tool list; it calls them   │")
+    print("  │    → the Cursor rule nudges the model to call Chuzom first  │")
+    print("  │    → NOT guaranteed on every turn (model may skip)          │")
+    print("  │                                                              │")
+    print("  │  For guaranteed routing, use Claude Code.                   │")
+    print("  ╚──────────────────────────────────────────────────────────────╝")
+    print()
+
+
+def _print_help() -> None:
+    print("""
+chuzom-install-hooks — Install Chuzom routing into your dev environment
+
+USAGE
+  chuzom-install-hooks               Install Claude Code hooks + IDE configs (default)
+  chuzom-install-hooks uninstall     Remove Claude Code hooks
+  chuzom-install-hooks ide [DIR]     Install pull-routing IDE configs into DIR (default: cwd)
+  chuzom-install-hooks --help        Show this help
+
+WHAT GETS INSTALLED
+
+  Claude Code (push routing — automatic, every prompt):
+    ~/.claude/hooks/         UserPromptSubmit + PostToolUse hooks
+    ~/.claude/settings.json  MCP server registration + statusLine
+    ~/.claude/rules/         Routing rules (chuzom.md)
+
+  VS Code / GitHub Copilot (pull routing — model decides):
+    .vscode/mcp.json         MCP server config for Copilot Chat agent mode
+    Requires: VS Code ≥ 1.99, Copilot subscription, agent mode enabled
+
+  Windsurf / Cascade (pull routing — model decides):
+    .windsurf/mcp.json       MCP server config for Cascade agent
+
+  Cursor (pull routing with nudge — model usually calls):
+    .cursor/rules/use-chuzom.mdc  Agent rule that instructs Cursor to call
+                                  llm_code / llm_query / llm_analyze first
+
+PUSH vs PULL — THE KEY DIFFERENCE
+
+  Push (Claude Code):  Chuzom intercepts the prompt BEFORE the LLM sees it.
+    Every prompt is auto-routed. Zero extra effort from the model or user.
+    Savings are guaranteed on every turn.
+
+  Pull (Copilot/Cursor/Windsurf):  The LLM sees the prompt, then DECIDES
+    whether to call a Chuzom tool. The Cursor .mdc rule makes this more
+    likely, but it is not guaranteed.
+    → For the highest savings, use Claude Code.
+    → For Cursor: the rule approximates push routing in agent mode.
+    → For Copilot: explicitly invoke tools (@chuzom) or use agent mode.
+
+SUPPORTED PROVIDERS (after keys are set)
+  Ollama (free, local) · Gemini Flash · GPT-4o-mini · Claude Haiku ···
+
+EXAMPLES
+  # Install everything (Claude Code + IDE configs for this project)
+  cd my-project && chuzom-install-hooks
+
+  # Only write IDE configs (no Claude Code hooks)
+  chuzom-install-hooks ide
+
+  # Write IDE configs to a specific project
+  chuzom-install-hooks ide ~/projects/my-app
+""".strip())
 
 
 if __name__ == "__main__":

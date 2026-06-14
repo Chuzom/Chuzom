@@ -16,7 +16,8 @@ Usage:
     chuzom install --host pi          — write Pi coding agent (pi.dev) config files
     chuzom install --host factory     — confirm Factory Droid plugin manifest
     chuzom install --host desktop     — print Claude Desktop config snippet
-    chuzom install --host copilot     — print VS Code / Copilot config snippet
+    chuzom install --host copilot     — install VS Code / GitHub Copilot pull-routing configs
+    chuzom install --host windsurf    — install Windsurf / Cascade pull-routing configs
     chuzom install --host all         — install / print all host configs
     chuzom uninstall        — remove hooks and MCP registration
     chuzom uninstall --purge — also delete ~/.chuzom/ (usage DB, .env, logs)
@@ -167,34 +168,99 @@ def _append_routing_rules(
 # ── Platform-specific install functions ────────────────────────────────────────
 
 
+_COPILOT_AGENT_CONTENT = """\
+---
+description: Cost-optimized assistant that routes every task through Chuzom first.
+tools: ['chuzom']
+---
+You are a cost-aware coding assistant powered by Chuzom routing.
+
+For EVERY request, call the most specific Chuzom tool BEFORE producing your own answer,
+then relay the routed result to the user. Do NOT generate your own answer first.
+
+| Task | Tool |
+|---|---|
+| Code generation, refactors, tests | `llm_code` |
+| Questions, explanations, how-to | `llm_query` |
+| Debug, review, analysis | `llm_analyze` |
+| Research, current events, docs | `llm_research` |
+| Prose, docs, email | `llm_generate` |
+| Deep reasoning, proofs, root cause | `llm_reason` |
+
+Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable
+model (Ollama → Flash → GPT-4o-mini → Claude), saving 60–90% of premium quota.
+"""
+
+
 def _install_vscode_files() -> list[str]:
-    """Install chuzom MCP config for VS Code."""
+    """Install chuzom MCP config for VS Code / GitHub Copilot (pull routing).
+
+    Installs three things:
+    1. User-level mcp.json (global, all workspaces) — the canonical global config.
+    2. Workspace .vscode/mcp.json in cwd — project-scoped, committed to repo.
+    3. .github/copilot-instructions.md — biases Copilot to call Chuzom tools first.
+    4. .github/agents/chuzom.agent.md — tool-first custom agent (strongest lever).
+
+    Pull routing note: Copilot has no UserPromptSubmit hook. These configs make
+    Chuzom tools available and instruct the model to call them first, but
+    invocation is non-deterministic (model decides). Use Claude Code for
+    guaranteed push routing on every turn.
+    """
     actions = []
     home = Path.home()
 
-    # VS Code mcp.json location (platform-specific)
+    # ── 1. User-level MCP config (global, all workspaces) ────────────────────
     if sys.platform == "darwin":
-        mcp_json = home / "Library" / "Application Support" / "Code" / "User" / "mcp.json"
+        user_mcp = home / "Library" / "Application Support" / "Code" / "User" / "mcp.json"
     elif sys.platform == "win32":
-        mcp_json = home / "AppData" / "Roaming" / "Code" / "User" / "mcp.json"
+        user_mcp = home / "AppData" / "Roaming" / "Code" / "User" / "mcp.json"
     else:
-        mcp_json = home / ".config" / "Code" / "User" / "mcp.json"
+        user_mcp = home / ".config" / "Code" / "User" / "mcp.json"
 
-    # VS Code uses "servers" key, not "mcpServers"
+    # VS Code uses "servers" key (NOT "mcpServers" — that's the Cursor/Claude Desktop key)
     actions.extend(
         _merge_json_mcp_block(
-            mcp_json,
+            user_mcp,
             "chuzom",
-            {"command": "chuzom", "args": []},
+            {"type": "stdio", "command": "chuzom", "args": []},
             root_key="servers",
         )
     )
 
-    # Add copilot-instructions.md if in current directory
+    # ── 2. Workspace .vscode/mcp.json (project-scoped, commit to repo) ───────
+    workspace_mcp = Path.cwd() / ".vscode" / "mcp.json"
+    workspace_mcp.parent.mkdir(parents=True, exist_ok=True)
+    actions.extend(
+        _merge_json_mcp_block(
+            workspace_mcp,
+            "chuzom",
+            {"type": "stdio", "command": "chuzom", "args": []},
+            root_key="servers",
+        )
+    )
+
+    # ── 3. .github/copilot-instructions.md ───────────────────────────────────
     github_dir = Path.cwd() / ".github"
-    if github_dir.exists():
-        instructions = github_dir / "copilot-instructions.md"
-        actions.extend(_append_routing_rules(instructions, "vscode-rules.md"))
+    github_dir.mkdir(parents=True, exist_ok=True)
+    instructions = github_dir / "copilot-instructions.md"
+    actions.extend(_append_routing_rules(instructions, "vscode-rules.md"))
+
+    # ── 4. .github/agents/chuzom.agent.md (tool-first custom agent) ──────────
+    agents_dir = github_dir / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    agent_file = agents_dir / "chuzom.agent.md"
+    if not agent_file.exists():
+        agent_file.write_text(_COPILOT_AGENT_CONTENT, encoding="utf-8")
+        actions.append(f"Wrote {agent_file}")
+    else:
+        actions.append(f"Already exists: {agent_file}")
+
+    actions.append(
+        "NOTE (pull routing): Copilot has no hook mechanism. Tools are available "
+        "in Agent mode; the model decides when to call them. Enable Agent mode and "
+        "select the 'chuzom' agent for best results. For guaranteed routing use "
+        "Claude Code (chuzom-install-hooks)."
+    )
 
     return actions
 
@@ -307,6 +373,56 @@ def _install_copilot_cli_files() -> list[str]:
     # Copilot instructions
     instructions = home / ".config" / "gh" / "copilot" / "instructions.md"
     actions.extend(_append_routing_rules(instructions, "copilot-rules.md"))
+
+    return actions
+
+
+def _install_windsurf_files() -> list[str]:
+    """Install chuzom MCP config for Windsurf / Cascade (pull routing)."""
+    actions = []
+    home = Path.home()
+
+    # Windsurf global MCP config
+    if sys.platform == "darwin":
+        mcp_json = home / "Library" / "Application Support" / "Windsurf" / "User" / "mcp.json"
+    elif sys.platform == "win32":
+        mcp_json = home / "AppData" / "Roaming" / "Windsurf" / "User" / "mcp.json"
+    else:
+        mcp_json = home / ".config" / "Windsurf" / "User" / "mcp.json"
+
+    # Windsurf uses "mcpServers" key
+    actions.extend(
+        _merge_json_mcp_block(
+            mcp_json,
+            "chuzom",
+            {"command": "chuzom", "args": []},
+            root_key="mcpServers",
+        )
+    )
+
+    # Workspace .windsurf/mcp.json (project-scoped)
+    workspace_mcp = Path.cwd() / ".windsurf" / "mcp.json"
+    workspace_mcp.parent.mkdir(parents=True, exist_ok=True)
+    actions.extend(
+        _merge_json_mcp_block(
+            workspace_mcp,
+            "chuzom",
+            {"command": "chuzom", "args": []},
+            root_key="mcpServers",
+        )
+    )
+
+    # Windsurf instructions (.github/copilot-instructions.md is also read by Windsurf)
+    github_dir = Path.cwd() / ".github"
+    github_dir.mkdir(parents=True, exist_ok=True)
+    instructions = github_dir / "copilot-instructions.md"
+    actions.extend(_append_routing_rules(instructions, "vscode-rules.md"))
+
+    actions.append(
+        "NOTE (pull routing): Windsurf/Cascade has no hook mechanism. "
+        "Tools are available in Cascade agent mode; the model decides when to call them. "
+        "For guaranteed routing use Claude Code (chuzom-install-hooks)."
+    )
 
     return actions
 
@@ -483,13 +599,19 @@ def _install_host(host: str) -> None:
         actions = _print_claude_desktop_config()
         for action in actions:
             print(f"  {action}")
-    elif host == "copilot":
-        print("VS Code / Copilot configuration:")
-        actions = _print_vs_code_copilot_config()
+    elif host in ("copilot", "vscode-copilot", "github-copilot"):
+        # --host copilot: full install of VS Code/Copilot pull-routing configs
+        actions = _install_vscode_files()
+        print("GitHub Copilot / VS Code configuration (pull routing):")
+        for action in actions:
+            print(f"  {action}")
+    elif host in ("windsurf", "cascade"):
+        actions = _install_windsurf_files()
+        print("Windsurf / Cascade configuration (pull routing):")
         for action in actions:
             print(f"  {action}")
     elif host == "all":
-        for h in ["vscode", "cursor", "opencode", "gemini-cli", "copilot-cli", "openclaw", "trae", "pi", "codex", "desktop", "copilot"]:
+        for h in ["vscode", "cursor", "windsurf", "opencode", "gemini-cli", "copilot-cli", "openclaw", "trae", "pi", "codex", "desktop", "copilot"]:
             _install_host(h)
             print()
     else:

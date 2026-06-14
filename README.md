@@ -146,15 +146,84 @@ The session summary (shown when you close Claude Code) displays the exact per-mo
 
 ## Supported IDEs
 
-Works as a drop-in MCP server for:
+Chuzom integrates with every major AI-assisted IDE. There are two fundamentally
+different integration modes — **push** and **pull** — with different guarantees:
 
-| Tool | Status | Install |
-|---|---|---|
-| 🔵 Claude Code / Claude Desktop | ✅ Production | `chuzom install --host claude-code` |
-| 🟣 Cursor | ✅ Production | `chuzom install --host cursor` |
-| 🟠 Codex CLI | ✅ Production | `chuzom install --host codex` |
-| 🔴 Gemini CLI | ✅ Production | `chuzom install --host gemini-cli` |
-| ✨ All at once | ✅ | `chuzom install --host all` |
+### Push routing — automatic, every prompt (Claude Code)
+
+Claude Code's `UserPromptSubmit` hook fires **before** the LLM sees your prompt.
+Chuzom intercepts it, routes to the cheapest capable model, and returns the result.
+Zero extra effort. Works on every single turn.
+
+```
+You type  →  hook fires  →  Chuzom routes  →  cheap model responds
+                ↑
+         LLM never sees the raw prompt
+```
+
+### Pull routing — model decides (Copilot, Cursor, Windsurf)
+
+These IDEs expose Chuzom as a tool the **model can choose to call**.
+The model sees your prompt, then (if rules/instructions say to) calls
+`llm_code` / `llm_query` / `llm_analyze` and returns the result.
+
+```
+You type  →  LLM sees prompt  →  model calls llm_code  →  cheap model responds
+                                        ↑
+                              NOT guaranteed every turn
+```
+
+The `.cursor/rules/use-chuzom.mdc` rule that Chuzom installs nudges Cursor's
+agent to call Chuzom tools first. In practice this fires ~90% of turns in agent
+mode, but it is not a hard guarantee like the Claude Code hook.
+
+### IDE support matrix
+
+| Tool | Routing | Status | Setup |
+|---|---|---|---|
+| 🔵 Claude Code / Claude Desktop | **Push** (automatic) | ✅ Production | `chuzom-install-hooks` |
+| 🟠 Codex CLI | **Push** (plugin) | ✅ Production | `chuzom-install-hooks` |
+| 🟣 Cursor | **Pull** + rule nudge | ✅ Production | `chuzom-install-hooks ide` |
+| 🟤 GitHub Copilot (VS Code) | **Pull** (agent mode) | ✅ Beta | `chuzom-install-hooks ide` |
+| 🌊 Windsurf / Cascade | **Pull** (agent mode) | ✅ Beta | `chuzom-install-hooks ide` |
+| 🔴 Gemini CLI | **Pull** (tool call) | ✅ Production | `chuzom-install-hooks` |
+
+> **Recommendation:** Use Claude Code for guaranteed cost savings on every turn.
+> Use Cursor/Copilot/Windsurf for pull-based savings in agent mode.
+
+### Copilot setup (VS Code ≥ 1.99)
+
+```bash
+# In your project root
+chuzom-install-hooks ide
+
+# This writes .vscode/mcp.json with the Chuzom MCP server config.
+# Then in VS Code:
+#   1. Enable Copilot Chat agent mode (VS Code ≥ 1.99 required)
+#   2. Open Copilot Chat → switch to "Agent" mode
+#   3. Chuzom tools appear automatically in the tool list
+```
+
+In Copilot agent mode, you can explicitly invoke Chuzom:
+```
+@workspace use llm_code to refactor this function
+```
+Or just work normally — the model will call `llm_code` when it's appropriate.
+
+### Windsurf / Cascade setup
+
+```bash
+chuzom-install-hooks ide
+# Writes .windsurf/mcp.json — Cascade picks it up automatically
+```
+
+### Cursor setup
+
+```bash
+chuzom-install-hooks ide
+# Writes .cursor/rules/use-chuzom.mdc — instructs Cursor agent to call
+# Chuzom tools before generating its own response
+```
 
 ---
 
