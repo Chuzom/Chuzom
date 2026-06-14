@@ -933,9 +933,10 @@ def create_app() -> FastAPI:
         try:
             audit_log.verify_chain()
         except TamperDetected as exc:
+            log.warning("audit_chain_tamper_detected", tamper_row=exc.row_index, detail=sanitize_exception(exc))
             return {
                 "verified": False, "rows_checked": rows,
-                "tamper_row": exc.row_index, "detail": str(exc),
+                "tamper_row": exc.row_index,
             }
         return {"verified": True, "rows_checked": rows, "tamper_row": None}
 

@@ -1198,8 +1198,9 @@ async def run(port: int = DEFAULT_PORT) -> None:
             provider = str(body["provider"]).strip().lower()
             cap = float(body["cap"])
         except Exception as e:
+            log.warning("budget_set: bad request", exc_info=e)
             return web.Response(
-                text=json.dumps({"ok": False, "error": str(e)}),
+                text=json.dumps({"ok": False, "error": "Invalid request body"}),
                 content_type="application/json", status=400,
             )
         from chuzom.budget_store import set_cap, remove_cap

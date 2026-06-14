@@ -1,4 +1,4 @@
-# Chuzom — Smart LLM Routing. Save 35–80% on API Costs.
+# Chuzom — Extend Your Claude Quota. 3× Longer Sessions.
 
 [![PyPI version](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&color=4F46E5)](https://pypi.org/project/chuzom-router/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/chuzom-router?style=flat-square&color=10B981&label=downloads%2Fmo)](https://pypi.org/project/chuzom-router/)
@@ -22,55 +22,48 @@
 
 ## The Problem
 
-You're paying **$40–80/month** for Claude Opus on every request, but 90% of your work doesn't need it:
+You're on **Claude Pro ($20/mo), Max ($100/mo), or Max ($200/mo)** — a flat subscription, not pay-per-token.
 
-- **"What's the capital of France?"** → $0.08 (Opus) | $0.0003 (Haiku) ✗
-- **"Debug this Python error"** → $0.08 (Opus) | $0.003 (GPT-4o) ✗  
-- **"Complex reasoning task"** → $0.08 (Opus) | $0.08 (Opus) ✓
+But Claude Code routes **every request** through your quota: file reads, quick questions, routine edits, and complex reasoning all burn the same limited budget. Claude throttles after roughly 40–50 messages in a 5-hour rolling window.
 
-You're throwing money away on every simple question.
+**The result: your session hits the wall in under 2 hours, and you wait.**
+
+| Prompt | Quota burned | Actually needs Claude? |
+|---|---|---|
+| *"What does this function return?"* | ✗ Yes | No |
+| *"List files matching \*.test.ts"* | ✗ Yes | No |
+| *"Write a test for this function"* | ✗ Yes | Probably not |
+| *"Re-architect this auth system"* | ✓ Yes | **Yes** |
+
+Simple questions and complex reasoning cost the same quota. That's the inefficiency Chuzom fixes.
 
 ---
 
 ## The Solution
 
-**Chuzom** automatically routes each prompt to the cheapest model that can actually handle it.
+**Chuzom** routes each prompt to the cheapest capable model *before* spending Claude quota.
 
 ```
 Your IDE (Claude Code, Cursor, etc)
     ↓
-[Chuzom Smart Router]  ← analyzes complexity
+[Chuzom Smart Router]  ← analyzes complexity & task type
     ↓
-├─ Simple?   → Ollama (free, local)         ✅
-├─ Medium?   → Gemini Flash / Codex         ✅
-└─ Complex?  → Claude Opus / GPT-4o         ✅
+├─ Simple tasks?   → Ollama (local, free) 🌳
+├─ Moderate tasks? → Codex CLI / Gemini CLI (free via your subscriptions)
+└─ Complex tasks?  → Claude (only when it truly needs it) 🔥
     ↓
-Result + streaming progress + savings banner
-    🎯 chuzom → gemini-2.5-flash · code/moderate · 342ms · saved $0.07
+Result + streaming progress + quota savings banner
+    🎯 chuzom → gemini-2.5-flash · code/moderate · 342ms · saved Claude quota!
 ```
 
-**Same answers. 60–80% lower costs.**
+**A typical developer session burns ~200,000 Claude tokens.** Routing ~80% of prompts to free models saves ~160,000 Claude tokens per session — the difference between hitting the limit in 2 hours vs. working a full uninterrupted day.
 
----
-
-## For Claude Code / Claude Pro / Max Subscribers
-
-If you pay for Claude Pro or Max, **Chuzom is the single biggest lever you have** to extend how long your session lasts and reduce how often you hit usage limits.
-
-Claude Code routes nearly every request — file reads, code edits, questions — through your subscription quota. Chuzom intercepts those requests and asks: **does this actually need Claude?**
-
-- A file-listing question → routed to Ollama locally (free, 0 quota used)
-- A moderate coding task → routed to Codex or Gemini CLI (free via your subscription)
-- A deep architecture review → sent to Claude (only when it truly needs it)
-
-**Result: 3× longer sessions, same quality.** Your Claude quota goes to the work that actually benefits from it.
-
-```
-Without Chuzom:  [Claude] ← every request      → quota exhausted in 2h
-With Chuzom:     [Ollama] ← simple questions   } quota lasts 6–8h
-                 [Codex]  ← code tasks         }
-                 [Claude] ← only complex work  }
-```
+| Tool | Cost | Best for |
+|---|---|---|
+| **Ollama** (local) | Free | Simple questions, syntax lookups, file ops |
+| **Codex CLI** | Free (via GitHub Copilot) | Code generation, refactors, test writing |
+| **Gemini CLI** | Free (via Google account) | Moderate reasoning, explanations, summaries |
+| **Claude** | Your subscription quota | Complex reasoning, long context, architecture |
 
 ---
 
@@ -91,8 +84,8 @@ Chuzom sits between your coding tool and your model providers. It classifies eac
 <table align="center">
 <tr>
 <td align="center" width="25%">
-  <h3>💰 60–80% Cheaper</h3>
-  <p>Route 70% of tasks to free or near-free models</p>
+  <h3>⏱️ 3–5× Longer Sessions</h3>
+  <p>Route 80% of prompts to free models — hit quota limits far less often</p>
 </td>
 <td align="center" width="25%">
   <h3>✅ Quality Preserved</h3>
@@ -113,15 +106,14 @@ Chuzom sits between your coding tool and your model providers. It classifies eac
 
 ## Real-World Savings
 
-Typical developer workload (mix of questions, code review, debugging):
+Typical Claude Code heavy user — mix of questions, code review, and debugging (~1,000 prompts/week):
 
-| Approach | Cost/Month | Success Rate |
-|---|---|---|
-| Always use Opus | **$60–80** | 99% (but wasteful) |
-| Always use Haiku | **$2–5** | 68% (often fails) |
-| **Chuzom (smart routing)** | **$10–15** | 96% (best of both) |
+| Approach | Claude tokens/week | Sessions per day before limit | Extra spend (if buying API) |
+|---|---|---|---|
+| All prompts → Claude | ~200,000 | 1–2 sessions | $18–40/week |
+| **Chuzom (smart routing)** | **~40,000** | **6–8 sessions** | **$2–6/week** |
 
-**Over a year: Chuzom saves you $600–800** vs Opus-only.
+**For subscription users: Chuzom stretches one day's Claude quota across a full working week of sessions.** No waiting for limits to reset. No switching to a worse model mid-task.
 
 ---
 
