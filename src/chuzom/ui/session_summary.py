@@ -321,12 +321,12 @@ class SessionSummaryDashboard:
         # ── Right: savings summary ───────────────────────────────────────────
         def _savings_entry(usd: float, tokens: int, label: str,
                            style: str) -> list[RenderableType]:
-            lines: list[RenderableType] = [
-                Text(f"  {_fmt_usd(usd):<10} {label}", style=style),
-            ]
-            if tokens > 0:
-                lines.append(Text(f"    {_fmt_tok(tokens)} tok", style=PALETTE.text_dim))
-            return lines
+            tok_part = f"  {_fmt_tok(tokens)} tok" if tokens > 0 else ""
+            return [Text.assemble(
+                (f"  {_fmt_usd(usd):<8}", style),
+                (tok_part, PALETTE.text_dim),
+                (f"  {label}", PALETTE.text_dim),
+            )]
 
         right_lines: list[RenderableType] = [
             Text("SAVINGS  all sessions", style=f"bold {PALETTE.success}"),
@@ -348,8 +348,9 @@ class SessionSummaryDashboard:
         if burn_rate_per_hr > 0:
             right_lines.append(Text(""))
             hr_str = f"{_fmt_usd(burn_rate_per_hr)}/hr"
-            projected_month = burn_rate_per_hr * 24 * 30
-            proj_str = f"~{_fmt_usd(projected_month)}/mo"
+            # Assume ~8h active/day (not 24/7) for a realistic forecast
+            projected_day = burn_rate_per_hr * 8
+            proj_str = f"~{_fmt_usd(projected_day)}/active-day"
             burn_color = (
                 PALETTE.error if burn_rate_per_hr > 1.0
                 else PALETTE.warning if burn_rate_per_hr > 0.1
@@ -359,7 +360,7 @@ class SessionSummaryDashboard:
                 ("  ⚡ ", PALETTE.warning),
                 (hr_str, burn_color),
             ))
-            right_lines.append(Text(f"  {proj_str} projected", style=PALETTE.text_dim))
+            right_lines.append(Text(f"  {proj_str}", style=PALETTE.text_dim))
         elif session_cost_usd > 0:
             right_lines.append(Text(""))
             right_lines.append(
