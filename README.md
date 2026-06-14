@@ -464,55 +464,68 @@ For all models, Chuzom sends periodic heartbeat notifications during long waits:
 At the end of every Claude Code session, Chuzom prints a full-color session summary in the terminal. The dashboard uses the **Tokyo Night** color palette for readability.
 
 ```
-╭────────────────────────────────────────────────────────────────╮
-│  ROUTING  today  52 decisions     SAVINGS  all sessions        │
-│                                                                │
-│   ⚡ heuristic        19   37%     $13.98  lifetime            │
-│   🔗 ctx-inherit      11   21%     $7.66   today               │
-│   🔨 build-fast        7   13%                                 │
-│   📝 content-gen       2    4%                                 │
-│                                                                │
-│   Zero-cost: ██████████ 100%                                   │
-╰────────────────────────────────────────────────────────────────╯
+╭─ Session ──────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                    │
+│  ROUTING  today  312 decisions          SAVINGS  all sessions                                      │
+│                                                                                                    │
+│   ⚡ heuristic      234   75%             $35.70   1.1M tok  lifetime                              │
+│   🔗 ctx-inherit     45   14%              $9.03   320.4k tok  today                               │
+│   🔨 build-fast      21    7%              $7.32   244.1k tok  week                                │
+│   📝 content-gen     12    4%                                                                      │
+│                                            ⚡ $0.96/hr                                             │
+│   Zero-cost: ████████████ 85%             ~$7.68/active-day                                        │
+│                                                                                                    │
+│   Policy ⚡ balanced                                                                               │
+│   Effective: ████████████ 88%                                                                      │
+│   vs typical ~ 1.0× cost                                                                           │
+│                                                                                                    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-╭────────────────────────────────────────────────────────────────╮
-│  QUOTA  Claude Subscription  live                              │
-│                                                                │
-│    5h   ━━━━━━━━━───   67%  +2.0pp                            │
-│  resets in 1h 32m (4:00pm local)                              │
-│                                                                │
-│  weekly ━━━━────────   33%                                     │
-│  resets Monday                                                │
-╰────────────────────────────────────────────────────────────────╯
+╭─ Session ──────────────────────────────────────────────────────────────────────────────────────────╮
+│  QUOTA  Claude Subscription  live                                                                  │
+│                                                                                                    │
+│    5h   ━━━━━━━━━━━━━━───   73%  +2.0pp                                                           │
+│  resets in 1h 32m (4:00pm local)                                                                   │
+│                                                                                                    │
+│  weekly ━━━━━────────────   34%                                                                    │
+│  resets Monday                                                                                     │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-╭────────────────────────────────────────────────────────────────╮
-│  MODELS  this session                                          │
-│   gemini-2.5-flash     18   35%                               │
-│   gpt-5.5              14   27%                               │
-│   ollama/qwen3.5:7b     9   17%                               │
-│   claude-sonnet-4-6     9   17%                               │
-╰────────────────────────────────────────────────────────────────╯
-
-╭─ 14-DAY ACTIVITY ─────────────────────────────────────────────╮
-│ calls/day                                                     │
-│  391 ┤    █                                                   │
-│  279 ┤   ▄██                                                  │
-│  167 ┤ █▆████                                                 │
-│    0 ┤ ███████                                                │
-│       D1  D3  D5  D7                                          │
-│  1650 calls · 449.1k tok · $13.98 lifetime                    │
-╰────────────────────────────────────────────────────────────────╯
+╭─ 14-DAY ACTIVITY ──────────────────────────────────────────────────────────────────────────────────╮
+│  calls/day                   savings/day                   tokens saved/day                        │
+│  391 ┤      █                $4.20 ┤      █                577k ┤      █                          │
+│  293 ┤   ▄  ██               $3.15 ┤   ▄  ██               433k ┤   ▄  ██                         │
+│  195 ┤  ▆█  ███              $2.10 ┤  ▆█  ███              288k ┤  ▆█  ███                         │
+│   98 ┤ ▂██  ████              $1.05 ┤ ▂██  ████             144k ┤ ▂██  ████                        │
+│    0 ┤ ████████████            $0  ┤ ████████████              0 ┤ ████████████                     │
+│      └──────────             1/6   └──────────             1/6   └──────────                       │
+│       1/6          today            1/6          today            1/6          today                │
+│  2,812 calls · 1.1M tok · $34.95 lifetime                                                         │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### Dashboard panels
 
-| Panel | Color | What it shows |
-|---|---|---|
-| **ROUTING** | Cyan-blue | Decision method breakdown — heuristic, ctx-inherit, build-fast, etc. |
-| **SAVINGS** | Green | Lifetime, today, week, month savings vs always-Opus baseline |
-| **QUOTA** | Amber | Claude 5h + weekly quota bars with reset countdown; Gemini daily rate |
-| **MODELS** | Purple | Model usage share this session + 14-day rolling mix |
-| **14-DAY ACTIVITY** | Blue | Sparkline bar chart of daily call volume and spend |
+| Panel | What it shows |
+|---|---|
+| **ROUTING** (left, cyan) | Decision method breakdown with count + %; zero-cost bar; policy indicator; routing effectiveness score; fallback/escalation rate; cost vs. typical session |
+| **SAVINGS** (right, green) | Lifetime, today, week savings — USD and tokens on one line; burn rate ($/hr) and realistic active-day forecast |
+| **QUOTA** (amber, optional) | Claude 5h + weekly quota bars with reset countdown; appears only when Claude subscription quota is active |
+| **14-DAY ACTIVITY** | Three side-by-side bar charts: **calls/day**, **savings/day** (USD), **tokens saved/day** (tokens handled by cheap providers, not burned on premium); compact x-axis labels |
+
+#### Reading the SAVINGS panel
+
+- **`$35.70  1.1M tok  lifetime`** — total saved vs. always-Opus baseline, with tokens routed to cheap providers
+- **`⚡ $0.96/hr`** — current session burn rate; amber = moderate, red = high (>$1/hr)
+- **`~$7.68/active-day`** — projected daily cost assuming ~8 active hours/day (not 24/7)
+
+#### Reading the 14-DAY ACTIVITY charts
+
+The three charts share the same 14-day x-axis. Bars use block characters (`█▆▄▂`) proportional to that day's value. Three x-axis markers show the start date, midpoint, and today.
+
+- **calls/day** — total routed LLM calls; spikes show heavy coding sessions
+- **savings/day** — dollar value saved that day vs. premium baseline
+- **tokens saved/day** — tokens offloaded to Ollama/Gemini/Codex; a proxy for cheap-route scale independent of model pricing
 
 ---
 
