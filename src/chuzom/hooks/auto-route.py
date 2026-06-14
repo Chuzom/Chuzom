@@ -898,7 +898,7 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"\b(?:analyze|evaluate|assess|review (?:the |this |my )|"
             r"critique|debug|diagnose|"
             r"explain why|root cause|investigate|audit|"
-            r"compare (?:and contrast |.+ (?:to|with|vs|versus) |.+ and .+)|"
+            r"compare (?:and contrast|\w[^.]{0,80}? (?:to|with|vs|versus)|\w[^.]{0,60}? and [^.]{0,60})|"
             r"pros and cons|trade-?offs?|advantages|disadvantages|"
             r"deep dive|what do you think|what(?:'s| is) (?:your |the )?(?:opinion|take|assessment)|"
             r"help me understand|break down|walk me through|"
