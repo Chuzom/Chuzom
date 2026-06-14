@@ -822,6 +822,140 @@ def _query_cache_hit_stats() -> dict:
         return {}
 
 
+def _query_session_metrics(session_start: float) -> dict:
+    """Single-pass query for burn rate, fallback rate, p95 latency, routing effectiveness.
+
+    Returns:
+        session_cost_usd, burn_rate_per_hr, fallback_count, escalation_count,
+        fallback_pct, escalation_pct, p95_latency (dict by tier in seconds),
+        routing_effectiveness_pct, session_cost_ratio, session_calls_ratio
+    """
+    if not os.path.exists(DB_PATH):
+        return {}
+    try:
+        session_iso = _session_start_iso(session_start)
+        conn = sqlite3.connect(DB_PATH)
+
+        rows = conn.execute(
+            """
+            SELECT complexity, final_provider, latency_ms, cost_usd,
+                   was_downshifted, timestamp
+            FROM routing_decisions
+            WHERE timestamp >= ? AND (is_real = 1 OR is_real IS NULL)
+            """,
+            (session_iso,),
+        ).fetchall()
+
+        # 14-day daily costs for "session vs typical" denominator
+        daily = conn.execute(
+            """
+            SELECT date(timestamp, 'localtime') as day,
+                   SUM(cost_usd) as day_cost,
+                   COUNT(*) as day_calls
+            FROM routing_decisions
+            WHERE date(timestamp, 'localtime') >= date('now', '-15 days')
+              AND (is_real = 1 OR is_real IS NULL)
+            GROUP BY day
+            ORDER BY day
+            """
+        ).fetchall()
+
+        conn.close()
+
+        if not rows:
+            return {}
+
+        from datetime import datetime as _dt, timezone as _tz
+        session_start_dt = _dt.fromtimestamp(session_start, tz=_tz.utc)
+        now_dt = _dt.now(tz=_tz.utc)
+        session_hours = max(0.017, (now_dt - session_start_dt).total_seconds() / 3600)
+
+        _CHEAP = {"ollama", "codex", "gemini_cli"}
+        _PREMIUM = {"anthropic", "openai", "deepseek"}
+
+        total = len(rows)
+        session_cost = sum(r[3] or 0.0 for r in rows)
+        burn_rate = session_cost / session_hours
+
+        fallbacks = sum(1 for r in rows if r[4] == 1)
+        # escalation: simple/moderate task routed to premium API provider
+        escalations = sum(
+            1 for r in rows
+            if (r[0] or "moderate") in ("simple", "moderate") and (r[1] or "") in _PREMIUM
+        )
+
+        # p95 latency per tier (ms → seconds)
+        tier_lat: dict[str, list[float]] = {
+            "simple": [], "moderate": [], "complex": [], "deep_reasoning": []
+        }
+        for r in rows:
+            tier = r[0] if r[0] in tier_lat else "moderate"
+            if r[2] and r[2] > 0:
+                tier_lat[tier].append(r[2])
+        p95_by_tier: dict[str, float] = {}
+        for tier, lats in tier_lat.items():
+            if lats:
+                sl = sorted(lats)
+                p95_by_tier[tier] = sl[min(len(sl) - 1, int(len(sl) * 0.95))] / 1000.0
+
+        # Routing effectiveness: % handled by cheap / subscription providers
+        cheap_count = sum(1 for r in rows if (r[1] or "") in _CHEAP | {"subscription", "gemini"})
+        effectiveness_pct = cheap_count / total * 100
+
+        # Session vs typical: compare session cost/calls to 14-day excluding today
+        today_str = now_dt.astimezone().strftime("%Y-%m-%d")
+        hist = [(dc, dca) for day, dc, dca in daily if day != today_str]
+        cost_ratio = calls_ratio = None
+        if hist:
+            avg_cost = sum(c for c, _ in hist) / len(hist)
+            avg_calls = sum(c for _, c in hist) / len(hist)
+            if avg_cost > 0:
+                cost_ratio = session_cost / avg_cost
+            if avg_calls > 0:
+                calls_ratio = total / avg_calls
+
+        return {
+            "session_cost_usd": session_cost,
+            "session_hours": session_hours,
+            "burn_rate_per_hr": burn_rate,
+            "fallback_count": fallbacks,
+            "escalation_count": escalations,
+            "total_decisions": total,
+            "fallback_pct": fallbacks / total * 100 if total else 0.0,
+            "escalation_pct": escalations / total * 100 if total else 0.0,
+            "p95_latency": p95_by_tier,
+            "routing_effectiveness_pct": effectiveness_pct,
+            "session_cost_ratio": cost_ratio,
+            "session_calls_ratio": calls_ratio,
+        }
+    except Exception:
+        return {}
+
+
+def _query_daily_cache_trend() -> list[float]:
+    """Return up to 14 days of daily cache hit rates as % [oldest→newest]."""
+    if not os.path.exists(DB_PATH):
+        return []
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute(
+            """
+            SELECT date(timestamp, 'localtime') as day,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as hits
+            FROM usage
+            WHERE date(timestamp, 'localtime') >= date('now', '-14 days')
+              AND cache_hit IS NOT NULL
+            GROUP BY day
+            ORDER BY day
+            """
+        ).fetchall()
+        conn.close()
+        return [(r[2] or 0) / max(r[1], 1) * 100 for r in rows]
+    except Exception:
+        return []
+
+
 def _query_savings_by_task_type() -> list[dict]:
     """Query savings_stats and usage: return list of {task_type, calls, saved} sorted by saved DESC."""
     if not os.path.exists(DB_PATH):
@@ -1626,6 +1760,10 @@ def main() -> None:
             daily_calls_list = [d[1] for d in daily_14d_data] if daily_14d_data else []
             daily_tokens_list = [d[2] for d in daily_14d_data] if daily_14d_data else []
 
+            # Gather session-level metrics: burn rate, fallback %, p95 latency, etc.
+            session_metrics = _query_session_metrics(session_start)
+            daily_cache_trend = _query_daily_cache_trend()
+
             # Build session_models from tools_data so the MODELS panel shows "this session".
             # Format: [{"model": str, "calls": int, "tokens": int, "cost": float, "saved": float}]
             tools_data = report_data.get("tools") or {}
@@ -1669,6 +1807,18 @@ def main() -> None:
                 gemini_remaining=gemini_remaining,
                 daily_calls=daily_calls_list,
                 daily_tokens=daily_tokens_list,
+                # New session-level metrics
+                burn_rate_per_hr=session_metrics.get("burn_rate_per_hr", 0.0),
+                session_cost_usd=session_metrics.get("session_cost_usd", 0.0),
+                fallback_pct=session_metrics.get("fallback_pct", 0.0),
+                escalation_pct=session_metrics.get("escalation_pct", 0.0),
+                fallback_count=session_metrics.get("fallback_count", 0),
+                escalation_count=session_metrics.get("escalation_count", 0),
+                p95_latency=session_metrics.get("p95_latency", {}),
+                routing_effectiveness_pct=session_metrics.get("routing_effectiveness_pct", 0.0),
+                session_cost_ratio=session_metrics.get("session_cost_ratio"),
+                session_calls_ratio=session_metrics.get("session_calls_ratio"),
+                daily_cache_trend=daily_cache_trend if daily_cache_trend else None,
             )
             colored_output = console.export_text(clear=False, styles=True)
             # Save ANSI version to disk — Claude Code UI can't render terminal

@@ -199,6 +199,16 @@ class SessionSummaryDashboard:
         session_models: list[dict] | None = None,
         subscriptions: list[dict] | None = None,
         routing_policy: str = "balanced",
+        # New session metrics
+        burn_rate_per_hr: float = 0.0,
+        session_cost_usd: float = 0.0,
+        fallback_pct: float = 0.0,
+        escalation_pct: float = 0.0,
+        fallback_count: int = 0,
+        escalation_count: int = 0,
+        routing_effectiveness_pct: float = 0.0,
+        session_cost_ratio: float | None = None,
+        session_calls_ratio: float | None = None,
     ) -> RenderableType:
         """Single panel: routing decisions (left) + savings (right) + quota + models."""
         decisions = decisions or []
@@ -266,6 +276,48 @@ class SessionSummaryDashboard:
             (routing_policy, policy_color),
         ))
 
+        # Routing effectiveness score (cheap routing %)
+        if routing_effectiveness_pct > 0:
+            eff_bar = self._colored_quota_bar(routing_effectiveness_pct, width=12)
+            left_lines.append(Text(""))
+            left_lines.append(Text.assemble(
+                ("  Effective:", PALETTE.success),
+                (" ", ""),
+                eff_bar,
+                (f" {routing_effectiveness_pct:.0f}%", PALETTE.success),
+            ))
+
+        # Fallback / escalation rate
+        if fallback_count > 0 or escalation_count > 0:
+            fb_color = PALETTE.warning if fallback_pct > 10 else PALETTE.text_dim
+            esc_color = PALETTE.error if escalation_pct > 10 else PALETTE.text_dim
+            left_lines.append(Text(""))
+            fb_str = f"  Fallback {fallback_count} ({fallback_pct:.0f}%)"
+            esc_str = f"  Escalated {escalation_count} ({escalation_pct:.0f}%)"
+            left_lines.append(Text(fb_str, style=fb_color))
+            left_lines.append(Text(esc_str, style=esc_color))
+
+        # Session vs typical comparison
+        if session_cost_ratio is not None:
+            left_lines.append(Text(""))
+            if session_cost_ratio >= 2.0:
+                ratio_color = PALETTE.error
+                ratio_sym = "↑↑"
+            elif session_cost_ratio >= 1.3:
+                ratio_color = PALETTE.warning
+                ratio_sym = "↑"
+            elif session_cost_ratio <= 0.5:
+                ratio_color = PALETTE.success
+                ratio_sym = "↓↓"
+            else:
+                ratio_color = PALETTE.text_dim
+                ratio_sym = "~"
+            left_lines.append(Text.assemble(
+                ("  vs typical ", PALETTE.text_dim),
+                (f"{ratio_sym} {session_cost_ratio:.1f}×", ratio_color),
+                (" cost", PALETTE.text_dim),
+            ))
+
         # ── Right: savings summary ───────────────────────────────────────────
         def _savings_entry(usd: float, tokens: int, label: str,
                            style: str) -> list[RenderableType]:
@@ -291,6 +343,28 @@ class SessionSummaryDashboard:
                     _savings_entry(amount, savings.get(f"{key}_tokens", 0),
                                    label, PALETTE.text_dim)
                 )
+
+        # Burn rate + projected spend
+        if burn_rate_per_hr > 0:
+            right_lines.append(Text(""))
+            hr_str = f"{_fmt_usd(burn_rate_per_hr)}/hr"
+            projected_month = burn_rate_per_hr * 24 * 30
+            proj_str = f"~{_fmt_usd(projected_month)}/mo"
+            burn_color = (
+                PALETTE.error if burn_rate_per_hr > 1.0
+                else PALETTE.warning if burn_rate_per_hr > 0.1
+                else PALETTE.text_dim
+            )
+            right_lines.append(Text.assemble(
+                ("  ⚡ ", PALETTE.warning),
+                (hr_str, burn_color),
+            ))
+            right_lines.append(Text(f"  {proj_str} projected", style=PALETTE.text_dim))
+        elif session_cost_usd > 0:
+            right_lines.append(Text(""))
+            right_lines.append(
+                Text(f"  session {_fmt_usd(session_cost_usd)}", style=PALETTE.text_dim)
+            )
 
         # ── Grid: left + right columns ───────────────────────────────────────
         grid = Table.grid(expand=True, padding=(0, 2))
@@ -499,6 +573,23 @@ class SessionSummaryDashboard:
             width=70,
         )
 
+    def _sparkline(self, values: list[float], width: int = 14) -> Text:
+        """Single-row Unicode block sparkline for a list of float values."""
+        BLOCKS = " ▁▂▃▄▅▆▇█"
+        if not values or max(values, default=0) == 0:
+            return Text("─" * width, style=PALETTE.text_dim)
+        max_v = max(values)
+        # downsample or upsample to exactly `width` slots
+        out = Text()
+        for i in range(width):
+            src = i * (len(values) - 1) / max(width - 1, 1)
+            j = int(src)
+            k = min(j + 1, len(values) - 1)
+            v = values[j] * (1 - (src - j)) + values[k] * (src - j)
+            idx = max(0, min(8, int(v / max_v * 8)))
+            out.append(BLOCKS[idx], style=PALETTE.success)
+        return out
+
     def render_activity_panel(
         self,
         daily_calls: list[int],
@@ -507,6 +598,8 @@ class SessionSummaryDashboard:
         total_saved: float = 0.0,
         overhead_ms: float = 0.0,
         cache_hit_pct: float = 0.0,
+        p95_latency: dict[str, float] | None = None,
+        daily_cache_trend: list[float] | None = None,
     ) -> RenderableType:
         """14-day activity panel: calls/day bar chart + savings/day bar chart."""
         n = min(14, len(daily_calls)) if daily_calls else 0
@@ -616,6 +709,47 @@ class SessionSummaryDashboard:
         if cache_hit_pct > 0:
             stats.append(f"{cache_hit_pct:.0f}% cache hit")
         lines.append(Text(f"  {' · '.join(stats)}", style=PALETTE.text_dim))
+
+        # ── p95 Latency per tier ──────────────────────────────────────────────
+        p95 = p95_latency or {}
+        _TIER_LABELS = [
+            ("simple",        "cheap  "),
+            ("moderate",      "mid    "),
+            ("complex",       "premium"),
+            ("deep_reasoning","reason "),
+        ]
+        tier_entries = [(lbl, p95[k]) for k, lbl in _TIER_LABELS if k in p95]
+        if tier_entries:
+            lines.append(Text(""))
+            lines.append(Text("p95 latency", style=PALETTE.text_dim))
+            parts = []
+            for lbl, secs in tier_entries:
+                if secs >= 10:
+                    lat_str = f"{secs:.0f}s"
+                    lat_color = PALETTE.warning
+                elif secs >= 3:
+                    lat_str = f"{secs:.1f}s"
+                    lat_color = PALETTE.text_primary
+                else:
+                    lat_str = f"{secs:.1f}s"
+                    lat_color = PALETTE.success
+                parts.append(Text.assemble(
+                    (f"  {lbl}", PALETTE.text_dim),
+                    (f" {lat_str}", lat_color),
+                ))
+            lines.append(Text.assemble(*[p for pair in parts for p in [pair, Text("  ")]]))
+
+        # ── Cache hit rate trend sparkline ────────────────────────────────────
+        trend = daily_cache_trend or []
+        if trend and any(v > 0 for v in trend):
+            avg_hit = sum(trend) / len(trend)
+            lines.append(Text(""))
+            spark = self._sparkline(trend, width=min(14, len(trend)))
+            lines.append(Text.assemble(
+                ("cache hits  ", PALETTE.text_dim),
+                spark,
+                (f"  avg {avg_hit:.0f}%", PALETTE.success),
+            ))
 
         return Panel(
             Group(*lines),
@@ -788,6 +922,18 @@ class SessionSummaryDashboard:
         overhead_ms: float = 0.0,
         cache_hit_pct: float = 0.0,
         quota_samples: list[tuple[str, float]] | None = None,
+        # New session metrics
+        burn_rate_per_hr: float = 0.0,
+        session_cost_usd: float = 0.0,
+        fallback_pct: float = 0.0,
+        escalation_pct: float = 0.0,
+        fallback_count: int = 0,
+        escalation_count: int = 0,
+        routing_effectiveness_pct: float = 0.0,
+        session_cost_ratio: float | None = None,
+        session_calls_ratio: float | None = None,
+        p95_latency: dict[str, float] | None = None,
+        daily_cache_trend: list[float] | None = None,
     ) -> RenderableType:
         """Two-panel dashboard: main summary + 14-day activity + quota timeline."""
         try:
@@ -814,6 +960,15 @@ class SessionSummaryDashboard:
             session_models=session_models,
             subscriptions=subscriptions,
             routing_policy=_routing_policy,
+            burn_rate_per_hr=burn_rate_per_hr,
+            session_cost_usd=session_cost_usd,
+            fallback_pct=fallback_pct,
+            escalation_pct=escalation_pct,
+            fallback_count=fallback_count,
+            escalation_count=escalation_count,
+            routing_effectiveness_pct=routing_effectiveness_pct,
+            session_cost_ratio=session_cost_ratio,
+            session_calls_ratio=session_calls_ratio,
         )
         activity = self.render_activity_panel(
             daily_calls=daily_calls or [],
@@ -822,6 +977,8 @@ class SessionSummaryDashboard:
             total_saved=total_saved,
             overhead_ms=overhead_ms,
             cache_hit_pct=cache_hit_pct,
+            p95_latency=p95_latency,
+            daily_cache_trend=daily_cache_trend,
         )
         panels: list[RenderableType] = [Text(""), main, Text(""), activity]
         if quota_samples:
