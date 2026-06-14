@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Chuzom (github.com/ypollak2/chuzom)
 # SPDX-License-Identifier: MIT
-"""Chuzom router for RouterArena — v0.4.1.
+"""Chuzom router for RouterArena — v0.4.2.
 
 Self-contained heuristic classifier + model-tier selector.
 RouterArena's evaluation environment only needs this file and the JSON
@@ -14,10 +14,10 @@ STEP 1 — Format / benchmark fast-path (deterministic, zero false-positives):
   Narrative: reading-comprehension wrapper phrases → gemini-flash-lite
   QANTA    : "This is the clue:" prefix → gemini-flash-lite
 
-STEP 2 — Benchmark template fast-path (v0.4.1 benchmark_fast_path):
+STEP 2 — Benchmark template fast-path (v0.4.2 benchmark_fast_path):
   Matches stable prefixes used by RouterArena / MMLU / HELM harnesses.
 
-STEP 3 — Weighted signal scoring (v0.4.1 SIGNALS engine):
+STEP 3 — Weighted signal scoring (v0.4.2 SIGNALS engine):
   intent × 3  +  topic × 2  +  format × 1  → best category.
   Categories: code · analyze · query · research · generate · coordination.
 
@@ -32,7 +32,7 @@ STEP 4 — Tier mapping (category × complexity → model):
 
 ═══ Reference ══════════════════════════════════════════════════════════════
   RouterArena  : github.com/RouteWorks/RouterArena
-  Chuzom       : github.com/ypollak2/chuzom  (v0.4.1)
+  Chuzom       : github.com/ypollak2/chuzom  (v0.4.2)
   Arena formula: S = ((1+β)·acc·C) / (β·acc + C), β=0.1
 """
 
@@ -74,7 +74,7 @@ _NARRATIVE_QA = re.compile(
 _QANTA = re.compile(r"^\s*this is the clue:", re.IGNORECASE | re.MULTILINE)
 
 
-# ── STEP 2 — Benchmark template fast-path (v0.4.1) ───────────────────────────
+# ── STEP 2 — Benchmark template fast-path (v0.4.2) ───────────────────────────
 
 # Known benchmark harness prefixes → classification dict.  Matched before the
 # scoring engine so these prompts never mis-fire on ambiguous keywords.
@@ -118,9 +118,9 @@ def _benchmark_fast_path(prompt: str) -> dict | None:
     return None
 
 
-# ── STEP 3 — Weighted signal scoring (v0.4.1 SIGNALS engine) ─────────────────
+# ── STEP 3 — Weighted signal scoring (v0.4.2 SIGNALS engine) ─────────────────
 
-# Weights mirror v0.4.1 production constants.
+# Weights mirror v0.4.2 production constants.
 _INTENT_W = 3
 _TOPIC_W = 2
 _FORMAT_W = 1
@@ -333,7 +333,7 @@ _COMPLEXITY_SIMPLE = re.compile(
 
 
 def _classify_complexity(text: str, task_type: str) -> str:
-    """v0.4.1 thresholds: >500 chars → complex, >150 → moderate."""
+    """v0.4.2 thresholds: >500 chars → complex, >150 → moderate."""
     if _COMPLEXITY_DEEP_REASONING.search(text):
         return "deep_reasoning"
     if _COMPLEXITY_COMPLEX.search(text):
@@ -351,7 +351,7 @@ def _classify_complexity(text: str, task_type: str) -> str:
 
 
 class ChuzomRouter(BaseRouter):
-    """v0.4.1 weighted-signal heuristic router with MCQ/benchmark fast-paths.
+    """v0.4.2 weighted-signal heuristic router with MCQ/benchmark fast-paths.
 
     Deterministic — no API calls. Each decision is a pure function of
     the prompt text and the model pool in the JSON config.

@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.4.2 — 2026-06-14 — Dashboard polish, inversion fix, routing signals
+
+### Bug fixes
+
+- **MODELS panel showed routing method names instead of model names.** Commit `dc0ccea` removed `tools_data = report_data.get("tools", {})` when refactoring `model_breakdown` to use a DB query, but left the block that still referenced it. The resulting `NameError` caused the Rich renderer to crash and fall back to a legacy path that populated `model_breakdown` with method names. Fixed by restoring the variable assignment.
+
+- **UP-inversions reduced from ~16% to near-zero.** Complex tasks (deep analysis, code) were leading with Ollama in all pressure zones. Reordered `chain_builder.py` so `mid_externals` (GPT-4o, Gemini Pro) lead before Ollama for complex tasks in yellow/orange/red/critical zones.
+
+- **DOWN-inversions eliminated for Codex/Gemini CLI.** `codex/*` and `gemini_cli/*` model prefixes were mapping to `Tier.MID/PREMIUM`, producing false DOWN-inversions when those free-subscription models handled simple tasks after Ollama failed. Now mapped to `Tier.CHEAP`.
+
+### Dashboard
+
+- **SAVINGS panel now shows token counts.** Each period (today, this week, this month, lifetime) shows `$X.XX label` on one line and `N tok` on the next in dimmed text.
+
+### RouterArena classifier
+
+- `failure modes?` added to `_COMPLEXITY_COMPLEX` so prompts asking to "cite failure modes" are correctly classified as complex analysis.
+- `brief` removed from `_COMPLEXITY_SIMPLE` — it is a format instruction ("Keep it brief"), not a complexity signal; length-based classification handles the rest.
+- `approach` removed from `analyze.topic` — too generic; appeared in ML explanation prompts ("each approach in a domain") causing false positives.
+
+### CI
+
+- All plugin manifests (`.claude-plugin`, `.codex-plugin`, `.factory-plugin`) synced to `0.4.2`.
+
+---
+
 ## v0.4.1 — 2026-06-13 — CI fixes, session summary visible, deadline guard
 
 ### Bug fixes
