@@ -19,9 +19,13 @@ PYPROJECT_PATH = ROOT / "pyproject.toml"
 INIT_PATH = ROOT / "src" / "chuzom" / "__init__.py"
 CHANGELOG_PATH = ROOT / "CHANGELOG.md"
 PLUGIN_DIRS = (".claude-plugin", ".codex-plugin", ".factory-plugin")
+# Extra files that embed a version string and must be kept in sync.
+_EXTRA_VERSION_FILES: list[tuple[Path, re.Pattern, str]] = []  # populated below
 
 _PYPROJECT_VERSION_RE = re.compile(r'(?m)^version = "([^"]+)"$')
 _INIT_VERSION_RE = re.compile(r'(?m)^__version__ = "([^"]+)"(.*)$')
+# Matches the docstring version tag in the RouterArena submission router.
+_ROUTERARENA_VERSION_RE = re.compile(r"(Chuzom router for RouterArena — )v\d+\.\d+\.\d+")
 
 
 def run(
@@ -94,6 +98,13 @@ def bump_versions(version: str, *, root: Path = ROOT) -> None:
 
         marketplace_data = json.loads(marketplace_path.read_text(encoding="utf-8"))
         _write_json(marketplace_path, update_marketplace_data(marketplace_data, version))
+
+    # Keep the RouterArena submission router version tag in sync.
+    routerarena_path = root / "routerarena_submission" / "router" / "chuzom_router.py"
+    if routerarena_path.exists():
+        text = routerarena_path.read_text(encoding="utf-8")
+        updated = _ROUTERARENA_VERSION_RE.sub(rf"\g<1>v{version}", text)
+        routerarena_path.write_text(updated, encoding="utf-8")
 
 
 def read_versions(*, root: Path = ROOT) -> dict[str, str]:
@@ -208,6 +219,7 @@ def perform_release(
             ".claude-plugin/",
             ".codex-plugin/",
             ".factory-plugin/",
+            "routerarena_submission/router/chuzom_router.py",
             "CHANGELOG.md",
             "README.md",
             "docs/",
