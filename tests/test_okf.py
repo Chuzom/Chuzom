@@ -1,8 +1,6 @@
 """Extensive tests for src/chuzom/okf.py — OKF context injection, model catalog, enrichment."""
 from __future__ import annotations
 
-import asyncio
-import time
 from pathlib import Path
 
 import pytest

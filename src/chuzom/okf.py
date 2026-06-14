@@ -330,7 +330,7 @@ async def enrich_from_response(
         if not files:
             return
 
-        resp_lines = [l.strip() for l in response_text.splitlines() if l.strip()]
+        resp_lines = [line.strip() for line in response_text.splitlines() if line.strip()]
         summary = " ".join(resp_lines[:2])[:200] if resp_lines else ""
 
         sym_pat = re.compile(r'(?:def |class |fn |func |async def )(\w+)\s*[({<:]', re.MULTILINE)
