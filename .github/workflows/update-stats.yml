@@ -1,9 +1,6 @@
 name: Update Download Statistics
 
 on:
-  schedule:
-    # Run every Sunday at 00:00 UTC
-    - cron: '0 0 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -29,7 +26,7 @@ jobs:
       - name: Fetch combined download statistics
         id: stats
         run: |
-          STATS_JSON=$(uv run llm-router stats --format json)
+          STATS_JSON=$(uv run chuzom stats --format json)
           echo "stats=$STATS_JSON" >> "$GITHUB_OUTPUT"
 
           # Extract values for badge/display
