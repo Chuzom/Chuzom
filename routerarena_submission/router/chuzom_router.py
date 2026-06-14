@@ -199,7 +199,7 @@ _SIGNALS: dict[str, dict[str, re.Pattern]] = {
         "topic": re.compile(
             r"\b(?:performance|bottleneck|latency|throughput|efficiency|"
             r"security|vulnerability|risk|threat|exposure|"
-            r"architecture|system design|design pattern|approach|strategy|"
+            r"architecture|system design|design pattern|strategy|"
             r"cost-benefit|roi|impact|outcome|"
             r"quality|reliability|scalability|maintainability|"
             r"trade-?off|decision|choice|option|alternative|"
@@ -319,12 +319,14 @@ _COMPLEXITY_COMPLEX = re.compile(
     r"novel approach|research paper|synthesis|multi-step|workflow|pipeline|"
     r"in-depth|thorough|detailed plan|full implementation|production|"
     r"scalable|distributed|microservice|security audit|"
-    r"compare multiple|across all|entire|complete)\b",
+    r"compare multiple|across all|entire|complete|failure modes?)\b",
     re.IGNORECASE,
 )
 
+# "brief" is deliberately excluded: "Keep it brief" is a format instruction,
+# not a complexity signal. Length-based classification handles the rest.
 _COMPLEXITY_SIMPLE = re.compile(
-    r"\b(?:quick|simple|short|one-liner|brief|"
+    r"\b(?:quick|simple|short|one-liner|"
     r"summarize|tldr|eli5|just|only|small|tiny|minor)\b",
     re.IGNORECASE,
 )
@@ -389,7 +391,7 @@ class ChuzomRouter(BaseRouter):
         # ── STEP 3: weighted signal scoring ──────────────────────────────────
 
         scores = _score_categories(query)
-        best_category = max(scores, key=scores.get)
+        best_category = max(scores, key=lambda k: scores.get(k, 0))
         best_score = scores[best_category]
 
         if best_score >= _CONFIDENCE_THRESHOLD:
