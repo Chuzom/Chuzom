@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.5.1 — 2026-06-14 — GitHub Copilot & Windsurf IDE support
+
+### New features
+
+- **`chuzom install --host copilot`** — installs full VS Code / GitHub Copilot pull-routing
+  stack: user-level `~/Library/Application Support/Code/User/mcp.json`, workspace
+  `.vscode/mcp.json`, `.github/copilot-instructions.md` (instructs Copilot to call
+  Chuzom tools first), and `.github/agents/chuzom.agent.md` (Copilot agent with
+  `tools: ['chuzom']` for strongest tool-first enforcement in Agent mode).
+
+- **`chuzom install --host windsurf`** — installs Windsurf / Cascade pull-routing stack:
+  global `~/.codeium/windsurf/mcp_config.json`, workspace `.windsurf/mcp.json`, and
+  `.github/copilot-instructions.md` (also read by Windsurf).
+
+- **`install_hooks.py ide` subcommand** — `python install_hooks.py ide` writes
+  `.vscode/mcp.json`, `.windsurf/mcp.json`, and `.cursor/rules/use-chuzom.mdc` to the
+  project root. `python install_hooks.py ide --uninstall` removes them.
+
+### Architecture
+
+- **Push vs pull routing** explained clearly in README: Claude Code uses push routing
+  (hooks intercept 100% of prompts automatically); Copilot/Cursor/Windsurf use pull
+  routing (model must choose to call the tool). IDE support matrix added.
+
+- **`--host all`** now includes `windsurf` in the installation loop.
+
+### Bug fixes
+
+- `--host copilot` previously called `_print_vs_code_copilot_config()` (print-only);
+  now correctly calls `_install_vscode_files()` which writes all config files.
+
+---
+
 ## v0.5.0 — 2026-06-14 — Deep Reasoning tier (DeepSeek-R1 · o3 · Gemini thinking)
 
 ### New features

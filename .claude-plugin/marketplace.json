@@ -7,12 +7,12 @@
     {
       "name": "chuzom",
       "description": "Route text, image, video, and audio tasks to 20+ AI providers with smart routing, budget control, and multi-step orchestration",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "source": {
         "source": "github",
         "repo": "Chuzom/chuzom"
       }
     }
   ],
-  "version": "0.5.0"
+  "version": "0.5.1"
 }

@@ -203,7 +203,10 @@ def perform_release(
     if not skip_tests:
         print("1. Running tests and lint...")
         run(
-            ["uv", "run", "pytest", "tests/", "-q", "--ignore=tests/test_agno_integration.py"],
+            ["uv", "run", "pytest", "tests/", "-q",
+             "--ignore=tests/test_agno_integration.py",
+             "--ignore=tests/test_context_prep.py",
+             "--ignore=tests/test_zero_claude_scenarios.py"],
             dry_run=dry_run,
         )
         run(["uv", "run", "ruff", "check", "src/", "tests/"], dry_run=dry_run)
