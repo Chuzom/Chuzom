@@ -173,23 +173,27 @@ def build_chain(complexity: str, zone: str, task_type: str) -> list[ModelSpec]:
             return base
 
     # ── Complex: Claude leads at low pressure, excluded at high ──────────────
+    # Ollama is excluded from complex chains for code/research tasks — Ollama
+    # on complex reasoning causes UP-inversions (qwen3.5 winning tasks it
+    # handles poorly). For these task types, let the chain fail through to
+    # Claude (subscription) rather than degrade to local.
+    high_risk = task_type in ("code", "research")
     if complexity in ("complex", "deep_reasoning"):
         if zone == "green":
             # Plenty of quota — Claude Opus leads for max quality
-            return [_CLAUDE_OPUS] + mid_externals + ollama
+            return [_CLAUDE_OPUS] + mid_externals + ([] if high_risk else ollama)
         elif zone == "yellow":
             # Comfortable — mid-tier externals lead, Claude Opus as premium fallback
-            # (ollama after mid_externals to avoid UP-inversion: qwen3.5 winning complex tasks)
-            return mid_externals + ollama + [_CLAUDE_OPUS]
+            return mid_externals + ([] if high_risk else ollama) + [_CLAUDE_OPUS]
         elif zone == "orange":
             # Getting tight — mid-tier externals lead, Claude Sonnet as last resort
-            return mid_externals + ollama + [_CLAUDE_SONNET]
+            return mid_externals + ([] if high_risk else ollama) + [_CLAUDE_SONNET]
         elif zone == "red":
-            # Preserve Claude — mid-tier first, Ollama as local fallback
-            return mid_externals + ollama + cheap_externals
+            # Preserve Claude — mid-tier first; skip Ollama for high-risk task types
+            return mid_externals + ([] if high_risk else ollama) + cheap_externals
         else:
-            # Critical — no Claude at all; mid-tier before Ollama for quality
-            return mid_externals + ollama + cheap_externals
+            # Critical — no Claude; mid-tier before Ollama, but skip Ollama for high-risk
+            return mid_externals + ([] if high_risk else ollama) + cheap_externals
 
     # Fallback for unknown complexity
     return ollama + cheap_externals
