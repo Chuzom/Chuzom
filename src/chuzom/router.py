@@ -48,6 +48,7 @@ from chuzom.codex_agent import CODEX_MODELS, is_codex_available, run_codex
 from chuzom.contract import build_contract
 from chuzom.gates import run_gates
 from chuzom.gemini_cli_agent import GEMINI_MODELS, is_gemini_cli_available, run_gemini_cli
+from chuzom import okf as _okf
 from chuzom.logging import get_logger
 from chuzom.streaming_types import RouterStreamEvent
 from chuzom.compaction import compact_structural
@@ -2501,6 +2502,21 @@ async def route_and_call(
                 "identity's org/user rollup (CHUZOM_ENVELOPE_MODE=strict)."
             )
 
+        # OKF #1: context injection — prepend relevant knowledge bundle docs to prompt.
+        # OKF #3: seed model catalog on first run (no-op if docs already exist).
+        # Both are best-effort; any failure falls through to normal routing.
+        try:
+            _okf.seed_model_catalog()
+            _okf_concepts = _okf.find_relevant(prompt)
+            if _okf_concepts:
+                prompt = _okf.inject_context(prompt, _okf_concepts)
+                if ctx is not None:
+                    asyncio.create_task(
+                        _notify(ctx, "info", f"📚 OKF: injected {len(_okf_concepts)} context doc(s)")
+                    )
+        except Exception:  # noqa: BLE001
+            pass
+
         # Dispatch through the extracted model loop, which handles both primary
         # and emergency BUDGET fallback chains atomically.
         # T3-S2: optional wall-clock cap. ``asyncio.wait_for`` is used (not
@@ -2730,6 +2746,18 @@ async def route_and_call(
                 _get_idempotency_store().store(idempotency_key, response)
             except Exception as _idem_err:  # noqa: BLE001 — fail-open
                 log.warning("idempotency_store_failed", error=str(_idem_err))
+
+        # OKF #4: side-effect enrichment — write SourceFile concept docs from
+        # file mentions in the prompt+response. Fire-and-forget; never blocks.
+        try:
+            _resp_text = getattr(response, "content", "") or ""
+            _resp_model = getattr(response, "model", "") or ""
+            asyncio.create_task(
+                _okf.enrich_from_response(prompt, _resp_text, _resp_model)
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
         return response
 
 
