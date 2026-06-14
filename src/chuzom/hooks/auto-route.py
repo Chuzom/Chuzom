@@ -1021,7 +1021,7 @@ COMPLEXITY_DEEP_REASONING = re.compile(
     r"synthesize (?:the )?research|comprehensive literature review|"
     r"rigorous(?:ly)? (?:analyze|prove|derive|examine|analysis)|"
     r"formal(?:ly)? (?:specify|verify|prove)|"
-    r"induction|deduction|proof by contradiction|reductio ad absurdum|"
+    r"mathematical induction|(?:proof |by )(?:induction|deduction|contradiction)|reductio ad absurdum|"
     # Natural-language chain-of-thought triggers (new — catches everyday deep-think requests)
     r"step[- ]by[- ]step|think (?:this )?through|reason (?:through|about|carefully)|"
     r"chain[- ]of[- ]thought|think (?:carefully|deeply|step[- ]by[- ]step)|"

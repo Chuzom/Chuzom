@@ -73,6 +73,17 @@ _NARRATIVE_QA = re.compile(
 # QANTA quiz-bowl format.
 _QANTA = re.compile(r"^\s*this is the clue:", re.IGNORECASE | re.MULTILINE)
 
+# AsDiv / FinQA / AIME harness prefix.  The benchmark harness injects
+# "Please solve the following mathematical problem step by step" as an
+# *instruction*, which collides with the "step by step" deep_reasoning
+# trigger.  Stripping this prefix before classification restores the
+# original routing: long FinQA/AIME → complex (qwen3-235b), short
+# AsDiv → moderate/simple (gpt-4o-mini / gemini-flash-lite).
+_MATH_PROBLEM_PREFIX = re.compile(
+    r"^Please solve the following mathematical problem step by step[.,]?\s*",
+    re.IGNORECASE,
+)
+
 
 # ── STEP 2 — Benchmark template fast-path (v0.4.2) ───────────────────────────
 
@@ -311,7 +322,7 @@ _COMPLEXITY_DEEP_REASONING = re.compile(
     r"synthesize (?:the )?research|comprehensive literature review|"
     r"rigorous(?:ly)? (?:analyze|prove|derive|examine|analysis)|"
     r"formal(?:ly)? (?:specify|verify|prove)|"
-    r"induction|deduction|proof by contradiction|reductio ad absurdum|"
+    r"mathematical induction|(?:proof |by )(?:induction|deduction|contradiction)|reductio ad absurdum|"
     # Natural-language chain-of-thought triggers
     r"step[- ]by[- ]step|think (?:this )?through|reason (?:through|about|carefully)|"
     r"chain[- ]of[- ]thought|think (?:carefully|deeply|step[- ]by[- ]step)|"
@@ -369,6 +380,11 @@ class ChuzomRouter(BaseRouter):
     """
 
     def _get_prediction(self, query: str) -> str:
+        # Strip AsDiv / FinQA / AIME harness prefix before any classification
+        # so the embedded "step by step" instruction does not trigger the
+        # deep_reasoning path.  All subsequent logic runs on the stripped text.
+        query = _MATH_PROBLEM_PREFIX.sub("", query.lstrip())
+
         # ── STEP 1: format fast-path ─────────────────────────────────────────
 
         # MCQ: \\boxed{X} is injected by RouterArena into prompt_formatted for
