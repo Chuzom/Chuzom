@@ -602,130 +602,98 @@ class SessionSummaryDashboard:
         daily_cache_trend: list[float] | None = None,
         daily_tokens_saved: list[int] | None = None,
     ) -> RenderableType:
-        """14-day activity panel: calls/day bar chart + savings/day bar chart."""
-        n = min(14, len(daily_calls)) if daily_calls else 0
-        values = daily_calls[-n:] if n > 0 else []
+        """14-day activity panel: three bar charts side by side + stats."""
         N_ROWS = 8
         today = datetime.date.today()
 
-        lines: list[RenderableType] = [
-            Text("calls/day", style=PALETTE.text_dim)
-        ]
+        def _date_xaxis(n: int, y_width: int) -> list[Text]:
+            """Compact 3-marker axis: oldest · mid · today, fits in a narrow column."""
+            prefix = " " * y_width
+            axis_line = f"{prefix} └{'─' * n}"
+            if n < 2:
+                return [Text(axis_line, style=PALETTE.text_dim)]
+            d_start = (today - datetime.timedelta(days=n - 1)).strftime("%-d/%-m")
+            d_mid = (today - datetime.timedelta(days=(n - 1) // 2)).strftime("%-d")
+            d_end = today.strftime("%-d")
+            mid_pos = (n - 1) // 2
+            # Build label row: start at pos 0, mid at mid_pos, end at n-1
+            label_row = [" "] * n
+            for ch_i, ch in enumerate(d_start):
+                if ch_i < n:
+                    label_row[ch_i] = ch
+            for ch_i, ch in enumerate(d_mid):
+                pos = mid_pos + ch_i
+                if pos < n:
+                    label_row[pos] = ch
+            end_start = max(mid_pos + len(d_mid) + 1, n - len(d_end))
+            for ch_i, ch in enumerate(d_end):
+                pos = end_start + ch_i
+                if pos < n:
+                    label_row[pos] = ch
+            return [
+                Text(axis_line, style=PALETTE.text_dim),
+                Text(f"{prefix} " + "".join(label_row), style=PALETTE.text_dim),
+            ]
 
+        # ── Chart 1: calls/day ────────────────────────────────────────────────
+        n = min(14, len(daily_calls)) if daily_calls else 0
+        values = daily_calls[-n:] if n > 0 else []
+        calls_lines: list[RenderableType] = [Text("calls/day", style=PALETTE.text_dim)]
         if values and max(values) > 0:
             max_val = max(values)
-            chart_rows = self._bar_chart_rows(values, n_rows=N_ROWS)
-            y_labels = [
-                int(max_val * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1))
-                for i in range(N_ROWS)
-            ]
             y_width = max(len(str(max_val)), 3)
-
-            for y_label, row_chars in zip(y_labels, chart_rows):
-                lines.append(
-                    Text(
-                        f"  {y_label:>{y_width}} ┤ {row_chars}",
-                        style=PALETTE.accent,
-                    )
-                )
-            lines.append(
-                Text(f"  {' ' * y_width}  └{'─' * n}", style=PALETTE.text_dim)
-            )
-
-            # X-axis: actual dates, every other day
-            x_parts: list[str] = []
-            for i in range(n):
-                d = today - datetime.timedelta(days=n - 1 - i)
-                x_parts.append(d.strftime("%-d") if i % 2 == 0 else " ")
-            lines.append(
-                Text(
-                    f"  {' ' * (y_width + 3)}" + "  ".join(x_parts),
-                    style=PALETTE.text_dim,
-                )
-            )
+            for i, row_chars in enumerate(self._bar_chart_rows(values, n_rows=N_ROWS)):
+                y_val = int(max_val * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1))
+                calls_lines.append(Text(f"{y_val:>{y_width}} ┤ {row_chars}", style=PALETTE.accent))
+            calls_lines.extend(_date_xaxis(n, y_width + 2))
         else:
-            lines.append(Text("  No activity data for this period", style=PALETTE.text_dim))
+            calls_lines.append(Text("no data", style=PALETTE.text_dim))
 
-        # ── Savings/day bar chart ─────────────────────────────────────────────
+        # ── Chart 2: savings/day ──────────────────────────────────────────────
         n_s = min(14, len(daily_costs)) if daily_costs else 0
         save_values = daily_costs[-n_s:] if n_s > 0 else []
-
-        lines.append(Text(""))
-        lines.append(Text("savings/day  (vs premium-only)", style=PALETTE.text_dim))
-
+        save_lines: list[RenderableType] = [Text("savings/day", style=PALETTE.text_dim)]
         if save_values and max(save_values) > 0.0001:
             max_saved_day = max(save_values)
-            # _bar_chart_rows works with any numerics; scale to ints for clarity
             scaled = [int(v * 100_000) for v in save_values]
-            save_rows = self._bar_chart_rows(scaled, n_rows=N_ROWS)
-            y_width_s = 7  # "$0.0123" = 7 chars
-
-            for i, row_chars in enumerate(save_rows):
+            y_width_s = 7
+            for i, row_chars in enumerate(self._bar_chart_rows(scaled, n_rows=N_ROWS)):
                 y_val = max_saved_day * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1)
                 y_str = _fmt_usd(y_val) if y_val >= 0.0001 else "$0"
-                lines.append(
-                    Text.assemble(
-                        (f"  {y_str:>{y_width_s}} ┤ ", PALETTE.text_dim),
-                        (row_chars, PALETTE.success),
-                    )
-                )
-            lines.append(
-                Text(f"  {' ' * y_width_s}  └{'─' * n_s}", style=PALETTE.text_dim)
-            )
-
-            x_parts_s: list[str] = []
-            for i in range(n_s):
-                d = today - datetime.timedelta(days=n_s - 1 - i)
-                x_parts_s.append(d.strftime("%-d") if i % 2 == 0 else " ")
-            lines.append(
-                Text(
-                    f"  {' ' * (y_width_s + 3)}" + "  ".join(x_parts_s),
-                    style=PALETTE.text_dim,
-                )
-            )
+                save_lines.append(Text.assemble(
+                    (f"{y_str:>{y_width_s}} ┤ ", PALETTE.text_dim),
+                    (row_chars, PALETTE.success),
+                ))
+            save_lines.extend(_date_xaxis(n_s, y_width_s + 2))
         else:
-            lines.append(Text("  No savings data for this period", style=PALETTE.text_dim))
+            save_lines.append(Text("no data", style=PALETTE.text_dim))
 
-        # ── Tokens saved/day bar chart ────────────────────────────────────────
+        # ── Chart 3: tokens saved/day ─────────────────────────────────────────
         tok_saved_values = (daily_tokens_saved or [])[-14:]
         n_ts = len(tok_saved_values)
-
-        lines.append(Text(""))
-        lines.append(Text("tokens saved/day  (cheap routes, not burned on premium)", style=PALETTE.text_dim))
-
+        tok_lines: list[RenderableType] = [Text("tokens saved/day", style=PALETTE.text_dim)]
         if tok_saved_values and max(tok_saved_values) > 0:
             max_ts = max(tok_saved_values)
-            ts_rows = self._bar_chart_rows(tok_saved_values, n_rows=N_ROWS)
             y_width_ts = max(len(_fmt_tok(max_ts)), 4)
-
-            for i, row_chars in enumerate(ts_rows):
+            for i, row_chars in enumerate(self._bar_chart_rows(tok_saved_values, n_rows=N_ROWS)):
                 y_val = int(max_ts * (N_ROWS - 1 - i) / max(N_ROWS - 1, 1))
-                y_str = _fmt_tok(y_val)
-                lines.append(
-                    Text.assemble(
-                        (f"  {y_str:>{y_width_ts}} ┤ ", PALETTE.text_dim),
-                        (row_chars, PALETTE.accent),
-                    )
-                )
-            lines.append(
-                Text(f"  {' ' * y_width_ts}  └{'─' * n_ts}", style=PALETTE.text_dim)
-            )
-
-            x_parts_ts: list[str] = []
-            for i in range(n_ts):
-                d = today - datetime.timedelta(days=n_ts - 1 - i)
-                x_parts_ts.append(d.strftime("%-d") if i % 2 == 0 else " ")
-            lines.append(
-                Text(
-                    f"  {' ' * (y_width_ts + 3)}" + "  ".join(x_parts_ts),
-                    style=PALETTE.text_dim,
-                )
-            )
+                tok_lines.append(Text.assemble(
+                    (f"{_fmt_tok(y_val):>{y_width_ts}} ┤ ", PALETTE.text_dim),
+                    (row_chars, PALETTE.accent),
+                ))
+            tok_lines.extend(_date_xaxis(n_ts, y_width_ts + 2))
         else:
-            lines.append(Text("  No token savings data for this period", style=PALETTE.text_dim))
+            tok_lines.append(Text("no data", style=PALETTE.text_dim))
+
+        # ── Three charts side by side ─────────────────────────────────────────
+        charts = Table.grid(expand=True, padding=(0, 1))
+        charts.add_column(ratio=1)
+        charts.add_column(ratio=1)
+        charts.add_column(ratio=1)
+        charts.add_row(Group(*calls_lines), Group(*save_lines), Group(*tok_lines))
 
         # ── Summary stats line ────────────────────────────────────────────────
-        lines.append(Text(""))
+        lines: list[RenderableType] = [charts, Text("")]
 
         total_calls = sum(daily_calls[-n:]) if daily_calls and n > 0 else 0
         total_tokens = sum(daily_tokens[-n:]) if daily_tokens and n > 0 else 0
@@ -795,7 +763,7 @@ class SessionSummaryDashboard:
             border_style=PALETTE.muted_border,
             title="14-DAY ACTIVITY",
             title_align="left",
-            width=70,
+            width=100,
         )
 
     def render_quota_graph(
