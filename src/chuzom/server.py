@@ -386,6 +386,13 @@ def main():
     # clean remediation message.
     _critical_modules_or_die()
     _startup_verify_or_die()
+    # Auto-detect local LLM platforms and print a summary on first run.
+    # Best-effort — never blocks or crashes startup on failure.
+    try:
+        from chuzom.local_platforms import print_startup_summary
+        print_startup_summary()
+    except Exception:
+        pass
     mcp.run()
 
 

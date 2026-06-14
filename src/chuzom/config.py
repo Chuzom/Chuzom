@@ -443,15 +443,30 @@ class RouterConfig(BaseSettings):
         them into the chain. The quirk layer (``OpenAICompatQuirks``) rewrites
         the prefix to ``openai/`` and injects ``api_base`` before the LiteLLM call.
 
-        Returns an empty list when ``openai_compat_base_url`` is not set.
+        When ``openai_compat_base_url`` is not set, falls back to the first
+        auto-detected local platform (LM Studio, Jan, vLLM, etc.) so users get
+        local routing without any manual config.
         """
-        if not self.openai_compat_base_url or not self.openai_compat_models:
-            return []
-        return [
-            f"openai_compat/{m.strip()}"
-            for m in self.openai_compat_models.split(",")
-            if m.strip()
-        ]
+        if self.openai_compat_base_url and self.openai_compat_models:
+            return [
+                f"openai_compat/{m.strip()}"
+                for m in self.openai_compat_models.split(",")
+                if m.strip()
+            ]
+        # Auto-detect: find first running non-Ollama OpenAI-compat platform
+        try:
+            import os
+            if not os.getenv("PYTEST_CURRENT_TEST"):
+                from chuzom.local_platforms import get_first_openai_compat
+                result = get_first_openai_compat()
+                if result:
+                    _url, models = result
+                    # Temporarily set so OpenAICompatQuirks can read the base_url
+                    object.__setattr__(self, "openai_compat_base_url", _url)
+                    return [f"openai_compat/{m}" for m in models[:5] if m]
+        except Exception:
+            pass
+        return []
 
     def model_post_init(self, __context: dict) -> None:
         # Skip in test mode (pytest sets this env var)
