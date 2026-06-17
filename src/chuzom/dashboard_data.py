@@ -175,22 +175,28 @@ def query_window(
     total_calls = total_tokens = 0
     total_saved = 0.0
     try:
-        # Legacy ``usage`` table — use input/output split and Sonnet baseline.
+        # Legacy ``usage`` table — recalculate savings from in/out at Opus rates.
+        # Opus: $15/M input, $75/M output.  Stored saved_usd used a blended
+        # $0.045/1K estimate that is inaccurate for input-heavy calls.
+        # Subscription provider rows have no meaningful token cost so exclude them.
+        _OPUS_IN_PER_M = 15.0
+        _OPUS_OUT_PER_M = 75.0
         if _table_exists(conn, _LEGACY_TABLE):
             cols = _columns(conn, _LEGACY_TABLE)
             row = conn.execute(
                 f"SELECT COUNT(*), "
                 f"{_sum_if_present(cols, 'input_tokens')}, "
                 f"{_sum_if_present(cols, 'output_tokens')}, "
-                f"{_sum_if_present(cols, 'cost_usd')}, "
-                f"{_sum_if_present(cols, 'saved_usd')} "
-                f"FROM {_LEGACY_TABLE} WHERE success=1 AND {where}"
+                f"{_sum_if_present(cols, 'cost_usd')} "
+                f"FROM {_LEGACY_TABLE} "
+                f"WHERE success=1 AND (provider IS NULL OR provider != 'subscription') AND {where}"
             ).fetchone()
             calls = int(row[0])
             in_tok = int(row[1])
             out_tok = int(row[2])
             cost = float(row[3])
-            saved = float(row[4])
+            opus_baseline = (in_tok * _OPUS_IN_PER_M + out_tok * _OPUS_OUT_PER_M) / 1_000_000
+            saved = max(0.0, opus_baseline - cost)
             by_source[_LEGACY_TABLE] = {
                 "calls": calls, "tokens": in_tok + out_tok,
                 "cost_usd": cost, "saved_usd": saved,
@@ -271,6 +277,8 @@ def query_daily(
 
     conn = sqlite3.connect(str(db))
     try:
+        _OPUS_IN_PER_M = 15.0
+        _OPUS_OUT_PER_M = 75.0
         if _table_exists(conn, _LEGACY_TABLE):
             cols = _columns(conn, _LEGACY_TABLE)
             rows = conn.execute(
@@ -278,15 +286,19 @@ def query_daily(
                 f"COUNT(*), "
                 f"{_sum_if_present(cols, 'input_tokens')}, "
                 f"{_sum_if_present(cols, 'output_tokens')}, "
-                f"{_sum_if_present(cols, 'saved_usd')} "
-                f"FROM {_LEGACY_TABLE} WHERE success=1 AND {where} "
+                f"{_sum_if_present(cols, 'cost_usd')} "
+                f"FROM {_LEGACY_TABLE} "
+                f"WHERE success=1 "
+                f"AND (provider IS NULL OR provider != 'subscription') "
+                f"AND {where} "
                 f"GROUP BY date(timestamp,'localtime')"
             ).fetchall()
-            for day, calls, in_tok, out_tok, saved in rows:
+            for day, calls, in_tok, out_tok, cost in rows:
                 b = _bucket(day)
                 b["calls"] += int(calls)
                 b["tokens"] += int(in_tok) + int(out_tok)
-                b["saved"] += float(saved)
+                opus_baseline = (int(in_tok) * _OPUS_IN_PER_M + int(out_tok) * _OPUS_OUT_PER_M) / 1_000_000
+                b["saved"] += max(0.0, opus_baseline - float(cost))
 
         for table in _PLATFORM_TABLES:
             if not _table_exists(conn, table):
