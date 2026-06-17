@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.5.4 — 2026-06-17 — PyPI metadata & discoverability improvements
+
+### Improvements
+
+- **PyPI metadata**: bumped classifier from `3 - Alpha` to `4 - Beta`; added keywords
+  `claude`, `anthropic`, `ollama`, `token-optimization`, `cost-saving`, `quota-saver`,
+  `ai-routing`, `llm-proxy`, `copilot`, `windsurf` for search discoverability.
+- **Project URLs**: fixed `Bug Tracker` and `Changelog` links (previously pointed to
+  personal fork instead of `Chuzom/Chuzom` org repo); added `Documentation` link.
+- **Short description**: now mentions Cursor and Copilot explicitly alongside Claude Code.
+- **README**: hero image now uses absolute GitHub URL — was previously broken on PyPI
+  (relative `assets/` paths do not resolve in PyPI's renderer).
+
+---
+
 ## v0.5.1 — 2026-06-14 — GitHub Copilot & Windsurf IDE support
 
 ### New features
