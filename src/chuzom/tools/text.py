@@ -98,8 +98,7 @@ def _read_hook_complexity_hint(max_age_sec: float = 120.0) -> str | None:
     return complexity
 
 
-def _effective_complexity(caller_hint: str | None,
-                          floor: str | None = None) -> str | None:
+def _effective_complexity(caller_hint: str | None, floor: str | None = None) -> str | None:
     """Pick the best complexity hint: caller arg > hook verdict > floor.
 
     Each MCP tool has its own ``complexity`` keyword. If the caller
@@ -162,6 +161,7 @@ def _cache_result(
     """
     try:
         from chuzom.result_cache import store_result
+
         store_result(
             user_prompt=prompt,
             response=resp.content or "",
@@ -185,6 +185,7 @@ def _record_quality(resp: LLMResponse, task_type: str, complexity: str | None) -
     """
     try:
         from chuzom.quality_feedback import record_quality, score_response
+
         qs = score_response(
             response=resp.content or "",
             task_type=task_type,
@@ -209,19 +210,19 @@ def _record_quality(resp: LLMResponse, task_type: str, complexity: str | None) -
 
 #: Approximate cost-per-1k-output-tokens for Sonnet baseline comparison.
 _COST_PER_1K = {
-    "anthropic/claude-opus-4-6":         0.075,
-    "anthropic/claude-sonnet-4-6":       0.015,
+    "anthropic/claude-opus-4-6": 0.075,
+    "anthropic/claude-sonnet-4-6": 0.015,
     "anthropic/claude-haiku-4-5-20251001": 0.00125,
-    "gemini/gemini-2.5-flash":           0.00035,
-    "gemini/gemini-2.5-pro":             0.00315,
-    "openai/gpt-4o":                     0.010,
-    "openai/gpt-4o-mini":                0.0006,
-    "openai/o3":                         0.040,
-    "groq/llama-3.3-70b-versatile":      0.00059,
-    "deepseek/deepseek-chat":            0.0007,
-    "deepseek/deepseek-reasoner":        0.0014,
-    "mistral/mistral-large-latest":      0.008,
-    "xai/grok-3":                        0.009,
+    "gemini/gemini-2.5-flash": 0.00035,
+    "gemini/gemini-2.5-pro": 0.00315,
+    "openai/gpt-4o": 0.010,
+    "openai/gpt-4o-mini": 0.0006,
+    "openai/o3": 0.040,
+    "groq/llama-3.3-70b-versatile": 0.00059,
+    "deepseek/deepseek-chat": 0.0007,
+    "deepseek/deepseek-reasoner": 0.0014,
+    "mistral/mistral-large-latest": 0.008,
+    "xai/grok-3": 0.009,
 }
 _HOST_COST = _COST_PER_1K["anthropic/claude-opus-4-6"]
 
@@ -236,6 +237,7 @@ def _get_explain_mode() -> str:
         return legacy.lower()
     try:
         from chuzom.config import get_config
+
         return getattr(get_config(), "chuzom_explain", "footer")
     except Exception:
         return "footer"
@@ -269,7 +271,9 @@ def _routing_explanation(resp: LLMResponse, task: str) -> str:
 
     # Semantic cache hit (v8.4.0) — special short-circuit footer
     if resp.cache_hit:
-        cache_model = resp.model.replace("cache/", "") if resp.model.startswith("cache/") else resp.model
+        cache_model = (
+            resp.model.replace("cache/", "") if resp.model.startswith("cache/") else resp.model
+        )
         sim_pct = f"{resp.cache_similarity:.0%}"
         if mode == "verbose":
             return f"\n─────\n→ Semantic cache hit ({sim_pct} match) · original model: {cache_model} · $0 · 0ms"
@@ -286,6 +290,7 @@ def _routing_explanation(resp: LLMResponse, task: str) -> str:
     ctx_info = ""
     try:
         from chuzom.context import get_last_optimization
+
         opt = get_last_optimization()
         if opt and opt.tokens_saved > 0:
             ctx_info = f" | ctx {opt.original_tokens}→{opt.compressed_tokens}tok ({opt.reduction_pct:.0f}% saved)"
@@ -332,27 +337,27 @@ def _routing_explanation(resp: LLMResponse, task: str) -> str:
 
 def _apply_response_compression(content: str) -> tuple[str, bool]:
     """Apply response compression if enabled and beneficial.
-    
+
     Args:
         content: The response content to potentially compress
-        
+
     Returns:
         Tuple of (possibly_compressed_content, was_compressed)
     """
     # Check if compression is enabled
     if os.getenv("CHUZOM_COMPRESS_RESPONSE", "").lower() != "true":
         return content, False
-    
+
     # Skip compression for very short responses
     if len(content.strip()) < 200:
         return content, False
-    
+
     try:
         from chuzom.compression import ResponseCompressor
-        
+
         compressor = ResponseCompressor(enable=True)
         result = compressor.compress(content, target_reduction=0.5)
-        
+
         # Only use compressed version if meaningful compression achieved
         if result.compression_ratio < 0.95:
             # Log compression stat asynchronously (fire and forget)
@@ -370,7 +375,7 @@ def _apply_response_compression(content: str) -> tuple[str, bool]:
                     )
                 except Exception:
                     pass  # Silent failure on logging
-            
+
             # Try to log in background (non-blocking)
             try:
                 loop = asyncio.get_event_loop()
@@ -387,11 +392,11 @@ def _apply_response_compression(content: str) -> tuple[str, bool]:
                     )
             except Exception:
                 pass  # Silent failure - don't block response
-            
+
             return result.output, True
     except Exception:
         pass  # Silent failure - return original if compression fails
-    
+
     return content, False
 
 
@@ -461,10 +466,14 @@ async def llm_query(
     effective = _effective_complexity(complexity)
     await _announce_routing(ctx, "query", effective or "auto")
     resp = await route_and_call(
-        TaskType.QUERY, prompt,
+        TaskType.QUERY,
+        prompt,
         complexity_hint=effective,
-        model_override=model, system_prompt=system_prompt,
-        temperature=temperature, max_tokens=max_tokens, ctx=ctx,
+        model_override=model,
+        system_prompt=system_prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        ctx=ctx,
         caller_context=context,
     )
     _cache_result(prompt, resp, "query", effective)
@@ -494,21 +503,25 @@ async def llm_research(
     await _announce_routing(ctx, "research", "moderate")
 
     resp = await route_and_call(
-        TaskType.RESEARCH, prompt,
+        TaskType.RESEARCH,
+        prompt,
         # Without Perplexity, escalate to PREMIUM so the fallback chain uses
         # o3 / Gemini 2.5 Pro rather than silently degrading to BALANCED tier.
         profile=RoutingProfile.PREMIUM if no_perplexity else None,
-        system_prompt=system_prompt, max_tokens=max_tokens,
-        temperature=0.3, ctx=ctx, caller_context=context,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        temperature=0.3,
+        ctx=ctx,
+        caller_context=context,
     )
     _cache_result(prompt, resp, "research", "moderate")
     _record_quality(resp, "research", "moderate")
 
     result = _format_response(resp, "research")
-    
+
     if resp.citations:
         result += "\n\n**Sources:**\n" + "\n".join(f"- {c}" for c in resp.citations)
-    
+
     if no_perplexity and "perplexity" not in resp.model.lower():
         result += (
             "\n\n⚠️  No PERPLEXITY_API_KEY — web search unavailable. "
@@ -544,10 +557,14 @@ async def llm_generate(
     effective = _effective_complexity(complexity)
     await _announce_routing(ctx, "generate", effective or "auto")
     resp = await route_and_call(
-        TaskType.GENERATE, prompt,
+        TaskType.GENERATE,
+        prompt,
         complexity_hint=effective,
-        system_prompt=system_prompt, temperature=temperature,
-        max_tokens=max_tokens, ctx=ctx, caller_context=context,
+        system_prompt=system_prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        ctx=ctx,
+        caller_context=context,
     )
     _cache_result(prompt, resp, "generate", effective)
     _record_quality(resp, "generate", effective)
@@ -583,10 +600,14 @@ async def llm_analyze(
         effective_complexity = "moderate"
     await _announce_routing(ctx, "analyze", effective_complexity)
     resp = await route_and_call(
-        TaskType.ANALYZE, prompt,
+        TaskType.ANALYZE,
+        prompt,
         complexity_hint=effective_complexity,
-        system_prompt=system_prompt, temperature=0.3,
-        max_tokens=max_tokens, ctx=ctx, caller_context=context,
+        system_prompt=system_prompt,
+        temperature=0.3,
+        max_tokens=max_tokens,
+        ctx=ctx,
+        caller_context=context,
     )
     _cache_result(prompt, resp, "analyze", effective_complexity)
     _record_quality(resp, "analyze", effective_complexity)
@@ -622,7 +643,8 @@ async def llm_reason(
     """
     await _announce_routing(ctx, "analyze", "deep_reasoning")
     resp = await route_and_call(
-        TaskType.ANALYZE, prompt,
+        TaskType.ANALYZE,
+        prompt,
         complexity_hint="deep_reasoning",
         system_prompt=system_prompt,
         temperature=0.3,
@@ -635,6 +657,31 @@ async def llm_reason(
     return await _apply_response_router(_format_response(resp, "analyze"))
 
 
+# Ponytail system prompt — "lazy senior dev" mode (DietrichGebert/ponytail).
+# Injected by default into llm_code calls to minimise output tokens and prevent
+# over-engineering. Users who need full creative latitude pass use_ponytail=False.
+_PONYTAIL_PROMPT = """You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
+
+Before writing any code, stop at the first rung that holds:
+1. Does this need to be built at all? (YAGNI)
+2. Does the standard library already do this? Use it.
+3. Does a native platform feature cover it? Use it.
+4. Does an already-installed dependency solve it? Use it.
+5. Can this be one line? Make it one line.
+6. Only then: write the minimum code that works.
+
+Rules:
+- No abstractions that weren't explicitly requested.
+- No new dependency if it can be avoided.
+- No boilerplate nobody asked for.
+- Deletion over addition. Boring over clever. Fewest files possible.
+- Question complex requests: "Do you actually need X, or does Y cover it?"
+- Pick the edge-case-correct option when two stdlib approaches are the same size.
+- Mark intentional simplifications with a `ponytail:` comment.
+
+Not lazy about: input validation at trust boundaries, error handling that prevents data loss, security, accessibility, anything explicitly requested. Non-trivial logic leaves ONE runnable check behind."""
+
+
 async def llm_code(
     prompt: str,
     ctx: Context,
@@ -642,6 +689,7 @@ async def llm_code(
     system_prompt: str | None = None,
     max_tokens: int | None = None,
     context: str | None = None,
+    use_ponytail: bool = True,
 ) -> str:
     """Coding task — routes to the best coding model.
 
@@ -655,14 +703,28 @@ async def llm_code(
         system_prompt: Optional system instructions (language, framework, style).
         max_tokens: Maximum output tokens.
         context: Optional conversation context to help the model understand the broader task.
+        use_ponytail: Apply lazy-senior-dev constraints (YAGNI, stdlib-first, minimum code).
+            Defaults to true — reduces output tokens 40-75% by preventing over-engineering.
+            Set to false for creative/exploratory tasks where full latitude is needed.
     """
     effective = _effective_complexity(complexity)
     await _announce_routing(ctx, "code", effective or "auto")
+    # Compose system prompt: ponytail (default) + any caller-supplied instructions
+    if use_ponytail:
+        effective_system = (
+            _PONYTAIL_PROMPT + "\n\n" + system_prompt if system_prompt else _PONYTAIL_PROMPT
+        )
+    else:
+        effective_system = system_prompt
     resp = await route_and_call(
-        TaskType.CODE, prompt,
+        TaskType.CODE,
+        prompt,
         complexity_hint=effective,
-        system_prompt=system_prompt, temperature=0.2,
-        max_tokens=max_tokens, ctx=ctx, caller_context=context,
+        system_prompt=effective_system,
+        temperature=0.2,
+        max_tokens=max_tokens,
+        ctx=ctx,
+        caller_context=context,
     )
     _cache_result(prompt, resp, "code", effective)
     _record_quality(resp, "code", effective)
@@ -702,8 +764,10 @@ async def llm_edit(
         context: Optional conversation context to help the model understand the task.
     """
     from chuzom.edit import (
-        build_edit_prompt, format_edit_result,
-        parse_edit_response, read_file_for_edit,
+        build_edit_prompt,
+        format_edit_result,
+        parse_edit_response,
+        read_file_for_edit,
     )
 
     # Read all requested files
@@ -721,7 +785,8 @@ async def llm_edit(
         prompt = f"{context}\n\n---\n\n{prompt}"
 
     resp = await route_and_call(
-        TaskType.CODE, prompt,
+        TaskType.CODE,
+        prompt,
         system_prompt=(
             "You are a precise code editor. Return ONLY a JSON array of edit "
             "instructions. No prose, no explanation outside the JSON."
