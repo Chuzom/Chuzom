@@ -483,7 +483,7 @@ async def llm_providers() -> str:
         "cohere": "Command R+",
     }
     media_providers = {
-        "gemini": "Imagen 3 (images), Veo 2 (video)",
+        "gemini": "Nano Banana (gemini-3.1-flash-image / gemini-3-pro-image), Veo 2 (video)",
         "openai": "DALL-E 3, TTS, Whisper",
         "fal": "Flux Pro/Dev, Kling Video, minimax",
         "stability": "Stable Diffusion 3, SDXL",
