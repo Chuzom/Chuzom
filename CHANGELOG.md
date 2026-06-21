@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.5.3 — 2026-06-14 — Local inference platforms + rolling savings projections
+
+### New features
+
+- **`openai_compat` provider** — any server speaking the OpenAI `/v1/chat/completions` wire
+  format (llama.cpp, vLLM, TGI, LM Studio) can now be wired into Chuzom's routing chain as a
+  free local provider. Configure via `OPENAI_COMPAT_BASE_URL` and `OPENAI_COMPAT_MODELS`.
+  Routes after Ollama, before paid externals; treated as cost-free like Ollama.
+
+- **Auto-detect 10+ local inference platforms on startup** — Chuzom now probes LM Studio,
+  Jan, vLLM, llamafile, MLX-LM, and 6 more platforms at launch and registers any running
+  servers as `openai_compat` providers automatically. Zero config for common defaults.
+
+- **14-day rolling savings projections in dashboard SAVINGS panel** — the panel now shows
+  three projection lines derived from the 14-day rolling daily average:
+  actual 14-day savings · `~$X.XX/month` (avg × 30) · `~$X.XX/year` (avg × 365).
+  The 14-day rolling average is more stable than calendar-month sums and smooths daily spikes.
+  Falls back to week/month display when fewer than 14 days of data exist.
+
+### Fixes & docs
+
+- Session Summary README preview corrected to match real terminal output: narrower column
+  widths, SAVINGS label wrapping, QUOTA/MODELS inside main panel, real date x-axis on
+  14-day charts, Routing Summary table, and Quota Preserved section.
+
+---
+
+## v0.5.2 — 2026-06-14 — Dashboard v2: rich metrics, OKF enrichment, Kimi support
+
+### New features
+
+- **8 new session metrics in dashboard** — burn rate, fallback/escalation rate, routing
+  effectiveness, p95 latency per tier, cache trend sparkline, and session vs. typical cost
+  comparison. Each metric appears as a live panel in the session summary.
+
+- **14-day activity panel** — side-by-side bar charts for calls / savings / tokens-saved per
+  day, with an additional tokens-saved/day bar chart.
+
+- **Daily savings chart** added to the 14-day panel.
+
+- **OKF (On-device Knowledge Fusion) enrichment** — adds knowledge context injection,
+  model catalog integration, and response enrichment via `okf.py`.
+
+- **Kimi Code MCP host support** — `chuzom install --host kimi` wires Chuzom into the
+  Kimi Code editor.
+
+### Fixes
+
+- Dashboard y-axis labels corrected (`N_ROWS` denominator, not `N_ROWS − 1`) so bar row
+  boundaries are accurate.
+- Active-day forecast is now honest: uses actual session-active days, not calendar days.
+- Lint: ambiguous variable `l` renamed to `line` in `okf.py`; unused imports removed in
+  `test_okf`.
+
+---
+
 ## v0.5.1 — 2026-06-14 — GitHub Copilot & Windsurf IDE support
 
 ### New features
