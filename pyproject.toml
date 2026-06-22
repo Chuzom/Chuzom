@@ -63,7 +63,7 @@ code-context = [
     "tree-sitter-languages>=1.10.0",
 ]
 tui = [
-    "textual>=0.80.0",
+    "textual>=8.2.7",
     "plotext>=5.2.0",
 ]
 # Multi-instance budget coordination via Postgres (T2-XL1 / Phase 3b).
