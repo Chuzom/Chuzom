@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate skill package
         uses: hashgraph-online/skill-publish@df6ae95e010d9792158a441eec9ac50d4d17139d
