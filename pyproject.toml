@@ -81,7 +81,7 @@ postgres-test = [
 # Semantic response cache + embedding-based classifier (v0.1+).
 # Pulled in lazily so the bare router stays lightweight.
 semantic = [
-    "sentence-transformers>=3.0",
+    "sentence-transformers>=5.6.0",
     "sqlite-vec>=0.1.0",
 ]
 # Federated identity — OIDC JWT validation (JWKS / RS256) + SCIM provisioning.
