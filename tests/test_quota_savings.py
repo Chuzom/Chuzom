@@ -274,8 +274,10 @@ async def test_llm_quota_saved_renders_full_breakdown(
 ) -> None:
     from chuzom.tools.subscription import llm_quota_saved
     db = tmp_path / "usage.db"
-    now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
-    inside_week = (now - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+    # Use a timestamp 2h ago so the record is always inside the current
+    # week window regardless of when the test runs (avoids hardcoded dates
+    # falling outside _start_of_week_utc when the real clock advances).
+    inside_week = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
     _make_usage_db(db, [(inside_week, 3.5)])
     monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db))
     monkeypatch.setenv("CHUZOM_WEEKLY_QUOTA_USD_OPUS_EQUIV", "50")
@@ -308,8 +310,10 @@ def test_route_prefix_includes_savings_when_meaningful(
     from chuzom.hooks.response_formatter import format_echo_context
 
     db = tmp_path / "usage.db"
-    now = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
-    inside_week = (now - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+    # Use a timestamp 2h ago so the record is always inside the current
+    # week window regardless of when the test runs (avoids hardcoded dates
+    # falling outside _start_of_week_utc when the real clock advances).
+    inside_week = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
     _make_usage_db(db, [(inside_week, 5.0)])  # 5.0 / 0.5 = 10 pp wk
     monkeypatch.setenv("CHUZOM_USAGE_DB_PATH", str(db))
     monkeypatch.setenv("CHUZOM_WEEKLY_QUOTA_USD_OPUS_EQUIV", "50")

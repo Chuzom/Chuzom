@@ -480,6 +480,52 @@ The active policy is shown in the session summary dashboard alongside quota bars
 
 ---
 
+## 🧠 Companion Skill: `/council`
+
+Chuzom is optimized for cost: it routes each prompt to the cheapest model that can handle it well. `/council` is the quality-maximizing counterpart.
+
+Where Chuzom picks one capable model, `/council` convenes a small committee of the strongest available models for genuinely hard problems. It runs a structured loop:
+
+```
+propose → critique → synthesize
+```
+
+Across multiple model families — Claude Opus, Codex/GPT-5.x via subscription CLI, and optional Gemini via Antigravity — each seat argues independently before a synthesis pass fuses the result.
+
+Use `/council` when the cost of being wrong is higher than the cost of asking twice.
+
+| Tier | Committee | Cost posture |
+|---|---|---|
+| `max` | Claude + Codex + Claude | All subscription/native — no API cost |
+| `balanced` | Strong primary + independent critique | Quality-focused, lower overhead |
+| `budget` | Lightweight second opinion via chuzom | Minimal extra spend |
+
+**Typical use cases:** architecture decisions · hard research questions · theory building · high-consequence technical or strategic choices · any prompt where you want explicit disagreement, not just confidence.
+
+The final output includes both a **fused answer** and an **explicit dissent section** — minority views are preserved instead of averaged away.
+
+```bash
+/council Should we migrate this service to event sourcing?
+/council --tier=max Evaluate this architecture decision thoroughly.
+```
+
+**Trigger methods:**
+- Explicit `/council` command
+- Claude proactively offers it when a problem looks high-stakes
+- Advisory hook nudges on risky prompts (`~/.claude/hooks/council-advisor.mjs`)
+- Phrase triggers: *"second opinion"*, *"be thorough"*, *"are you sure?"*, *"what am I missing?"*
+
+**Install:**
+
+```
+~/.claude/skills/council/           ← skill runtime + eval harness
+~/.claude/hooks/council-advisor.mjs ← zero-cost advisory hook
+```
+
+`/council` is complementary to Chuzom, not a replacement. Chuzom handles ~95% of prompts cheaply and quickly. `/council` is for the 5% where quality, robustness, and dissent matter more than cost. It never auto-fires — the human always confirms before any multi-model run.
+
+---
+
 ## Real-Time Streaming Progress
 
 In v0.4.0, long-running model calls stream live progress into Claude Code. You'll see what's happening inside Codex and Gemini CLI instead of staring at a blank spinner.
