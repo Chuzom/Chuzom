@@ -98,6 +98,13 @@ perplexity_api_key: "{discovered.get('perplexity_api_key', '')}"
 ollama_base_url: "{discovered.get('ollama_base_url', 'http://localhost:11434')}"
 ollama_budget_models: "{discovered.get('ollama_budget_models', 'gemma4:latest,qwen3.5:latest')}"
 
+# Agentic model — preferred model for agentic / tool-reasoning tasks
+# (analyze, generate, query, research). When set, it is pinned at the FRONT of
+# the routing chain for those tasks — ahead of generic Ollama injection — so a
+# strong tool-calling model leads agent work. CODE is excluded (keeps its coder).
+# Leave empty to disable. Example: ollama/hermes3:8b
+chuzom_agentic_model: "{discovered.get('chuzom_agentic_model', '')}"
+
 # Media providers
 fal_key: "{discovered.get('fal_key', '')}"
 stability_api_key: "{discovered.get('stability_api_key', '')}"
