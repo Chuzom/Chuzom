@@ -449,6 +449,31 @@ def _complexity_to_profile(complexity: str, session: float, sonnet: float, weekl
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+def _route_allowlist() -> set[str]:
+    """Subagent types that BYPASS agent-routing (always approved).
+
+    For agents that must do real tool-work — running tests, editing files,
+    QA/validation, code review — where redirecting to an ``llm_*`` text call is
+    not a substitute. ``Explore`` is always allowed separately.
+
+    Configured via ``CHUZOM_AGENT_ROUTE_ALLOW`` (comma-separated subagent_type
+    values). Read from the environment first, then from ``~/.chuzom/.env`` so it
+    takes effect without restarting the host. Example:
+        CHUZOM_AGENT_ROUTE_ALLOW=code-reviewer,qa,test-runner
+    """
+    vals = os.environ.get("CHUZOM_AGENT_ROUTE_ALLOW", "").strip()
+    if not vals:
+        try:
+            for line in (Path.home() / ".chuzom" / ".env").read_text().splitlines():
+                line = line.strip()
+                if line.startswith("CHUZOM_AGENT_ROUTE_ALLOW="):
+                    vals = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+        except OSError:
+            pass
+    return {t.strip() for t in vals.split(",") if t.strip()}
+
+
 def main() -> None:
     try:
         hook_input = json.load(sys.stdin)
@@ -472,6 +497,13 @@ def main() -> None:
     # ── Always approve Explore subagents — they're pure retrieval ────────────
     if subagent_type == "Explore":
         _log_agent_call(subagent_type, prompt, "approved_explore")
+        sys.exit(0)
+
+    # ── Special rule: allowlisted subagent types bypass routing ──────────────
+    # Agents that must do real tool-work (run tests, QA, edit files) where an
+    # llm_* call is not a substitute. See CHUZOM_AGENT_ROUTE_ALLOW.
+    if subagent_type in _route_allowlist():
+        _log_agent_call(subagent_type, prompt, "approved_allowlist")
         sys.exit(0)
 
     # ── Circuit breaker: block if nesting too deep ──────────────────────────
