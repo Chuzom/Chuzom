@@ -1447,7 +1447,9 @@ def calc_savings(
     Returns:
         (net_cost_saved_usd, net_time_saved_sec). May be negative.
     """
-    baseline = _get_baseline_for_task(task_type, complexity) if task_type else "opus"
+    # Always use Opus as baseline — savings are always measured vs the most
+    # expensive model so comparisons are consistent across all task types.
+    baseline = "opus"
 
     # Cache-aware path: when any sub-component count is provided, use the
     # 4-component formula. Otherwise fall back to the lumped per-1K rate.
@@ -2607,13 +2609,16 @@ async def get_savings_by_period() -> dict[str, dict]:
                 calls += 1
                 if provider == "subscription":
                     continue  # CC subscription rows have no token cost data
+                # Always recalculate from actual in/out counts at Opus rates.
+                # Stored saved_col used a blended $0.045/1K estimate; accurate
+                # pricing requires separate input ($15/M) and output ($75/M) rates.
                 host_est = (in_tok * _HOST_INPUT_PER_M + out_tok * _HOST_OUTPUT_PER_M) / 1_000_000
                 baseline += host_est
                 if provider in _FREE_PROVIDERS:
-                    saved_total += saved_col if saved_col else host_est
+                    saved_total += host_est
                 else:
                     actual += cost
-                    saved_total += saved_col if saved_col else max(0.0, host_est - cost)
+                    saved_total += max(0.0, host_est - cost)
 
             efficiency = baseline / actual if actual > 0.001 else 0.0
             result[name] = {

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Chuzom (github.com/ypollak2/chuzom)
 # SPDX-License-Identifier: MIT
-"""Chuzom router for RouterArena — v0.5.1.
+"""Chuzom router for RouterArena — v0.5.2.
 
 Self-contained heuristic classifier + model-tier selector.
 RouterArena's evaluation environment only needs this file and the JSON
@@ -20,6 +20,10 @@ STEP 2 — Benchmark template fast-path (v0.4.2 benchmark_fast_path):
 STEP 3 — Weighted signal scoring (v0.4.2 SIGNALS engine):
   intent × 3  +  topic × 2  +  format × 1  → best category.
   Categories: code · analyze · query · research · generate · coordination.
+
+STEP 1b — Competition-math fast-path (v0.5.2, after MCQ check):
+  Context: None + LaTeX → qwen3-235b  (AIME, MATH datasets)
+  Fires after \\boxed{X} MCQ check so MMLUPro MCQ stays on flash-lite.
 
 STEP 4 — Tier mapping (category × complexity → model):
   code/moderate+    → Qwen3-Coder-Next
@@ -82,6 +86,25 @@ _QANTA = re.compile(r"^\s*this is the clue:", re.IGNORECASE | re.MULTILINE)
 _MATH_PROBLEM_PREFIX = re.compile(
     r"^Please solve the following mathematical problem step by step[.,]?\s*",
     re.IGNORECASE,
+)
+
+# Competition-level math fast-path (v0.5.2).
+#
+# AIME uses "step by step" prefix (stripped by _MATH_PROBLEM_PREFIX), then
+# "Context: None\n\nQuestion: <LaTeX>".  After stripping, short AIME prompts
+# (<500 chars) were mis-classified as moderate → gpt-4o-mini.
+#
+# MATH dataset uses "and provide the final answer" prefix (NOT stripped by
+# _MATH_PROBLEM_PREFIX), so the full prompt contains "Context: None\n\nQuestion:
+# <LaTeX>" plus a different harness header.
+#
+# Signal: "Context: None" (no word-problem context) + LaTeX mathematical notation
+# in the question body.  This combination is exclusive to competition-level math
+# datasets (AIME, MATH) — FinQA/AsDiv/GSM8K all have natural-language contexts
+# (not "None"), so they are never caught by this pattern.
+_COMPETITION_MATH = re.compile(
+    r"Context:\s*None\s*\n\nQuestion:.*?(?:\\(?:binom|frac|cos|sin|tan|log_|prod|sum|omega|phi|theta|sqrt|cdot|cdots|ldots|lim|int|infty)\b|\$[^$\n]{3,}\$|\\\[|\\\{)",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -397,6 +420,19 @@ class ChuzomRouter(BaseRouter):
         if _MCQ_BOXED.search(query):
             if "google/gemini-3.1-flash-lite" in self.models:
                 return "google/gemini-3.1-flash-lite"
+
+        # Competition-math fast-path (v0.5.2): fires AFTER the MCQ check so
+        # MMLUPro/MathQA MCQ questions (which also carry LaTeX but have \\boxed{X})
+        # are already handled above.  Only reaches here for prompts WITHOUT an MCQ
+        # letter answer, i.e. AIME ("step by step" prefix, now stripped) and MATH
+        # ("provide the final answer" prefix, never stripped).
+        #
+        # Signal: "Context: None" (no word-problem context) + LaTeX math notation.
+        # FinQA/AsDiv/GSM8K all have natural-language contexts (not "None") so they
+        # are never caught here, even when length mis-classified them as complex.
+        if _COMPETITION_MATH.search(query):
+            if "qwen/qwen3-235b-a22b-2507" in self.models:
+                return "qwen/qwen3-235b-a22b-2507"
 
         # LiveCodeBench: unambiguous template header → code specialist.
         if _LIVECODE.search(query):

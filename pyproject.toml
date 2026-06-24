@@ -1,16 +1,25 @@
 [project]
 name = "chuzom-router"
 version = "0.5.5"
-description = "Smart LLM router for Claude Code: save 60-80% of tokens and keep your session alive 3x longer. Auto-routes to Ollama, Codex, and Gemini CLI before spending Claude quota."
+description = "Smart LLM router for Claude Code, Cursor & Copilot — 3× longer sessions, 60–90% token savings. Auto-routes to Ollama, Codex CLI, and Gemini CLI before burning Claude quota."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
     { name = "ypollak2", email = "ypollak2@users.noreply.github.com" },
 ]
-keywords = ["chuzom", "llm", "mcp", "router", "ai", "claude-code", "cursor", "codex", "gemini-cli", "model-routing", "mcp-server", "semantic-cache", "signal-router"]
+keywords = [
+    "chuzom", "llm", "mcp", "router", "ai",
+    "claude", "claude-code", "anthropic",
+    "cursor", "copilot", "windsurf",
+    "codex", "gemini-cli", "gemini", "ollama",
+    "model-routing", "mcp-server", "llm-proxy", "ai-routing",
+    "token-optimization", "cost-saving", "quota-saver",
+    "semantic-cache", "signal-router",
+]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -19,7 +28,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "mcp>=1.0.0",
@@ -94,15 +105,16 @@ sso = [
 [project.urls]
 Homepage = "https://github.com/Chuzom/Chuzom"
 Repository = "https://github.com/Chuzom/Chuzom"
-Issues = "https://github.com/ypollak2/chuzom/issues"
-Changelog = "https://github.com/ypollak2/chuzom/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/Chuzom/Chuzom#readme"
+"Bug Tracker" = "https://github.com/Chuzom/Chuzom/issues"
+Changelog = "https://github.com/Chuzom/Chuzom/blob/main/CHANGELOG.md"
 
 # chuzom-sse intentionally NOT exposed as a console script (SEC-001, audit 2026-06).
 # Prior versions installed a binary that bound 0.0.0.0 with no auth and exposed
 # the full MCP tool surface (incl. fs + wallet) to anyone reachable on the network.
 # main_sse() is retained in chuzom.server for future re-introduction behind
 # proper authentication + identity (post-INV-010). Do not re-add chuzom-sse
-# here until that wrapper exists. See Docs/audit/FINDINGS.md F-SEC-001.
+# here until that wrapper exists. (SEC-001: bound 0.0.0.0 with no auth.)
 [project.scripts]
 chuzom = "chuzom.cli:main"
 chuzom-onboard = "chuzom.onboard:main"
@@ -137,6 +149,8 @@ exclude = [
     ".github/",
     ".cursor/",
     ".cursorignore",
+    ".kimi/",
+    ".windsurf/",
     # Anchor with leading slash so this matches the top-level
     # ``agents/`` (Claude agent definitions) ONLY — NOT the nested
     # ``src/chuzom/agents/`` package, which IS shipped. Without the
@@ -149,6 +163,8 @@ exclude = [
     "Docs/",
     "CLAUDE.md",
     "SECURITY.md",
+    "KIMI.md",
+    "RELEASE.md",
     "AUDIT_FINDINGS.txt",
     "CHUZOM_AUDIT_REPORT.md",
     "STUCK_PATTERNS_ANALYSIS.md",
@@ -158,6 +174,7 @@ exclude = [
     "Dockerfile",
     "docker-compose.yml",
     ".dockerignore",
+    "deploy/",
     # Enterprise source code (public distribution only includes public features)
     "src/chuzom/enterprise/",
     # Dev-only directories
@@ -189,9 +206,10 @@ exclude = [
     ".gitattributes",
     "**/.gitignore",
     "**/.gitattributes",
-    # Binary assets (logos handled via README only)
+    # Binary/SVG assets (referenced via absolute GitHub URLs in README)
     "*.png",
     "*.jpg",
+    "assets/",
 ]
 
 [tool.pytest.ini_options]

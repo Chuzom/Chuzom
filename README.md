@@ -10,7 +10,7 @@
 ---
 
 <p align="center">
-  <img src="assets/architecture-hero.svg" alt="Chuzom architecture — classify, route, save" width="100%"/>
+  <img src="https://raw.githubusercontent.com/Chuzom/Chuzom/main/assets/chuzom-logo.png" alt="Chuzom — smart LLM router" width="200"/>
 </p>
 
 <p align="center">
