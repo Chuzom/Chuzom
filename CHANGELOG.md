@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.5.8 — 2026-06-24 — Accurate savings report + subagent allowlist
+
+### Fixes
+
+- **`savings-report` contradicted itself.** It read the `usage` table and recomputed a flat-Opus
+  baseline, while the authoritative per-call savings live in `savings_stats` (per-complexity
+  baselines) — so the report total disagreed with the stored stats. Worse, the "External (Paid)"
+  and "Free" sections both matched the local/ollama rows, **listing the same calls twice**. The
+  report now reads `savings_stats` as the single source of truth, splits paid vs free by
+  `external_cost` (no overlap), and reports the stored saved amount directly — so the report
+  equals the ledger exactly. Adds an explicit note that downstream agent/tool tokens are not metered.
+
+### New features
+
+- **`CHUZOM_AGENT_ROUTE_ALLOW`** — allowlist subagent types that bypass the agent-route hook
+  (always approved) for agents that must do real tool-work (run tests, edit files, QA/validation)
+  where redirecting to an `llm_*` text call is no substitute. Read from env, then `~/.chuzom/.env`
+  (takes effect without restarting the host). Example: `CHUZOM_AGENT_ROUTE_ALLOW=code-reviewer,qa`.
+
+---
+
 ## v0.5.7 — 2026-06-24 — Fix: public MCP server boots without enterprise
 
 ### Fixes
