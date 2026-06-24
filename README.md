@@ -417,6 +417,27 @@ export CHUZOM_OLLAMA_MODEL=llama3.2:latest
 chuzom doctor    # populates ~/.chuzom/discovery.json
 ```
 
+### Agentic model pinning (v0.5.5)
+
+Prefer a specific model for **agentic / tool-reasoning** tasks — `analyze`, `generate`, `query`,
+and `research` — while keeping dedicated coders for `code`. When set, the agentic model is pinned
+at the **absolute front** of the routing chain for those task types, ahead of the generic Ollama
+injection and every other reorder. This is ideal for a strong tool-calling model (e.g. Hermes)
+leading your agent work:
+
+```bash
+# Env var (highest precedence)
+export CHUZOM_AGENTIC_MODEL=ollama/hermes3:8b
+```
+
+```yaml
+# Or in ~/.chuzom/routing.yaml (env > repo > user)
+agentic_model: ollama/hermes3:8b
+```
+
+`code` tasks are intentionally excluded, so a coder pin (e.g. `routing.code.model: ollama/qwen3-coder:30b`)
+still wins coding work. The `agent-route` hook surfaces the pinned model in its route indicator.
+
 ---
 
 ## Routing Policies
@@ -815,6 +836,7 @@ chuzom --version                     # Show installed version
 | `OLLAMA_BUDGET_MODELS` | auto-discovered | Comma-separated budget model list |
 | `OLLAMA_MODELS` | auto-discovered | Comma-separated model list |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `CHUZOM_AGENTIC_MODEL` | _(unset)_ | Preferred model for agentic tasks (analyze/generate/query/research); pinned at chain front, excludes `code` |
 | `CHUZOM_CODEX_MODELS` | `gpt-5.5,gpt-5.4` | Codex model fallback chain |
 | `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
 | `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription mode (no API key needed) |

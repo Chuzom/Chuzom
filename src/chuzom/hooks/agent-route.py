@@ -575,6 +575,13 @@ def main() -> None:
     }
     model_hint = _model_hint.get(profile, profile)
 
+    # Agentic model pin (v0.5.5): when CHUZOM_AGENTIC_MODEL is set, the router
+    # leads agentic/reasoning tasks with it — surface that in the hint so the
+    # route indicator reflects the real preferred model.
+    _agentic = os.environ.get("CHUZOM_AGENTIC_MODEL", "").strip()
+    if _agentic:
+        model_hint = f"{_agentic} (agentic pin) → {model_hint}"
+
     pressure_note = ""
     if _p["weekly"] >= 0.95:
         pressure_note = f"  ⚠️  Weekly={_p['weekly']:.0%} — all tiers on external models.\n"

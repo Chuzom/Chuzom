@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.5.5 — 2026-06-24 — Agentic model routing
+
+### New features
+
+- **`CHUZOM_AGENTIC_MODEL` / `agentic_model` routing pin** — designate a preferred model for
+  agentic / tool-reasoning tasks (`analyze`, `generate`, `query`, `research`). When set, it is
+  pinned at the absolute front of the routing chain for those task types — ahead of the generic
+  Ollama injection and every other reorder — so a strong tool-calling model (e.g. Hermes) leads
+  agent work. `CODE` is intentionally excluded so dedicated coder models still win coding tasks.
+  Configure via the `CHUZOM_AGENTIC_MODEL` env var or the `agentic_model:` key in
+  `~/.chuzom/routing.yaml` (env > repo > user precedence). Example:
+  `CHUZOM_AGENTIC_MODEL=ollama/hermes3:8b`. The `agent-route` hook surfaces the pinned model in
+  its route indicator.
+
+### Fixes & docs
+
+- **Ghost-model fix** — `auto_profile` no longer hardcodes `ollama/qwen3.5:latest` (and other
+  example tags) into the free-local tier when those models are not installed. It now prefers the
+  models actually discovered from the running Ollama instance, falling back to the example list
+  only before discovery has run. Prevents routes to a model the user doesn't have.
+
+---
+
 ## v0.5.3 — 2026-06-14 — Local inference platforms + rolling savings projections
 
 ### New features

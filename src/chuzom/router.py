@@ -535,6 +535,23 @@ async def _build_and_filter_chain(
         # exploit/explore math. Doing the reorder there (instead of here) lets
         # the bandit see the post-specialist chain and use the active subject.
 
+        # ── Agentic model pin (v0.5.5) ────────────────────────────────────────
+        # When CHUZOM_AGENTIC_MODEL (env) or routing.yaml `agentic_model` is set,
+        # pin it at the absolute FRONT for agentic / tool-reasoning task types —
+        # ahead of the generic Ollama injection and every reorder above — so a
+        # strong tool-calling model (e.g. Hermes) leads agent work. CODE is
+        # intentionally excluded so dedicated coders still win coding tasks.
+        # env takes precedence over the YAML pin (env > repo > user).
+        _agentic_model = config.chuzom_agentic_model or repo_cfg.agentic_model
+        if _agentic_model and task_type in AGENTIC_TASK_TYPES:
+            models_to_try = [_agentic_model] + [
+                m for m in models_to_try if m != _agentic_model
+            ]
+            log.debug(
+                "Agentic model pinned at front: %s (%s task)",
+                _agentic_model, task_type.value,
+            )
+
         # Dedup: preserve free-first order, remove injected duplicates
         _seen: set[str] = set()
         models_to_try = [
@@ -699,6 +716,12 @@ _pending_spend: float = 0.0  # sum of provisional spend for all in-flight calls
 # LiteLLM only supports text completion; media generation requires direct
 # calls to each provider's SDK (DALL-E, Flux, Runway, ElevenLabs, etc.).
 MEDIA_TASK_TYPES = {TaskType.IMAGE, TaskType.VIDEO, TaskType.AUDIO}
+
+# Task types treated as "agentic" / tool-reasoning work for CHUZOM_AGENTIC_MODEL.
+# CODE is intentionally excluded so dedicated coder models still win coding tasks.
+AGENTIC_TASK_TYPES = {
+    TaskType.ANALYZE, TaskType.GENERATE, TaskType.QUERY, TaskType.RESEARCH,
+}
 
 # Allowed keys per media task type.  Caller-supplied media_params are filtered
 # through this whitelist before being spread into the generator functions, so

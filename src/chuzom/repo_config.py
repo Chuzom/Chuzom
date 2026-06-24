@@ -46,6 +46,7 @@ class RepoConfig:
     block_models: list[str] = field(default_factory=list)   # model-level deny (v3.2)
     allow_models: list[str] = field(default_factory=list)   # model-level allow-list (v3.2)
     routing: dict[str, TaskRouteOverride] = field(default_factory=dict)
+    agentic_model: str | None = None  # preferred model for agentic/reasoning tasks (v0.5.5)
     daily_caps: dict[str, float] = field(default_factory=dict)  # task_type → USD; "_total" key for global
     # Source info (not a user field — set by loader)
     _sources: list[str] = field(default_factory=list)
@@ -124,6 +125,9 @@ def _dict_to_config(data: dict[str, Any], source: str) -> RepoConfig:
                     provider=opts.get("provider"),
                 )
 
+    if data.get("agentic_model"):
+        cfg.agentic_model = str(data["agentic_model"])
+
     if isinstance(data.get("daily_caps"), dict):
         for key, val in data["daily_caps"].items():
             try:
@@ -143,6 +147,7 @@ def _merge(base: RepoConfig, override: RepoConfig) -> RepoConfig:
         block_models   = list({*base.block_models,    *override.block_models}),
         allow_models   = list({*base.allow_models,    *override.allow_models}),
         routing        = {**base.routing, **override.routing},
+        agentic_model  = override.agentic_model or base.agentic_model,
         daily_caps     = {**base.daily_caps, **override.daily_caps},
         _sources       = base._sources + override._sources,
     )

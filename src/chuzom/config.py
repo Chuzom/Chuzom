@@ -137,6 +137,15 @@ class RouterConfig(BaseSettings):
     openai_compat_base_url: str = ""        # empty = disabled
     openai_compat_models: str = ""          # comma-separated model names
 
+    # ── Agentic model routing (v0.5.5) ──
+    # Preferred model for agentic / tool-reasoning tasks (analyze, generate,
+    # query, research). When set, it is pinned at the absolute FRONT of the
+    # routing chain for those task types — ahead of the generic Ollama injection
+    # and every other reorder — so a strong tool-calling model (e.g. Hermes)
+    # leads agent work while dedicated coders still win CODE tasks.
+    # Example: CHUZOM_AGENTIC_MODEL=ollama/hermes3:8b
+    chuzom_agentic_model: str = ""          # CHUZOM_AGENTIC_MODEL
+
     # ── Media providers ──
     fal_key: str = ""               # fal.ai — Flux, video, audio
     stability_api_key: str = ""     # Stability AI — Stable Diffusion

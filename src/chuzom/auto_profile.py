@@ -137,11 +137,24 @@ def generate_profile_yaml(detected: ServiceDetection) -> str:
 
     # Tier 1: Free local (prioritized by task type + speed)
     if detected.get("ollama_available"):
-        free_local.append("ollama/qwen3.5:latest")      # Primary: best reasoning (Feb 2025)
-        free_local.append("ollama/kimi-k2.6:cloud")     # Code expert: 256K context, autonomous
-        free_local.append("ollama/qwen3-coder-next")    # Code-specialized fallback
-        free_local.append("ollama/qwen2.5:latest")      # Secondary fallback
-        free_local.append("ollama/gemma4:latest")       # Lightweight pre-check
+        # Prefer the models actually installed (from discovery cache) so the
+        # profile never routes to a model the user doesn't have. The hardcoded
+        # list below is only a pre-discovery fallback (example names that may
+        # not be installed) — see Chuzom #ghost-model fix (v0.5.5).
+        _discovered: list[str] = []
+        try:
+            from chuzom.discover import get_cached_ollama_models
+            _discovered = get_cached_ollama_models()
+        except Exception:
+            _discovered = []
+        if _discovered:
+            free_local.extend(_discovered)
+        else:
+            free_local.append("ollama/qwen3.5:latest")      # Primary: best reasoning (Feb 2025)
+            free_local.append("ollama/kimi-k2.6:cloud")     # Code expert: 256K context, autonomous
+            free_local.append("ollama/qwen3-coder-next")    # Code-specialized fallback
+            free_local.append("ollama/qwen2.5:latest")      # Secondary fallback
+            free_local.append("ollama/gemma4:latest")       # Lightweight pre-check
 
     # Tier 2: Free subscriptions
     if detected.get("claude_subscription"):
