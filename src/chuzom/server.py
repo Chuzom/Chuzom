@@ -233,10 +233,18 @@ _CRITICAL_MODULES: tuple[str, ...] = (
     "chuzom.classification_allowlist",  # the canonical G-034 canary
     "chuzom.admin_api",
     "chuzom.invoice_reconciliation",
+    "chuzom.agents.session",
+)
+
+# Enterprise-only critical modules. ``chuzom.enterprise/`` is intentionally
+# EXCLUDED from the public wheel/sdist, so requiring it universally made the
+# published MCP server refuse to boot ("No module named 'chuzom.enterprise'").
+# These are only critical under the enterprise profile, where the package IS
+# present; checked conditionally below.
+_ENTERPRISE_CRITICAL_MODULES: tuple[str, ...] = (
     "chuzom.enterprise.identity",
     "chuzom.enterprise.rbac",
     "chuzom.enterprise.quotas",
-    "chuzom.agents.session",
 )
 
 _CRITICAL_MODULE_SKIP_ENV = "CHUZOM_SKIP_CRITICAL_MODULE_CHECK"
@@ -284,8 +292,18 @@ def _critical_modules_or_die() -> None:
         )
         return
 
+    # Enterprise modules are only critical under the enterprise profile — the
+    # public distribution ships without them on purpose.
+    modules = _CRITICAL_MODULES
+    try:
+        from chuzom.profile import is_enterprise
+        if is_enterprise():
+            modules = _CRITICAL_MODULES + _ENTERPRISE_CRITICAL_MODULES
+    except Exception:  # noqa: BLE001 — profile resolution must never block boot
+        pass
+
     failures: list[tuple[str, str]] = []
-    for name in _CRITICAL_MODULES:
+    for name in modules:
         try:
             importlib.import_module(name)
         except Exception as exc:  # noqa: BLE001

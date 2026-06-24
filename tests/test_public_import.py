@@ -44,3 +44,27 @@ def test_public_modules_import_without_enterprise():
         "Public import failed without chuzom.enterprise — an unguarded "
         f"enterprise import regressed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
+
+
+def test_critical_module_check_boots_without_enterprise():
+    """The MCP server's _critical_modules_or_die() must not require chuzom.enterprise
+    in the public (non-enterprise) profile — otherwise the published MCP server
+    refuses to boot ('No module named chuzom.enterprise')."""
+    code = textwrap.dedent(
+        """
+        import sys
+        sys.modules["chuzom.enterprise"] = None  # simulate the public wheel
+        from chuzom.server import _critical_modules_or_die
+        _critical_modules_or_die()  # must NOT sys.exit / raise in non-enterprise profile
+        print("CRITICAL_CHECK_OK")
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+    )
+    assert "CRITICAL_CHECK_OK" in result.stdout, (
+        "MCP critical-module check died without chuzom.enterprise — the public "
+        f"MCP server would refuse to boot.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )

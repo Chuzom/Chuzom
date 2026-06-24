@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.7 — 2026-06-24 — Fix: public MCP server boots without enterprise
+
+### Fixes
+
+- **MCP server refused to boot on the public distribution** — even after the v0.5.6 import
+  guards, `_critical_modules_or_die()` (the boot-time module check in `chuzom.server`) listed
+  `chuzom.enterprise.{identity,rbac,quotas}` as critical and aborted startup when they were
+  missing. Those modules are intentionally excluded from the public wheel/sdist, so
+  `pip install`ed Chuzom still couldn't start its MCP server (`No module named
+  'chuzom.enterprise'`). The enterprise modules are now split into a separate
+  `_ENTERPRISE_CRITICAL_MODULES` tuple that is only verified under the enterprise profile
+  (`is_enterprise()`); the universal check no longer requires them. Adds a regression test
+  (`test_critical_module_check_boots_without_enterprise`). Together with v0.5.6 this makes the
+  published package usable as an MCP server (verified end-to-end with an Agno agent calling
+  `llm_query` through the Chuzom MCP server).
+
+---
+
 ## v0.5.6 — 2026-06-24 — Fix: public package import without enterprise
 
 ### Fixes
