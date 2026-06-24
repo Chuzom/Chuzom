@@ -17,12 +17,16 @@ import os
 import structlog
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
 
-from chuzom.enterprise import scim
-from chuzom.enterprise.identity import (
-    IdentityConflict,
-    IdentityNotFound,
-    IdentityStore,
-)
+try:
+    from chuzom.enterprise import scim
+    from chuzom.enterprise.identity import (
+        IdentityConflict,
+        IdentityNotFound,
+        IdentityStore,
+    )
+except ImportError:  # enterprise/ is excluded from public distributions (gated by is_enterprise())
+    scim = None  # type: ignore
+    IdentityConflict = IdentityNotFound = IdentityStore = None  # type: ignore
 
 log = structlog.get_logger(__name__)
 

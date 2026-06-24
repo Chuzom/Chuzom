@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.5.6 — 2026-06-24 — Fix: public package import without enterprise
+
+### Fixes
+
+- **Public distribution import crash** — `chuzom.server` / `chuzom.router` (and the `chuzom`
+  MCP entrypoint) failed to import when installed from PyPI with
+  `ModuleNotFoundError: No module named 'chuzom.enterprise'`. The `enterprise/` package is
+  intentionally excluded from the published wheel/sdist, but five modules
+  (`audit_routing`, `rbac_routing`, `admin_api`, `scim_api`, `commands/audit`) imported it at
+  top level without a guard. These imports are now wrapped in `try/except ImportError` so the
+  public package imports and routes cleanly; enterprise features remain gated behind
+  `is_enterprise()`. Adds `tests/test_public_import.py`, which imports the core modules with
+  `chuzom.enterprise` forced absent to prevent regressions.
+
+---
+
 ## v0.5.5 — 2026-06-24 — Agentic model routing
 
 ### New features

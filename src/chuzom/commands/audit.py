@@ -20,7 +20,10 @@ import argparse
 import json
 import sys
 
-from chuzom.enterprise.audit import AuditLog, TamperDetected
+try:
+    from chuzom.enterprise.audit import AuditLog, TamperDetected
+except ImportError:  # enterprise/ is excluded from public distributions (gated by is_enterprise())
+    AuditLog = TamperDetected = None  # type: ignore
 
 _USAGE = (
     "chuzom audit — tamper-evident audit log operations\n"

@@ -32,7 +32,10 @@ import os
 import threading
 from typing import Any
 
-from chuzom.enterprise.audit import AuditEvent, AuditEventType, AuditLog
+try:
+    from chuzom.enterprise.audit import AuditEvent, AuditEventType, AuditLog
+except ImportError:  # enterprise/ is excluded from public distributions (gated by is_enterprise())
+    AuditEvent = AuditEventType = AuditLog = None  # type: ignore
 from chuzom.identity import TurnIdentity, current_identity
 from chuzom.logging import get_logger
 from chuzom.profile import is_enterprise

@@ -63,7 +63,10 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from chuzom.admin_actions import AdminActionLog
 from chuzom.agents.session import SessionStore
-from chuzom.enterprise.audit import AuditLog
+try:
+    from chuzom.enterprise.audit import AuditLog
+except ImportError:  # enterprise/ is excluded from public distributions (gated by is_enterprise())
+    AuditLog = None  # type: ignore
 from chuzom.error_sanitization import sanitize_exception
 from chuzom.metrics import EXPOSITION_CONTENT_TYPE, collect_all
 from chuzom.policy_versions import (
@@ -71,16 +74,22 @@ from chuzom.policy_versions import (
     PolicyVersionNotFound,
     PolicyVersionStore,
 )
-from chuzom.enterprise.identity import (
-    Identity,
-    IdentityConflict,
-    IdentityNotFound,
-    IdentityStore,
-    InvalidToken,
-    User,
-)
-from chuzom.enterprise.quotas import QuotaPolicy, QuotaTracker
-from chuzom.enterprise.rbac import Permission, Role, has_permission
+try:
+    from chuzom.enterprise.identity import (
+        Identity,
+        IdentityConflict,
+        IdentityNotFound,
+        IdentityStore,
+        InvalidToken,
+        User,
+    )
+    from chuzom.enterprise.quotas import QuotaPolicy, QuotaTracker
+    from chuzom.enterprise.rbac import Permission, Role, has_permission
+except ImportError:  # enterprise/ is excluded from public distributions (gated by is_enterprise())
+    Identity = IdentityConflict = IdentityNotFound = IdentityStore = None  # type: ignore
+    InvalidToken = User = None  # type: ignore
+    QuotaPolicy = QuotaTracker = None  # type: ignore
+    Permission = Role = has_permission = None  # type: ignore
 from chuzom.provider_registry import (
     RuntimeProviderRegistry,
     get_global_registry as _resolve_global_registry,

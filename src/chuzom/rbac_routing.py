@@ -35,7 +35,10 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from chuzom.enterprise.rbac import Permission, PermissionDenied, has_permission
+try:
+    from chuzom.enterprise.rbac import Permission, PermissionDenied, has_permission
+except ImportError:  # enterprise/ is excluded from public distributions (gated by is_enterprise())
+    Permission = PermissionDenied = has_permission = None  # type: ignore
 from chuzom.identity import TurnIdentity
 from chuzom.logging import get_logger
 from chuzom.profile import is_enterprise
