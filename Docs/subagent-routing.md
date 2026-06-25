@@ -132,6 +132,7 @@ counterfactuals.
 | `CHUZOM_SUBAGENT_CLI_DELEGATION` | `on` | Master switch for the CLI-delegation tier (Codex / Gemini CLI) |
 | `CHUZOM_SUBAGENT_CLI_TIMEOUT` | `120` | Max seconds for a delegated CLI run before falling back |
 | `CHUZOM_CODEX_MODELS` | — | Override Codex model list (set to a model the account has) |
+| `CHUZOM_SUBAGENT_GOVERNANCE` | `on` | Record each routed run as a governed `agents/` session |
 | `CHUZOM_AGENT_ROUTE_ALLOW` | — | Subagent types that bypass routing (real tool-work agents) |
 | `CHUZOM_ROUTE_BANNER` | `on` | stderr `🎯 routed →` banner |
 
@@ -145,8 +146,13 @@ counterfactuals.
   reach `build_chain` → DIRECT prefers **free local** models); CLI delegation
   (`_try_cli_delegation`) routing tool-heavy/complex subagents to `run_codex` / `run_gemini_cli`,
   bounded by `CHUZOM_SUBAGENT_CLI_TIMEOUT`, savings tagged `host="claude_code_subagent_cli"`.
-- **Phase 3 (pending):** wrap routed runs in `agents/` session+budget+lineage governance;
-  Option-A model-pin for spawned Claude subagents.
+- **Phase 3 (done):** every routed subagent run is recorded as a governed `agents/` session
+  (`_govern_run` → `SessionStore.create/record_step/complete` in `~/.chuzom/sessions.db`):
+  `agent_id="subagent:<type>"`, budget cap = Claude-equivalent baseline, consumed = actual
+  external cost, `framework="chuzom-subagent-route"`. The cap−consumed gap is the saving,
+  auditable at the governance layer. Gated by `CHUZOM_SUBAGENT_GOVERNANCE`. Fire-and-forget.
+- **Phase 4 (pending):** Option-A model-pin for genuinely-spawned Claude subagents (rewrite the
+  Agent tool's `model` to the cheapest viable tier when input-rewrite is supported).
 
 ### Operational notes (this environment)
 - `run_codex` needs a model the account actually has. Defaults `gpt-5.5`/`gpt-5.4` return 404 here

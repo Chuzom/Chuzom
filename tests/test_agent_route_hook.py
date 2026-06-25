@@ -292,6 +292,35 @@ class TestCliDelegationGating:
         mod._load_dotenv()  # no-override re-run must not raise
 
 
+class TestGovernance:
+    """Phase 3 — routed runs become governed agents/ sessions."""
+
+    def test_governance_disabled_is_noop(self, tmp_path, monkeypatch):
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_GOVERNANCE", "off")
+        monkeypatch.setenv("CHUZOM_SESSIONS_PATH", str(tmp_path / "s.db"))
+        mod._govern_run("general-purpose", "ollama", "hermes3:8b", 130, 70, "moderate")
+        assert not (tmp_path / "s.db").exists()  # no session written
+
+    def test_governance_records_session(self, tmp_path, monkeypatch):
+        """A routed run creates one completed session: cap=baseline, consumed=external."""
+        import sqlite3
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_GOVERNANCE", "on")
+        db = tmp_path / "s.db"
+        monkeypatch.setenv("CHUZOM_SESSIONS_PATH", str(db))
+        mod._govern_run("general-purpose", "ollama", "hermes3:8b", 130, 70, "moderate")
+        rows = sqlite3.connect(str(db)).execute(
+            "SELECT agent_id, state, consumed_usd, budget_cap_usd FROM sessions"
+        ).fetchall()
+        assert len(rows) == 1
+        agent_id, state, consumed, cap = rows[0]
+        assert agent_id == "subagent:general-purpose"
+        assert state == "completed"
+        assert consumed == 0.0           # ollama is free
+        assert cap > 0                    # Claude-equivalent baseline envelope
+
+
 class TestMissingFiles:
     """Test handling of missing/malformed state files."""
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 4
+# chuzom-hook-version: 5
 """PreToolUse[Agent] hook — intercept subagent spawning, route reasoning to cheap models.
 
 When Claude spawns a subagent (Agent tool), this hook intercepts and decides:
@@ -514,8 +514,44 @@ def _route_allowlist() -> set[str]:
 _COMPLEXITY_RANK = {"simple": 1, "moderate": 2, "complex": 3}
 
 
+def _govern_run(subagent_type: str, provider: str, model: str,
+                in_tok: int, out_tok: int, complexity: str) -> None:
+    """Phase 3 — record a routed subagent run as a governed agents/ session.
+
+    Each routed subagent becomes a first-class session in ~/.chuzom/sessions.db
+    (visible via chuzom_agent_list / chuzom_agent_check_budget): budget cap = the
+    Claude-equivalent baseline it would have spent, consumed = the actual external
+    cost. The gap (cap − consumed) is the saving, now auditable at the governance
+    layer in addition to the savings log. Fire-and-forget; never breaks routing.
+    """
+    if os.environ.get("CHUZOM_SUBAGENT_GOVERNANCE", "on").strip().lower() in ("0", "off", "false", "no"):
+        return
+    try:
+        from chuzom.agents.session import SessionStore
+        from chuzom.hooks.savings_logger import _baseline_cost, _cost_for
+    except Exception:
+        return
+    try:
+        external = _cost_for(provider, model, in_tok, out_tok)
+        baseline = _baseline_cost(complexity, in_tok, out_tok)
+        cap = baseline if baseline > 0 else max(external, 1e-6)
+        store = SessionStore()
+        try:
+            sess = store.create(
+                agent_id=f"subagent:{subagent_type}", budget_usd=cap,
+                framework="chuzom-subagent-route",
+            )
+            store.record_step(sess.session_id, cost_usd=min(external, cap))
+            store.complete(sess.session_id)
+        finally:
+            store.close()
+    except Exception:
+        pass
+
+
 def _try_direct_subagent(
-    prompt: str, task_type: str, complexity: str, session_id: str
+    prompt: str, task_type: str, complexity: str, session_id: str,
+    subagent_type: str = "general-purpose",
 ) -> str | None:
     """Run the subagent's task on a routed cheap model instead of spawning Opus.
 
@@ -583,6 +619,8 @@ def _try_direct_subagent(
     except Exception:
         pass
 
+    _govern_run(subagent_type, result.model.provider, result.model.model,
+                int(result.input_tokens or 0), int(result.output_tokens or 0), complexity)
     return result.text
 
 
@@ -613,7 +651,8 @@ def _log_cli_savings(content: str, provider: str, model: str, duration_sec: floa
 
 
 def _try_cli_delegation(
-    prompt: str, task_type: str, complexity: str, session_id: str
+    prompt: str, task_type: str, complexity: str, session_id: str,
+    subagent_type: str = "general-purpose",
 ) -> str | None:
     """Phase 2 — delegate bigger/tool-heavy subagent work to a real external agent
     CLI (Codex / Gemini CLI) that brings its own toolchain and runs on an external
@@ -677,6 +716,8 @@ def _try_cli_delegation(
 
     _log_cli_savings(res.content, provider, res.model, res.duration_sec,
                      prompt, task_type, complexity, session_id)
+    _govern_run(subagent_type, provider, res.model,
+                max(1, len(prompt) // 4), max(1, len(res.content) // 4), complexity)
     return res.content
 
 
@@ -744,7 +785,7 @@ def main() -> None:
     # Instead of merely blocking with advice, actually run the task on the
     # routed chain and hand the result back as the subagent's output. Savings
     # are logged (host=claude_code_subagent). Falls through on any failure.
-    _routed = _try_direct_subagent(prompt, task_type, complexity, session_id)
+    _routed = _try_direct_subagent(prompt, task_type, complexity, session_id, subagent_type)
     if _routed is not None:
         _write_agent_depth(session_id, current_depth)  # roll back: no real spawn happened
         _log_agent_call(subagent_type, prompt, "routed_direct")
@@ -762,7 +803,7 @@ def main() -> None:
     # What DIRECT didn't take (tool tasks, complex work) goes to a real external
     # agent CLI (Codex / Gemini) running on an external subscription. Savings
     # logged (host=claude_code_subagent_cli). Falls through on any failure.
-    _delegated = _try_cli_delegation(prompt, task_type, complexity, session_id)
+    _delegated = _try_cli_delegation(prompt, task_type, complexity, session_id, subagent_type)
     if _delegated is not None:
         _write_agent_depth(session_id, current_depth)  # roll back: no real spawn happened
         _log_agent_call(subagent_type, prompt, "routed_cli_delegation")
