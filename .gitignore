@@ -62,6 +62,11 @@ Thumbs.db
 Docs/
 !docs/
 !docs/**
+# Test-suite-generated scenario report (written to Docs/ by pytest). Must come
+# AFTER the !docs/** negation: on case-insensitive filesystems (macOS) Docs/
+# and docs/ collide, so the negation re-includes this artifact unless we
+# re-ignore it explicitly by name here.
+SCENARIO_REPORT.md
 INTERNAL.md
 STRATEGY.md
 MONETIZATION.md
