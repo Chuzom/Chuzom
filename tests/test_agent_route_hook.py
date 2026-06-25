@@ -11,6 +11,7 @@ Tests verify:
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -20,6 +21,14 @@ from pathlib import Path
 HOOK_PATH = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-route.py"
 
 
+def _load_hook_module():
+    """Import the hyphenated hook file as a module for white-box unit tests."""
+    spec = importlib.util.spec_from_file_location("agent_route_hook", HOOK_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def _run(
     prompt: str,
     subagent_type: str = "general-purpose",
@@ -27,6 +36,7 @@ def _run(
     agent_depth: int | None = None,
     max_depth: str | None = None,
     tmp_path: Path | None = None,
+    subagent_direct: bool = False,
 ) -> tuple[int, dict | None]:
     """Run the agent-route hook with given parameters.
 
@@ -50,7 +60,11 @@ def _run(
         },
     })
 
-    env = None
+    env = os.environ.copy()
+    # DIRECT subagent execution makes live model calls — non-deterministic and
+    # network-dependent. Classification/depth/budget tests assert the pre-routing
+    # decision, so disable it unless a test explicitly opts in.
+    env["CHUZOM_SUBAGENT_DIRECT"] = "on" if subagent_direct else "off"
     if tmp_path is not None:
         llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
@@ -67,11 +81,9 @@ def _run(
         if session_id is not None:
             (llmr_dir / "session_id.txt").write_text(session_id)
 
-        env = {**os.environ, "HOME": str(tmp_path)}
+        env["HOME"] = str(tmp_path)
 
     if max_depth is not None:
-        if env is None:
-            env = os.environ.copy()
         env["CHUZOM_MAX_AGENT_DEPTH"] = max_depth
 
     result = subprocess.run(
@@ -231,6 +243,30 @@ class TestDepthIncrement:
         assert depth_file.exists()
         data = json.loads(depth_file.read_text())
         assert data["depth"] == 1
+
+
+class TestSubagentDirectGating:
+    """The DIRECT subagent router must gate cleanly before any network call."""
+
+    def test_disabled_returns_none(self, monkeypatch):
+        """CHUZOM_SUBAGENT_DIRECT=off → no execution, no network, returns None."""
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_DIRECT", "off")
+        assert mod._try_direct_subagent("implement foo", "code", "simple", "s1") is None
+
+    def test_complexity_ceiling_blocks_complex(self, monkeypatch):
+        """Tasks above the complexity ceiling are not DIRECT-executed."""
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_DIRECT", "on")
+        monkeypatch.setenv("CHUZOM_SUBAGENT_DIRECT_MAX_COMPLEXITY", "moderate")
+        # complex > moderate → must return None before importing executors
+        assert mod._try_direct_subagent("x" * 600, "code", "complex", "s1") is None
+
+    def test_complexity_rank_ordering(self):
+        """Ranking is monotonic simple < moderate < complex (ceiling logic)."""
+        mod = _load_hook_module()
+        r = mod._COMPLEXITY_RANK
+        assert r["simple"] < r["moderate"] < r["complex"]
 
 
 class TestMissingFiles:

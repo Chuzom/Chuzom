@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 2
+# chuzom-hook-version: 3
 """PreToolUse[Agent] hook — intercept subagent spawning, route reasoning to cheap models.
 
 When Claude spawns a subagent (Agent tool), this hook intercepts and decides:
@@ -474,6 +474,83 @@ def _route_allowlist() -> set[str]:
     return {t.strip() for t in vals.split(",") if t.strip()}
 
 
+# ── Subagent DIRECT execution (route the work onto a cheap model) ────────────
+
+_COMPLEXITY_RANK = {"simple": 1, "moderate": 2, "complex": 3}
+
+
+def _try_direct_subagent(
+    prompt: str, task_type: str, complexity: str, session_id: str
+) -> str | None:
+    """Run the subagent's task on a routed cheap model instead of spawning Opus.
+
+    Mirrors the main-session DIRECT path in auto-route.py: build a provider chain
+    by complexity+pressure, execute (tool-loop for file work, single-shot for
+    Q&A), log savings tagged ``claude_code_subagent``, and return the result text.
+
+    Returns the routed output, or None to fall back to a real spawn. Fire-and-
+    forget: any failure returns None so the subagent path stays robust.
+    """
+    if os.environ.get("CHUZOM_SUBAGENT_DIRECT", "on").strip().lower() in ("0", "off", "false", "no"):
+        return None
+    # Only DIRECT-execute up to the configured complexity ceiling — bigger work
+    # would block the hook too long and is better off as a real (cheaper-tier) spawn.
+    max_c = os.environ.get("CHUZOM_SUBAGENT_DIRECT_MAX_COMPLEXITY", "moderate").strip().lower()
+    if _COMPLEXITY_RANK.get(complexity, 2) > _COMPLEXITY_RANK.get(max_c, 2):
+        return None
+
+    try:
+        from chuzom.hooks.chain_builder import (
+            build_chain,
+            get_current_pressure,
+            needs_claude_tools,
+        )
+        from chuzom.hooks.direct_executor import execute_agent, execute_chain
+    except Exception:
+        return None
+
+    try:
+        zone, _pct = get_current_pressure()
+        chain = build_chain(complexity, zone, task_type)
+        if not chain:
+            return None
+        if needs_claude_tools(prompt, task_type):
+            result = execute_agent(prompt, chain, timeout=60)  # Ollama tool-loop
+        else:
+            result = execute_chain(prompt, chain, task_type, timeout=15)
+    except Exception:
+        return None
+
+    if not result or not (getattr(result, "text", "") or "").strip():
+        return None
+
+    # Visible UI signal (Claude Code surfaces PreToolUse stderr to the user).
+    if os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower() not in ("0", "off", "false", "no"):
+        try:
+            sys.stderr.write(
+                f"🎯 subagent routed → {result.model.provider}/{result.model.model} "
+                f"· {task_type}/{complexity} · {result.latency_ms / 1000.0:.1f}s\n"
+            )
+        except Exception:
+            pass
+
+    # ── SAVINGS: same pipeline as main-session DIRECT, tagged for subagents ──
+    try:
+        from chuzom.hooks.savings_logger import log_direct_savings, log_direct_to_db
+        log_direct_savings(
+            result=result, task_type=task_type, complexity=complexity,
+            session_id=session_id, host="claude_code_subagent",
+        )
+        log_direct_to_db(
+            result=result, prompt=prompt, task_type=task_type,
+            complexity=complexity, classifier_type="agent-route", session_id=session_id,
+        )
+    except Exception:
+        pass
+
+    return result.text
+
+
 def main() -> None:
     try:
         hook_input = json.load(sys.stdin)
@@ -533,7 +610,25 @@ def main() -> None:
     # ── Classify reasoning task ──────────────────────────────────────────────
     task_type = _classify_task_type(prompt)
     complexity = _classify_complexity(prompt)
-    
+
+    # ── DIRECT subagent execution: route the work onto a cheap model ─────────
+    # Instead of merely blocking with advice, actually run the task on the
+    # routed chain and hand the result back as the subagent's output. Savings
+    # are logged (host=claude_code_subagent). Falls through on any failure.
+    _routed = _try_direct_subagent(prompt, task_type, complexity, session_id)
+    if _routed is not None:
+        _write_agent_depth(session_id, current_depth)  # roll back: no real spawn happened
+        _log_agent_call(subagent_type, prompt, "routed_direct")
+        json.dump({
+            "decision": "block",
+            "reason": (
+                "[chuzom] Subagent task was executed by a routed model (not spawned); "
+                "savings logged. Use this result directly as the subagent's output — "
+                "do not re-do the work:\n\n" + _routed
+            ),
+        }, sys.stdout)
+        return
+
     # ── Estimate cost for this agent call ───────────────────────────────────
     estimated_cost = _estimate_agent_cost(complexity, task_type)
     remaining_budget = _get_remaining_budget()
