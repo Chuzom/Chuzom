@@ -22,10 +22,21 @@ HOOK_PATH = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-r
 
 
 def _load_hook_module():
-    """Import the hyphenated hook file as a module for white-box unit tests."""
+    """Import the hyphenated hook file as a module for white-box unit tests.
+
+    The hook calls _load_dotenv() at import, which mutates os.environ. Snapshot
+    and restore it so loading the module for a test doesn't leak ~/.chuzom/.env
+    vars (e.g. OLLAMA_BUDGET_MODELS) into env-sensitive tests elsewhere in the
+    same pytest process.
+    """
     spec = importlib.util.spec_from_file_location("agent_route_hook", HOOK_PATH)
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    saved = dict(os.environ)
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
     return mod
 
 
@@ -289,9 +300,13 @@ class TestCliDelegationGating:
     def test_env_loaded_into_environ(self):
         """The hook loads ~/.chuzom/.env so OLLAMA_BUDGET_MODELS reaches build_chain."""
         mod = _load_hook_module()
-        # _load_dotenv ran at import; the function exists and is idempotent.
         assert callable(mod._load_dotenv)
-        mod._load_dotenv()  # no-override re-run must not raise
+        saved = dict(os.environ)
+        try:
+            mod._load_dotenv()  # no-override re-run must not raise
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)  # don't leak .env into other tests
 
 
 class TestGovernance:
