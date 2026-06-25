@@ -39,7 +39,13 @@ def _run_agent_route(
         },
     })
 
-    env = None
+    env = os.environ.copy()
+    # These tests assert the pre-routing budget/block decision. DIRECT + CLI
+    # routing make live model calls (non-deterministic); disable them so the
+    # budget path is exercised deterministically.
+    env["CHUZOM_SUBAGENT_DIRECT"] = "off"
+    env["CHUZOM_SUBAGENT_CLI_DELEGATION"] = "off"
+    env["CHUZOM_SUBAGENT_MODEL_PIN"] = "off"
     if tmp_path is not None:
         llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
@@ -61,7 +67,7 @@ def _run_agent_route(
                     "timestamp": 0,
                 }))
 
-        env = {**os.environ, "HOME": str(tmp_path)}
+        env["HOME"] = str(tmp_path)
 
     result = subprocess.run(
         [sys.executable, str(AGENT_ROUTE_HOOK)],

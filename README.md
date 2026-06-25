@@ -376,6 +376,24 @@ The model tried depends on task complexity. Chuzom tries each tier in order, fal
 | **complex** | PREMIUM | Codex CLI | OpenAI o3 | Claude Opus | Gemini 2.5 Pro |
 | **deep_reasoning** 🧠 | REASONING | Ollama qwen3 | DeepSeek-R1 | OpenAI o3 | Claude Opus + thinking |
 
+### Subagent routing — savings inside the Agent tool (new)
+
+Chuzom routes **subagent spawns**, not just top-level prompts. When Claude Code's `Agent`
+tool fires, the `agent-route` hook applies the same funnel before an expensive subagent ever
+starts:
+
+| Tier | What happens |
+|---|---|
+| **DIRECT** | simple/moderate subagents run on free-local (Ollama) or a cheap chain — the result is handed back, no Opus spawn |
+| **CLI delegation** | tool-heavy / complex subagents delegate to **Codex / Gemini CLI** (external subscriptions, real toolchains) |
+| **Model-pin** | lightweight Explore / retrieval spawns are pinned to **Haiku** instead of inherited Opus |
+| **Governance** | every routed run is recorded as a budgeted session in `~/.chuzom/sessions.db` (cap vs consumed) |
+| fall-through | anything that genuinely needs the full harness still spawns normally — never trapped |
+
+Subagent savings are tracked under their own hosts (`claude_code_subagent`,
+`claude_code_subagent_cli`), so they show up in your dashboard alongside main-session
+routing. Full design: [Docs/subagent-routing.md](Docs/subagent-routing.md).
+
 ### The REASONING profile (new in v0.5.0)
 
 When Chuzom detects a prompt that requires extended chain-of-thought reasoning — formal proofs, first-principles derivations, multi-step deductive chains, or explicit "think step-by-step" requests — it routes to the dedicated **REASONING profile** instead of the generic PREMIUM chain.
@@ -907,6 +925,16 @@ A: Chuzom uses 5-level dynamic discovery to find your installed models. Run `chu
 
 **Q: Codex was taking 80+ seconds with no feedback — is that fixed?**  
 A: Yes. v0.4.0 streams Codex JSONL events in real time. You'll see `thread.started`, `item.completed`, and `turn.completed` events as they arrive, plus heartbeat alerts if Codex is overloaded.
+
+---
+
+## Codex Plugin
+
+Chuzom ships as a Codex plugin — manifest at [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json)
+(name `chuzom`, category *Developer Tools*). It's eligible for the
+[awesome-ai-plugins](https://github.com/awesome-ai-plugins) list; a ready-to-submit entry
+lives at [`.codex-plugin/awesome-ai-plugins-entry.md`](.codex-plugin/awesome-ai-plugins-entry.md)
+(tracked in issue #103).
 
 ---
 

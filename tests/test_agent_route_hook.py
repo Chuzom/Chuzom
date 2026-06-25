@@ -11,6 +11,7 @@ Tests verify:
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -20,6 +21,25 @@ from pathlib import Path
 HOOK_PATH = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-route.py"
 
 
+def _load_hook_module():
+    """Import the hyphenated hook file as a module for white-box unit tests.
+
+    The hook calls _load_dotenv() at import, which mutates os.environ. Snapshot
+    and restore it so loading the module for a test doesn't leak ~/.chuzom/.env
+    vars (e.g. OLLAMA_BUDGET_MODELS) into env-sensitive tests elsewhere in the
+    same pytest process.
+    """
+    spec = importlib.util.spec_from_file_location("agent_route_hook", HOOK_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    saved = dict(os.environ)
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+    return mod
+
+
 def _run(
     prompt: str,
     subagent_type: str = "general-purpose",
@@ -27,6 +47,8 @@ def _run(
     agent_depth: int | None = None,
     max_depth: str | None = None,
     tmp_path: Path | None = None,
+    subagent_direct: bool = False,
+    model_pin: bool = False,
 ) -> tuple[int, dict | None]:
     """Run the agent-route hook with given parameters.
 
@@ -50,7 +72,12 @@ def _run(
         },
     })
 
-    env = None
+    env = os.environ.copy()
+    # DIRECT subagent execution makes live model calls — non-deterministic and
+    # network-dependent. Classification/depth/budget tests assert the pre-routing
+    # decision, so disable it unless a test explicitly opts in.
+    env["CHUZOM_SUBAGENT_DIRECT"] = "on" if subagent_direct else "off"
+    env["CHUZOM_SUBAGENT_MODEL_PIN"] = "on" if model_pin else "off"
     if tmp_path is not None:
         llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
@@ -67,11 +94,9 @@ def _run(
         if session_id is not None:
             (llmr_dir / "session_id.txt").write_text(session_id)
 
-        env = {**os.environ, "HOME": str(tmp_path)}
+        env["HOME"] = str(tmp_path)
 
     if max_depth is not None:
-        if env is None:
-            env = os.environ.copy()
         env["CHUZOM_MAX_AGENT_DEPTH"] = max_depth
 
     result = subprocess.run(
@@ -231,6 +256,114 @@ class TestDepthIncrement:
         assert depth_file.exists()
         data = json.loads(depth_file.read_text())
         assert data["depth"] == 1
+
+
+class TestSubagentDirectGating:
+    """The DIRECT subagent router must gate cleanly before any network call."""
+
+    def test_disabled_returns_none(self, monkeypatch):
+        """CHUZOM_SUBAGENT_DIRECT=off → no execution, no network, returns None."""
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_DIRECT", "off")
+        assert mod._try_direct_subagent("implement foo", "code", "simple", "s1") is None
+
+    def test_complexity_ceiling_blocks_complex(self, monkeypatch):
+        """Tasks above the complexity ceiling are not DIRECT-executed."""
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_DIRECT", "on")
+        monkeypatch.setenv("CHUZOM_SUBAGENT_DIRECT_MAX_COMPLEXITY", "moderate")
+        # complex > moderate → must return None before importing executors
+        assert mod._try_direct_subagent("x" * 600, "code", "complex", "s1") is None
+
+    def test_complexity_rank_ordering(self):
+        """Ranking is monotonic simple < moderate < complex (ceiling logic)."""
+        mod = _load_hook_module()
+        r = mod._COMPLEXITY_RANK
+        assert r["simple"] < r["moderate"] < r["complex"]
+
+
+class TestCliDelegationGating:
+    """Phase 2 CLI delegation must gate before invoking any external CLI."""
+
+    def test_disabled_returns_none(self, monkeypatch):
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_CLI_DELEGATION", "off")
+        assert mod._try_cli_delegation("refactor and run tests", "code", "complex", "s1") is None
+
+    def test_non_tool_non_complex_skipped(self, monkeypatch):
+        """A simple Q&A task is not delegated — DIRECT already covers it."""
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_CLI_DELEGATION", "on")
+        # 'what is X' is not a tool task and not complex → no CLI invocation, returns None
+        assert mod._try_cli_delegation("what is a closure", "query", "simple", "s1") is None
+
+    def test_env_loaded_into_environ(self):
+        """The hook loads ~/.chuzom/.env so OLLAMA_BUDGET_MODELS reaches build_chain."""
+        mod = _load_hook_module()
+        assert callable(mod._load_dotenv)
+        saved = dict(os.environ)
+        try:
+            mod._load_dotenv()  # no-override re-run must not raise
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)  # don't leak .env into other tests
+
+
+class TestGovernance:
+    """Phase 3 — routed runs become governed agents/ sessions."""
+
+    def test_governance_disabled_is_noop(self, tmp_path, monkeypatch):
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_GOVERNANCE", "off")
+        monkeypatch.setenv("CHUZOM_SESSIONS_PATH", str(tmp_path / "s.db"))
+        mod._govern_run("general-purpose", "ollama", "hermes3:8b", 130, 70, "moderate")
+        assert not (tmp_path / "s.db").exists()  # no session written
+
+    def test_governance_records_session(self, tmp_path, monkeypatch):
+        """A routed run creates one completed session: cap=baseline, consumed=external."""
+        import sqlite3
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_GOVERNANCE", "on")
+        db = tmp_path / "s.db"
+        monkeypatch.setenv("CHUZOM_SESSIONS_PATH", str(db))
+        mod._govern_run("general-purpose", "ollama", "hermes3:8b", 130, 70, "moderate")
+        rows = sqlite3.connect(str(db)).execute(
+            "SELECT agent_id, state, consumed_usd, budget_cap_usd FROM sessions"
+        ).fetchall()
+        assert len(rows) == 1
+        agent_id, state, consumed, cap = rows[0]
+        assert agent_id == "subagent:general-purpose"
+        assert state == "completed"
+        assert consumed == 0.0           # ollama is free
+        assert cap > 0                    # Claude-equivalent baseline envelope
+
+
+class TestModelPin:
+    """Phase 4 — lightweight spawned subagents are pinned to a cheaper Claude tier."""
+
+    def test_explore_pinned_to_haiku(self, tmp_path):
+        code, out = _run("find all callers of foo()", subagent_type="Explore",
+                         tmp_path=tmp_path, model_pin=True)
+        assert code == 0
+        hso = out["hookSpecificOutput"]
+        assert hso["permissionDecision"] == "allow"
+        assert hso["updatedInput"]["model"] == "haiku"
+        # original input preserved (only model added/overridden)
+        assert hso["updatedInput"]["prompt"] == "find all callers of foo()"
+        assert hso["updatedInput"]["subagent_type"] == "Explore"
+
+    def test_retrieval_pinned_to_haiku(self, tmp_path):
+        code, out = _run("search for every import of requests across the repo",
+                         subagent_type="general-purpose", tmp_path=tmp_path, model_pin=True)
+        assert code == 0
+        assert out["hookSpecificOutput"]["updatedInput"]["model"] == "haiku"
+
+    def test_pin_disabled_is_silent_allow(self, tmp_path):
+        """With the pin off, Explore approval is a silent allow (no stdout) as before."""
+        code, out = _run("find all callers of foo()", subagent_type="Explore",
+                         tmp_path=tmp_path, model_pin=False)
+        assert code == 0
+        assert out is None
 
 
 class TestMissingFiles:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 2
+# chuzom-hook-version: 6
 """PreToolUse[Agent] hook — intercept subagent spawning, route reasoning to cheap models.
 
 When Claude spawns a subagent (Agent tool), this hook intercepts and decides:
@@ -34,6 +34,41 @@ import re
 import sys
 import time
 from pathlib import Path
+
+# ── .env loader (mirrors auto-route.py) ──────────────────────────────────────
+# PreToolUse[Agent] runs without an interactive shell, so OLLAMA_BUDGET_MODELS,
+# GEMINI_API_KEY, etc. from ~/.chuzom/.env are not in os.environ unless we load
+# them. Without this, build_chain() falls back to its hardcoded default model
+# (often not pulled) and DIRECT routing silently degrades to paid/Claude tiers.
+
+_ENV_PATHS = [
+    Path.cwd() / ".env",
+    Path(__file__).resolve().parent.parent.parent.parent / ".env",  # dev: repo root
+    Path.home() / ".chuzom" / ".env",
+    Path.home() / ".env",
+]
+
+
+def _load_dotenv() -> None:
+    """Load key=value pairs from .env files into os.environ (no override)."""
+    for env_path in _ENV_PATHS:
+        if not env_path.exists():
+            continue
+        try:
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip("\"'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+        except OSError:
+            pass
+
+
+_load_dotenv()
 
 # ── Agent resource limits ────────────────────────────────────────────────────
 
@@ -474,6 +509,240 @@ def _route_allowlist() -> set[str]:
     return {t.strip() for t in vals.split(",") if t.strip()}
 
 
+# ── Subagent DIRECT execution (route the work onto a cheap model) ────────────
+
+_COMPLEXITY_RANK = {"simple": 1, "moderate": 2, "complex": 3}
+
+
+def _govern_run(subagent_type: str, provider: str, model: str,
+                in_tok: int, out_tok: int, complexity: str) -> None:
+    """Phase 3 — record a routed subagent run as a governed agents/ session.
+
+    Each routed subagent becomes a first-class session in ~/.chuzom/sessions.db
+    (visible via chuzom_agent_list / chuzom_agent_check_budget): budget cap = the
+    Claude-equivalent baseline it would have spent, consumed = the actual external
+    cost. The gap (cap − consumed) is the saving, now auditable at the governance
+    layer in addition to the savings log. Fire-and-forget; never breaks routing.
+    """
+    if os.environ.get("CHUZOM_SUBAGENT_GOVERNANCE", "on").strip().lower() in ("0", "off", "false", "no"):
+        return
+    try:
+        from chuzom.agents.session import SessionStore
+        from chuzom.hooks.savings_logger import _baseline_cost, _cost_for
+    except Exception:
+        return
+    try:
+        external = _cost_for(provider, model, in_tok, out_tok)
+        baseline = _baseline_cost(complexity, in_tok, out_tok)
+        cap = baseline if baseline > 0 else max(external, 1e-6)
+        store = SessionStore()
+        try:
+            sess = store.create(
+                agent_id=f"subagent:{subagent_type}", budget_usd=cap,
+                framework="chuzom-subagent-route",
+            )
+            store.record_step(sess.session_id, cost_usd=min(external, cap))
+            store.complete(sess.session_id)
+        finally:
+            store.close()
+    except Exception:
+        pass
+
+
+def _model_pin_enabled() -> bool:
+    return os.environ.get("CHUZOM_SUBAGENT_MODEL_PIN", "on").strip().lower() not in ("0", "off", "false", "no")
+
+
+def _emit_model_pin(tool_input: dict, model: str) -> None:
+    """Phase 4 (Option-A) — approve the spawn but rewrite its model to a cheaper tier.
+
+    Uses Claude Code PreToolUse input rewriting (`updatedInput` under
+    `hookSpecificOutput`): the subagent still spawns with the full harness, just on a
+    cheaper Claude tier. If the host build ignores `updatedInput`, the `allow` still
+    holds and the spawn proceeds on the inherited model — graceful degradation.
+    """
+    json.dump({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "updatedInput": {**tool_input, "model": model},
+            "permissionDecisionReason": f"[chuzom] model pinned → {model} (lightweight subagent)",
+        }
+    }, sys.stdout)
+
+
+def _try_direct_subagent(
+    prompt: str, task_type: str, complexity: str, session_id: str,
+    subagent_type: str = "general-purpose",
+) -> str | None:
+    """Run the subagent's task on a routed cheap model instead of spawning Opus.
+
+    Mirrors the main-session DIRECT path in auto-route.py: build a provider chain
+    by complexity+pressure, execute (tool-loop for file work, single-shot for
+    Q&A), log savings tagged ``claude_code_subagent``, and return the result text.
+
+    Returns the routed output, or None to fall back to a real spawn. Fire-and-
+    forget: any failure returns None so the subagent path stays robust.
+    """
+    if os.environ.get("CHUZOM_SUBAGENT_DIRECT", "on").strip().lower() in ("0", "off", "false", "no"):
+        return None
+    # Only DIRECT-execute up to the configured complexity ceiling — bigger work
+    # would block the hook too long and is better off as a real (cheaper-tier) spawn.
+    max_c = os.environ.get("CHUZOM_SUBAGENT_DIRECT_MAX_COMPLEXITY", "moderate").strip().lower()
+    if _COMPLEXITY_RANK.get(complexity, 2) > _COMPLEXITY_RANK.get(max_c, 2):
+        return None
+
+    try:
+        from chuzom.hooks.chain_builder import (
+            build_chain,
+            get_current_pressure,
+            needs_claude_tools,
+        )
+        from chuzom.hooks.direct_executor import execute_agent, execute_chain
+    except Exception:
+        return None
+
+    try:
+        zone, _pct = get_current_pressure()
+        chain = build_chain(complexity, zone, task_type)
+        if not chain:
+            return None
+        if needs_claude_tools(prompt, task_type):
+            result = execute_agent(prompt, chain, timeout=60)  # Ollama tool-loop
+        else:
+            result = execute_chain(prompt, chain, task_type, timeout=15)
+    except Exception:
+        return None
+
+    if not result or not (getattr(result, "text", "") or "").strip():
+        return None
+
+    # Visible UI signal (Claude Code surfaces PreToolUse stderr to the user).
+    if os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower() not in ("0", "off", "false", "no"):
+        try:
+            sys.stderr.write(
+                f"🎯 subagent routed → {result.model.provider}/{result.model.model} "
+                f"· {task_type}/{complexity} · {result.latency_ms / 1000.0:.1f}s\n"
+            )
+        except Exception:
+            pass
+
+    # ── SAVINGS: same pipeline as main-session DIRECT, tagged for subagents ──
+    try:
+        from chuzom.hooks.savings_logger import log_direct_savings, log_direct_to_db
+        log_direct_savings(
+            result=result, task_type=task_type, complexity=complexity,
+            session_id=session_id, host="claude_code_subagent",
+        )
+        log_direct_to_db(
+            result=result, prompt=prompt, task_type=task_type,
+            complexity=complexity, classifier_type="agent-route", session_id=session_id,
+        )
+    except Exception:
+        pass
+
+    _govern_run(subagent_type, result.model.provider, result.model.model,
+                int(result.input_tokens or 0), int(result.output_tokens or 0), complexity)
+    return result.text
+
+
+def _log_cli_savings(content: str, provider: str, model: str, duration_sec: float,
+                     prompt: str, task_type: str, complexity: str, session_id: str) -> None:
+    """Log savings for a CLI-delegated subagent run. CLI agents don't report token
+    counts, so estimate from text length (chars/4), the same heuristic cc-usage-track
+    uses. host=claude_code_subagent_cli keeps delegation savings separately attributable."""
+    try:
+        from chuzom.hooks.direct_executor import DirectResult, ModelSpec
+        from chuzom.hooks.savings_logger import log_direct_savings, log_direct_to_db
+        synthetic = DirectResult(
+            text=content, model=ModelSpec(provider, model),
+            latency_ms=int(duration_sec * 1000),
+            input_tokens=max(1, len(prompt) // 4),
+            output_tokens=max(1, len(content) // 4),
+        )
+        log_direct_savings(
+            result=synthetic, task_type=task_type, complexity=complexity,
+            session_id=session_id, host="claude_code_subagent_cli",
+        )
+        log_direct_to_db(
+            result=synthetic, prompt=prompt, task_type=task_type,
+            complexity=complexity, classifier_type="agent-route-cli", session_id=session_id,
+        )
+    except Exception:
+        pass
+
+
+def _try_cli_delegation(
+    prompt: str, task_type: str, complexity: str, session_id: str,
+    subagent_type: str = "general-purpose",
+) -> str | None:
+    """Phase 2 — delegate bigger/tool-heavy subagent work to a real external agent
+    CLI (Codex / Gemini CLI) that brings its own toolchain and runs on an external
+    subscription (free from Claude quota). Returns the CLI output, or None to fall
+    back. Bounded by CHUZOM_SUBAGENT_CLI_TIMEOUT so the hook can't hang.
+
+    Triggers only for tool-needing or complex tasks — a single cheap LLM call
+    (the DIRECT tier) already covers simple/moderate Q&A.
+    """
+    if os.environ.get("CHUZOM_SUBAGENT_CLI_DELEGATION", "on").strip().lower() in ("0", "off", "false", "no"):
+        return None
+
+    try:
+        from chuzom.hooks.chain_builder import needs_claude_tools
+    except Exception:
+        needs_claude_tools = lambda *_a, **_k: False  # noqa: E731
+    if not (needs_claude_tools(prompt, task_type) or complexity == "complex"):
+        return None
+
+    # Budget guard: don't delegate if the session's agent budget is spent.
+    if _get_remaining_budget() <= 0:
+        return None
+
+    try:
+        import asyncio
+
+        from chuzom.codex_agent import is_codex_available, run_codex
+        from chuzom.gemini_cli_agent import is_gemini_cli_available, run_gemini_cli
+    except Exception:
+        return None
+
+    timeout = 120
+    try:
+        timeout = max(15, int(os.environ.get("CHUZOM_SUBAGENT_CLI_TIMEOUT", "120")))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        if is_codex_available():
+            provider = "codex"
+            res = asyncio.run(run_codex(prompt, timeout=timeout))
+        elif is_gemini_cli_available():
+            provider = "gemini-cli"
+            res = asyncio.run(run_gemini_cli(prompt, timeout=timeout))
+        else:
+            return None
+    except Exception:
+        return None
+
+    if not res or not getattr(res, "success", False) or not (res.content or "").strip():
+        return None
+
+    if os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower() not in ("0", "off", "false", "no"):
+        try:
+            sys.stderr.write(
+                f"🎯 subagent delegated → {provider}/{res.model} "
+                f"· {task_type}/{complexity} · {res.duration_sec:.1f}s\n"
+            )
+        except Exception:
+            pass
+
+    _log_cli_savings(res.content, provider, res.model, res.duration_sec,
+                     prompt, task_type, complexity, session_id)
+    _govern_run(subagent_type, provider, res.model,
+                max(1, len(prompt) // 4), max(1, len(res.content) // 4), complexity)
+    return res.content
+
+
 def main() -> None:
     try:
         hook_input = json.load(sys.stdin)
@@ -497,6 +766,9 @@ def main() -> None:
     # ── Always approve Explore subagents — they're pure retrieval ────────────
     if subagent_type == "Explore":
         _log_agent_call(subagent_type, prompt, "approved_explore")
+        if _model_pin_enabled():  # Phase 4: lightweight read/search → Haiku, not Opus
+            _emit_model_pin(tool_input, "haiku")
+            return
         sys.exit(0)
 
     # ── Special rule: allowlisted subagent types bypass routing ──────────────
@@ -528,12 +800,51 @@ def main() -> None:
     # ── Detect retrieval-only tasks ──────────────────────────────────────────
     if _is_retrieval_only(prompt):
         _log_agent_call(subagent_type, prompt, "approved_retrieval")
+        if _model_pin_enabled():  # Phase 4: pure retrieval → Haiku, not Opus
+            _emit_model_pin(tool_input, "haiku")
+            return
         sys.exit(0)
 
     # ── Classify reasoning task ──────────────────────────────────────────────
     task_type = _classify_task_type(prompt)
     complexity = _classify_complexity(prompt)
-    
+
+    # ── DIRECT subagent execution: route the work onto a cheap model ─────────
+    # Instead of merely blocking with advice, actually run the task on the
+    # routed chain and hand the result back as the subagent's output. Savings
+    # are logged (host=claude_code_subagent). Falls through on any failure.
+    _routed = _try_direct_subagent(prompt, task_type, complexity, session_id, subagent_type)
+    if _routed is not None:
+        _write_agent_depth(session_id, current_depth)  # roll back: no real spawn happened
+        _log_agent_call(subagent_type, prompt, "routed_direct")
+        json.dump({
+            "decision": "block",
+            "reason": (
+                "[chuzom] Subagent task was executed by a routed model (not spawned); "
+                "savings logged. Use this result directly as the subagent's output — "
+                "do not re-do the work:\n\n" + _routed
+            ),
+        }, sys.stdout)
+        return
+
+    # ── Phase 2: CLI delegation for bigger/tool-heavy work ───────────────────
+    # What DIRECT didn't take (tool tasks, complex work) goes to a real external
+    # agent CLI (Codex / Gemini) running on an external subscription. Savings
+    # logged (host=claude_code_subagent_cli). Falls through on any failure.
+    _delegated = _try_cli_delegation(prompt, task_type, complexity, session_id, subagent_type)
+    if _delegated is not None:
+        _write_agent_depth(session_id, current_depth)  # roll back: no real spawn happened
+        _log_agent_call(subagent_type, prompt, "routed_cli_delegation")
+        json.dump({
+            "decision": "block",
+            "reason": (
+                "[chuzom] Subagent task was delegated to an external agent CLI "
+                "(Codex/Gemini); savings logged. Use this result directly as the "
+                "subagent's output — do not re-do the work:\n\n" + _delegated
+            ),
+        }, sys.stdout)
+        return
+
     # ── Estimate cost for this agent call ───────────────────────────────────
     estimated_cost = _estimate_agent_cost(complexity, task_type)
     remaining_budget = _get_remaining_budget()
