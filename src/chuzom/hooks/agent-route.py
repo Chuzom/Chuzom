@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 5
+# chuzom-hook-version: 6
 """PreToolUse[Agent] hook — intercept subagent spawning, route reasoning to cheap models.
 
 When Claude spawns a subagent (Agent tool), this hook intercepts and decides:
@@ -549,6 +549,28 @@ def _govern_run(subagent_type: str, provider: str, model: str,
         pass
 
 
+def _model_pin_enabled() -> bool:
+    return os.environ.get("CHUZOM_SUBAGENT_MODEL_PIN", "on").strip().lower() not in ("0", "off", "false", "no")
+
+
+def _emit_model_pin(tool_input: dict, model: str) -> None:
+    """Phase 4 (Option-A) — approve the spawn but rewrite its model to a cheaper tier.
+
+    Uses Claude Code PreToolUse input rewriting (`updatedInput` under
+    `hookSpecificOutput`): the subagent still spawns with the full harness, just on a
+    cheaper Claude tier. If the host build ignores `updatedInput`, the `allow` still
+    holds and the spawn proceeds on the inherited model — graceful degradation.
+    """
+    json.dump({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "updatedInput": {**tool_input, "model": model},
+            "permissionDecisionReason": f"[chuzom] model pinned → {model} (lightweight subagent)",
+        }
+    }, sys.stdout)
+
+
 def _try_direct_subagent(
     prompt: str, task_type: str, complexity: str, session_id: str,
     subagent_type: str = "general-purpose",
@@ -744,6 +766,9 @@ def main() -> None:
     # ── Always approve Explore subagents — they're pure retrieval ────────────
     if subagent_type == "Explore":
         _log_agent_call(subagent_type, prompt, "approved_explore")
+        if _model_pin_enabled():  # Phase 4: lightweight read/search → Haiku, not Opus
+            _emit_model_pin(tool_input, "haiku")
+            return
         sys.exit(0)
 
     # ── Special rule: allowlisted subagent types bypass routing ──────────────
@@ -775,6 +800,9 @@ def main() -> None:
     # ── Detect retrieval-only tasks ──────────────────────────────────────────
     if _is_retrieval_only(prompt):
         _log_agent_call(subagent_type, prompt, "approved_retrieval")
+        if _model_pin_enabled():  # Phase 4: pure retrieval → Haiku, not Opus
+            _emit_model_pin(tool_input, "haiku")
+            return
         sys.exit(0)
 
     # ── Classify reasoning task ──────────────────────────────────────────────

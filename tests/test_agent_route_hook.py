@@ -37,6 +37,7 @@ def _run(
     max_depth: str | None = None,
     tmp_path: Path | None = None,
     subagent_direct: bool = False,
+    model_pin: bool = False,
 ) -> tuple[int, dict | None]:
     """Run the agent-route hook with given parameters.
 
@@ -65,6 +66,7 @@ def _run(
     # network-dependent. Classification/depth/budget tests assert the pre-routing
     # decision, so disable it unless a test explicitly opts in.
     env["CHUZOM_SUBAGENT_DIRECT"] = "on" if subagent_direct else "off"
+    env["CHUZOM_SUBAGENT_MODEL_PIN"] = "on" if model_pin else "off"
     if tmp_path is not None:
         llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
@@ -319,6 +321,34 @@ class TestGovernance:
         assert state == "completed"
         assert consumed == 0.0           # ollama is free
         assert cap > 0                    # Claude-equivalent baseline envelope
+
+
+class TestModelPin:
+    """Phase 4 — lightweight spawned subagents are pinned to a cheaper Claude tier."""
+
+    def test_explore_pinned_to_haiku(self, tmp_path):
+        code, out = _run("find all callers of foo()", subagent_type="Explore",
+                         tmp_path=tmp_path, model_pin=True)
+        assert code == 0
+        hso = out["hookSpecificOutput"]
+        assert hso["permissionDecision"] == "allow"
+        assert hso["updatedInput"]["model"] == "haiku"
+        # original input preserved (only model added/overridden)
+        assert hso["updatedInput"]["prompt"] == "find all callers of foo()"
+        assert hso["updatedInput"]["subagent_type"] == "Explore"
+
+    def test_retrieval_pinned_to_haiku(self, tmp_path):
+        code, out = _run("search for every import of requests across the repo",
+                         subagent_type="general-purpose", tmp_path=tmp_path, model_pin=True)
+        assert code == 0
+        assert out["hookSpecificOutput"]["updatedInput"]["model"] == "haiku"
+
+    def test_pin_disabled_is_silent_allow(self, tmp_path):
+        """With the pin off, Explore approval is a silent allow (no stdout) as before."""
+        code, out = _run("find all callers of foo()", subagent_type="Explore",
+                         tmp_path=tmp_path, model_pin=False)
+        assert code == 0
+        assert out is None
 
 
 class TestMissingFiles:

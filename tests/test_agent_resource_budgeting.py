@@ -45,6 +45,7 @@ def _run_agent_route(
     # budget path is exercised deterministically.
     env["CHUZOM_SUBAGENT_DIRECT"] = "off"
     env["CHUZOM_SUBAGENT_CLI_DELEGATION"] = "off"
+    env["CHUZOM_SUBAGENT_MODEL_PIN"] = "off"
     if tmp_path is not None:
         llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)

@@ -133,6 +133,7 @@ counterfactuals.
 | `CHUZOM_SUBAGENT_CLI_TIMEOUT` | `120` | Max seconds for a delegated CLI run before falling back |
 | `CHUZOM_CODEX_MODELS` | — | Override Codex model list (set to a model the account has) |
 | `CHUZOM_SUBAGENT_GOVERNANCE` | `on` | Record each routed run as a governed `agents/` session |
+| `CHUZOM_SUBAGENT_MODEL_PIN` | `on` | Pin lightweight spawned subagents (Explore/retrieval) to Haiku |
 | `CHUZOM_AGENT_ROUTE_ALLOW` | — | Subagent types that bypass routing (real tool-work agents) |
 | `CHUZOM_ROUTE_BANNER` | `on` | stderr `🎯 routed →` banner |
 
@@ -151,8 +152,13 @@ counterfactuals.
   `agent_id="subagent:<type>"`, budget cap = Claude-equivalent baseline, consumed = actual
   external cost, `framework="chuzom-subagent-route"`. The cap−consumed gap is the saving,
   auditable at the governance layer. Gated by `CHUZOM_SUBAGENT_GOVERNANCE`. Fire-and-forget.
-- **Phase 4 (pending):** Option-A model-pin for genuinely-spawned Claude subagents (rewrite the
-  Agent tool's `model` to the cheapest viable tier when input-rewrite is supported).
+- **Phase 4 (done, conservative scope):** Option-A model-pin for lightweight *spawned* subagents.
+  Explore + retrieval-only agents (which run on inherited Opus today) are pinned to **Haiku** via
+  PreToolUse input rewriting — `{"hookSpecificOutput":{"permissionDecision":"allow",
+  "updatedInput":{...,"model":"haiku"}}}`. The spawn keeps the full harness, just on a cheaper
+  tier. If the host ignores `updatedInput`, the `allow` still holds (graceful). Gated by
+  `CHUZOM_SUBAGENT_MODEL_PIN`. Pinning allowlisted tool-work agents (code-reviewer/Plan) by
+  complexity is the deliberate next increment.
 
 ### Operational notes (this environment)
 - `run_codex` needs a model the account actually has. Defaults `gpt-5.5`/`gpt-5.4` return 404 here
