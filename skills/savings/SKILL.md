@@ -1,3 +1,8 @@
+---
+name: savings
+description: Track and report cross-session savings from routing tasks to cheaper models
+---
+
 # LLM Router — Savings Tracking Skill
 
 Track and report how much you've saved by routing tasks to cheaper models.

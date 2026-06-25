@@ -1,0 +1,17 @@
+# Paths excluded from HOL plugin-scanner / Codex packaging.
+# Tests hold intentional fake secrets (secret-scrubber / PII fixtures); caches
+# and infra dirs are not part of the published plugin surface.
+tests/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+.venv/
+.venv-*/
+venv/
+deploy/
+htmlcov/
+.coverage
+dist/
+build/
+*.egg-info/

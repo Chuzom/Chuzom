@@ -1,0 +1,28 @@
+# HOL plugin-scanner config (https://github.com/hashgraph-online/hol-guard).
+#
+# ignore_paths excludes reviewed paths from scanning:
+#  - tests/**          : secret-scrubber / PII test fixtures carry intentional
+#                        FAKE secrets; not part of the published plugin surface.
+#  - caches/deploy      : not part of the published plugin.
+#  - 3 source files     : manually reviewed HARDCODED_SECRET hits, all false
+#    positives (NO real secrets):
+#      safe_config.py   -> emits a config TEMPLATE with empty `*_api_key: ""`
+#                          placeholders for the user to fill in.
+#      org_policy.py    -> documentation example of an AWS Secrets Manager ARN
+#                          reference (a pointer, not a secret value).
+#      enterprise/rbac.py -> RBAC permission identifiers containing the word
+#                          "token" (e.g. ISSUE_TEAM_TOKEN) — not secrets.
+[scanner]
+ignore_paths = [
+  "tests/*",
+  "tests/**",
+  ".pytest_cache/*",
+  ".pytest_cache/**",
+  "deploy/*",
+  "deploy/**",
+  ".venv/*",
+  "htmlcov/*",
+  "src/chuzom/safe_config.py",
+  "src/chuzom/org_policy.py",
+  "src/chuzom/enterprise/rbac.py",
+]

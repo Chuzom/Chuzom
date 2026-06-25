@@ -29,7 +29,7 @@ Example:
         api_key: "${vault:secret/llm-providers#openai_key}"
         organization: "${env:OPENAI_ORG}"
       anthropic:
-        api_key: "${aws-sm:arn:aws:secretsmanager:us-east-1:1234:secret:anthropic-AaBbCc}"
+        api_key: "${aws-sm:arn:aws:secretsmanager:us-east-1:1234:secret:<SECRET_NAME>}"
     routing:
       default_chain: code_chain
       enforce: smart
