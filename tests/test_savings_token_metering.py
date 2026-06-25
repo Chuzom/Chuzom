@@ -30,7 +30,8 @@ def _mk(db, with_tokens: bool):
         "external_cost,model_used,host" + extra + ") VALUES(?,?,?,?,?,?,?" + (",?,?" if with_tokens else "") + ")",
         (_TS, "s", "query", 0.012, 0.0, "ollama/hermes3:8b", "claude_code", *vals),
     )
-    c.commit(); c.close()
+    c.commit()
+    c.close()
 
 
 def test_savings_stats_tokens_counted():
