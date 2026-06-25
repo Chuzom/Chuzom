@@ -1,13 +1,25 @@
 # Changelog
 
-## [0.5.9] - 2026-06-25
+## v0.5.10 — 2026-06-25 — DIRECT routing fully visible in usage + routing_decisions
 
-### Fixed
+### Fixes
+
+- **DIRECT-routed turns were invisible in the routing view.** The DIRECT (hook) path
+  only wrote to `savings_log.jsonl` → `savings_stats`; it never called
+  `cost.log_usage` / `cost.log_routing_decision`. Since DIRECT intercepts every
+  prompt, the `usage` and `routing_decisions` tables (which the routing view/summary
+  read) stayed frozen. New `savings_logger.log_direct_to_db()` mirrors the MCP path
+  and writes both tables (rows tagged `reason_code='direct'`), fire-and-forget so the
+  hook never blocks. Hook bumped to v24 so the installer redeploys.
 - **Token metering for DIRECT-routed calls.** Free-provider (Ollama/Codex) routes
   captured token counts in `DirectResult` but dropped them at `savings_logger`, so
   `savings_stats` (and the dashboard token totals) under-counted. Tokens now flow
   logger → `savings_stats` (new `input_tokens`/`output_tokens` cols + migration) →
   `dashboard_data.query_window` totals. Old DBs migrate idempotently.
+- **Green CI.** Fixed a pre-existing ruff E702, synced plugin manifests to the
+  release version, and made the enforcement-logging hook test hermetic
+  (`CHUZOM_DIRECT_EXECUTION=0`) so it no longer OOM-kills its subprocess under
+  full-suite load.
 
 ## v0.5.8 — 2026-06-24 — Accurate savings report + subagent allowlist
 
