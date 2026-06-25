@@ -211,7 +211,7 @@ async def llm_setup(
                     f"To add **{reg['name']}**:\n"
                     f"1. Sign up at: {reg['signup_url']}\n"
                     f"2. Copy your API key\n"
-                    f"3. Run: `llm_setup(action='add', provider='{provider}', api_key='your-key-here')`\n\n"
+                    f"3. Run: `llm_setup(action='add', provider='{provider}', api_key=<YOUR_KEY>)`\n\n"
                     f"Free tier: {reg['free_tier']}"
                 )
             return f"Unknown provider: {provider}. Run `llm_setup(action='status')` for the list."
@@ -298,25 +298,25 @@ def _setup_guide() -> str:
 1. Go to https://aistudio.google.com/apikey
 2. Click "Create API Key" (Google account required)
 3. Copy the key
-4. Run: `llm_setup(action='add', provider='gemini', api_key='your-key')`
+4. Run: `llm_setup(action='add', provider='gemini', api_key=<YOUR_KEY>)`
 5. You now have: text, code, images (Imagen 3), and video (Veo 2)!
 
 ## Step 2: Groq (FREE — ultra-fast inference)
 1. Go to https://console.groq.com/keys
 2. Sign up and create an API key
-3. Run: `llm_setup(action='add', provider='groq', api_key='your-key')`
+3. Run: `llm_setup(action='add', provider='groq', api_key=<YOUR_KEY>)`
 4. Adds: blazing fast Llama 3.3 for classification and simple tasks
 
 ## Step 3: DeepSeek (CHEAP — best quality/price)
 1. Go to https://platform.deepseek.com/api_keys
 2. Sign up and add $5 credit (lasts weeks of heavy use)
-3. Run: `llm_setup(action='add', provider='deepseek', api_key='your-key')`
+3. Run: `llm_setup(action='add', provider='deepseek', api_key=<YOUR_KEY>)`
 4. Adds: excellent coding and reasoning at 1/20th the cost of GPT-4o
 
 ## Step 4 (Optional): OpenAI
 1. Go to https://platform.openai.com/api-keys
 2. Add billing ($5 minimum)
-3. Run: `llm_setup(action='add', provider='openai', api_key='your-key')`
+3. Run: `llm_setup(action='add', provider='openai', api_key=<YOUR_KEY>)`
 4. Adds: GPT-4o, o3, DALL-E 3, TTS, Whisper
 
 ## After Setup
@@ -559,7 +559,7 @@ def _setup_provider_detail(provider: str | None) -> str:
             "## How to Add",
             f"1. Go to {reg['signup_url']}",
             "2. Create an account and generate an API key",
-            f"3. Run: `llm_setup(action='add', provider='{provider}', api_key='your-key')`",
+            f"3. Run: `llm_setup(action='add', provider='{provider}', api_key=<YOUR_KEY>)`",
         ])
 
     return "\n".join(lines)

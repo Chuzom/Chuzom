@@ -1,3 +1,8 @@
+---
+name: routing
+description: Route tasks to the cheapest capable model automatically via the llm-router MCP tools
+---
+
 # LLM Router — Smart Routing Skill
 
 Route tasks to the cheapest capable model automatically using llm-router MCP tools.

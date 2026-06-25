@@ -1,3 +1,9 @@
+---
+name: release
+description: Automate the full llm-router release pipeline (version, changelog, publish)
+trigger: /release
+---
+
 # /release — llm-router Release Skill
 
 Automates the full release pipeline for llm-router. Run this skill whenever
