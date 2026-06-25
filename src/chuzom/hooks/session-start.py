@@ -409,9 +409,9 @@ def _refresh_claude_usage_attempt() -> dict:
 
     # Parse — the OAuth response has utilization as a percentage (0-100)
     try:
-        session_pct = float(data.get("five_hour", {}).get("utilization", 0.0))
-        weekly_pct = float(data.get("seven_day", {}).get("utilization", 0.0))
-        sonnet_pct = float(data.get("seven_day_sonnet", {}).get("utilization", 0.0))
+        session_pct = float((data.get("five_hour") or {}).get("utilization", 0.0))
+        weekly_pct = float((data.get("seven_day") or {}).get("utilization", 0.0))
+        sonnet_pct = float((data.get("seven_day_sonnet") or {}).get("utilization", 0.0))
         highest_pressure = max(session_pct, weekly_pct, sonnet_pct) / 100.0
         
         return {
