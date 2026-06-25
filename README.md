@@ -932,7 +932,7 @@ A: Yes. v0.4.0 streams Codex JSONL events in real time. You'll see `thread.start
 
 Chuzom ships as a Codex plugin — manifest at [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json)
 (name `chuzom`, category *Developer Tools*). It's eligible for the
-[awesome-ai-plugins](https://github.com/awesome-ai-plugins) list; a ready-to-submit entry
+[awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins) list; a ready-to-submit entry
 lives at [`.codex-plugin/awesome-ai-plugins-entry.md`](.codex-plugin/awesome-ai-plugins-entry.md)
 (tracked in issue #103).
 
