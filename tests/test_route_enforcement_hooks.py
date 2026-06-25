@@ -362,6 +362,12 @@ def test_auto_route_logs_unrouted_previous_turn_on_next_prompt(tmp_path):
             "prompt": "Write a blog post about routing economics",
         },
         home=tmp_path,
+        # Test enforcement-logging behavior only. Without this, the hook attempts
+        # real DIRECT execution (Ollama chain) in a subprocess, which under
+        # full-suite memory pressure gets OOM-killed (returncode -9) — flaky
+        # locally and red in CI (no Ollama). Disabling direct execution makes the
+        # test hermetic and deterministic, matching test_auto_route_hook.py.
+        extra_env={"CHUZOM_DIRECT_EXECUTION": "0"},
     )
 
     assert result.returncode == 0
