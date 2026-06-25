@@ -107,8 +107,65 @@ def _append_savings_log(tool_name: str) -> None:
         pass
 
 
+def _oauth_refresh_and_write() -> None:
+    """Fetch live Claude subscription usage via OAuth and write usage.json.
+
+    Invoked when this script is run with no stdin payload — i.e. the statusline's
+    periodic background refresh. Mirrors the fetch/parse in the session-start hook
+    but is null-safe: the OAuth endpoint returns ``null`` (not a missing key) for
+    inactive windows like ``seven_day_sonnet``, so we coerce ``None`` to ``{}``.
+    """
+    import subprocess
+    import urllib.request
+
+    try:
+        r = subprocess.run(
+            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode != 0 or not r.stdout.strip():
+            return
+        token = json.loads(r.stdout.strip()).get("claudeAiOauth", {}).get("accessToken", "")
+        if not token:
+            return
+        req = urllib.request.Request(
+            "https://api.anthropic.com/api/oauth/usage",
+            headers={"Authorization": f"Bearer {token}", "anthropic-beta": "oauth-2025-04-20"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        session_pct = float((data.get("five_hour") or {}).get("utilization", 0.0))
+        weekly_pct = float((data.get("seven_day") or {}).get("utilization", 0.0))
+        sonnet_pct = float((data.get("seven_day_sonnet") or {}).get("utilization", 0.0))
+    except Exception:
+        return  # leave the last-known usage.json untouched on any failure
+
+    snap = {
+        "session_pct": round(session_pct, 1),
+        "weekly_pct": round(weekly_pct, 1),
+        "sonnet_pct": round(sonnet_pct, 1),
+        "highest_pressure": round(max(session_pct, weekly_pct, sonnet_pct) / 100.0, 4),
+        "updated_at": time.time(),
+    }
+    _ensure_state_dir()
+    usage_path = os.path.join(STATE_DIR, "usage.json")
+    tmp = usage_path + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump(snap, f)
+        os.replace(tmp, usage_path)
+    except OSError:
+        pass
+
+
 def main() -> None:
-    payload = json.loads(sys.stdin.read())
+    raw = sys.stdin.read().strip()
+    if not raw:
+        # No hook payload → statusline background refresh. Fetch & write usage.json.
+        _oauth_refresh_and_write()
+        return
+
+    payload = json.loads(raw)
 
     tool_name = payload.get("toolName", "")
     if not tool_name.startswith("llm_"):

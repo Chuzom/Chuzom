@@ -299,24 +299,31 @@ case "$enforce" in
     smart)   parts+=("🛡  ${_SKY}smart${_RESET}") ;;
 esac
 
-# ── 🔀 Last route (if recent) ────────────────────────────────────────────────
-last=$(python3 -c "
+# ── 🔀 Last route (always shown) ─────────────────────────────────────────────
+# Persistent: always render the most recent route. A dim ° marker is appended
+# when the route is older than 5 min, matching the quota segment's stale cue.
+# Output format from python: "<route>\t<stale>" where stale is "1" or "".
+last_raw=$(python3 -c "
 import json, glob, os, time
 files = glob.glob(os.path.expanduser('$STATE_DIR/last_route_*.json'))
 if files:
     newest = max(files, key=os.path.getmtime)
     try:
         d = json.load(open(newest))
-        age = time.time() - d.get('saved_at', 0)
-        if age < 300:
-            tool = d.get('tool', '?').replace('llm_', '')
-            task = d.get('task_type', tool)
-            print(f'{task}>{tool}' if task != tool else tool)
+        tool = d.get('tool', '?').replace('llm_', '')
+        task = d.get('task_type', tool)
+        route = f'{task}>{tool}' if task != tool else tool
+        stale = '1' if (time.time() - d.get('saved_at', 0)) >= 300 else ''
+        print(f'{route}\t{stale}')
     except Exception:
         pass
 " 2>/dev/null)
+last="${last_raw%%$'\t'*}"
+last_stale="${last_raw##*$'\t'}"
 if [ -n "$last" ]; then
-    parts+=("🔀 ${_MAUVE}${last}${_RESET}")
+    stale_marker=""
+    [ -n "$last_stale" ] && stale_marker="${_DIM}°${_RESET}"
+    parts+=("🔀 ${_MAUVE}${last}${_RESET}${stale_marker}")
 fi
 
 # ── Assemble with dim middle-dot separators ──────────────────────────────────
