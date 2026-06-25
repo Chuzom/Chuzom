@@ -129,6 +129,9 @@ counterfactuals.
 |---|---|---|
 | `CHUZOM_SUBAGENT_DIRECT` | `on` | Master switch for subagent DIRECT execution |
 | `CHUZOM_SUBAGENT_DIRECT_MAX_COMPLEXITY` | `moderate` | Highest complexity to execute in-hook (`simple`/`moderate`/`complex`) |
+| `CHUZOM_SUBAGENT_CLI_DELEGATION` | `on` | Master switch for the CLI-delegation tier (Codex / Gemini CLI) |
+| `CHUZOM_SUBAGENT_CLI_TIMEOUT` | `120` | Max seconds for a delegated CLI run before falling back |
+| `CHUZOM_CODEX_MODELS` | — | Override Codex model list (set to a model the account has) |
 | `CHUZOM_AGENT_ROUTE_ALLOW` | — | Subagent types that bypass routing (real tool-work agents) |
 | `CHUZOM_ROUTE_BANNER` | `on` | stderr `🎯 routed →` banner |
 
@@ -136,11 +139,20 @@ counterfactuals.
 
 ## Phasing
 
-- **Phase 1 (this change):** dispatch ladder + savings logging for simple/moderate subagents via
+- **Phase 1 (done):** dispatch ladder + savings logging for simple/moderate subagents via
   `execute_chain` / `execute_agent` (Ollama for tools). Fall back to spawn otherwise.
-- **Phase 2:** route tool-heavy/external-OK subagents to `run_gemini_cli` / `run_codex`
-  (CLI delegation, real toolchains on external subs); wrap runs in `agents/` session+budget
-  governance; Option-A model-pin for spawned Claude subagents.
+- **Phase 2 (done):** `.env` self-loading in `agent-route.py` (so `OLLAMA_BUDGET_MODELS` + keys
+  reach `build_chain` → DIRECT prefers **free local** models); CLI delegation
+  (`_try_cli_delegation`) routing tool-heavy/complex subagents to `run_codex` / `run_gemini_cli`,
+  bounded by `CHUZOM_SUBAGENT_CLI_TIMEOUT`, savings tagged `host="claude_code_subagent_cli"`.
+- **Phase 3 (pending):** wrap routed runs in `agents/` session+budget+lineage governance;
+  Option-A model-pin for spawned Claude subagents.
+
+### Operational notes (this environment)
+- `run_codex` needs a model the account actually has. Defaults `gpt-5.5`/`gpt-5.4` return 404 here
+  — set `CHUZOM_CODEX_MODELS` to a valid model. The CLI tier falls back gracefully until then; a
+  wrong model retries 5×, so keep `CHUZOM_SUBAGENT_CLI_TIMEOUT` bounded.
+- Gemini CLI is not installed here (`is_gemini_cli_available()` False); Codex is preferred.
 
 ---
 

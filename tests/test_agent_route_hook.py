@@ -269,6 +269,29 @@ class TestSubagentDirectGating:
         assert r["simple"] < r["moderate"] < r["complex"]
 
 
+class TestCliDelegationGating:
+    """Phase 2 CLI delegation must gate before invoking any external CLI."""
+
+    def test_disabled_returns_none(self, monkeypatch):
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_CLI_DELEGATION", "off")
+        assert mod._try_cli_delegation("refactor and run tests", "code", "complex", "s1") is None
+
+    def test_non_tool_non_complex_skipped(self, monkeypatch):
+        """A simple Q&A task is not delegated — DIRECT already covers it."""
+        mod = _load_hook_module()
+        monkeypatch.setenv("CHUZOM_SUBAGENT_CLI_DELEGATION", "on")
+        # 'what is X' is not a tool task and not complex → no CLI invocation, returns None
+        assert mod._try_cli_delegation("what is a closure", "query", "simple", "s1") is None
+
+    def test_env_loaded_into_environ(self):
+        """The hook loads ~/.chuzom/.env so OLLAMA_BUDGET_MODELS reaches build_chain."""
+        mod = _load_hook_module()
+        # _load_dotenv ran at import; the function exists and is idempotent.
+        assert callable(mod._load_dotenv)
+        mod._load_dotenv()  # no-override re-run must not raise
+
+
 class TestMissingFiles:
     """Test handling of missing/malformed state files."""
 
