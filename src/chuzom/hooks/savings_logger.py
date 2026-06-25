@@ -129,6 +129,8 @@ def log_direct_savings(
             "estimated_saved": estimated_saved,
             "external_cost": external_cost,
             "model": f"{provider}/{model}",
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "host": host,
         }
 

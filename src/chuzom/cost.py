@@ -98,7 +98,9 @@ CREATE TABLE IF NOT EXISTS savings_stats (
     estimated_claude_cost_saved REAL NOT NULL,
     external_cost REAL NOT NULL,
     model_used TEXT NOT NULL,
-    host TEXT NOT NULL DEFAULT 'claude_code'
+    host TEXT NOT NULL DEFAULT 'claude_code',
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0
 )
 """
 """Schema for the ``savings_stats`` table tracking per-call routing savings.
@@ -228,6 +230,13 @@ MIGRATE_SAVINGS_STATS_ADD_HOST = [
     "ALTER TABLE savings_stats ADD COLUMN host TEXT NOT NULL DEFAULT 'claude_code'",
 ]
 """Idempotent migration to add host attribution column to savings_stats (v3.1)."""
+
+MIGRATE_SAVINGS_STATS_ADD_TOKENS = [
+    "ALTER TABLE savings_stats ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE savings_stats ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0",
+]
+"""Idempotent migration: record token counts for DIRECT-routed calls so the
+dashboard's token totals include free-provider (Ollama/Codex) throughput (v7.4)."""
 
 MIGRATE_ROUTING_DECISIONS_ADD_POLICY = [
     "ALTER TABLE routing_decisions ADD COLUMN policy_applied TEXT",
@@ -550,6 +559,7 @@ async def _get_db() -> aiosqlite.Connection:
         + MIGRATE_USAGE_ADD_TEAM
         + MIGRATE_USAGE_ADD_COMPLEXITY
         + MIGRATE_SAVINGS_STATS_ADD_HOST
+        + MIGRATE_SAVINGS_STATS_ADD_TOKENS
         + MIGRATE_ROUTING_DECISIONS_ADD_POLICY
         + MIGRATE_ADD_CORRELATION_ID
         + MIGRATE_ADD_CACHE_METRICS
@@ -2478,7 +2488,8 @@ async def import_savings_log() -> int:
             await db.execute(
                 "INSERT INTO savings_stats "
                 "(timestamp, session_id, task_type, estimated_claude_cost_saved, "
-                "external_cost, model_used, host) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "external_cost, model_used, host, input_tokens, output_tokens) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     entry.get("timestamp", datetime.now(timezone.utc).isoformat()),
                     entry.get("session_id", "unknown"),
@@ -2487,6 +2498,8 @@ async def import_savings_log() -> int:
                     float(entry.get("external_cost", 0.0)),
                     entry.get("model", "unknown"),
                     entry.get("host", "claude_code"),
+                    int(entry.get("input_tokens", 0) or 0),
+                    int(entry.get("output_tokens", 0) or 0),
                 ),
             )
             imported += 1

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.9] - 2026-06-25
+
+### Fixed
+- **Token metering for DIRECT-routed calls.** Free-provider (Ollama/Codex) routes
+  captured token counts in `DirectResult` but dropped them at `savings_logger`, so
+  `savings_stats` (and the dashboard token totals) under-counted. Tokens now flow
+  logger → `savings_stats` (new `input_tokens`/`output_tokens` cols + migration) →
+  `dashboard_data.query_window` totals. Old DBs migrate idempotently.
+
 ## v0.5.8 — 2026-06-24 — Accurate savings report + subagent allowlist
 
 ### Fixes

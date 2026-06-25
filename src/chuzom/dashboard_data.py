@@ -225,19 +225,25 @@ def query_window(
             total_tokens += tokens
             total_saved += saved
 
-        # ``savings_stats`` — no token columns.
+        # ``savings_stats`` — DIRECT-routed (free-provider) calls. Token columns
+        # added in v7.4; older DBs lack them, so sum defensively.
         if _table_exists(conn, _JSONL_TABLE):
+            cols = _columns(conn, _JSONL_TABLE)
             row = conn.execute(
                 f"SELECT COUNT(*), "
-                f"COALESCE(SUM(estimated_claude_cost_saved),0) "
+                f"COALESCE(SUM(estimated_claude_cost_saved),0), "
+                f"{_sum_if_present(cols, 'input_tokens')}, "
+                f"{_sum_if_present(cols, 'output_tokens')} "
                 f"FROM {_JSONL_TABLE} WHERE {where}"
             ).fetchone()
             calls = int(row[0])
             saved = float(row[1])
+            tokens = int(row[2]) + int(row[3])
             by_source[_JSONL_TABLE] = {
-                "calls": calls, "tokens": 0, "saved_usd": saved,
+                "calls": calls, "tokens": tokens, "saved_usd": saved,
             }
             total_calls += calls
+            total_tokens += tokens
             total_saved += saved
     finally:
         conn.close()

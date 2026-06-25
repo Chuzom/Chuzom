@@ -306,6 +306,8 @@ def _sync_import_savings_log() -> None:
                 float(r.get("external_cost", 0.0)),
                 r.get("model", "unknown"),
                 r.get("host", "claude_code"),
+                int(r.get("input_tokens", 0) or 0),
+                int(r.get("output_tokens", 0) or 0),
             ))
         except (json.JSONDecodeError, KeyError, ValueError):
             continue
@@ -323,13 +325,22 @@ def _sync_import_savings_log() -> None:
                 estimated_claude_cost_saved REAL NOT NULL,
                 external_cost REAL NOT NULL,
                 model_used TEXT NOT NULL,
-                host TEXT NOT NULL DEFAULT 'claude_code'
+                host TEXT NOT NULL DEFAULT 'claude_code',
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0
             )
         """)
+        # Idempotent migration for DBs created before token columns existed.
+        for _col in ("input_tokens", "output_tokens"):
+            try:
+                conn.execute(f"ALTER TABLE savings_stats ADD COLUMN {_col} INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass  # column already present
         conn.executemany(
             "INSERT INTO savings_stats "
-            "(timestamp, session_id, task_type, estimated_claude_cost_saved, external_cost, model_used, host) "
-            "VALUES (?,?,?,?,?,?,?)",
+            "(timestamp, session_id, task_type, estimated_claude_cost_saved, external_cost, "
+            "model_used, host, input_tokens, output_tokens) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             records,
         )
         conn.commit()
