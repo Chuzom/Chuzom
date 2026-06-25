@@ -198,3 +198,75 @@ def test_records_match_baseline_per_complexity(savings_log_path):
     records = {json.loads(line)["session_id"]: json.loads(line) for line in lines}
     assert records["simple"]["estimated_saved"] < records["moderate"]["estimated_saved"]
     assert records["moderate"]["estimated_saved"] < records["complex"]["estimated_saved"]
+
+
+# ── DIRECT → usage / routing_decisions table persistence ─────────────────────
+# Bug: the DIRECT (hook) path only appended to savings_log.jsonl, so the
+# `usage` and `routing_decisions` tables — which the routing view / summary
+# read from — stayed frozen whenever the hook answered prompts inline. The
+# fix wires log_direct_to_db() into the DIRECT success handler so DIRECT-routed
+# turns are visible everywhere the MCP-tool path is.
+
+
+def test_log_direct_to_db_writes_usage_table(temp_db):
+    """A successful DIRECT call must insert one row into the usage table."""
+    import sqlite3
+
+    from chuzom.hooks.savings_logger import log_direct_to_db
+
+    log_direct_to_db(
+        _ollama_result(input_tokens=512, output_tokens=88),
+        prompt="check the backfill log",
+        task_type="research",
+        complexity="moderate",
+        classifier_type="heuristic",
+    )
+
+    rows = sqlite3.connect(str(temp_db)).execute(
+        "SELECT model, provider, task_type, input_tokens, output_tokens, cost_usd FROM usage"
+    ).fetchall()
+    assert len(rows) == 1
+    model, provider, task_type, in_tok, out_tok, cost = rows[0]
+    assert provider == "ollama"
+    assert task_type == "research"
+    assert (in_tok, out_tok) == (512, 88)
+    assert cost == 0.0  # local provider is free
+
+
+def test_log_direct_to_db_writes_routing_decisions_table(temp_db):
+    """A successful DIRECT call must insert one row into routing_decisions,
+    tagged reason_code='direct' so it's distinguishable from MCP-path rows."""
+    import sqlite3
+
+    from chuzom.hooks.savings_logger import log_direct_to_db
+
+    log_direct_to_db(
+        _ollama_result(),
+        prompt="hello",
+        task_type="query",
+        complexity="simple",
+        classifier_type="heuristic",
+    )
+
+    rows = sqlite3.connect(str(temp_db)).execute(
+        "SELECT task_type, final_provider, final_model, reason_code FROM routing_decisions"
+    ).fetchall()
+    assert len(rows) == 1
+    task_type, provider, model, reason = rows[0]
+    assert task_type == "query"
+    assert provider == "ollama"
+    assert reason == "direct"
+
+
+def test_log_direct_to_db_never_raises_on_bad_task_type(temp_db):
+    """Unknown task_type / profile strings must fall back, not crash the hook."""
+    from chuzom.hooks.savings_logger import log_direct_to_db
+
+    # Should not raise even with a nonsense task_type.
+    log_direct_to_db(
+        _ollama_result(),
+        prompt="x",
+        task_type="not-a-real-task-type",
+        complexity="moderate",
+        profile="not-a-real-profile",
+    )

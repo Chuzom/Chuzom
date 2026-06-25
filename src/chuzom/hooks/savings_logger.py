@@ -29,6 +29,7 @@ Schema (must stay in sync with ``hooks/session-end.py::_sync_import_savings_log`
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -140,4 +141,107 @@ def log_direct_savings(
             f.write(json.dumps(record) + "\n")
     except Exception:
         # Silent — savings logging must never break the routing hook.
+        pass
+
+
+def log_direct_to_db(
+    result: "DirectResult",
+    *,
+    prompt: str,
+    task_type: str,
+    complexity: str,
+    classifier_type: str = "hook",
+    profile: str = "balanced",
+    session_id: str = "",
+) -> None:
+    """Persist a successful DIRECT routing into the ``usage`` and
+    ``routing_decisions`` tables of ``~/.chuzom/usage.db``.
+
+    The DIRECT (hook) path historically only appended to
+    ``savings_log.jsonl`` (via :func:`log_direct_savings`), so the two tables
+    that the routing view / summary read from — ``usage`` and
+    ``routing_decisions`` — stayed frozen whenever the hook answered prompts
+    inline instead of routing through the MCP tools. This mirrors what the
+    MCP path's ``cost.log_usage`` / ``cost.log_routing_decision`` do, so
+    DIRECT-routed turns become visible everywhere the MCP path is.
+
+    Fire-and-forget — never raises. The routing hook stays snappy and robust
+    even if the DB is locked or the import graph changes.
+    """
+    try:
+        from chuzom.cost import (
+            log_routing_decision as _cost_log_routing_decision,
+            log_usage as _cost_log_usage,
+        )
+        from chuzom.types import LLMResponse, RoutingProfile, TaskType
+
+        provider = result.model.provider
+        model = result.model.model
+        input_tokens = max(0, int(result.input_tokens or 0))
+        output_tokens = max(0, int(result.output_tokens or 0))
+        latency_ms = float(result.latency_ms or 0)
+        cost_usd = _cost_for(provider, model, input_tokens, output_tokens)
+
+        # Map the hook's string fields onto the typed enums the cost API wants,
+        # falling back to safe defaults if an unexpected value shows up.
+        try:
+            _task = TaskType(task_type)
+        except ValueError:
+            _task = TaskType.QUERY
+        try:
+            _profile = RoutingProfile(profile)
+        except ValueError:
+            _profile = RoutingProfile.BALANCED
+
+        response = LLMResponse(
+            content=getattr(result, "text", "") or "",
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            latency_ms=latency_ms,
+            provider=provider,
+        )
+
+        async def _persist() -> None:
+            await _cost_log_usage(
+                response,
+                _task,
+                _profile,
+                success=True,
+                complexity=complexity,
+            )
+            await _cost_log_routing_decision(
+                prompt=prompt,
+                task_type=task_type,
+                profile=_profile.value,
+                classifier_type=classifier_type,
+                classifier_model=None,
+                classifier_confidence=0.0,
+                classifier_latency_ms=0.0,
+                complexity=complexity,
+                recommended_model=model,
+                base_model=model,
+                was_downshifted=False,
+                budget_pct_used=0.0,
+                quality_mode="balanced",
+                final_model=model,
+                final_provider=provider,
+                success=True,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=cost_usd,
+                latency_ms=latency_ms,
+                reason_code="direct",
+            )
+
+        # The UserPromptSubmit hook runs as a standalone synchronous script, so
+        # there is no ambient event loop — asyncio.run is safe. Guard anyway:
+        # if a loop is somehow already running, skip rather than crash.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(_persist())
+    except Exception:
+        # Silent — DB persistence must never break the routing hook.
         pass

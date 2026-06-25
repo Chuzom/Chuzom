@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 23
+# chuzom-hook-version: 24
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -2510,6 +2510,25 @@ def main() -> None:
                         result=_direct_result,
                         task_type=task_type,
                         complexity=complexity,
+                        session_id=session_id,
+                    )
+                except Exception:
+                    pass
+                # Persist into usage + routing_decisions so DIRECT-routed turns
+                # show up in the routing view / summary, not just the savings
+                # dashboard. The MCP-tool path writes these tables via
+                # cost.log_usage / cost.log_routing_decision; the DIRECT path
+                # historically did not, leaving both tables frozen whenever the
+                # hook answered prompts inline. Fire-and-forget — swallows all
+                # errors so it can never block the routing decision.
+                try:
+                    from chuzom.hooks.savings_logger import log_direct_to_db
+                    log_direct_to_db(
+                        result=_direct_result,
+                        prompt=prompt,
+                        task_type=task_type,
+                        complexity=complexity,
+                        classifier_type=method,
                         session_id=session_id,
                     )
                 except Exception:
