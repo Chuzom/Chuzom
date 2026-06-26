@@ -220,6 +220,24 @@ def needs_claude_tools(prompt: str, task_type: str) -> bool:
     ):
         return True
 
+    # Local machine / filesystem / credential-location / run-the-app requests.
+    # These need native tools and local context that NO routed (web or local-LLM)
+    # model can supply — e.g. "search my machine for the token", "run the app",
+    # "what's in my .env". They must never route regardless of task_type, so this
+    # check sits ABOVE the research/query/generate early-return below.
+    if re.search(
+        r'(?:~/|\$HOME|/Users/|\.env\b|\.pypirc\b|keychain'
+        r'|\b(?:on |in )?my (?:machine|computer|laptop|mac|system|disk|files?|env(?:ironment)?)\b'
+        r'|\b(?:locally|local files?|on disk|file ?system|environment variable|env var)\b'
+        r'|\b(?:search|find|locate|where(?:\W?s| is| are| did)?|store|put|save)\b'
+        r'[^.?!]{0,40}\b(?:token|api[ _-]?key|secret|credential|password)\b'
+        r'|\b(?:run|launch|start|restart|deploy|publish|install|build|test)\b'
+        r'[^.?!]{0,25}\b(?:the app|my app|the server|the dashboard|the script|the suite|the release|locally)\b)',
+        prompt,
+        re.IGNORECASE,
+    ):
+        return True
+
     # Reading an explicit local file requires tool access even when the
     # classifier labels the request as a simple query.
     if re.search(
