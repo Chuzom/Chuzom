@@ -745,6 +745,18 @@ def main() -> None:
     _record_tool_call(session_id, tool_name)  # Track for loop detection
     violation_count = _increment_violation_count(session_id)
 
+    # Honest-savings split: the main model is doing the work itself instead of
+    # using the routed answer, so this routed turn's savings are POTENTIAL, not
+    # realized. Tell the session ledger (deduped per prompt_sequence). Fire-and-
+    # forget — accounting must never block or crash enforcement.
+    try:
+        from chuzom.session_spend import get_session_spend
+
+        _spend = get_session_spend()
+        _spend.mark_overridden(_spend.prompt_sequence)
+    except Exception:
+        pass
+
     # Detect investigation loops (same tool called 3+ times in 2 minutes)
     loop_detected = _detect_investigation_loop(session_id, tool_name)
 

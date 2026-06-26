@@ -139,6 +139,32 @@ def log_direct_savings(
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as f:
             f.write(json.dumps(record) + "\n")
+
+        # Mirror this DIRECT routing into the SESSION-scoped ledger
+        # (~/.chuzom/session_spend.json). llm_session_spend / llm_session_savings
+        # read THAT ledger, not usage.db — so without this, a session that routes
+        # exclusively through the DIRECT hook path (never the MCP llm_* tools)
+        # reports $0 spent / $0 saved even though usage.db recorded real savings.
+        # record()        → actual spend (≈$0 for local models) + call_count
+        # record_reclaimed → opus-equivalent + net savings (drives the headline #)
+        try:
+            from chuzom.session_spend import get_session_spend
+
+            _spend = get_session_spend()
+            _spend.record(
+                model=f"{provider}/{model}",
+                tool="direct",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=external_cost,
+            )
+            _spend.record_reclaimed(
+                tokens_reclaimed=input_tokens + output_tokens,
+                opus_equivalent_usd=baseline,
+                gates_passed=True,
+            )
+        except Exception:
+            pass
     except Exception:
         # Silent — savings logging must never break the routing hook.
         pass

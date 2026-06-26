@@ -92,6 +92,16 @@ class SessionSpend:
     opus_equivalent_usd: float = 0.0
     gates_passed: int = 0
     gates_failed: int = 0
+    # Round-tripped so DIRECT-path persistence (which goes through this class)
+    # does not drop the prompt_sequence counter the auto-route hook maintains.
+    prompt_sequence: int = 0
+    # Honest-savings split: a routed turn's savings are only REALIZED if the main
+    # model actually used the routed answer. When the enforce hook sees the model
+    # do the work itself (a routing violation), it marks the turn overridden —
+    # those savings are POTENTIAL, not realized. Deduped per prompt_sequence so
+    # multiple blocked tool-calls in one turn count as a single override.
+    overridden_turns: int = 0
+    last_overridden_seq: int = -1
 
     def record(
         self,
@@ -199,6 +209,35 @@ class SessionSpend:
         return max(0.0, self.opus_equivalent_usd - self.total_usd)
 
     @property
+    def potential_savings_usd(self) -> float:
+        """Counterfactual savings from routing — what a baseline model would have
+        cost minus actual spend. This is what the routed turns *could* have saved;
+        it is only fully realized if the main model used each routed answer."""
+        return self.net_savings_usd
+
+    @property
+    def realized_savings_usd(self) -> float:
+        """Savings actually preserved: potential minus the share attributed to
+        turns the main model overrode (did the work itself, so both models ran).
+        Prorated evenly across routed turns — conservative and clearly labelled."""
+        if self.call_count <= 0:
+            return 0.0
+        kept = max(0, self.call_count - self.overridden_turns)
+        return round(self.potential_savings_usd * kept / self.call_count, 6)
+
+    def mark_overridden(self, prompt_sequence: int) -> None:
+        """Flag the current routed turn as overridden by the main model.
+
+        Called by the enforce hook when it observes a routing violation. Deduped
+        on prompt_sequence so several blocked tool-calls in one turn count once.
+        """
+        if prompt_sequence == self.last_overridden_seq:
+            return
+        self.last_overridden_seq = prompt_sequence
+        self.overridden_turns += 1
+        self._persist()
+
+    @property
     def extension_minutes(self) -> float:
         """Estimated minutes of extra work the savings bought.
 
@@ -243,6 +282,12 @@ class SessionSpend:
             "gate_pass_rate": round(self.gate_pass_rate, 1),
             "gates_passed": self.gates_passed,
             "gates_failed": self.gates_failed,
+            "prompt_sequence": self.prompt_sequence,
+            # Honest-savings split (potential = counterfactual, realized = used)
+            "potential_savings_usd": round(self.potential_savings_usd, 6),
+            "realized_savings_usd": self.realized_savings_usd,
+            "overridden_turns": self.overridden_turns,
+            "last_overridden_seq": self.last_overridden_seq,
         }
 
     def _persist(self) -> None:
@@ -267,6 +312,9 @@ class SessionSpend:
         self.opus_equivalent_usd = 0.0
         self.gates_passed = 0
         self.gates_failed = 0
+        self.prompt_sequence = 0
+        self.overridden_turns = 0
+        self.last_overridden_seq = -1
         self._persist()
 
     @classmethod
@@ -286,6 +334,9 @@ class SessionSpend:
             obj.opus_equivalent_usd = float(data.get("opus_equivalent_usd", 0.0))
             obj.gates_passed = int(data.get("gates_passed", 0))
             obj.gates_failed = int(data.get("gates_failed", 0))
+            obj.prompt_sequence = int(data.get("prompt_sequence", 0))
+            obj.overridden_turns = int(data.get("overridden_turns", 0))
+            obj.last_overridden_seq = int(data.get("last_overridden_seq", -1))
             return obj
         except (OSError, json.JSONDecodeError, KeyError, ValueError):
             return cls()

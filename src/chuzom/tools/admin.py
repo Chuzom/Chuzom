@@ -944,6 +944,24 @@ async def llm_session_spend() -> str:
         "Scope: routed chuzom calls only; native host turns are not visible.",
     ]
 
+    # Honest-savings split: potential is the routing counterfactual; realized
+    # excludes turns the main model overrode (did the work itself). Only shown
+    # once there is at least one routed turn to talk about.
+    _pot = summary.get("potential_savings_usd", 0.0)
+    _real = summary.get("realized_savings_usd", 0.0)
+    _over = summary.get("overridden_turns", 0)
+    if summary.get("call_count", 0) > 0:
+        lines += [
+            "",
+            f"Potential saved (routing counterfactual): **${_pot:.4f}**",
+            f"Realized saved (answers actually used):   **${_real:.4f}**",
+        ]
+        if _over > 0:
+            lines.append(
+                f"⚠️  {_over} turn(s) overridden — main model did the work itself; "
+                "potential ≠ realized for those."
+            )
+
     if summary.get("anomaly_flag"):
         lines.insert(0, "⚠️  ANOMALY: Spend threshold exceeded in < 10 minutes!")
         lines.insert(1, "")

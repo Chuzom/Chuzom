@@ -1,6 +1,6 @@
 [project]
 name = "chuzom-router"
-version = "0.5.10"
+version = "0.6.0"
 description = "Smart LLM router for Claude Code, Cursor & Copilot — 3× longer sessions, 60–90% token savings. Auto-routes to Ollama, Codex CLI, and Gemini CLI before burning Claude quota."
 readme = "README.md"
 license = "MIT"

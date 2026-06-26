@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.6.0 — 2026-06-26 — Honest, grounded session savings (potential vs realized)
+
+### Fixes
+
+- **DIRECT-routed turns showed $0 in the session views.** `llm_session_spend` /
+  `llm_session_savings` (and `session_spend.json`) read the session ledger, but the
+  DIRECT (hook) path only wrote `usage.db` — it never called `session_spend.record()`.
+  So a session that routed exclusively through the DIRECT path reported `$0 / 0 calls`
+  even though `usage.db` had recorded real token savings (two ledgers, the session one
+  blind to DIRECT). `savings_logger.log_direct_savings()` now mirrors each DIRECT
+  routing into `SessionSpend` via `record()` + `record_reclaimed()`, fire-and-forget.
+
+### Features
+
+- **Honest savings split — potential vs realized.** Routing savings are a
+  counterfactual; they are only *realized* if the main model actually uses the routed
+  answer. New `SessionSpend.potential_savings_usd` / `realized_savings_usd` /
+  `overridden_turns`: when the enforce hook sees a routing violation (the model does the
+  work itself), it calls `mark_overridden()` (deduped per `prompt_sequence`), and those
+  turns are excluded from realized savings. `llm_session_spend` now renders both figures
+  plus an override count, so the number can no longer overstate savings.
+
+### Internal
+
+- `SessionSpend` round-trips `prompt_sequence` (and the new override fields) so
+  DIRECT-path persistence no longer drops the hook's prompt counter.
+- New regression suite `tests/test_direct_session_spend.py` — grounds every aggregate in
+  the input token counts and covers override proration + per-turn dedup.
+
 ## v0.5.10 — 2026-06-25 — DIRECT routing fully visible in usage + routing_decisions
 
 ### Fixes
