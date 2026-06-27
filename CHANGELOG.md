@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.6.2 — 2026-06-27 — Route everything: gateway, SDK, multi-protocol, observability
+
+### Features
+
+- **OpenAI-compatible gateway** (`chuzom gateway`) — wraps the router behind
+  `POST /v1/chat/completions`; any litellm/openai client routes through Chuzom via
+  `OPENAI_BASE_URL`. Meters into `usage.db` + `savings_log` + `model_tracking.jsonl`.
+  The Surface-C fix: external agents (Stockagent, cron, Agno) finally hit the ledger.
+- **Multi-protocol** — the gateway also serves Anthropic `/v1/messages` and Ollama
+  `/api/chat` + `/api/generate`, so a client enrolls via whatever SDK it speaks.
+- **In-process SDK** — `from chuzom import route` for Python agents (no HTTP).
+- **Infra presets** — `~/.chuzom/presets.yaml` + `CHUZOM_PRESET`; gateway & clients
+  resolve endpoint/host/port/profile from it. No hardcoded URLs across users/infra.
+- **`advise` enforce mode** — route everywhere but never block a tool or log a
+  violation (`auto-route` keeps DIRECT-executing). Removes the override friction.
+- **Agent-loop routing** — file/local prompts route to a local tool-calling model
+  (gateway + SDK), so every prompt routes. (Local-model agentic quality is the limit.)
+- **Observability** — `chuzom routing-report`: per-model tokens/latency/savings,
+  routing-outcome matrix, model-swap latency note.
+- **CI gate** — `make verify` (enforcement lint + tests + version-sync + report);
+  `scripts/lint_no_direct_llm.py` fails on direct provider calls bypassing Chuzom.
+- **Gateway launchd service** so it's always up; richer/consistent `🎯 Chuzom routed`
+  indicator (model · task · latency · tokens) in both the reply line and stderr banner.
+
+### Fixes
+
+- Gateway/SDK routings now also write `model_tracking.jsonl`, so they show in
+  `chuzom summary`, not just `chuzom routing-report`.
+
 ## v0.6.1 — 2026-06-27 — Don't route local-machine tasks; atomic release script
 
 ### Fixes
