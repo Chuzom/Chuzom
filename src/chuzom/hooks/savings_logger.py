@@ -208,6 +208,18 @@ def log_direct_to_db(
         latency_ms = float(result.latency_ms or 0)
         cost_usd = _cost_for(provider, model, input_tokens, output_tokens)
 
+        # Also append to model_tracking.jsonl — the per-decision log the
+        # session-end dashboard reads. Without this, gateway/SDK routings land in
+        # usage.db (the routing report) but stay invisible in `chuzom summary`.
+        try:
+            from chuzom.model_tracking import log_routing_decision as _mt_log
+            _mt_log(task_type=task_type, complexity=complexity,
+                    classification_method=classifier_type,
+                    selected_model=model, provider=provider,
+                    cost_usd_estimate=cost_usd, notes=classifier_type)
+        except Exception:
+            pass
+
         # Map the hook's string fields onto the typed enums the cost API wants,
         # falling back to safe defaults if an unexpected value shows up.
         try:

@@ -42,7 +42,9 @@ Compliance log: ~/.chuzom/enforcement.log
 Pending state:  ~/.chuzom/pending_route_{session_id}.json
 
 Environment variables:
-  CHUZOM_ENFORCE  smart | soft | hard | off   (default: smart)
+  CHUZOM_ENFORCE  advise | smart | soft | hard | off   (default: smart)
+                  advise — route everywhere but NEVER block a tool or log a
+                           violation (routing stays active; zero friction). 1d.
 """
 
 from __future__ import annotations
@@ -549,6 +551,13 @@ def main() -> None:
             pass
     # shadow / off = pure observation (treat as off)
     if enforce in ("off", "shadow"):
+        sys.exit(0)
+    # advise = route everywhere, NEVER block (1d). Distinct from off/shadow:
+    # auto-route still DIRECT-executes (advise is not in its skip list), so prompts
+    # keep routing to the right model — the enforce hook just never blocks a tool
+    # or logs a violation. "Route through the right model all the time, without
+    # blocking itself."
+    if enforce in ("advise", "advisory"):
         sys.exit(0)
     # suggest = soft (log violation but never block)
     if enforce == "suggest":

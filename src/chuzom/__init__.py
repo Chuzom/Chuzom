@@ -30,5 +30,6 @@ except PackageNotFoundError:
 
 # Export response router for easy access
 from chuzom.response_router import route_response as route_response_explanations
+from chuzom.sdk import RouteResult, RoutingError, route
 
-__all__ = ["route_response_explanations"]
+__all__ = ["route", "RouteResult", "RoutingError", "route_response_explanations"]
