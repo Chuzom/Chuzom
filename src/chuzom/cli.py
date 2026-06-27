@@ -802,6 +802,11 @@ def main() -> None:
         # entrypoint). Default = secured SSE MCP server; --admin = admin API.
         from chuzom.commands.serve import cmd_serve
         sys.exit(cmd_serve(args[1:]))
+    elif args and args[0] == "gateway":
+        # OpenAI-compatible HTTP gateway: any litellm/openai client routes through
+        # Chuzom by pointing OPENAI_BASE_URL at it. The Surface-C fix.
+        from chuzom.gateway import main as gateway_main
+        gateway_main()
     elif args and args[0] == "routing":
         from chuzom.commands.routing import cmd_routing
         cmd_routing(args[1:])
