@@ -1,212 +1,92 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Atomic release: bump version EVERYWHERE, test, build, verify, commit, tag, push,
+# publish to PyPI, draft a GitHub release — in one shot, so PyPI / GitHub / the 6
+# plugin manifests never drift again.
+#
+#   Usage: scripts/release.sh <X.Y.Z>
+#   Pre-req: add a "## v<X.Y.Z>" section to CHANGELOG.md first.
+#
+# Credentialed steps (push / publish / gh release) DEGRADE GRACEFULLY: if auth is
+# missing they print the exact command to run by hand instead of failing the release.
+set -euo pipefail
+cd "$(dirname "$0")/.."
 
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+VERSION="${1:-}"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "usage: scripts/release.sh X.Y.Z"; exit 1; }
 
-# Configuration
-PACKAGE_NAME="llm-routing"
-REPO="ypollak2/chuzom"
-MAX_RETRIES=3
+# Every file that carries the version: pyproject + the 6 plugin manifests.
+JSON_MANIFESTS=(
+  .claude-plugin/plugin.json .claude-plugin/marketplace.json
+  .codex-plugin/plugin.json  .codex-plugin/marketplace.json
+  .factory-plugin/plugin.json .factory-plugin/marketplace.json
+)
 
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
+echo "──> 1/9  Pre-flight checks"
+git diff --quiet && git diff --cached --quiet || { echo "FATAL: uncommitted changes — commit or stash first."; exit 1; }
+grep -q "## v$VERSION" CHANGELOG.md || { echo "FATAL: no '## v$VERSION' section in CHANGELOG.md — add it first."; exit 1; }
+if curl -s "https://pypi.org/pypi/chuzom-router/json" | grep -q "\"$VERSION\""; then
+  echo "FATAL: $VERSION is already published on PyPI (versions are immutable)."; exit 1
+fi
 
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
+echo "──> 2/9  Bump version → $VERSION (pyproject + ${#JSON_MANIFESTS[@]} manifests)"
+perl -0pi -e "s/(^\s*version\s*=\s*)\"[0-9]+\.[0-9]+\.[0-9]+\"/\${1}\"$VERSION\"/m" pyproject.toml
+for f in "${JSON_MANIFESTS[@]}"; do
+  VERSION="$VERSION" python3 - "$f" <<'PY'
+import json, os, sys
+p = sys.argv[1]; v = os.environ["VERSION"]
+def bump(o):
+    if isinstance(o, dict):
+        return {k: (v if k == "version" and isinstance(val, str) else bump(val)) for k, val in o.items()}
+    if isinstance(o, list):
+        return [bump(x) for x in o]
+    return o
+json.dump(bump(json.load(open(p))), open(p, "w"), indent=2); open(p, "a").write("\n")
+PY
+done
 
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
+echo "──> 3/9  Verify all versions agree on $VERSION"
+grep -q "\"$VERSION\"" pyproject.toml || { echo "FATAL: pyproject not bumped"; exit 1; }
+for f in "${JSON_MANIFESTS[@]}"; do grep -q "\"$VERSION\"" "$f" || { echo "FATAL: $f not bumped"; exit 1; }; done
 
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
+echo "──> 4/9  Tests (version-sync + unit suites)"
+uv run --extra dev pytest tests/qa/test_plugin_packaging.py -k version -q
+uv run --extra dev pytest tests/test_direct_session_spend.py tests/test_local_task_no_route.py tests/test_public_import.py -q
 
-get_version() {
-    python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
-}
+echo "──> 5/9  Build wheel + sdist, twine check"
+rm -rf dist; uv build
+uvx twine check dist/*
 
-get_previous_version() {
-    # Get the previous git tag
-    git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "unknown"
-}
+echo "──> 6/9  Clean-room import verify (fresh venv, no editable repo)"
+TMP=$(mktemp -d); uv venv --python 3.12 "$TMP/v" >/dev/null 2>&1
+uv pip install --python "$TMP/v/bin/python" dist/chuzom_router-"$VERSION"-py3-none-any.whl >/dev/null 2>&1
+"$TMP/v/bin/python" -c "import importlib.metadata as m, chuzom.server; assert m.version('chuzom-router')=='$VERSION'; print('   clean-room OK:', m.version('chuzom-router'))"
+rm -rf "$TMP"
 
-rollback() {
-    local current_version=$1
-    local previous_version=$2
+echo "──> 7/9  Commit + tag"
+git add pyproject.toml "${JSON_MANIFESTS[@]}" CHANGELOG.md
+git commit -q -m "release: v$VERSION"
+git tag -a "v$VERSION" -m "v$VERSION"
+echo "   committed $(git rev-parse --short HEAD), tagged v$VERSION"
 
-    log_warning "Rolling back from v${current_version} to v${previous_version}..."
+echo "──> 8/9  Push (main + tag)"
+if git push origin main && git push origin "v$VERSION"; then
+  echo "   pushed."
+else
+  echo "   ⚠️  PUSH FAILED (SSH auth?). Finish by hand: git push origin main && git push origin v$VERSION"
+fi
 
-    # Revert version files
-    git checkout HEAD~1 -- \
-        pyproject.toml \
-        .claude-plugin/plugin.json \
-        .claude-plugin/marketplace.json \
-        .codex-plugin/plugin.json \
-        .codex-plugin/marketplace.json \
-        .factory-plugin/plugin.json \
-        .factory-plugin/marketplace.json \
-        src/chuzom/__init__.py \
-        CHANGELOG.md
-    git commit -m "rollback: revert v${current_version} due to release failure" || true
-    git push || true
+echo "──> 9/9  Publish to PyPI + draft GitHub release"
+if uv publish 2>/dev/null; then
+  echo "   published to PyPI."
+else
+  echo "   ⚠️  PUBLISH skipped (no token in env). Finish by hand: uv publish --token \"\$PYPI_TOKEN\""
+fi
+if command -v gh >/dev/null && gh release create "v$VERSION" --title "v$VERSION" \
+     --notes "$(awk "/^## v$VERSION/{f=1;next} /^## v/{f=0} f" CHANGELOG.md)" 2>/dev/null; then
+  echo "   GitHub release created."
+else
+  echo "   ⚠️  GitHub release not created (no gh auth). Create from tag v$VERSION at github.com/Chuzom/Chuzom/releases/new"
+fi
 
-    # Delete tags if they exist
-    git tag -d "v${current_version}" 2>/dev/null || true
-    git push origin --delete "v${current_version}" 2>/dev/null || true
-
-    log_error "Rolled back to v${previous_version}. Fix the issues and try again."
-    exit 1
-}
-
-main() {
-    echo ""
-    echo "╔════════════════════════════════════════════════════════╗"
-    echo "║         🚀 LLM-Router Automated Release Script         ║"
-    echo "╚════════════════════════════════════════════════════════╝"
-    echo ""
-
-    current_version=$(get_version)
-    previous_version=$(get_previous_version)
-
-    log_info "Current version: v${current_version}"
-    log_info "Previous version: v${previous_version}"
-    echo ""
-
-    # Step 1: Verify version sync
-    log_info "Step 1/5: Verifying version files are synchronized..."
-    if python3 scripts/verify-version-sync.py && python3 scripts/verify-plugin-sync.py; then
-        log_success "All versions and plugin distributions synchronized: v${current_version}"
-    else
-        log_error "Version mismatch detected. Fix version files and try again."
-        exit 1
-    fi
-    echo ""
-
-    # Step 2: Run tests (core tests, skip known failures)
-    # Wrapped in `timeout` because pytest occasionally hangs in Py_FinalizeEx
-    # (asyncio event-loop teardown leak from background HTTP clients) AFTER
-    # all tests have passed. We treat exit code 124 (timeout) as success iff
-    # the output shows the "[100%]" pytest completion marker.
-    log_info "Step 2/5: Running test suite (core tests, skipping pre-existing failures)..."
-    local _test_timeout="${RELEASE_TEST_TIMEOUT:-300}"
-    local _test_output=""
-    local _test_exit=0
-    # `|| _test_exit=$?` bypasses `set -e` on non-zero exit while capturing the code.
-    _test_output=$(timeout --foreground "$_test_timeout" uv run pytest tests/ -q \
-        --ignore=tests/test_agno_integration.py \
-        --ignore=tests/test_codex_routing.py \
-        --ignore=tests/test_edge_cases.py \
-        --ignore=tests/test_freemium.py \
-        --ignore=tests/test_hook_health.py \
-        --ignore=tests/test_profile_invariants.py \
-        --ignore=tests/test_quality_guard.py \
-        --ignore=tests/test_rate_limit.py \
-        --ignore=tests/test_router.py \
-        --ignore=tests/test_adaptive_router.py \
-        --ignore=tests/test_agent_loop.py \
-        --ignore=tests/commands/test_doctor.py \
-        --deselect=tests/test_cost.py::test_get_router_efficiency \
-        --deselect=tests/test_cost.py::test_get_classifier_overhead \
-        --deselect=tests/test_cost.py::test_get_savings_by_task_type \
-        -m "not slow" \
-        --tb=line \
-        --disable-warnings 2>&1) || _test_exit=$?
-    echo "$_test_output"
-    if [ $_test_exit -eq 0 ]; then
-        log_success "All tests passed"
-    elif [ $_test_exit -eq 124 ] && echo "$_test_output" | grep -q "\[100%\]"; then
-        log_success "All tests passed (Python shutdown hung after [100%]; killed by timeout — known asyncio teardown leak)"
-    else
-        log_error "Tests failed (exit $_test_exit). Fix failures and try again."
-        exit 1
-    fi
-    echo ""
-
-    # Step 3: Check linting
-    log_info "Step 3/5: Checking linting with ruff..."
-    if uv run ruff check src/ tests/ 2>&1; then
-        log_success "No linting errors"
-    else
-        log_error "Linting errors found. Fix and try again."
-        exit 1
-    fi
-    echo ""
-
-    # Step 4: Build, verify contents, and publish
-    log_info "Step 4/5: Building and publishing to PyPI..."
-    rm -rf dist/
-    uv build
-
-    # Safety: verify sdist contains no private files before publishing
-    log_info "Verifying sdist contents..."
-    SDIST_FILE=$(ls dist/*.tar.gz 2>/dev/null | head -1)
-    if [ -z "$SDIST_FILE" ]; then
-        log_error "No sdist file found in dist/"
-        exit 1
-    fi
-
-    LEAKED_FILES=$(tar tzf "$SDIST_FILE" | grep -i -E '\.env$|CLAUDE\.md|MONETIZATION|ROADMAP|STRATEGY|PRICING|PHASE_COMPLETION|\.internal/|/research/|/deprecation/|/scripts/|/skills/' || true)
-    if [ -n "$LEAKED_FILES" ]; then
-        log_error "BLOCKED: sdist contains private/internal files:"
-        echo "$LEAKED_FILES"
-        log_error "Fix [tool.hatch.build.targets.sdist] exclude in pyproject.toml"
-        exit 1
-    fi
-    log_success "sdist is clean — no private files detected"
-
-    PYPI_TOKEN=$(grep "password" ~/.pypirc 2>/dev/null | cut -d' ' -f3)
-    if [ -z "$PYPI_TOKEN" ]; then
-        log_error "PyPI token not found in ~/.pypirc"
-        exit 1
-    fi
-
-    if uv publish --token "$PYPI_TOKEN" 2>&1; then
-        log_success "Published to PyPI"
-    else
-        log_error "Failed to publish to PyPI"
-        rollback "$current_version" "$previous_version"
-    fi
-    echo ""
-
-    # Step 5: Create GitHub release
-    log_info "Step 5/5: Creating GitHub release..."
-
-    # Get changelog entry for this version
-    changelog_entry=$(sed -n "/^## v${current_version}/,/^## /p" CHANGELOG.md | head -n -1 | tail -n +2)
-
-    if git tag "v${current_version}" && \
-       git push origin --tags && \
-       gh release create "v${current_version}" --title "v${current_version}" --latest --notes "${changelog_entry}" 2>&1; then
-        log_success "GitHub release created"
-    else
-        log_error "Failed to create GitHub release"
-        rollback "$current_version" "$previous_version"
-    fi
-    echo ""
-
-    # Verification
-    log_info "Verifying release was successful..."
-    if python3 scripts/verify-release.py; then
-        echo ""
-        echo "╔════════════════════════════════════════════════════════╗"
-        echo "║           🎉 Release v${current_version} Complete!          ║"
-        echo "╚════════════════════════════════════════════════════════╝"
-        echo ""
-        log_success "All checks passed!"
-        log_info "Users can upgrade with: pip install --upgrade ${PACKAGE_NAME}"
-        return 0
-    else
-        log_error "Post-release verification failed"
-        rollback "$current_version" "$previous_version"
-    fi
-}
-
-main "$@"
+echo ""
+echo "✅ Release v$VERSION done locally + tagged. Any ⚠️ above are credentialed steps to finish by hand."

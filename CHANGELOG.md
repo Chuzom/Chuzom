@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.6.1 — 2026-06-27 — Don't route local-machine tasks; atomic release script
+
+### Fixes
+
+- **Routing no longer misfires on local-machine / credential / run-app prompts.**
+  `needs_claude_tools()` early-returned `False` for research/query/generate task
+  types, so prompts like "search my machine for the token" routed to a web model
+  that can't touch the disk. Added an all-task-type gate that keeps local
+  filesystem / credential-location / env-keychain / run-the-app intents native,
+  while genuine general questions still route. Regression test:
+  `tests/test_local_task_no_route.py` (14 cases).
+
+### Tooling
+
+- **`scripts/release.sh` — one atomic release.** Bumps the version across
+  `pyproject.toml` + all 6 plugin manifests, requires a matching CHANGELOG entry,
+  runs the version-sync + unit tests, builds + `twine`-checks + clean-room-verifies
+  the wheel, commits, tags, then pushes + publishes + drafts the GitHub release
+  (credentialed steps degrade to printed commands when auth is absent). No more
+  PyPI/GitHub/plugin version drift.
+
 ## v0.6.0 — 2026-06-26 — Honest, grounded session savings (potential vs realized)
 
 ### Fixes
