@@ -2491,9 +2491,10 @@ def main() -> None:
                 if os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower() not in ("0", "off", "false", "no"):
                     try:
                         _latency_s = _direct_result.latency_ms / 1000.0
+                        _toks = (_direct_result.input_tokens or 0) + (_direct_result.output_tokens or 0)
                         print(
-                            f"🎯 routed → {_direct_result.model.provider}/{_direct_result.model.model} "
-                            f"· {task_type}/{complexity} · {_latency_s:.1f}s",
+                            f"🎯 Chuzom routed → {_direct_result.model.provider}/{_direct_result.model.model} "
+                            f"· {task_type}/{complexity} · {_latency_s:.1f}s · {_toks} tokens",
                             file=sys.stderr,
                         )
                     except Exception:
