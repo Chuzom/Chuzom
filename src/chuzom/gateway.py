@@ -69,8 +69,37 @@ def _classify(prompt: str) -> tuple[str, str]:
     return task, complexity
 
 
-def _route(prompt: str, task_type: str | None, complexity: str | None):
-    """Shared core: classify (if needed) → route → meter. Returns a DirectResult."""
+def _prefer(chain, model_name):
+    """Lead the chain with a client-requested model (tier override).
+
+    Provider-agnostic — no hardcoded model names:
+      * ``provider/model`` (e.g. ``gemini/gemini-2.5-flash``) → used directly. This
+        is the universal litellm/OpenRouter convention, so it works for ANY provider.
+      * a bare model name → resolved to a provider only if it already appears in the
+        routing chain (Chuzom's own registry). Unknown bare names are ignored (we
+        never guess a provider from the model string), so Chuzom routes normally.
+    """
+    if not model_name or model_name in ("chuzom-auto", ""):
+        return chain
+    from chuzom.hooks.chain_builder import ModelSpec
+    if "/" in model_name:
+        prov, mdl = model_name.split("/", 1)
+        spec = ModelSpec(provider=prov, model=mdl)
+    else:
+        spec = next((c for c in chain if c.model == model_name), None)
+        if spec is None:
+            return chain  # unknown bare name, no provider → don't guess
+    return [spec] + [c for c in chain if c.model != spec.model]
+
+
+def _route(prompt: str, task_type: str | None, complexity: str | None,
+           prefer_model: str | None = None):
+    """Shared core: classify (if needed) → route → meter. Returns a DirectResult.
+
+    prefer_model (the OpenAI ``model`` field) lets a client request a specific tier
+    (e.g. "gemini-2.5-flash"); the gateway leads the chain with it, keeping the rest
+    as fallback. Omit / "chuzom-auto" = let Chuzom pick.
+    """
     if not prompt.strip():
         raise HTTPException(status_code=400, detail="no prompt content")
     if not task_type or not complexity:
@@ -82,9 +111,10 @@ def _route(prompt: str, task_type: str | None, complexity: str | None):
     # runs commands); plain Q&A → text-in/text-out. So EVERYTHING routes. The
     # agent loop needs a capable tool-caller, so bias its chain to the coder tier.
     if needs_claude_tools(prompt, task_type):
-        result = execute_agent(prompt, build_chain("complex", zone, "code"), timeout=180)
+        result = execute_agent(prompt, _prefer(build_chain("complex", zone, "code"), prefer_model),
+                               timeout=180)
     else:
-        result = execute_chain(prompt, build_chain(complexity, zone, task_type),
+        result = execute_chain(prompt, _prefer(build_chain(complexity, zone, task_type), prefer_model),
                                task_type, timeout=150)
     if result is None:
         raise HTTPException(status_code=502,
@@ -140,7 +170,7 @@ class _OAIRequest(BaseModel):
 
 @app.post("/v1/chat/completions")
 def openai_chat(req: _OAIRequest) -> dict:
-    r = _route(_flatten(req.messages), req.task_type, req.complexity)
+    r = _route(_flatten(req.messages), req.task_type, req.complexity, prefer_model=req.model)
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
         "object": "chat.completion",
