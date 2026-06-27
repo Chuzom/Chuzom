@@ -41,8 +41,8 @@ def route(prompt: str, *, task_type: str | None = None,
     """
     # Lazy imports keep ``import chuzom`` cheap.
     from chuzom.gateway import _classify
-    from chuzom.hooks.chain_builder import build_chain, get_current_pressure
-    from chuzom.hooks.direct_executor import execute_chain
+    from chuzom.hooks.chain_builder import build_chain, get_current_pressure, needs_claude_tools
+    from chuzom.hooks.direct_executor import execute_agent, execute_chain
 
     if not prompt or not prompt.strip():
         raise ValueError("prompt is empty")
@@ -51,8 +51,14 @@ def route(prompt: str, *, task_type: str | None = None,
         task_type, complexity = task_type or _t, complexity or _c
 
     zone, _pct = get_current_pressure()
-    chain = build_chain(complexity, zone, task_type)
-    result = execute_chain(prompt, chain, task_type, timeout=timeout)
+    # File/local tasks → agent-loop (local tool-calling model); Q&A → text call.
+    # The agent loop needs a capable tool-caller, so bias its chain to the coder tier.
+    if needs_claude_tools(prompt, task_type):
+        result = execute_agent(prompt, build_chain("complex", zone, "code"),
+                               timeout=max(timeout, 180))
+    else:
+        result = execute_chain(prompt, build_chain(complexity, zone, task_type),
+                               task_type, timeout=timeout)
     if result is None:
         raise RoutingError("Chuzom routing failed — model chain exhausted")
 

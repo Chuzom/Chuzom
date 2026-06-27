@@ -25,8 +25,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from chuzom.hooks.chain_builder import build_chain, get_current_pressure
-from chuzom.hooks.direct_executor import execute_chain
+from chuzom.hooks.chain_builder import build_chain, get_current_pressure, needs_claude_tools
+from chuzom.hooks.direct_executor import execute_agent, execute_chain
 
 
 def _load_dotenv() -> None:
@@ -78,8 +78,14 @@ def _route(prompt: str, task_type: str | None, complexity: str | None):
         task_type, complexity = task_type or _t, complexity or _c
 
     zone, _pct = get_current_pressure()
-    chain = build_chain(complexity, zone, task_type)
-    result = execute_chain(prompt, chain, task_type, timeout=150)
+    # File/local tasks → agent-loop (a local tool-calling model that reads files /
+    # runs commands); plain Q&A → text-in/text-out. So EVERYTHING routes. The
+    # agent loop needs a capable tool-caller, so bias its chain to the coder tier.
+    if needs_claude_tools(prompt, task_type):
+        result = execute_agent(prompt, build_chain("complex", zone, "code"), timeout=180)
+    else:
+        result = execute_chain(prompt, build_chain(complexity, zone, task_type),
+                               task_type, timeout=150)
     if result is None:
         raise HTTPException(status_code=502,
                             detail="Chuzom routing failed — chain exhausted")
