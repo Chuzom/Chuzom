@@ -48,7 +48,8 @@ echo "──> 3/9  Verify all versions agree on $VERSION"
 grep -q "\"$VERSION\"" pyproject.toml || { echo "FATAL: pyproject not bumped"; exit 1; }
 for f in "${JSON_MANIFESTS[@]}"; do grep -q "\"$VERSION\"" "$f" || { echo "FATAL: $f not bumped"; exit 1; }; done
 
-echo "──> 4/9  Tests (version-sync + unit suites)"
+echo "──> 4/9  Enforcement lint + tests (version-sync + unit suites)"
+uv run python scripts/lint_no_direct_llm.py src/chuzom
 uv run --extra dev pytest tests/qa/test_plugin_packaging.py -k version -q
 uv run --extra dev pytest tests/test_direct_session_spend.py tests/test_local_task_no_route.py tests/test_public_import.py -q
 

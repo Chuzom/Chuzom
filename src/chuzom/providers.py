@@ -182,7 +182,7 @@ async def call_llm(
     kwargs["model"] = _quirk.transform_model_name(kwargs["model"])
     kwargs = _quirk.transform_request(kwargs)
 
-    response = await litellm.acompletion(**kwargs)
+    response = await litellm.acompletion(**kwargs)  # chuzom: direct-ok (router provider layer)
     elapsed_ms = (time.monotonic() - start) * 1000
 
     content = extract_content(response.choices[0].message)
@@ -316,7 +316,7 @@ async def call_llm_stream_events(
     kwargs["model"] = _quirk.transform_model_name(kwargs["model"])
     kwargs = _quirk.transform_request(kwargs)
 
-    response = await litellm.acompletion(**kwargs)
+    response = await litellm.acompletion(**kwargs)  # chuzom: direct-ok (router provider layer)
 
     collected_content: list[str] = []
     input_tokens = 0
