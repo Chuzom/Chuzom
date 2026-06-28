@@ -16,6 +16,9 @@ jobs:
     name: ${{ matrix.os }} · py${{ matrix.python }} · ${{ matrix.installer }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     strategy:
       fail-fast: false
       matrix:
