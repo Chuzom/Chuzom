@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__chuzom__llm_query",
+      "mcp__chuzom__llm_analyze",
+      "mcp__chuzom__llm_code",
+      "mcp__chuzom__llm_research",
+      "mcp__chuzom__llm_route",
+      "mcp__chuzom__llm_generate",
+      "mcp__chuzom__llm_usage",
+      "mcp__chuzom__llm_savings",
+      "mcp__chuzom__llm_session_savings",
+      "mcp__chuzom__llm_session_spend",
+      "mcp__chuzom__llm_health",
+      "Bash(.venv/bin/ruff check --output-format*)",
+      "Bash(.venv/bin/ruff check --select*)"
+    ]
+  }
+}
