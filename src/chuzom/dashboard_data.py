@@ -183,7 +183,7 @@ def query_window(
         _OPUS_OUT_PER_M = 75.0
         if _table_exists(conn, _LEGACY_TABLE):
             cols = _columns(conn, _LEGACY_TABLE)
-            row = conn.execute(
+            row = conn.execute(  # nosec B608 — table/where are module constants & validated enum, not user input
                 f"SELECT COUNT(*), "
                 f"{_sum_if_present(cols, 'input_tokens')}, "
                 f"{_sum_if_present(cols, 'output_tokens')}, "
@@ -229,7 +229,7 @@ def query_window(
         # added in v7.4; older DBs lack them, so sum defensively.
         if _table_exists(conn, _JSONL_TABLE):
             cols = _columns(conn, _JSONL_TABLE)
-            row = conn.execute(
+            row = conn.execute(  # nosec B608 — table/where are module constants & validated enum, not user input
                 f"SELECT COUNT(*), "
                 f"COALESCE(SUM(estimated_claude_cost_saved),0), "
                 f"{_sum_if_present(cols, 'input_tokens')}, "
@@ -341,7 +341,7 @@ def query_daily(
             cols = _columns(conn, _LEGACY_TABLE)
             if "provider" in cols and "input_tokens" in cols:
                 cheap_placeholders = ",".join("?" * len(_CHEAP_PROVIDERS))
-                rows = conn.execute(
+                rows = conn.execute(  # nosec B608 — table/where are module constants & validated enum; IN uses ? placeholders
                     f"SELECT date(timestamp,'localtime'), "
                     f"COALESCE(SUM(input_tokens),0) + COALESCE(SUM(output_tokens),0) "
                     f"FROM {_LEGACY_TABLE} "

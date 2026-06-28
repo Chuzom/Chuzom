@@ -25,7 +25,8 @@ def _get_db_path() -> Path:
     return Path.home() / ".chuzom" / "usage.db"
 
 
-def _get_time_filter(period: str = "all") -> str:
+def _get_time_filter(period: str = "all") -> tuple[str, tuple]:
+    """Return (sql_fragment, params) for the given period."""
     if period == "day":
         cutoff = datetime.now(timezone.utc) - timedelta(days=1)
     elif period == "week":
@@ -33,8 +34,8 @@ def _get_time_filter(period: str = "all") -> str:
     elif period == "month":
         cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     else:
-        return ""  # all time
-    return f"AND timestamp > '{cutoff.isoformat()}'"
+        return "", ()
+    return "AND timestamp > ?", (cutoff.isoformat(),)
 
 
 def _provider_of(model: str) -> str:
@@ -47,21 +48,22 @@ def _provider_of(model: str) -> str:
 
 def _query(db_path: Path, period: str, *, paid: bool) -> dict:
     """Aggregate savings_stats for paid (external_cost>0) or free (==0) routes."""
-    tf = _get_time_filter(period)
+    tf_sql, tf_params = _get_time_filter(period)
     cond = "external_cost > 0" if paid else "(external_cost = 0 OR external_cost IS NULL)"
     stats = {"calls": 0, "saved": 0.0, "cost": 0.0, "by_model": {}}
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
+        rows = conn.execute(  # nosec B608 — cond is a hardcoded literal, not user input
             f"""SELECT COUNT(*) AS calls,
                        COALESCE(SUM(estimated_claude_cost_saved), 0) AS saved,
                        COALESCE(SUM(external_cost), 0) AS cost,
                        model_used AS model
                 FROM savings_stats
-                WHERE {cond} {tf}
+                WHERE {cond} {tf_sql}
                 GROUP BY model_used
                 ORDER BY calls DESC""",
+            tf_params,
         ).fetchall()
         conn.close()
     except Exception:
