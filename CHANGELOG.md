@@ -1,5 +1,64 @@
 # Changelog
 
+## v0.6.3 — 2026-06-28 — IDE rules overhaul + routing reliability
+
+### Features
+
+- **All IDE rule templates rewritten** — every `src/chuzom/rules/*.md` file now
+  has a `<!-- chuzom-rules-version: 2 -->` marker (idempotency: re-running
+  `chuzom install` no longer duplicates content), explicit pull-routing emphasis,
+  consistent Ollama→Flash→GPT-4o-mini provider chain notation, and `llm_reason`
+  row in all tool tables. Affected: `vscode-rules.md`, `cursor-rules.md`,
+  `copilot-rules.md`, `copilot-cli-rules.md`, `gemini-rules.md`,
+  `gemini-cli-rules.md`, `opencode-rules.md`, `openclaw-rules.md`,
+  `desktop-rules.md`, `trae-rules.md`, `pi-rules.md`, `codex-rules.md`.
+- **Trae IDE rules now deployed** — `chuzom install trae` previously wrote only
+  `~/.trae/mcp.json`; now also appends `trae-rules.md` to
+  `~/.trae/rules/chuzom.md`.
+- **Gemini CLI subcommand uses correct rules file** — `chuzom install gemini-cli`
+  was appending the 19-line stub (`gemini-rules.md`); now correctly uses the full
+  `gemini-cli-rules.md`, consistent with the full `chuzom install` path.
+- **Copilot CLI subcommand uses correct rules file** — `chuzom install copilot-cli`
+  was appending `copilot-rules.md` (a documentation page); now uses
+  `copilot-cli-rules.md` (the proper rule file), consistent with the full
+  `chuzom install` path.
+- **Ollama pre-flight** — 0.5 s GET `/api/tags` before any Ollama call; chain
+  skips all Ollama steps immediately on timeout instead of waiting 4 s per model.
+  `CHUZOM_OLLAMA_TIMEOUT` default lowered from 15 s → 4 s.
+- **`CHUZOM_CLASSIFY_LOCAL_ONLY` auto-detection** — when not explicitly set,
+  allows API classifiers if Ollama is unreachable AND an API key is present;
+  stays local-only otherwise (privacy-safe default).
+- **Windsurf pull-routing rules** — `.windsurf/rules/use-chuzom.md` now created
+  by `chuzom install windsurf`, matching the Cursor `.mdc` rule file.
+- **Pull-routing session banner** — `session-start.py` detects `.cursor/` and
+  `.windsurf/` dirs and adds a `pull →` line listing which IDEs use pull routing.
+- **Pull-routing auto-update** — once per 24 h, `session-start.py` silently
+  updates stale `.cursor/rules/use-chuzom.mdc` and
+  `.windsurf/rules/use-chuzom.md` to the bundled template without user action.
+- **Hook self-healing** — `enforce-route.py` emits a user-visible warning when
+  `chuzom-auto-route.py` is missing from `~/.claude/hooks/`, prompting
+  `chuzom install` to restore it.
+- **CI smoke-test matrix** — `.github/workflows/smoke-test.yml` runs import,
+  routing, research-bypass, and install-hooks dry-run across
+  ubuntu/macOS/windows × py3.10/3.11/3.12 × pip/uv.
+- **`~/.chuzom/` initialized at onboard** — `chuzom onboard` now creates the
+  state directory and `usage.db` schema before hook installation, preventing
+  first-run errors on clean machines.
+- **No-provider error clarity** — `RouterConfig` raises a structured
+  `ValueError` with `chuzom doctor` guidance and provider links when no model
+  is configured.
+
+### Fixes
+
+- Research task type now correctly bypasses Ollama chain at all complexities and
+  falls through to `llm_research` (Perplexity) in both direct-execution and MCP
+  paths.
+- Windows: `chuzom install` no longer hardcodes `bash` for the status-line hook;
+  falls back gracefully when bash is absent. `APPDATA` → `LOCALAPPDATA` fallback
+  for Claude config path.
+- Test suite: 15 previously failing tests fixed (format drift E1–E6, binary PATH
+  E4, Ollama model discovery E5, JSON parse E6, pre-flight D4).
+
 ## v0.6.2 — 2026-06-27 — Route everything: gateway, SDK, multi-protocol, observability
 
 ### Features
