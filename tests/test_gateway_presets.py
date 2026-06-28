@@ -3,9 +3,7 @@
 Deterministic (no network): asserts all wire-format routes are mounted and that
 preset resolution honors env overrides and ~/.chuzom/presets.yaml.
 """
-import importlib
 
-import pytest
 
 
 def test_gateway_mounts_all_formats():

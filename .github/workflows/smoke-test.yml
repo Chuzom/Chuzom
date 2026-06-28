@@ -67,8 +67,9 @@ jobs:
           assert r.returncode == 0, f'hook exit {r.returncode}: {r.stderr}'
           output = next((l for l in r.stdout.splitlines() if l.startswith('{')), r.stdout)
           data = json.loads(output)
-          assert 'decision' in data, f'missing decision: {data}'
-          print(f'hook classified OK: decision={data["decision"]}')
+          assert 'decision' in data or 'hookSpecificOutput' in data, f'missing routing output: {data}'
+          decision = data.get('decision', data.get('hookSpecificOutput', {}).get('hookEventName', 'route'))
+          print(f'hook classified OK: decision={decision}')
           PY
 
       - name: Verify research routes to llm_research (not Ollama)

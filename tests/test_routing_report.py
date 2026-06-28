@@ -27,7 +27,8 @@ def fake_home(tmp_path, monkeypatch):
             ("gemini-2.5-flash", "gemini", 120, 20, 1500, 0.001),
         ],
     )
-    con.commit(); con.close()
+    con.commit()
+    con.close()
     # a tiny debug log for the outcome matrix
     (tmp_path / "auto-route-debug.log").write_text(
         "DIRECT SUCCESS x2\nDIRECT SUCCESS\nDIRECT SKIP\nDIRECT FAILED\n")

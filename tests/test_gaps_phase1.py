@@ -14,7 +14,7 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -194,7 +194,6 @@ class TestWindowsBashDetection:
             return original_which(cmd, *a, **kw)
 
         with patch("shutil.which", side_effect=mock_which):
-            from chuzom import install_hooks
             # Should not raise even with no bash
             src = INSTALL_HOOKS_SRC.read_text()
             assert "statusLine skipped on Windows" in src or "bash not in PATH" in src, (

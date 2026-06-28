@@ -155,12 +155,12 @@ def main() -> None:
         keep_sub = input("   You have subscription mode enabled. Keep it? [Y/n]: ").strip().lower()
         if keep_sub in ("", "y", "yes"):
             with open(env_path, "a") as f:
-                f.write(f"CHUZOM_CLAUDE_SUBSCRIPTION=true\n")
+                f.write("CHUZOM_CLAUDE_SUBSCRIPTION=true\n")
     else:
         sub_answer = input(sub_prompt).strip().lower()
         if sub_answer in ("y", "yes"):
             with open(env_path, "a") as f:
-                f.write(f"CHUZOM_CLAUDE_SUBSCRIPTION=true\n")
+                f.write("CHUZOM_CLAUDE_SUBSCRIPTION=true\n")
             print("   Subscription mode enabled — Claude quota will be tracked and saved.")
 
     # G2: Initialize ~/.chuzom/ directory and usage database so the first
@@ -191,7 +191,7 @@ def main() -> None:
             )
             _conn.commit()
             _conn.close()
-            print(f"   ✓ Initialized ~/.chuzom/usage.db")
+            print("   ✓ Initialized ~/.chuzom/usage.db")
     except Exception as _g2_err:
         print(f"   ⚠ Could not initialize ~/.chuzom/: {_g2_err}")
 
