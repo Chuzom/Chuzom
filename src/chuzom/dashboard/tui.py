@@ -304,31 +304,29 @@ def _fetch_data() -> DashboardData:
         except Exception:
             pass
 
-        # ── Savings computation ───────────────────────────────────────
-        SONNET_IN, SONNET_OUT = 3.0, 15.0  # $/M
-
-        def _savings_for(where: str) -> tuple[float, int]:
-            row = conn.execute(
-                f"SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), "
-                f"COALESCE(SUM(cost_usd),0), COUNT(*) FROM usage WHERE success=1 AND {where}"
-            ).fetchone()
-            if not row:
-                return 0.0, 0
-            baseline = (row[0] * SONNET_IN + row[1] * SONNET_OUT) / 1_000_000
-            return max(0.0, baseline - row[2]), row[3]
-
-        d.today_saved, d.today_saved_calls = _savings_for(
-            "timestamp >= datetime('now','start of day')"
-        )
-        d.week_saved, d.week_saved_calls = _savings_for(
-            "timestamp >= datetime('now','-7 days')"
-        )
-        d.month_saved, d.month_saved_calls = _savings_for(
-            "timestamp >= datetime('now','start of month')"
-        )
-        d.lifetime_saved, d.lifetime_saved_calls = _savings_for("1=1")
+        # ── Savings computation (unified across all sources) ─────────────
+        # Uses dashboard_data.query_window() which UNIONs usage + claude_usage
+        # + codex_usage + gemini_usage + savings_stats — fixes the v9.3 drift
+        # where this panel only queried the legacy usage table (missing 68%).
+        try:
+            from chuzom.dashboard_data import query_window as _qw
+            for _window, _saved_attr, _calls_attr in [
+                ("today",    "today_saved",    "today_saved_calls"),
+                ("week",     "week_saved",     "week_saved_calls"),
+                ("month",    "month_saved",    "month_saved_calls"),
+                ("lifetime", "lifetime_saved", "lifetime_saved_calls"),
+            ]:
+                _t = _qw(_window, db_path=DB_PATH)
+                setattr(d, _saved_attr, _t.saved_usd)
+                setattr(d, _calls_attr, _t.calls)
+            d.l14_savings = _qw("14d", db_path=DB_PATH).saved_usd
+        except Exception:
+            pass
 
         # ── L14 daily series ──────────────────────────────────────────
+        # daily_tokens / daily_cost come from the gateway usage table only
+        # (free-model throughput + actual API cost paid). daily_cost is the
+        # real cost paid to free APIs — NOT the savings figure (use l14_savings).
         rows = conn.execute(
             "SELECT date(timestamp) as day, COUNT(*), "
             "COALESCE(SUM(input_tokens+output_tokens),0), COALESCE(SUM(cost_usd),0) "
@@ -343,7 +341,7 @@ def _fetch_data() -> DashboardData:
 
         d.l14_total_calls = sum(d.daily_calls)
         d.l14_total_tokens = sum(d.daily_tokens)
-        d.l14_savings = sum(d.daily_cost)  # will subtract from baseline below
+        # l14_savings already set above via query_window("14d")
 
     except Exception:
         pass
@@ -734,7 +732,7 @@ class ActivityPanel(Static):
         lines.append(
             f"  {_tc(TN.CYAN, 'Calls')}: {d.l14_total_calls:<6}  "
             f"{_tc(TN.TEAL, 'Tokens')}: {_fmt_tokens(d.l14_total_tokens):<8}  "
-            f"{_tc(TN.GREEN, 'Savings')}: ${sum(d.daily_cost):.4f}  "
+            f"{_tc(TN.GREEN, 'Saved')}: ${d.l14_savings:.4f}  "
             f"{_tc(TN.FG_DIM, 'Avg')}: {avg_calls:.0f}/day"
         )
         lines.append("")
