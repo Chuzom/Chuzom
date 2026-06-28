@@ -43,6 +43,7 @@ dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.24.0",
     "pyyaml>=6.0",
+    "textual>=8.2.6",
 ]
 
 [project.optional-dependencies]

@@ -416,7 +416,7 @@ wheels = [
 
 [[package]]
 name = "chuzom-router"
-version = "0.6.2"
+version = "0.6.3"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -428,6 +428,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "structlog" },
+    { name = "textual" },
     { name = "uvicorn" },
 ]
 
@@ -511,6 +512,7 @@ requires-dist = [
     { name = "sqlite-vec", marker = "extra == 'semantic'", specifier = ">=0.1.0" },
     { name = "structlog", specifier = ">=24.4.0" },
     { name = "testcontainers", extras = ["postgres"], marker = "extra == 'postgres-test'", specifier = ">=4.0" },
+    { name = "textual", specifier = ">=8.2.6" },
     { name = "textual", marker = "extra == 'tui'", specifier = ">=0.80.0" },
     { name = "tree-sitter", marker = "extra == 'code-context'", specifier = ">=0.23.0" },
     { name = "tree-sitter-languages", marker = "extra == 'code-context'", specifier = ">=1.10.0" },

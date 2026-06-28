@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from chuzom.claude_jsonl_usage import CCUsageSummary, read_cc_usage
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
@@ -187,6 +189,9 @@ class DashboardData:
     l14_total_tokens: int = 0
     l14_savings: float = 0.0
 
+    # Direct Claude Code subscription usage (from ~/.claude/projects/**/*.jsonl)
+    cc_usage: CCUsageSummary = field(default_factory=CCUsageSummary)
+
 
 def _read_usage_json() -> dict:
     try:
@@ -347,6 +352,12 @@ def _fetch_data() -> DashboardData:
         pass
     finally:
         conn.close()
+
+    # ── Direct Claude Code subscription usage (local JSONL) ───────────────
+    try:
+        d.cc_usage = read_cc_usage()
+    except Exception:
+        pass
 
     return d
 
@@ -693,6 +704,39 @@ class SavingsPanel(Static):
             lines.append(
                 f"  Savings/yr:   {_tc_bold(TN.GREEN, f'${annual_saved:.2f}')}"
             )
+
+        # ── Direct Claude Subscription Usage ──────────────────────────────
+        cc = d.cc_usage
+        if cc.models:
+            def _fmt(t: int) -> str:
+                if t >= 1_000_000:
+                    return f"{t / 1_000_000:.1f}M"
+                if t >= 1_000:
+                    return f"{t / 1_000:.0f}K"
+                return str(t)
+
+            lines.append("")
+            lines.append(_tc_bold(TN.MAGENTA, " CLAUDE SUBSCRIPTION  "))
+            lines.append(_dim("  " + "─" * 36))
+            lines.append(
+                f"  {_tc(TN.FG_DIM, 'Sessions')}: {_tc(TN.CYAN, str(cc.sessions))}  "
+                f"{_tc(TN.FG_DIM, 'Total')}: "
+                f"{_tc(TN.CYAN, _fmt(cc.total_input))} in · "
+                f"{_tc(TN.CYAN, _fmt(cc.total_output))} out"
+            )
+            lines.append("")
+            for m in cc.models:
+                pct = cc.pct_output(m)
+                bar_filled = int(pct / 100 * 12)
+                bar = _tc(TN.MAGENTA, "█" * bar_filled) + _dim("░" * (12 - bar_filled))
+                lines.append(
+                    f"  {_tc(TN.FG, m.display_name):<14}"
+                    f" {bar} {pct:>5.1f}%"
+                )
+                lines.append(
+                    f"  {_tc(TN.FG_DIM, f'{_fmt(m.input_tokens)} in · {_fmt(m.output_tokens)} out'  ):<36}"
+                    f"  {_tc(TN.FG_DIM, f'{m.turns:,} turns')}"
+                )
 
         self.query_one("#savings-content").update("\n".join(lines))
 
