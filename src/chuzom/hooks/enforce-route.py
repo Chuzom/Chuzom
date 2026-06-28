@@ -577,6 +577,25 @@ def main() -> None:
         sys.exit(0)
 
     pending = _read_pending(session_id)
+
+    # ── Self-healing: if no pending routing state exists AND the upstream
+    # auto-route.py hook is missing, routing has silently stopped working.
+    # Warn the user via stderr (visible in the PreToolUse hook success panel)
+    # and exit cleanly — there's nothing to enforce against.
+    # Checked AFTER _read_pending so tests that inject pending state directly
+    # (without auto-route.py present) continue to work normally.
+    if pending is None:
+        try:
+            _hooks_dir = Path.home() / ".claude" / "hooks"
+            _auto_route_hook = _hooks_dir / "chuzom-auto-route.py"
+            if not _auto_route_hook.exists():
+                print(
+                    "⚠️  Chuzom: auto-route.py hook is missing from ~/.claude/hooks/. "
+                    "Routing is inactive — run `chuzom install` to restore it.",
+                    file=sys.stderr,
+                )
+        except Exception:
+            pass  # Never let self-healing logic break enforcement
     # introspect task type: the user is asking about LOCAL Chuzom state
     # (routing decisions, hooks, ~/.chuzom files). No LLM has access to
     # that data — enforcing the route would trap the user behind a

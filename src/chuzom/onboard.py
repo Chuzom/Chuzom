@@ -148,8 +148,66 @@ def main() -> None:
         print("\n   ⚠ No API keys configured! Run this again when you have keys.")
         sys.exit(1)
 
-    print("\n   Next: Add to Claude Code with `scripts/install.sh`")
-    print("   Or manually add to ~/.claude.json mcpServers.\n")
+    # Subscription detection (D3)
+    sub_current = existing.get("CHUZOM_CLAUDE_SUBSCRIPTION", "")
+    sub_prompt = "   Do you have a Claude Pro/Max subscription? [y/n]: "
+    if sub_current.lower() in ("true", "1", "yes"):
+        keep_sub = input("   You have subscription mode enabled. Keep it? [Y/n]: ").strip().lower()
+        if keep_sub in ("", "y", "yes"):
+            with open(env_path, "a") as f:
+                f.write(f"CHUZOM_CLAUDE_SUBSCRIPTION=true\n")
+    else:
+        sub_answer = input(sub_prompt).strip().lower()
+        if sub_answer in ("y", "yes"):
+            with open(env_path, "a") as f:
+                f.write(f"CHUZOM_CLAUDE_SUBSCRIPTION=true\n")
+            print("   Subscription mode enabled — Claude quota will be tracked and saved.")
+
+    # G2: Initialize ~/.chuzom/ directory and usage database so the first
+    # `chuzom status` / `chuzom savings-report` command doesn't fail on a
+    # missing directory. Done here so it happens before hooks start writing.
+    import sqlite3 as _sqlite3
+    from pathlib import Path as _Path
+    _state_dir = _Path.home() / ".chuzom"
+    try:
+        _state_dir.mkdir(parents=True, exist_ok=True)
+        _usage_db = _state_dir / "usage.db"
+        if not _usage_db.exists():
+            _conn = _sqlite3.connect(str(_usage_db))
+            _conn.execute(
+                "CREATE TABLE IF NOT EXISTS usage ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  ts REAL NOT NULL,"
+                "  session_id TEXT,"
+                "  task_type TEXT,"
+                "  model TEXT,"
+                "  provider TEXT,"
+                "  input_tokens INTEGER DEFAULT 0,"
+                "  output_tokens INTEGER DEFAULT 0,"
+                "  latency_ms INTEGER DEFAULT 0,"
+                "  cost_usd REAL DEFAULT 0.0,"
+                "  saved_usd REAL DEFAULT 0.0"
+                ")"
+            )
+            _conn.commit()
+            _conn.close()
+            print(f"   ✓ Initialized ~/.chuzom/usage.db")
+    except Exception as _g2_err:
+        print(f"   ⚠ Could not initialize ~/.chuzom/: {_g2_err}")
+
+    # Auto-install hooks (A1) — the single most important step for new users
+    print("\n── Installing Chuzom hooks into Claude Code ──")
+    try:
+        from chuzom.install_hooks import install as _install_hooks
+        install_actions = _install_hooks()
+        for action in install_actions:
+            print(f"   ✓ {action}")
+        print("   Hooks installed successfully.")
+    except Exception as exc:
+        print(f"   ⚠ Hook installation failed: {exc}")
+        print("   Fix manually: run `chuzom install` in your terminal.")
+
+    print("\n   Next: Open Claude Code — routing is now active.\n")
 
 
 if __name__ == "__main__":

@@ -44,11 +44,24 @@ def test_agentic_task_types_excludes_code():
 # ── router chain ordering ───────────────────────────────────────────────────
 
 def _isolate(monkeypatch):
-    """Make chain building deterministic and independent of the dev machine."""
+    """Make chain building deterministic and independent of the dev machine.
+
+    Also patches out Ollama model discovery so the AGENTIC model (hermes3:8b)
+    doesn't appear in chains as a naturally-discovered model. Without this,
+    E5 flakes: hermes3:8b is installed on the dev machine, so it shows up in
+    CODE chains independently of the agentic pin logic.
+    """
     monkeypatch.setattr("chuzom.claude_usage.get_claude_pressure", lambda: 0.0)
     monkeypatch.setattr("chuzom.router.get_repo_config", lambda *a, **k: RepoConfig())
     monkeypatch.setattr("chuzom.router.is_codex_available", lambda: False)
     monkeypatch.setattr("chuzom.router.is_gemini_cli_available", lambda: False)
+    # Pin the Ollama model list to a deterministic set that excludes the AGENTIC
+    # model (hermes3:8b) so agentic-pin assertions aren't machine-dependent.
+    # RouterConfig.all_ollama_models() is the source of truth in _build_and_filter_chain.
+    monkeypatch.setattr(
+        "chuzom.config.RouterConfig.all_ollama_models",
+        lambda self: ["ollama/qwen3.5:latest"],
+    )
 
 
 @pytest.mark.asyncio

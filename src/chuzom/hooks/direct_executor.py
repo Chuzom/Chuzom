@@ -59,7 +59,23 @@ def _get_ollama_url() -> str:
     return url
 
 
-def call_ollama(prompt: str, model: str, timeout: int = 15) -> str | None:
+def ollama_is_alive(timeout: float = 0.5) -> bool:
+    """0.5s pre-flight: HEAD /api/tags to confirm Ollama is reachable.
+
+    Avoids spending the full model-call timeout (4s) waiting on a TCP connection
+    that will time out anyway when Ollama is not running. Returns False on any
+    network error, including connection-refused and timeout.
+    """
+    try:
+        ollama_url = _get_ollama_url()
+        req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def call_ollama(prompt: str, model: str, timeout: int = 4) -> str | None:
     """Call Ollama's /api/chat endpoint. Returns response text or None."""
     body = json.dumps({
         "model": model,
@@ -96,7 +112,7 @@ def call_ollama(prompt: str, model: str, timeout: int = 15) -> str | None:
         return None, {}
 
 
-def call_gemini(prompt: str, model: str = "gemini-2.5-flash", timeout: int = 15) -> tuple[str | None, dict]:
+def call_gemini(prompt: str, model: str = "gemini-2.5-flash", timeout: int = 10) -> tuple[str | None, dict]:
     """Call Gemini API. Returns (response text, usage dict) or (None, {})."""
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
@@ -125,7 +141,7 @@ def call_gemini(prompt: str, model: str = "gemini-2.5-flash", timeout: int = 15)
         return None, {}
 
 
-def call_openai(prompt: str, model: str = "gpt-4o-mini", timeout: int = 15) -> tuple[str | None, dict]:
+def call_openai(prompt: str, model: str = "gpt-4o-mini", timeout: int = 10) -> tuple[str | None, dict]:
     """Call OpenAI chat completions API. Returns (response text, usage dict) or (None, {})."""
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
@@ -187,18 +203,31 @@ def execute_chain(
     prompt: str,
     chain: list[ModelSpec],
     task_type: str,
-    timeout: int = 15,
+    timeout: int = 4,
 ) -> DirectResult | None:
     """Try each model in the chain until one returns a quality response.
 
     Skips models whose provider is 'claude' - those cannot be called directly
     from the hook. The caller decides whether failure falls through or blocks.
 
+    For Ollama models, runs a 0.5s pre-flight health check first so we spend
+    4s max per Ollama call rather than 15s waiting on a dead connection.
+
     Returns DirectResult on success, None if all models failed or only Claude remains.
     """
+    _ollama_alive: bool | None = None  # lazily evaluated once per chain execution
+
     for model in chain:
         if model.provider == "claude":
             continue  # Can't call Claude from the hook — skip
+
+        # Pre-flight: skip Ollama models immediately if Ollama is not reachable
+        # (0.5s check, evaluated once and cached for the rest of this chain).
+        if model.provider == "ollama":
+            if _ollama_alive is None:
+                _ollama_alive = ollama_is_alive(timeout=0.5)
+            if not _ollama_alive:
+                continue
 
         call_fn = _PROVIDER_CALLS.get(model.provider)
         if not call_fn:

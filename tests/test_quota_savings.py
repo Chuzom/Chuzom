@@ -357,7 +357,7 @@ def test_route_prefix_omits_savings_when_not_meaningful(
     ):
         ctx = format_echo_context(result, "analyze", "moderate")
     # No DB → 0 savings → routing notice has no `saved … pp` suffix.
-    assert "saved" not in ctx.split("🎯 chuzom →")[1].split("\n")[0]
+    assert "saved" not in ctx.split("🎯 Chuzom routed →")[1].split("\n")[0]
 
 
 # ── 7. provider_route_hint — subscription vs API tier ─────────────────────
@@ -522,7 +522,7 @@ def test_route_prefix_appends_subscription_hint_for_anthropic_routes(
     ):
         ctx = format_echo_context(result, "query", "simple")
     prefix_line = next(
-        line for line in ctx.splitlines() if "🎯 chuzom" in line
+        line for line in ctx.splitlines() if "🎯 Chuzom routed" in line
     )
     assert "wk left" in prefix_line
     assert "5h left" in prefix_line
@@ -550,7 +550,7 @@ def test_route_prefix_appends_api_hint_for_gemini_routes(
     ):
         ctx = format_echo_context(result, "analyze", "moderate")
     prefix_line = next(
-        line for line in ctx.splitlines() if "🎯 chuzom" in line
+        line for line in ctx.splitlines() if "🎯 Chuzom routed" in line
     )
     assert "30d on gemini" in prefix_line
     assert "$1.23" in prefix_line
@@ -575,7 +575,7 @@ def test_route_prefix_omits_hint_for_ollama_routes(
     ):
         ctx = format_echo_context(result, "query", "simple")
     prefix_line = next(
-        line for line in ctx.splitlines() if "🎯 chuzom" in line
+        line for line in ctx.splitlines() if "🎯 Chuzom routed" in line
     )
     assert "wk left" not in prefix_line
     assert "30d on" not in prefix_line

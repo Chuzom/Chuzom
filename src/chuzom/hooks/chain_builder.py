@@ -144,6 +144,15 @@ def build_chain(complexity: str, zone: str, task_type: str) -> list[ModelSpec]:
     has_gemini = _has_gemini()
     has_openai = _has_openai()
 
+    # ── Research: always fall through to llm_research MCP tool (Perplexity) ──
+    # Ollama has a knowledge cutoff and cannot answer current-events or
+    # time-sensitive questions accurately. Returning [] causes direct_executor
+    # to return None, so the hook falls through to inject the ⚡ MANDATORY
+    # ROUTE hint pointing to llm_research, which calls Perplexity or a
+    # web-grounded model. This applies at ALL complexity levels for research.
+    if task_type == "research":
+        return []
+
     # Externals available based on API keys
     cheap_externals: list[ModelSpec] = []
     mid_externals: list[ModelSpec] = []

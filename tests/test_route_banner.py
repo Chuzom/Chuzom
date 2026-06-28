@@ -32,13 +32,13 @@ def test_banner_block_is_present_in_source() -> None:
     assert "CHUZOM_ROUTE_BANNER" in source, (
         "missing CHUZOM_ROUTE_BANNER opt-out — banner emit block deleted?"
     )
-    assert "🎯 routed →" in source, (
-        "missing 🎯 routed → format string — banner emit block deleted?"
+    assert "🎯 Chuzom routed →" in source, (
+        "missing 🎯 Chuzom routed → format string — banner emit block deleted?"
     )
     # Verify the block sits inside the DIRECT-success branch (i.e. follows
     # the DIRECT SUCCESS debug_log line) rather than firing unconditionally.
     direct_idx = source.find("DIRECT SUCCESS:")
-    banner_idx = source.find("🎯 routed →")
+    banner_idx = source.find("🎯 Chuzom routed →")
     assert direct_idx > 0 and banner_idx > direct_idx, (
         "banner emit must follow the DIRECT SUCCESS debug_log within the "
         "same branch — otherwise it fires on prompts that didn't actually "
@@ -86,10 +86,10 @@ def test_banner_format_renders_expected_fields() -> None:
     task_type, complexity = "query", "simple"
     latency_s = latency_ms / 1000.0
     line = (
-        f"🎯 routed → {provider}/{model} "
+        f"🎯 Chuzom routed → {provider}/{model} "
         f"· {task_type}/{complexity} · {latency_s:.1f}s"
     )
-    assert line == "🎯 routed → gemini/gemini-2.5-flash · query/simple · 1.5s"
+    assert line == "🎯 Chuzom routed → gemini/gemini-2.5-flash · query/simple · 1.5s"
 
 
 def test_emit_block_wraps_in_try_except() -> None:
@@ -103,15 +103,15 @@ def test_emit_block_wraps_in_try_except() -> None:
         if not isinstance(node, ast.Try):
             continue
         body_src = ast.unparse(node)
-        if "🎯 routed →" in body_src and "CHUZOM_ROUTE_BANNER" not in body_src:
+        if "🎯 Chuzom routed →" in body_src and "CHUZOM_ROUTE_BANNER" not in body_src:
             # The try/except wrapping the print itself (env-var check is
             # outside the try; that's expected).
             found = True
             break
-        if "🎯 routed →" in body_src:
+        if "🎯 Chuzom routed →" in body_src:
             found = True
             break
     assert found, (
-        "the 🎯 routed → print must sit inside a try/except so a UI rendering "
+        "the 🎯 Chuzom routed → print must sit inside a try/except so a UI rendering "
         "failure cannot block a successful route"
     )

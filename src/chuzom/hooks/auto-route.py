@@ -54,6 +54,30 @@ except ImportError:
 
 # ── .env loader (reads chuzom's .env for API keys) ──────────────────────
 
+# ── A4: Self-update check for pull-routing environments ──────────────────────
+# Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
+# never fires. This check emits a stderr warning when the installed hook is
+# older than the bundled one. The user sees it in their IDE's output panel.
+_THIS_VERSION_LINE = "# chuzom-hook-version: 24"
+try:
+    _PKG_HOOK = Path(__file__).resolve()
+    _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
+    if _INSTALLED_HOOK.exists() and _PKG_HOOK != _INSTALLED_HOOK:
+        import re as _re
+        _inst_match = _re.search(r"chuzom-hook-version:\s*(\d+)", _INSTALLED_HOOK.read_text()[:200])
+        _pkg_match = _re.search(r"chuzom-hook-version:\s*(\d+)", _THIS_VERSION_LINE)
+        if _inst_match and _pkg_match:
+            _inst_ver = int(_inst_match.group(1))
+            _pkg_ver = int(_pkg_match.group(1))
+            if _pkg_ver > _inst_ver:
+                print(
+                    f"⚠️  Chuzom hook is outdated (installed v{_inst_ver}, current v{_pkg_ver}). "
+                    "Run `chuzom install --force` to update.",
+                    file=sys.stderr,
+                )
+except Exception:
+    pass
+
 _ENV_PATHS = [
     Path.cwd() / ".env",  # CWD .env (hook runs from project root)
     Path(__file__).resolve().parent.parent.parent.parent / ".env",  # dev: src/chuzom/hooks → project root
@@ -128,15 +152,44 @@ def _load_discovered_ollama_models() -> list[str]:
 _DISCOVERED_OLLAMA = _load_discovered_ollama_models()
 # First discovered model used as the single-model fallback (e.g. for tracking)
 OLLAMA_MODEL = _DISCOVERED_OLLAMA[0] if _DISCOVERED_OLLAMA else "qwen3.5:latest"
-OLLAMA_TIMEOUT = int(os.environ.get("CHUZOM_OLLAMA_TIMEOUT", "15"))
+OLLAMA_TIMEOUT = int(os.environ.get("CHUZOM_OLLAMA_TIMEOUT", "4"))
 CONFIDENCE_THRESHOLD = int(os.environ.get("CHUZOM_CONFIDENCE_THRESHOLD", "2"))  # v7.5.0: Aggressive routing — route more with lower threshold
 # Privacy-first: classify locally only (heuristic + Ollama) by default.
 # Set CHUZOM_CLASSIFY_LOCAL_ONLY=false to enable external classifiers.
+# D5: If the user has NOT explicitly set this flag AND Ollama is absent but
+# API keys are present, fall back to API classifiers automatically so new
+# users without Ollama still get accurate classification instead of heuristic-only.
 _local_only_raw = os.environ.get(
     "CHUZOM_CLASSIFY_LOCAL_ONLY",
-    os.environ.get("CHUZOM_DISABLE_LLM_CLASSIFIERS", "true"),
+    os.environ.get("CHUZOM_DISABLE_LLM_CLASSIFIERS", ""),
 ).lower()
-DISABLE_LLM_CLASSIFIERS = _local_only_raw in ("1", "true", "yes", "on")
+if _local_only_raw in ("1", "true", "yes", "on"):
+    DISABLE_LLM_CLASSIFIERS = True
+elif _local_only_raw in ("0", "false", "no", "off"):
+    DISABLE_LLM_CLASSIFIERS = False
+else:
+    # Not explicitly set — auto-detect: stay local-only if Ollama reachable or
+    # no API keys are configured; allow API fallback otherwise.
+    _has_api_key = bool(
+        os.environ.get("GEMINI_API_KEY") or
+        os.environ.get("OPENAI_API_KEY") or
+        os.environ.get("GOOGLE_API_KEY")
+    )
+    _ollama_url_check = (
+        os.environ.get("CHUZOM_OLLAMA_URL") or
+        os.environ.get("OLLAMA_BASE_URL") or
+        "http://localhost:11434"
+    )
+    try:
+        import urllib.request as _urllib_req
+        with _urllib_req.urlopen(
+            _urllib_req.Request(f"{_ollama_url_check}/api/tags", method="GET"),
+            timeout=0.5,
+        ):
+            _ollama_reachable = True
+    except Exception:
+        _ollama_reachable = False
+    DISABLE_LLM_CLASSIFIERS = _ollama_reachable or not _has_api_key
 
 # ── Flexible Routing Policy (v7.5.0) ──────────────────────────────────────────
 # Load active policy to customize routing behavior per user
@@ -2474,7 +2527,7 @@ def main() -> None:
                     _debug_log(f"[INVOCATION {invocation_id:.3f}] AGENT LOOP SUCCESS")
             else:
                 # Q&A task — simple text-in/text-out call
-                _direct_result = _execute_chain(prompt, _direct_chain, task_type, timeout=15)
+                _direct_result = _execute_chain(prompt, _direct_chain, task_type, timeout=OLLAMA_TIMEOUT)
 
             if _direct_result:
                 _debug_log(

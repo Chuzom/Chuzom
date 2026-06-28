@@ -187,6 +187,7 @@ mode, but it is not a hard guarantee like the Claude Code hook.
 | 🟤 GitHub Copilot (VS Code) | **Pull** (agent mode) | ✅ Beta | `chuzom-install-hooks ide` |
 | 🌊 Windsurf / Cascade | **Pull** (agent mode) | ✅ Beta | `chuzom-install-hooks ide` |
 | 🔴 Gemini CLI | **Pull** (tool call) | ✅ Production | `chuzom-install-hooks` |
+| 🌙 Kimi Code | **Pull** (MCP tools) | ✅ Beta | Manual MCP config |
 
 > **Recommendation:** Use Claude Code for guaranteed cost savings on every turn.
 > Use Cursor/Copilot/Windsurf for pull-based savings in agent mode.
@@ -224,6 +225,23 @@ chuzom-install-hooks ide
 # Writes .cursor/rules/use-chuzom.mdc — instructs Cursor agent to call
 # Chuzom tools before generating its own response
 ```
+
+### Kimi Code setup
+
+Kimi Code uses pull routing via MCP. Add the Chuzom MCP server in Kimi's settings:
+
+```json
+{
+  "mcpServers": {
+    "chuzom": {
+      "command": "chuzom",
+      "args": []
+    }
+  }
+}
+```
+
+Then in Kimi Code, the model will call `llm_code`, `llm_query`, etc. See [`KIMI.md`](./KIMI.md) for the full routing table.
 
 ---
 
@@ -294,28 +312,47 @@ Local models are always tried first. On failure, chuzom falls through to the nex
 
 ### 1. Install
 
+**macOS / Linux:**
 ```bash
 pip install chuzom-router
+```
+
+**Windows (PowerShell):**
+```powershell
+pip install chuzom-router
+# If 'chuzom' isn't found after install, see Windows-specific setup below
+```
+
+**With uv (faster):**
+```bash
+uv pip install chuzom-router
 ```
 
 ### 2. Wire into your IDE
 
 ```bash
-chuzom install --host claude-code    # or cursor, codex, gemini-cli, all
+chuzom install --host claude-code    # or cursor, codex, gemini-cli, windsurf, all
 ```
 
 ### 3. Add your API keys (optional)
 
 ```bash
-# Bring your own keys (optional)
+# Bring your own keys — stored in ~/.chuzom/.env, never committed
 export OPENAI_API_KEY=sk-...
 export GEMINI_API_KEY=...
-export ANTHROPIC_API_KEY=sk-ant-...
+export PERPLEXITY_API_KEY=pplx-...   # for research routing
 
 # Or: use Claude Code Pro/Max or Codex subscriptions (zero keys needed)
+export CHUZOM_CLAUDE_SUBSCRIPTION=true
 ```
 
-### 4. Watch your savings live
+### 4. Verify everything works
+
+```bash
+chuzom doctor   # checks hooks, Ollama, API keys, provider health
+```
+
+### 5. Watch your savings live
 
 ```bash
 chuzom summary --watch
@@ -848,17 +885,25 @@ chuzom --version                     # Show installed version
 
 ## Configuration
 
-| Env var | Default | Description |
-|---|---|---|
-| `CHUZOM_OLLAMA_MODEL` | auto-discovered | Override the Ollama model |
-| `OLLAMA_BUDGET_MODELS` | auto-discovered | Comma-separated budget model list |
-| `OLLAMA_MODELS` | auto-discovered | Comma-separated model list |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `CHUZOM_AGENTIC_MODEL` | _(unset)_ | Preferred model for agentic tasks (analyze/generate/query/research); pinned at chain front, excludes `code` |
-| `CHUZOM_CODEX_MODELS` | `gpt-5.5,gpt-5.4` | Codex model fallback chain |
-| `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
-| `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription mode (no API key needed) |
-| `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |
+See the [full configuration reference](#full-configuration-reference) below for all environment variables.
+
+Common one-liners:
+
+```bash
+# Use a specific Ollama model
+export CHUZOM_OLLAMA_MODEL=qwen2.5-coder:7b
+
+# Claude Pro/Max subscription (enables quota tracking)
+export CHUZOM_CLAUDE_SUBSCRIPTION=true
+
+# Change routing policy
+export CHUZOM_ROUTING_POLICY=local-first   # or: cost, quality, balanced, dynamic
+
+# Maximum enforcement (block all direct Claude answers for Q&A tasks)
+export CHUZOM_ENFORCE=hard
+
+# All settings can live in ~/.chuzom/.env — loaded automatically
+```
 
 ---
 
@@ -926,6 +971,27 @@ A: Chuzom uses 5-level dynamic discovery to find your installed models. Run `chu
 **Q: Codex was taking 80+ seconds with no feedback — is that fixed?**  
 A: Yes. v0.4.0 streams Codex JSONL events in real time. You'll see `thread.started`, `item.completed`, and `turn.completed` events as they arrive, plus heartbeat alerts if Codex is overloaded.
 
+**Q: What's the difference between push and pull routing?**  
+A: Push routing (Claude Code, Codex) fires a hook before the LLM sees your prompt — routing is automatic and guaranteed. Pull routing (Cursor, Windsurf, Copilot) relies on the model reading instructions and choosing to call Chuzom tools — it fires ~90% of turns in agent mode but is not a hard guarantee.
+
+**Q: Does Chuzom work without Ollama?**  
+A: Yes. Ollama is optional. Without it, prompts route to Codex CLI, Gemini CLI, or API providers (Gemini, OpenAI, Perplexity). Install Ollama to enable free local routing with zero API cost.
+
+**Q: Can I use Chuzom on Windows?**  
+A: Yes. Install via `pip install chuzom-router`, then `chuzom install`. See the [Windows-specific setup](#windows-specific-setup) section for PATH configuration and PowerShell tips. The status-bar script requires Git Bash or WSL; all routing hooks work natively.
+
+**Q: Why did Chuzom answer a research question with old information?**  
+A: Research prompts (news, "latest X", current events) always route to `llm_research` (Perplexity) — Ollama is intentionally bypassed because it has a training cutoff and cannot fetch live data. If the answer was stale, `PERPLEXITY_API_KEY` may be missing. Run `chuzom doctor` to check.
+
+**Q: What is `CHUZOM_DIRECT_EXECUTION` and should I change it?**  
+A: When `true` (default), the hook answers prompts directly from the hook process — Claude never invokes, zero quota consumed. Set to `false` to use MCP-tool mode where Claude calls `llm_query` etc. Most users should leave it at `true`. See [Direct execution mode](#direct-execution-mode-chuzom_direct_execution).
+
+**Q: How do I stop Chuzom from blocking certain tool calls?**  
+A: Enforcement can be relaxed with `CHUZOM_ENFORCE=soft` (log only, never block) or `CHUZOM_ENFORCE=off` (completely disabled). For a single turn, prefix your prompt with `claude:` to bypass routing entirely. See [Enforcement Modes](#enforcement-modes).
+
+**Q: My hooks stopped working after a pip upgrade — how do I fix it?**  
+A: Run `chuzom install --force` to re-register hooks with the current interpreter path. The hook self-checks its version on each run and warns if the installed copy is older than the package version.
+
 ---
 
 ## Codex Plugin
@@ -935,6 +1001,327 @@ Chuzom ships as a Codex plugin — manifest at [`.codex-plugin/plugin.json`](.co
 [awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins) list; a ready-to-submit entry
 lives at [`.codex-plugin/awesome-ai-plugins-entry.md`](.codex-plugin/awesome-ai-plugins-entry.md)
 (tracked in issue #103).
+
+---
+
+## Troubleshooting
+
+### `chuzom` command not found
+
+**macOS / Linux:**
+```bash
+# Confirm the binary is in your PATH
+which chuzom || echo "not on PATH"
+
+# If installed via pip into a venv, activate it first:
+source .venv/bin/activate
+chuzom --version
+
+# Or run directly:
+python -m chuzom --version   # works if __main__ is present
+~/.local/bin/chuzom --version  # pip --user installs go here
+
+# Permanently add pip's user bin to PATH (add to ~/.zshrc or ~/.bashrc):
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Locate the chuzom binary installed by pip
+python -m pip show chuzom-router | Select-String Location
+# Add the Scripts\ subdirectory to your PATH:
+$env:PATH += ";C:\Users\YOU\AppData\Roaming\Python\Python311\Scripts"
+# Or persistently via System Properties → Environment Variables → PATH
+```
+
+---
+
+### Hooks not firing (Claude Code)
+
+```bash
+# Check hook registration
+chuzom doctor
+
+# Manually inspect ~/.claude/settings.json
+cat ~/.claude/settings.json | python -m json.tool | grep -A5 hook
+
+# Re-install if missing
+chuzom install
+
+# Force overwrite existing hooks
+chuzom install --force
+```
+
+The hook file lives at `~/.claude/hooks/chuzom-auto-route.py`. If it's missing after install, check that `~/.claude/` is writable and retry.
+
+---
+
+### Routing not working — Ollama not used
+
+1. Confirm Ollama is running: `ollama list` should show your models
+2. Run `chuzom doctor` — it runs a live health check and populates `~/.chuzom/discovery.json`
+3. Set a model explicitly if auto-discovery fails:
+   ```bash
+   export CHUZOM_OLLAMA_MODEL=llama3.2:latest   # or whichever model you have
+   ```
+4. Check the Ollama URL if you run it on a non-default port:
+   ```bash
+   export OLLAMA_BASE_URL=http://localhost:11435
+   ```
+
+---
+
+### Research prompts answering from Ollama (stale data)
+
+Research tasks (news, "latest X", current events) always bypass Ollama and route to `llm_research` (Perplexity). Ollama has a training cutoff and cannot fetch live web data. If you see stale answers on research prompts, check that `PERPLEXITY_API_KEY` is set in `~/.chuzom/.env`:
+
+```bash
+chuzom doctor   # will warn if PERPLEXITY_API_KEY is missing
+```
+
+---
+
+### Cursor / Windsurf rules not applying
+
+Pull-routing IDEs require the rule file to be present in the project root. If Chuzom tools aren't being called:
+
+```bash
+# Re-install IDE configs into the current project
+chuzom install --host cursor      # or windsurf
+# or
+chuzom-install-hooks ide
+
+# Verify the file exists
+ls .cursor/rules/use-chuzom.mdc
+ls .windsurf/rules/use-chuzom.md
+```
+
+If the rule file exists but the model still doesn't call Chuzom tools, ensure you're in **agent mode** (not chat mode). Pull routing only fires in agent/composer mode where the model can call tools.
+
+---
+
+### Windows-specific setup
+
+**Installation:**
+```powershell
+# Install (PowerShell as regular user — no admin needed)
+pip install chuzom-router
+
+# Verify
+chuzom --version
+```
+
+If `chuzom` isn't found after install, add Python's Scripts directory to PATH:
+```powershell
+# Find where pip installed it
+pip show chuzom-router
+
+# Add to PATH in current session
+$env:PATH += ";$env:APPDATA\Python\Python311\Scripts"
+
+# Or permanently — open System Properties → Advanced → Environment Variables
+# and append the Scripts path to the user PATH variable
+```
+
+**Claude Desktop config** (Windows path):
+```
+%APPDATA%\Claude\claude_desktop_config.json
+```
+
+**VS Code / Copilot MCP config** (Windows path):
+```
+%APPDATA%\Code\User\mcp.json
+```
+
+**Environment variables on Windows:**
+
+Set them permanently via PowerShell (runs at any privilege level):
+```powershell
+[System.Environment]::SetEnvironmentVariable("OLLAMA_BASE_URL","http://localhost:11434","User")
+[System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY","your-key","User")
+```
+
+Or add to your PowerShell profile (`$PROFILE`):
+```powershell
+$env:GEMINI_API_KEY = "your-key"
+$env:CHUZOM_CLAUDE_SUBSCRIPTION = "true"
+```
+
+**Ollama on Windows:**
+Download from [ollama.com](https://ollama.com) — the Windows installer sets up the service automatically. Chuzom auto-discovers it at `http://localhost:11434`.
+
+**Hook installation on Windows:**
+```powershell
+chuzom install
+# If Git Bash / WSL is not available, the status-bar script is skipped
+# automatically (requires bash). All routing hooks install normally.
+```
+
+---
+
+### GitHub Copilot not calling Chuzom tools
+
+1. Ensure VS Code ≥ 1.99 (agent mode required)
+2. Switch Copilot Chat to **Agent** mode (not "Ask" or "Edit")
+3. Verify `.github/copilot-instructions.md` and `.vscode/mcp.json` exist:
+   ```bash
+   chuzom-install-hooks ide
+   ls .vscode/mcp.json
+   ls .github/copilot-instructions.md
+   ```
+4. Restart VS Code — MCP servers load on startup
+
+---
+
+### `chuzom doctor` — what it checks
+
+```bash
+chuzom doctor
+```
+
+Verifies and reports on:
+- Hook registration in `~/.claude/settings.json`
+- Python interpreter path validity (warns if stale venv)
+- Ollama reachability and installed models
+- API key presence (Gemini, OpenAI, Perplexity, Anthropic)
+- `~/.chuzom/` directory initialization
+- Provider health (live ping to each configured provider)
+
+If a check fails, `doctor` prints a specific fix command.
+
+---
+
+## Enforcement Modes
+
+Chuzom's enforcement hook (`enforce-route.py`) fires before every tool call when a routing directive is active. It controls whether Claude can bypass routing and answer directly.
+
+Set via environment variable or `~/.chuzom/routing.yaml`:
+
+```bash
+# Environment variable (takes precedence)
+export CHUZOM_ENFORCE=smart
+
+# Or in ~/.chuzom/routing.yaml
+enforce: hard
+```
+
+| Mode | Behavior | Best for |
+|---|---|---|
+| `smart` (default) | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze). Allows file tools for code tasks. Auto-downgrades after 2 violations to prevent stuck sessions. | Most users — balances savings and productivity |
+| `soft` | Logs violations but never blocks. Route hints appear in context; model can follow voluntarily. | Low-friction onboarding; teams new to routing |
+| `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want guaranteed savings |
+| `strict` | Like `hard` with all escape valves disabled (no auto-pivot, no read-only Bash exception). Sessions can deadlock. | Compliance environments |
+| `advise` | Routes prompts to cheap models, but the enforcement hook **never blocks any tool**. Zero friction. | Testing / evaluation |
+| `off` | Enforcement completely disabled. Routing directives still appear in context. | Debugging routing |
+
+**Auto-pivot:** In `smart` and `hard` modes, after 2 consecutive tool-call violations in a session, enforcement auto-downgrades to `soft` for the rest of that session. This prevents stuck patterns where Claude can't complete a legitimate task.
+
+**Escape valve:** Prefix any prompt with `claude:` to bypass routing entirely for that turn:
+```
+claude: explain this function to me
+```
+
+---
+
+## Advanced Configuration
+
+### Direct execution mode (`CHUZOM_DIRECT_EXECUTION`)
+
+By default (`CHUZOM_DIRECT_EXECUTION=true`), the `UserPromptSubmit` hook answers simple prompts directly from the hook process — Claude never sees them and zero subscription tokens are consumed. The result is injected into the conversation as a cached answer.
+
+If direct execution fails (Ollama unreachable, all providers fail), the hook falls through and injects a `⚡ MANDATORY ROUTE:` directive instead, so an MCP tool handles it.
+
+```bash
+# Default — answer directly from hook, Claude never invoked
+export CHUZOM_DIRECT_EXECUTION=true
+
+# MCP-tool mode — hook injects a routing directive, Claude calls the MCP tool
+export CHUZOM_DIRECT_EXECUTION=false
+```
+
+**When to set `false`:** If you're on a subscription plan without API keys and want the model to handle all responses (pure pull routing via MCP tools), set `CHUZOM_DIRECT_EXECUTION=false`. This uses more Claude turns but keeps all responses through the standard conversational flow.
+
+### Subscription mode (`CHUZOM_CLAUDE_SUBSCRIPTION`)
+
+When you have **Claude Pro or Max** (a subscription, not API keys), set:
+
+```bash
+export CHUZOM_CLAUDE_SUBSCRIPTION=true
+# or add to ~/.chuzom/.env
+```
+
+This enables:
+- OAuth-based quota tracking (reads live usage from Claude Code's Keychain token)
+- Pressure-aware routing (routes more aggressively when your 5-hour or weekly quota is high)
+- Session summary shows "Free subscription" tier for Codex / Gemini CLI usage
+
+Without this flag, Chuzom treats Claude as a paid-API provider and tracks cost in dollars rather than quota pressure.
+
+### Classifier behavior (`CHUZOM_CLASSIFY_LOCAL_ONLY`)
+
+By default, Chuzom classifies prompts using local methods only (heuristic + Ollama). This protects privacy — your prompts never leave your machine for classification.
+
+```bash
+# Default — heuristic + Ollama only (privacy-first)
+export CHUZOM_CLASSIFY_LOCAL_ONLY=true
+
+# Allow API classifiers when Ollama is absent but API keys are present
+export CHUZOM_CLASSIFY_LOCAL_ONLY=false
+```
+
+**Auto-detection:** If you don't set this variable, Chuzom auto-detects: if Ollama is unreachable but you have API keys (`GEMINI_API_KEY` or `OPENAI_API_KEY`), it enables API classifiers automatically so routing accuracy doesn't silently degrade.
+
+### Full configuration reference
+
+| Env var | Default | Description |
+|---|---|---|
+| `CHUZOM_OLLAMA_MODEL` | auto-discovered | Override the primary Ollama model |
+| `OLLAMA_BUDGET_MODELS` | auto-discovered | Comma-separated budget model list |
+| `OLLAMA_MODELS` | auto-discovered | Comma-separated full model list |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `CHUZOM_OLLAMA_TIMEOUT` | `4` | Per-call Ollama timeout in seconds |
+| `CHUZOM_AGENTIC_MODEL` | _(unset)_ | Preferred model for agentic tasks (analyze/generate/query/research) |
+| `CHUZOM_CODEX_MODELS` | `gpt-5.5,gpt-5.4` | Codex model fallback chain |
+| `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
+| `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription quota tracking mode |
+| `CHUZOM_DIRECT_EXECUTION` | `true` | Answer prompts directly from hook (Claude never invoked) |
+| `CHUZOM_ENFORCE` | `smart` | Enforcement mode: `smart`, `soft`, `hard`, `strict`, `advise`, `off` |
+| `CHUZOM_CLASSIFY_LOCAL_ONLY` | auto | Restrict classification to local models only (privacy) |
+| `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |
+| `CHUZOM_ROUTE_BANNER` | `on` | Show `🎯 Chuzom routed →` banner in terminal (`off` to hide) |
+| `CHUZOM_ZERO_CLAUDE` | `false` | Zero-Claude mode: block native Claude turns; external route or block |
+| `PERPLEXITY_API_KEY` | _(unset)_ | API key for research routing via Perplexity |
+| `GEMINI_API_KEY` | _(unset)_ | API key for Gemini Flash / Pro |
+| `OPENAI_API_KEY` | _(unset)_ | API key for GPT-4o / o3 |
+| `ANTHROPIC_API_KEY` | _(unset)_ | API key for direct Claude API (not subscription) |
+
+All variables can also be set in `~/.chuzom/.env` (loaded automatically by hooks).
+
+---
+
+## Kimi Code Integration
+
+[Kimi Code](https://kimi.moonshot.cn/code) supports pull routing via MCP:
+
+```bash
+# Install Chuzom MCP server config for Kimi
+chuzom-install-hooks ide
+```
+
+Then configure Kimi Code's MCP settings to point to the Chuzom server. In Kimi Code's settings, add:
+
+```json
+{
+  "mcpServers": {
+    "chuzom": {
+      "command": "chuzom",
+      "args": []
+    }
+  }
+}
+```
+
+Kimi Code uses pull routing — see [`KIMI.md`](./KIMI.md) for the tool routing table. The model must call `llm_code`, `llm_query`, etc. before generating its own response.
 
 ---
 

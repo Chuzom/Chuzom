@@ -24,12 +24,13 @@ For research tasks specifically, always prefer `llm_research` (web-grounded via 
 
 | Task | Tool | Notes |
 |---|---|---|
-| Simple factual question | `llm_query` | Gemini Flash / Groq |
+| Simple factual question | `llm_query` | Ollama → Gemini Flash → GPT-4o-mini |
 | Research / current events | `llm_research` | Perplexity (web-grounded) |
-| Writing / content | `llm_generate` | Gemini Flash / Haiku |
-| Deep analysis | `llm_analyze` | GPT-4o / Gemini Pro |
+| Writing / content | `llm_generate` | Gemini Flash → Haiku |
+| Deep analysis | `llm_analyze` | Ollama → GPT-4o |
 | Code generation | `llm_code` | Ollama → Codex → o3 |
-| Unknown / auto-detect | `llm_auto` | Classifies + routes |
+| Deep reasoning / proofs | `llm_reason` | Extended-thinking model |
+| Unknown / auto-detect | `llm_auto` | Classifies + routes automatically |
 
 ---
 

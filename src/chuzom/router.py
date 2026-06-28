@@ -2341,10 +2341,12 @@ async def route_and_call(
                 candidate_count=0,
             )
             raise ValueError(
-                f"No available models for {task_type.value}/{profile.value}. "
+                f"No providers available for {task_type.value}/{profile.value}. "
                 f"Configured providers: {available or 'none'}. "
-                "Run llm_setup(action='test') to check API keys, or "
-                "llm_providers() to see all configured models."
+                "Fix: run `chuzom doctor` to diagnose, then one of:\n"
+                "  • Install Ollama (free, local): https://ollama.com\n"
+                "  • Set GEMINI_API_KEY or OPENAI_API_KEY in ~/.chuzom/.env\n"
+                "  • Set CHUZOM_CLAUDE_SUBSCRIPTION=true if you have Claude Pro/Max"
             )
 
         # Semantic dedup cache — skip the LLM call entirely when an equivalent
@@ -3119,7 +3121,11 @@ async def route_and_stream(
             )
         except Exception as e:
             log.warning("Audit write failed: %s", e)
-        raise ValueError(error_detail)
+        raise ValueError(
+            f"{error_detail}. "
+            "Fix: run `chuzom doctor` to diagnose, then install Ollama (free) "
+            "or set GEMINI_API_KEY / OPENAI_API_KEY in ~/.chuzom/.env"
+        )
 
     # ── Emit route.started event ──────────────────────────────────────────
     seq += 1

@@ -401,7 +401,9 @@ def claude_desktop_config_path() -> Path | None:
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
     if sys.platform == "win32":
-        appdata = os.environ.get("APPDATA", "")
+        # C2: LOCALAPPDATA is the fallback when APPDATA is unset (common in
+        # some CI, Docker, and non-standard Windows environments).
+        appdata = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA", "")
         return Path(appdata) / "Claude" / "claude_desktop_config.json" if appdata else None
     # Linux / other
     xdg = os.environ.get("XDG_CONFIG_HOME", "")
@@ -672,18 +674,24 @@ def install(force: bool = False) -> list[str]:
         actions.append(f"Installed statusline → {statusline_dst}")
 
         # Register statusLine in settings.json
+        # C1: On Windows, bash may not be available. Only register if bash is
+        # found in PATH (covers WSL/Git Bash users); skip gracefully otherwise.
+        import shutil as _shutil_sl
         settings3 = _load_settings()
-        statusline_cmd = f"bash {statusline_dst}"
-        current_sl = settings3.get("statusLine")
-        if not current_sl or current_sl.get("command") != statusline_cmd:
-            settings3["statusLine"] = {
-                "type": "command",
-                "command": statusline_cmd,
-            }
-            _save_settings(settings3)
-            actions.append("Registered statusLine command in settings.json")
+        if sys.platform == "win32" and not _shutil_sl.which("bash"):
+            actions.append("statusLine skipped on Windows (bash not in PATH — install Git Bash or WSL)")
         else:
-            actions.append("statusLine already configured")
+            statusline_cmd = f"bash {statusline_dst}"
+            current_sl = settings3.get("statusLine")
+            if not current_sl or current_sl.get("command") != statusline_cmd:
+                settings3["statusLine"] = {
+                    "type": "command",
+                    "command": statusline_cmd,
+                }
+                _save_settings(settings3)
+                actions.append("Registered statusLine command in settings.json")
+            else:
+                actions.append("statusLine already configured")
 
     # ── Register in Claude Desktop ────────────────────────────────────────
     actions.extend(_install_claude_desktop())

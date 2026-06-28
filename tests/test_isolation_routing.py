@@ -13,6 +13,7 @@ so results are not affected by prior routing cache or session state.
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -335,7 +336,7 @@ def _run_router_isolated(prompt: str, isolation_dir: Path, run_id: str = "test")
         # Use chuzom demo to get routing decision
         # (This is a built-in command that routes a prompt and shows the decision)
         result = subprocess.run(
-            ["chuzom", "demo", "--prompt", prompt],
+            [_chuzom_binary(), "demo", "--prompt", prompt],
             env=env,
             capture_output=True,
             text=True,
@@ -364,7 +365,7 @@ def _run_router_live(prompt: str) -> dict[str, Any] | None:
     """
     try:
         result = subprocess.run(
-            ["chuzom", "demo", "--prompt", prompt],
+            [_chuzom_binary(), "demo", "--prompt", prompt],
             capture_output=True,
             text=True,
             timeout=30,
@@ -422,8 +423,26 @@ def _parse_router_demo_output(output: str, run_id: str = "") -> dict[str, Any]:
     return result
 
 
+def _chuzom_binary() -> str:
+    """Return the path to the chuzom binary co-located with sys.executable.
+
+    In a venv, sys.executable is /path/to/venv/bin/python and the chuzom
+    entry point is /path/to/venv/bin/chuzom. Falling back to the bare
+    'chuzom' name allows CI environments where the bin dir is on PATH.
+    """
+    import shutil
+    candidate = Path(sys.executable).parent / "chuzom"
+    if candidate.exists():
+        return str(candidate)
+    return shutil.which("chuzom") or "chuzom"
+
+
 def _run_chuzom_cmd(args: list[str]) -> str:
-    """Run an chuzom CLI command and return output.
+    """Run a chuzom CLI command and return output.
+
+    Resolves the binary via _chuzom_binary() so the command works even when
+    the venv is not activated on PATH. (E4 fix: bare 'chuzom' fails outside
+    activated venv.)
 
     Args:
         args: Command arguments (e.g., ["status"], ["last", "--count", "3"])
@@ -433,7 +452,7 @@ def _run_chuzom_cmd(args: list[str]) -> str:
     """
     try:
         result = subprocess.run(
-            ["chuzom"] + args,
+            [_chuzom_binary()] + args,
             capture_output=True,
             text=True,
             timeout=10,

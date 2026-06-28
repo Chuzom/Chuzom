@@ -1,45 +1,33 @@
-# Chuzom — VS Code / GitHub Copilot Integration
+<!-- chuzom-rules-version: 2 -->
+# Chuzom — GitHub Copilot CLI Routing Rules
 
-This document explains how to use chuzom MCP tools with VS Code and GitHub Copilot.
+> Chuzom routes each task to the cheapest capable model before Copilot CLI generates
+> its own response. Call the appropriate tool BEFORE answering.
+>
+> **Pull routing:** Copilot CLI uses pull routing — YOU must call the tool. The tool
+> returns the response; relay it verbatim.
 
-## Configuration for VS Code / Copilot
+## Task Type → Tool Mapping
 
-Add this to your VS Code `mcp.json`:
+| Task | Tool | Notes |
+|---|---|---|
+| Simple factual question | `llm_query` | Ollama → Gemini Flash → GPT-4o-mini |
+| Research / current events | `llm_research` | Perplexity (web-grounded) |
+| Writing / content | `llm_generate` | Gemini Flash → Haiku |
+| Deep analysis / review | `llm_analyze` | Ollama → GPT-4o |
+| Code generation / refactor | `llm_code` | Ollama → Codex → o3 |
+| Deep reasoning / proofs | `llm_reason` | Extended-thinking model |
+| Unknown / auto-detect | `llm_auto` | Classifies + routes automatically |
 
-```json
-{
-  "servers": {
-    "chuzom": {
-      "command": "chuzom",
-      "args": []
-    }
-  }
-}
-```
+## Rules
 
-File location:
-- **macOS**: `~/Library/Application Support/Code/User/mcp.json`
-- **Windows**: `%APPDATA%\Code\User\mcp.json`
-- **Linux**: `~/.config/Code/User/mcp.json`
+1. Call the matching tool **before** generating your own response.
+2. Return the tool's output to the user **as-is** (don't paraphrase).
+3. Only use native Copilot CLI intelligence for file navigation, terminal commands,
+   or when all Chuzom MCP servers are unavailable.
+4. Use `llm_research` for anything time-sensitive — training has a cutoff.
 
-## Available Tools
+## Token-Efficient Responses
 
-### Smart Routing
-- `llm_route` - Classify and route to optimal model
-- `llm_classify` - Quick task complexity classification
-- `llm_auto` - Automatic routing with cost tracking
-
-### Text Operations
-- `llm_query` - Simple questions and Q&A
-- `llm_research` - Web-grounded research with sources
-- `llm_generate` - Content creation and writing
-- `llm_analyze` - Complex analysis and debugging
-- `llm_code` - Code generation and improvements
-
-### Utilities
-- `llm_usage` - View routing stats and savings
-- `llm_health` - Check provider availability
-
-## Quick Start
-
-Use `llm_route(prompt="your task")` to automatically classify and route any task to the optimal model for cost savings.
+Skip preamble. Lead with result. Fragments fine when meaning is clear.
+No trailing summaries. ≥3 items → bullets. Never restate the user's request.

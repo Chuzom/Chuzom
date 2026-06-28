@@ -351,7 +351,7 @@ def _install_gemini_cli_files() -> list[str]:
 
     # Gemini instructions
     instructions = ext_dir / "INSTRUCTIONS.md"
-    actions.extend(_append_routing_rules(instructions, "gemini-rules.md"))
+    actions.extend(_append_routing_rules(instructions, "gemini-cli-rules.md"))
 
     return actions
 
@@ -373,7 +373,7 @@ def _install_copilot_cli_files() -> list[str]:
 
     # Copilot instructions
     instructions = home / ".config" / "gh" / "copilot" / "instructions.md"
-    actions.extend(_append_routing_rules(instructions, "copilot-rules.md"))
+    actions.extend(_append_routing_rules(instructions, "copilot-cli-rules.md"))
 
     return actions
 
@@ -549,6 +549,10 @@ def _install_trae_files() -> list[str]:
             {"command": "chuzom", "args": []},
         )
     )
+
+    # Trae routing rules
+    rules_dest = home / ".trae" / "rules" / "chuzom.md"
+    actions.extend(_append_routing_rules(rules_dest, "trae-rules.md"))
 
     return actions
 

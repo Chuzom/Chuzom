@@ -174,8 +174,24 @@ def _render_welcome(is_subscription: bool) -> str:
         f"   opened  → {now}",
         "   chain   → Ollama · Codex · Gemini Flash · GPT-4o · Perplexity",
         "   tip     → run `chuzom summary` to see what this session saved",
-        _WELCOME_DIVIDER,
     ]
+
+    # F1: pull-routing feedback — if the project also has Cursor or Windsurf
+    # config, note that those IDEs use pull routing (model must call MCP tools
+    # manually) rather than the push routing active here in Claude Code.
+    _pull_ides = []
+    _project_root = Path(os.getcwd())
+    if (_project_root / ".cursor").exists():
+        _pull_ides.append("Cursor")
+    if (_project_root / ".windsurf").exists():
+        _pull_ides.append("Windsurf")
+    if _pull_ides:
+        _ide_list = " + ".join(_pull_ides)
+        lines.append(
+            f"   pull    → {_ide_list}: model must call llm_* tools (best-effort)"
+        )
+
+    lines.append(_WELCOME_DIVIDER)
     return "\n".join(lines)
 
 
@@ -726,6 +742,80 @@ def _maybe_refresh_benchmarks_bg() -> None:
         pass  # never block session start
 
 
+def _maybe_update_pull_routing_rules() -> None:
+    """Silently refresh IDE pull-routing rule files if they are out of date.
+
+    Runs at most once per 24h (timestamp in ~/.chuzom/last_rules_check).
+    Compares the installed .cursor/rules/use-chuzom.mdc and
+    .windsurf/rules/use-chuzom.md against the bundled content from
+    install_hooks.py; overwrites silently if they differ.  Never raises.
+    """
+    try:
+        import time as _time
+        _check_file = Path(STATE_DIR) / "last_rules_check"
+        _now = _time.time()
+        if _check_file.exists():
+            try:
+                _last = float(_check_file.read_text().strip())
+                if _now - _last < 86400:  # 24h
+                    return
+            except (ValueError, OSError):
+                pass
+
+        _project = Path(os.getcwd())
+
+        # Load bundled content from install_hooks module
+        try:
+            from chuzom.install_hooks import _CURSOR_RULE_CONTENT
+        except ImportError:
+            return  # package not installed — skip
+
+        _updates = []
+
+        # Cursor rules
+        _cursor_rules = _project / ".cursor" / "rules" / "use-chuzom.mdc"
+        if _cursor_rules.exists():
+            try:
+                if _cursor_rules.read_text(encoding="utf-8") != _CURSOR_RULE_CONTENT:
+                    _cursor_rules.write_text(_CURSOR_RULE_CONTENT, encoding="utf-8")
+                    _updates.append("Cursor")
+            except OSError:
+                pass
+
+        # Windsurf rules (use same routing instructions, adapted label)
+        _windsurf_rules = _project / ".windsurf" / "rules" / "use-chuzom.md"
+        if _windsurf_rules.exists():
+            try:
+                _ws_content = _CURSOR_RULE_CONTENT.replace(
+                    "Cursor uses pull routing: YOU must call the tool.",
+                    "Windsurf uses pull routing: YOU must call the tool.",
+                ).replace(
+                    "native Cursor intelligence",
+                    "native Windsurf intelligence",
+                )
+                if _windsurf_rules.read_text(encoding="utf-8") != _ws_content:
+                    _windsurf_rules.write_text(_ws_content, encoding="utf-8")
+                    _updates.append("Windsurf")
+            except OSError:
+                pass
+
+        if _updates:
+            print(
+                f"⚡ Chuzom: updated pull-routing rules for {', '.join(_updates)}",
+                file=sys.stderr,
+            )
+
+        # Record check time
+        try:
+            Path(STATE_DIR).mkdir(parents=True, exist_ok=True)
+            _check_file.write_text(str(_now))
+        except OSError:
+            pass
+
+    except Exception:
+        pass  # never block session start on rules refresh failure
+
+
 def main() -> None:
     try:
         json.load(sys.stdin)  # consume input (may be empty)
@@ -786,6 +876,11 @@ def main() -> None:
     print(banner, file=sys.stderr)
     print("", file=sys.stderr)
     print(_render_welcome(is_subscription), file=sys.stderr)
+
+    # Pull-routing auto-update: check if IDE rule files in the current
+    # project are out of date compared to the bundled version in the package.
+    # Runs at most once per day (gated by ~/.chuzom/last_rules_check).
+    _maybe_update_pull_routing_rules()
 
     print(json.dumps({
         "hookSpecificOutput": {
