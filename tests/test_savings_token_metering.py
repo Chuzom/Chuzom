@@ -5,7 +5,6 @@ columns, so the dashboard under-counted tokens for Ollama/Codex routing.
 import json
 import pathlib
 import sqlite3
-import tempfile
 import types
 from datetime import datetime, timezone
 
