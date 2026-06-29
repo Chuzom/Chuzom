@@ -260,10 +260,9 @@ def needs_claude_tools(prompt: str, task_type: str) -> bool:
     if task_type not in ("code", "analyze"):
         return False  # General Q&A, research, generate never need file tools
 
-    # Explicit file references
-    if re.search(r'[\w/]+\.\w{1,4}\b', prompt) and re.search(
-        r'\.(py|ts|js|go|rs|java|cpp|yaml|json|md|toml|cfg|sh|sql)\b', prompt
-    ):
+    # Explicit file references — check for known extensions directly.
+    # Single-pattern approach avoids the polynomial backtracking of [\w/]+\.
+    if re.search(r'\.(py|ts|js|go|rs|java|cpp|yaml|json|md|toml|cfg|sh|sql)\b', prompt):
         return True
     # Edit/fix/debug intent with location
     if re.search(r'\b(fix|debug|investigate|refactor|update|modify)\b', prompt, re.IGNORECASE) and \

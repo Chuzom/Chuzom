@@ -132,7 +132,7 @@ def _oauth_refresh_and_write() -> None:
             "https://api.anthropic.com/api/oauth/usage",
             headers={"Authorization": f"Bearer {token}", "anthropic-beta": "oauth-2025-04-20"},
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — HTTPS Anthropic API
             data = json.loads(resp.read().decode())
         session_pct = float((data.get("five_hour") or {}).get("utilization", 0.0))
         weekly_pct = float((data.get("seven_day") or {}).get("utilization", 0.0))

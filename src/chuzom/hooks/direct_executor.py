@@ -69,7 +69,7 @@ def ollama_is_alive(timeout: float = 0.5) -> bool:
     try:
         ollama_url = _get_ollama_url()
         req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
-        with urllib.request.urlopen(req, timeout=timeout):
+        with urllib.request.urlopen(req, timeout=timeout):  # nosec B310 — localhost only
             return True
     except Exception:
         return False
@@ -94,7 +94,7 @@ def call_ollama(prompt: str, model: str, timeout: int = 4) -> str | None:
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — localhost only
             result = json.loads(resp.read())
             msg = result.get("message", {})
             content = msg.get("content", "")
@@ -129,7 +129,7 @@ def call_gemini(prompt: str, model: str = "gemini-2.5-flash", timeout: int = 10)
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — HTTPS only
             result = json.loads(resp.read())
             content = result["candidates"][0]["content"]["parts"][0]["text"]
             usage = result.get("usageMetadata", {})
@@ -164,7 +164,7 @@ def call_openai(prompt: str, model: str = "gpt-4o-mini", timeout: int = 10) -> t
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — HTTPS only
             result = json.loads(resp.read())
             content = result["choices"][0]["message"]["content"]
             usage = result.get("usage", {})

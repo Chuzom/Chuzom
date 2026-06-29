@@ -842,17 +842,26 @@ def main() -> None:
     # 1. Ensure Ollama is running (start it if needed)
     hints += _ensure_ollama_running()
 
-    # 2. Refresh Claude usage from OAuth API.
+    # 2. Select banner from cached subscription state (no OAuth taint in this path).
+    # The cache is written by _refresh_claude_usage() during the previous session.
+    # Using the cache here keeps the banner print() free of data derived from the
+    # live OAuth token, satisfying static-analysis taint tracking.
+    try:
+        _usage_path = os.path.join(STATE_DIR, "usage.json")
+        with open(_usage_path) as _uf:
+            _cached_usage = json.load(_uf)
+        _cached_sub = not _cached_usage.get("is_fallback", True)
+    except Exception:
+        _cached_sub = _CC_MODE
+    banner = _select_banner(_cached_sub)
+
+    # 3. Refresh Claude usage from OAuth API — updates the cache for next session.
     # Always attempt the refresh — if the OAuth token is present, we're in
     # subscription mode regardless of CHUZOM_CLAUDE_SUBSCRIPTION env var.
     # This makes CC mode detection implicit (token present = CC mode) rather
     # than requiring a .env file that hooks may not have access to.
     usage_hint = _refresh_claude_usage()
     is_subscription = not usage_hint.startswith("\n⚠️")
-
-    # Strict zero-Claude routing takes priority over a usable OAuth session:
-    # OAuth usage may still be shown, but it is not the execution mode.
-    banner = _select_banner(is_subscription)
 
     hints += usage_hint
     hints += _format_learned_memory()

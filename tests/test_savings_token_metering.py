@@ -34,16 +34,16 @@ def _mk(db, with_tokens: bool):
     c.close()
 
 
-def test_savings_stats_tokens_counted():
-    db = tempfile.mktemp(suffix=".db")
+def test_savings_stats_tokens_counted(tmp_path):
+    db = str(tmp_path / "test.db")
     _mk(db, with_tokens=True)
     wt = dd.query_window("lifetime", db_path=db)
     assert wt.calls == 1
     assert wt.tokens == 830  # 350 + 480
 
 
-def test_old_schema_without_token_columns_is_graceful():
-    db = tempfile.mktemp(suffix=".db")
+def test_old_schema_without_token_columns_is_graceful(tmp_path):
+    db = str(tmp_path / "test_old.db")
     _mk(db, with_tokens=False)
     wt = dd.query_window("lifetime", db_path=db)
     assert wt.calls == 1 and wt.tokens == 0  # no crash, defaults to 0

@@ -38,9 +38,9 @@ async def register_on_agoragentic():
         creds_file.chmod(0o600)  # Secure permissions
         
         api_key = result.get('api_key', '')
-        masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "****"
+        key_len = len(api_key)
         print(f"\n✅ Credentials saved to {creds_file}")
-        print(f"API Key: {masked_key}")
+        print(f"API credential: registered ({key_len} chars)")
         print(f"Agent ID: {result.get('agent_id', 'N/A')}")
         
         return result

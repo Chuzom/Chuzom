@@ -182,7 +182,7 @@ else:
     )
     try:
         import urllib.request as _urllib_req
-        with _urllib_req.urlopen(
+        with _urllib_req.urlopen(  # nosec B310 — localhost Ollama only
             _urllib_req.Request(f"{_ollama_url_check}/api/tags", method="GET"),
             timeout=0.5,
         ):
