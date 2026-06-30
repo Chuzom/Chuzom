@@ -385,8 +385,10 @@ def test_auto_route_logs_unrouted_previous_turn_on_next_prompt(tmp_path):
         ctx = out.get("reason", "")
     else:
         pytest.fail(f"Unexpected hook output format: {out}")
-    assert "PREVIOUS TURN VIOLATED ROUTING" in ctx
-    assert "expected llm_query for query/simple" in ctx
+    # Neutral framing (de-fanged): the prior-unrouted-turn notice names the task
+    # and the tool it could have used, without "violation"/"escalated" language.
+    assert "Last turn was not routed" in ctx
+    assert "llm_query" in ctx and "query/simple" in ctx
 
     # With direct execution (block or echo mode), pending state may or may not exist.
     # With Claude pass-through path (MANDATORY ROUTE directive), pending state is updated.
@@ -401,7 +403,7 @@ def test_auto_route_logs_unrouted_previous_turn_on_next_prompt(tmp_path):
     assert "expected=llm_query" in log_text
     assert "task=query/simple" in log_text
     # Prior unrouted turn context is now in contextForAgent, not systemMessage
-    assert "PREVIOUS TURN VIOLATED ROUTING" in ctx or "prior unrouted turn" in ctx
+    assert "Last turn was not routed" in ctx or "prior unrouted turn" in ctx
 
 
 # ── Read-only Bash allowlist (smart mode, code tasks) ─────────────────────────

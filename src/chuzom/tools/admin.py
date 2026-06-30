@@ -375,23 +375,37 @@ async def llm_health() -> str:
     tracker = get_tracker()
     report = tracker.status_report()
 
+    # Probe the live local fallback up front so it counts toward the routable
+    # set. Previously llm_health headlined only `available_providers` (key-based)
+    # and probed Ollama separately at the bottom — so a local-only setup reported
+    # "0 providers / No providers configured" while llm_query was happily routing
+    # to Ollama. Health must reflect what can ACTUALLY be routed to right now.
+    ollama_reachable = bool(config.ollama_base_url) and probe_ollama(config.ollama_base_url)
+
+    routable = set(config.available_providers)
+    if ollama_reachable:
+        routable.add("ollama")
+
     lines = [
         f"## Provider Health (profile: {config.chuzom_profile.value})",
-        f"Configured: {len(config.available_providers)} providers — {', '.join(sorted(config.available_providers)) or 'none'}",
+        f"Routable now: {len(routable)} — {', '.join(sorted(routable)) or 'none'}",
+        f"Configured (key-based): {len(config.available_providers)} — {', '.join(sorted(config.available_providers)) or 'none'}",
         f"Text: {', '.join(sorted(config.text_providers)) or 'none'}",
         f"Media: {', '.join(sorted(config.media_providers)) or 'none'}",
         "",
     ]
-    if not report:
-        lines.append("No providers configured. Run `chuzom-onboard` to set up API keys.")
+    if not routable:
+        lines.append("No providers reachable. Run `chuzom-onboard` to set up API keys, or `ollama serve` for a local model.")
+    elif not report:
+        # Nothing has been routed yet this session, but a provider IS reachable.
+        lines.append("Reachable, no routes yet this session.")
     else:
         for provider, status in report.items():
             lines.append(f"- **{colorize_provider(provider)}**: {status}")
 
     # Show Ollama reachability explicitly — it's config-based AND needs a live probe
     if config.ollama_base_url:
-        reachable = probe_ollama(config.ollama_base_url)
-        ollama_status = "reachable ✅" if reachable else "unreachable ❌ — run: ollama serve"
+        ollama_status = "reachable ✅" if ollama_reachable else "unreachable ❌ — run: ollama serve"
         lines.append(f"\n🦙 Ollama ({config.ollama_base_url}): {ollama_status}")
 
     lines.append("\nTip: use llm_dashboard to open the visual web dashboard at localhost:7337")
