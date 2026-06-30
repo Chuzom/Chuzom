@@ -1901,10 +1901,14 @@ def _prior_violation_notice(pending: dict | None) -> str:
     expected_tool = pending.get("expected_tool", "llm_route")
     task_type = pending.get("task_type", "?")
     complexity = pending.get("complexity", "?")
+    # Honest framing (companion to PR #107): routing is a suggestion, not a
+    # mandate, so a skipped route is not a "violation" and nothing is "escalated".
+    # State it neutrally — the model decides, and answering from real context is
+    # a legitimate choice, not an offense.
     return (
-        "⚠ PREVIOUS TURN VIOLATED ROUTING: "
-        f"expected {expected_tool} for {task_type}/{complexity}, but no llm_* tool was called. "
-        "This was logged.\n"
+        "ℹ Last turn was not routed: "
+        f"{task_type}/{complexity} could have used {expected_tool}. "
+        "No action needed — route when it saves quota, answer directly when context is needed.\n"
     )
 
 

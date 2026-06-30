@@ -121,3 +121,28 @@ class TestHealth:
         from chuzom.server import llm_health
         result = await llm_health()
         assert "Provider Health" in result
+
+    @pytest.mark.asyncio
+    async def test_health_counts_reachable_ollama_as_routable(self, monkeypatch):
+        """Regression: a local-only setup (no API keys, Ollama reachable) must
+        report a non-zero routable set — not "0 providers / none reachable".
+        """
+        from types import SimpleNamespace
+
+        import chuzom.tools.admin as admin
+
+        fake_cfg = SimpleNamespace(
+            chuzom_profile=SimpleNamespace(value="budget"),
+            available_providers=set(),            # no API-key providers
+            text_providers=set(),
+            media_providers=set(),
+            ollama_base_url="http://localhost:11434",
+        )
+        monkeypatch.setattr(admin, "get_config", lambda: fake_cfg)
+        monkeypatch.setattr(admin, "get_tracker", lambda: SimpleNamespace(status_report=lambda: {}))
+        monkeypatch.setattr("chuzom.config.probe_ollama", lambda _url: True)
+
+        result = await admin.llm_health()
+        assert "Routable now: 1" in result
+        assert "ollama" in result
+        assert "No providers reachable" not in result
