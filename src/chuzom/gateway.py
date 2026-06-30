@@ -25,8 +25,6 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from chuzom.hooks.chain_builder import build_chain, get_current_pressure, needs_claude_tools
-from chuzom.hooks.direct_executor import execute_agent, execute_chain
 
 
 def _load_dotenv() -> None:
@@ -69,36 +67,46 @@ def _classify(prompt: str) -> tuple[str, str]:
     return task, complexity
 
 
-def _prefer(chain, model_name):
-    """Lead the chain with a client-requested model (tier override).
+class _ModelRef:
+    """Tiny ``.provider`` / ``.model`` holder so the wire-format endpoints can keep
+    formatting ``f"{r.model.provider}/{r.model.model}"`` unchanged."""
 
-    Provider-agnostic — no hardcoded model names:
-      * ``provider/model`` (e.g. ``gemini/gemini-2.5-flash``) → used directly. This
-        is the universal litellm/OpenRouter convention, so it works for ANY provider.
-      * a bare model name → resolved to a provider only if it already appears in the
-        routing chain (Chuzom's own registry). Unknown bare names are ignored (we
-        never guess a provider from the model string), so Chuzom routes normally.
-    """
-    if not model_name or model_name in ("chuzom-auto", ""):
-        return chain
-    from chuzom.hooks.chain_builder import ModelSpec
-    if "/" in model_name:
-        prov, mdl = model_name.split("/", 1)
-        spec = ModelSpec(provider=prov, model=mdl)
-    else:
-        spec = next((c for c in chain if c.model == model_name), None)
-        if spec is None:
-            return chain  # unknown bare name, no provider → don't guess
-    return [spec] + [c for c in chain if c.model != spec.model]
+    __slots__ = ("provider", "model")
+
+    def __init__(self, provider: str, model: str) -> None:
+        self.provider = provider
+        self.model = model
+
+
+class _RoutedResult:
+    """Adapts :func:`route_payload`'s JSON dict to the ``.text`` /
+    ``.model.provider`` / ``.model.model`` / ``.input_tokens`` / ``.output_tokens``
+    shape the gateway's wire-format endpoints expect."""
+
+    __slots__ = ("text", "input_tokens", "output_tokens", "cost_usd", "model")
+
+    def __init__(self, d: dict) -> None:
+        self.text = d.get("text", "")
+        self.input_tokens = d.get("input_tokens", 0) or 0
+        self.output_tokens = d.get("output_tokens", 0) or 0
+        self.cost_usd = d.get("cost_usd", 0.0) or 0.0
+        prov = d.get("provider") or ""
+        mdl = d.get("model") or ""
+        # route_and_call may return model as "provider/model" or bare — normalize
+        # to the bare model name so f"{provider}/{model}" doesn't double the prefix.
+        bare = mdl.split("/", 1)[1] if "/" in mdl and mdl.split("/", 1)[0] == prov else mdl
+        self.model = _ModelRef(prov, bare)
 
 
 def _route(prompt: str, task_type: str | None, complexity: str | None,
            prefer_model: str | None = None):
-    """Shared core: classify (if needed) → route → meter. Returns a DirectResult.
+    """Shared core for every wire-format endpoint: classify (if needed) → route
+    through Chuzom's FULL router and adapt the result.
 
-    prefer_model (the OpenAI ``model`` field) lets a client request a specific tier
-    (e.g. "gemini-2.5-flash"); the gateway leads the chain with it, keeping the rest
-    as fallback. Omit / "chuzom-auto" = let Chuzom pick.
+    Routes via :func:`chuzom.route_server.route_payload` → ``route_and_call``, so
+    gateway traffic gets the same budget caps, caching, paid-spend cap, and cost
+    logging as the native ``/route`` endpoint (and the standalone route server).
+    ``prefer_model`` (the OpenAI ``model`` field) requests a specific tier.
     """
     if not prompt.strip():
         raise HTTPException(status_code=400, detail="no prompt content")
@@ -106,28 +114,19 @@ def _route(prompt: str, task_type: str | None, complexity: str | None,
         _t, _c = _classify(prompt)
         task_type, complexity = task_type or _t, complexity or _c
 
-    zone, _pct = get_current_pressure()
-    # File/local tasks → agent-loop (a local tool-calling model that reads files /
-    # runs commands); plain Q&A → text-in/text-out. So EVERYTHING routes. The
-    # agent loop needs a capable tool-caller, so bias its chain to the coder tier.
-    if needs_claude_tools(prompt, task_type):
-        result = execute_agent(prompt, _prefer(build_chain("complex", zone, "code"), prefer_model),
-                               timeout=180)
-    else:
-        result = execute_chain(prompt, _prefer(build_chain(complexity, zone, task_type), prefer_model),
-                               task_type, timeout=150)
-    if result is None:
-        raise HTTPException(status_code=502,
-                            detail="Chuzom routing failed — chain exhausted")
+    from chuzom.route_server import route_payload
     try:
-        from chuzom.hooks.savings_logger import log_direct_savings, log_direct_to_db
-        log_direct_to_db(result=result, prompt=prompt, task_type=task_type,
-                         complexity=complexity, classifier_type="gateway", session_id="gateway")
-        log_direct_savings(result=result, task_type=task_type, complexity=complexity,
-                           session_id="gateway", host="gateway")
-    except Exception:
-        pass
-    return result
+        out = route_payload({
+            "prompt": prompt,
+            "task_type": task_type,
+            "complexity": complexity,
+            "model": prefer_model,
+        })
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Chuzom routing failed: {e}")
+    return _RoutedResult(out)
 
 
 def _flatten(messages: list) -> str:
@@ -146,7 +145,31 @@ def _flatten(messages: list) -> str:
 @app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True, "service": "chuzom-gateway",
-            "formats": ["openai", "anthropic", "ollama"]}
+            "formats": ["openai", "anthropic", "ollama", "route"]}
+
+
+@app.get("/health")  # alias — parity with the standalone route server
+def health() -> dict:
+    return {"ok": True}
+
+
+# ── Native: POST /route (parity with the zero-dep route_server) ───────────────
+@app.post("/route")
+def route(payload: dict) -> dict:
+    """Minimal native routing endpoint — same contract as ``chuzom.route_server``.
+
+    Body: ``{"prompt", "complexity"?, "system"?, "task_type"?, "max_tokens"?,
+    "temperature"?, "model"?}`` → ``{"text","model","provider","cost_usd",
+    "input_tokens","output_tokens","complexity"}``. Goes through the same
+    ``route_payload`` core as every other endpoint.
+    """
+    from chuzom.route_server import route_payload
+    try:
+        return route_payload(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"route failed: {e}")
 
 
 @app.get("/v1/models")

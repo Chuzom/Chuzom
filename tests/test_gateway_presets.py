@@ -14,6 +14,72 @@ def test_gateway_mounts_all_formats():
     assert "/api/chat" in paths                # Ollama chat
     assert "/api/generate" in paths            # Ollama generate
     assert "/healthz" in paths
+    assert "/route" in paths                   # native (folded in from route_server)
+
+
+# ── Consolidation: every endpoint goes through route_payload → route_and_call ──
+def test_routed_result_adapter_normalizes_model():
+    from chuzom.gateway import _RoutedResult
+    # provider-prefixed model → bare model behind .model.model (no double prefix)
+    r = _RoutedResult({"text": "hi", "provider": "ollama", "model": "ollama/hermes3:8b",
+                       "input_tokens": 5, "output_tokens": 2})
+    assert r.model.provider == "ollama"
+    assert r.model.model == "hermes3:8b"
+    assert f"{r.model.provider}/{r.model.model}" == "ollama/hermes3:8b"
+    assert (r.text, r.input_tokens, r.output_tokens) == ("hi", 5, 2)
+    # already-bare model is left as-is
+    r2 = _RoutedResult({"provider": "openai", "model": "gpt-4o"})
+    assert r2.model.model == "gpt-4o"
+
+
+def test_all_endpoints_route_through_route_payload(monkeypatch):
+    """OpenAI / Anthropic / Ollama / native /route must all funnel through the one
+    route_payload core — so external callers uniformly get budget caps + the cap."""
+    import chuzom.route_server as rs
+    from chuzom.gateway import app
+
+    calls = []
+
+    def _fake_payload(payload):
+        calls.append(payload)
+        return {"text": "ok", "provider": "ollama", "model": "ollama/hermes3:8b",
+                "cost_usd": 0.0, "input_tokens": 3, "output_tokens": 1, "complexity": "simple"}
+
+    monkeypatch.setattr(rs, "route_payload", _fake_payload)
+
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+
+    # native /route
+    r = client.post("/route", json={"prompt": "hi"})
+    assert r.status_code == 200 and r.json()["model"] == "ollama/hermes3:8b"
+
+    # OpenAI
+    r = client.post("/v1/chat/completions",
+                    json={"model": "chuzom-auto", "messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    assert r.json()["choices"][0]["message"]["content"] == "ok"
+    assert r.json()["model"] == "ollama/hermes3:8b"
+
+    # Anthropic
+    r = client.post("/v1/messages",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200 and r.json()["content"][0]["text"] == "ok"
+
+    # Ollama
+    r = client.post("/api/generate", json={"prompt": "hi"})
+    assert r.status_code == 200 and r.json()["response"] == "ok"
+
+    # All four endpoints went through the single core.
+    assert len(calls) == 4
+
+
+def test_route_endpoint_missing_prompt_is_400(monkeypatch):
+    from chuzom.gateway import app
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+    r = client.post("/route", json={"prompt": "   "})
+    assert r.status_code == 400
 
 
 def test_classifier_tiers():
