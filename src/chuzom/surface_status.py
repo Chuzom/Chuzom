@@ -82,9 +82,11 @@ class SurfaceStatus:
     last_model: Optional[str]         # "ollama/hermes3:8b"
     last_task: Optional[str]          # "code/moderate"
     last_age_s: Optional[float]       # seconds since last route, or None
+    last_tokens: Optional[int]        # input+output tokens of the last route
     routed_count_session: int         # routes for this host today (UTC day)
     saved_session: float              # $ saved for this host today
     saved_total: float                # $ saved for this host, all-time in the log
+    tokens_session: int               # input+output tokens routed for this host today
 
     def short_model(self) -> str:
         """``ollama/hermes3:8b`` → ``hermes3:8b`` (drop the provider prefix)."""
@@ -122,6 +124,14 @@ def _read_tail(path: Path, max_lines: int = 500) -> list[dict]:
         except (ValueError, TypeError):
             continue
     return records
+
+
+def _rec_tokens(rec: dict) -> int:
+    """input + output tokens for a savings-log record (0 if absent)."""
+    try:
+        return int(rec.get("input_tokens") or 0) + int(rec.get("output_tokens") or 0)
+    except (ValueError, TypeError):
+        return 0
 
 
 def _parse_ts(rec: dict) -> Optional[float]:
@@ -193,6 +203,7 @@ def compute_status(host: str, now: Optional[float] = None) -> SurfaceStatus:
     last_model: Optional[str] = None
     last_task: Optional[str] = None
     last_age: Optional[float] = None
+    last_tokens: Optional[int] = None
     for rec in reversed(host_recs):
         ts = _parse_ts(rec)
         if ts is None:
@@ -201,6 +212,7 @@ def compute_status(host: str, now: Optional[float] = None) -> SurfaceStatus:
         tt, cx = rec.get("task_type"), rec.get("complexity")
         last_task = f"{tt}/{cx}" if tt and cx else (tt or None)
         last_age = max(0.0, now - ts)
+        last_tokens = _rec_tokens(rec)
         break
 
     # Today's (UTC day) aggregates for this host.
@@ -208,6 +220,7 @@ def compute_status(host: str, now: Optional[float] = None) -> SurfaceStatus:
     routed_today = 0
     saved_today = 0.0
     saved_total = 0.0
+    tokens_today = 0
     for rec in host_recs:
         try:
             saved = float(rec.get("estimated_saved", 0.0) or 0.0)
@@ -218,6 +231,7 @@ def compute_status(host: str, now: Optional[float] = None) -> SurfaceStatus:
         if ts is not None and ts >= day_start:
             routed_today += 1
             saved_today += saved
+            tokens_today += _rec_tokens(rec)
 
     active = last_age is not None and last_age <= ACTIVE_WINDOW_S
     health, reason = _compute_health(now, records, last_age)
@@ -230,9 +244,11 @@ def compute_status(host: str, now: Optional[float] = None) -> SurfaceStatus:
         last_model=last_model,
         last_task=last_task,
         last_age_s=last_age,
+        last_tokens=last_tokens,
         routed_count_session=routed_today,
         saved_session=round(saved_today, 4),
         saved_total=round(saved_total, 4),
+        tokens_session=tokens_today,
     )
 
 
@@ -271,6 +287,15 @@ _C = {
 _HEALTH_COLOR = {HEALTH_OK: "green", HEALTH_DEGRADED: "yellow", HEALTH_DOWN: "red"}
 
 
+def fmt_tokens(n: Optional[int]) -> str:
+    """Compact token count: 0→"", 940→"940 tok", 1_250→"1.2k tok"."""
+    if not n or n <= 0:
+        return ""
+    if n >= 1000:
+        return f"{n / 1000:.1f}k tok"
+    return f"{n} tok"
+
+
 def _supports_color() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
@@ -301,6 +326,9 @@ def compact_line(status: SurfaceStatus, color: Optional[bool] = None) -> str:
         route = f"🎯 {status.short_model()}"
         if status.last_task:
             route += f" {status.last_task}"
+        _tok = fmt_tokens(status.last_tokens)
+        if _tok:
+            route += f" · {_tok}"
         parts.append(route)
     else:
         parts.append(c("no route yet", "dim"))
@@ -324,7 +352,9 @@ def terminal_title(status: SurfaceStatus) -> str:
     """
     model = status.short_model() if status.last_model else "idle"
     saved = f" · ${status.saved_session:.2f}" if status.saved_session > 0 else ""
-    title = f"⚡ chuzom: {model}{saved} {status.health_glyph()}"
+    _tok = fmt_tokens(status.last_tokens)
+    tok = f" · {_tok}" if _tok else ""
+    title = f"⚡ chuzom: {model}{tok}{saved} {status.health_glyph()}"
     # OSC 2 ; <title> BEL
     return f"\033]2;{title}\007"
 

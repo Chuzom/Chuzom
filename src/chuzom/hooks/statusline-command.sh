@@ -367,7 +367,26 @@ last_stale="${last_raw##*$'\t'}"
 if [ -n "$last" ]; then
     stale_marker=""
     [ -n "$last_stale" ] && stale_marker="${_DIM}°${_RESET}"
-    parts+=("🔀 ${_MAUVE}${last}${_RESET}${stale_marker}")
+    # Token count of the most recent routed call (input+output), read from the
+    # savings log (last_route_*.json carries no token counts). Compact: "1.2k tok".
+    last_tok=$(python3 -c "
+import json, os
+try:
+    for line in reversed(open(os.path.expanduser('$SAVINGS_LOG')).readlines()[-200:]):
+        line = line.strip()
+        if not line:
+            continue
+        d = json.loads(line)
+        n = (d.get('input_tokens') or 0) + (d.get('output_tokens') or 0)
+        if n > 0:
+            print(f'{n/1000:.1f}k tok' if n >= 1000 else f'{n} tok')
+        break
+except Exception:
+    pass
+" 2>/dev/null)
+    tok_seg=""
+    [ -n "$last_tok" ] && tok_seg=" ${_DIM}${last_tok}${_RESET}"
+    parts+=("🔀 ${_MAUVE}${last}${_RESET}${stale_marker}${tok_seg}")
 fi
 
 # ── Assemble with dim middle-dot separators ──────────────────────────────────

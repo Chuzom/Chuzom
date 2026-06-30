@@ -1841,6 +1841,14 @@ def _free_tier_draft_chain(chain: list) -> list:
     return [m for m in chain if getattr(m, "provider", None) in _FREE_DRAFT_PROVIDERS]
 
 
+def _estimate_prompt_tokens(prompt: str) -> int:
+    """Rough prompt-token estimate for the SUGGEST indicator (no model has run, so
+    only the input exists). ~4 chars/token — good enough for an order-of-magnitude
+    "~N tok" hint, never presented as an exact count."""
+    n = len((prompt or "").strip())
+    return (n + 3) // 4 if n else 0
+
+
 def _session_paid_spend() -> float:
     """Total paid-API dollars spent this session (from session_spend.json)."""
     try:
@@ -2796,9 +2804,13 @@ def main() -> None:
         indicator = f"👁 {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
         write_pending = False
     elif _enforce_mode == "suggest":
-        # Soft hint — pending state written but enforce-route only logs, never blocks
+        # Soft hint — pending state written but enforce-route only logs, never blocks.
+        # No model ran yet, so show an ESTIMATE of the prompt size (~N tok) so the
+        # token figure can't be mistaken for an exact post-execution count.
+        _est = _estimate_prompt_tokens(prompt)
+        _tok = f" · ~{_est} tok" if _est else ""
         directive = (
-            f"💡 SUGGESTED: ✨ {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model} "
+            f"💡 SUGGESTED: ✨ {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}{_tok} "
             f"[via {method}{stale_suffix}] | You may answer directly if preferred"
         )
         indicator = f"💡 {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
