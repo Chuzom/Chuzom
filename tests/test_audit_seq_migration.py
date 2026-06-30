@@ -10,7 +10,7 @@ from chuzom.enterprise import audit as A
 def _make_pre_seq_db(path) -> None:
     """Build an audit.db whose audit_events table predates the seq column."""
     schema = A._SCHEMA.replace("    seq INTEGER,\n", "")
-    schema = "\n".join(l for l in schema.splitlines() if "idx_audit_seq" not in l)
+    schema = "\n".join(line for line in schema.splitlines() if "idx_audit_seq" not in line)
     # the audit_events seq column + its index are gone (audit_checkpoint.max_seq stays)
     assert "    seq INTEGER," not in schema and "idx_audit_seq" not in schema
     conn = sqlite3.connect(str(path))
