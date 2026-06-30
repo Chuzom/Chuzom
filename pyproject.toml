@@ -121,6 +121,7 @@ chuzom = "chuzom.cli:main"
 chuzom-onboard = "chuzom.onboard:main"
 chuzom-install-hooks = "chuzom.install_hooks:main"
 chuzom-quickstart = "chuzom.quickstart:main"
+chuzom-route = "chuzom.route_server:main"
 
 [build-system]
 requires = ["hatchling"]
