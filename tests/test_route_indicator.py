@@ -49,7 +49,9 @@ def test_direct_success_directive_includes_fully_resolved_prefix() -> None:
     assert "f\"🎯 Chuzom routed → {model_label} · {task_type}/{complexity}" in src, (
         "route_prefix format drifted from `🎯 Chuzom routed → <model> · <task>/<complexity> · <latency>`"
     )
-    assert "Begin your reply to the user with this exact line" in src, (
+    # Phrasing was softened to the cooperative framing (see docs/decisions.md
+    # 2026-05-27); match the directive's stable core, not the old wording.
+    assert "begin your reply with this exact line" in src, (
         "directive instructing Claude to prepend the route prefix was removed"
     )
 

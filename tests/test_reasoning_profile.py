@@ -91,11 +91,14 @@ class TestReasoningChainContent:
             chain = ROUTING_TABLE[(RoutingProfile.REASONING, task_type)]
             assert "openai/o3" in chain, f"o3 must be in REASONING/{task_type.value}"
 
-    def test_gemini_25_pro_in_reasoning_chains(self) -> None:
+    def test_gemini_25_pro_not_in_reasoning_chains_while_disabled(self) -> None:
+        # Gemini API was intentionally disabled (commit 21aff97 "Disable Gemini
+        # API"); 2.5 Pro was removed from every chain. Guard that it stays out so
+        # a stale re-add can't silently route to an unconfigured provider.
         for task_type in (TaskType.QUERY, TaskType.ANALYZE):
             chain = ROUTING_TABLE[(RoutingProfile.REASONING, task_type)]
-            assert "gemini/gemini-2.5-pro" in chain, (
-                f"Gemini 2.5 Pro (thinkingConfig) must be in REASONING/{task_type.value}"
+            assert "gemini/gemini-2.5-pro" not in chain, (
+                f"Gemini 2.5 Pro is disabled and must NOT be in REASONING/{task_type.value}"
             )
 
     def test_claude_opus_in_reasoning_chains(self) -> None:

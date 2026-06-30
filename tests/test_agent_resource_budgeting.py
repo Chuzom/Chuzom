@@ -46,6 +46,10 @@ def _run_agent_route(
     env["CHUZOM_SUBAGENT_DIRECT"] = "off"
     env["CHUZOM_SUBAGENT_CLI_DELEGATION"] = "off"
     env["CHUZOM_SUBAGENT_MODEL_PIN"] = "off"
+    # The multi-agent "routed spawn" tier (CHUZOM_ALLOW_SUBAGENTS, default on)
+    # allow-and-pins the subagent and returns before the budget gate is reached.
+    # Disable it too so the pre-routing budget/block decision is exercised.
+    env["CHUZOM_ALLOW_SUBAGENTS"] = "off"
     if tmp_path is not None:
         llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
