@@ -47,7 +47,7 @@ def _write_flush_time() -> None:
         pass
 
 
-def main() -> None:
+def _flush() -> None:
     try:
         json.load(sys.stdin)
     except (json.JSONDecodeError, EOFError):
@@ -72,6 +72,19 @@ def main() -> None:
         _write_flush_time()
     except OSError:
         pass
+
+
+def main() -> None:
+    # Flush savings, then always surface the live "Chuzom is working" indicator.
+    try:
+        _flush()
+    finally:
+        try:
+            from chuzom.surface_status import emit_indicator
+
+            emit_indicator("opencode")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
