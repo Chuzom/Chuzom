@@ -1792,26 +1792,65 @@ def _is_continuation(prompt: str) -> bool:
 # fabrication risk and saving the wasted local-model call. General-knowledge
 # prompts (no local reference) are unaffected and still route normally.
 _CONTEXT_DEP_RE = re.compile(
-    r"\b(this|the|our|my|that)\s+(code|code\s?base|repo(sitory)?|project|file|module|"
-    r"function|class|method|test|suite|script|bug|error|stack\s?trace|diff|pr|branch|"
-    r"commit|readme|config|directory|folder|swarm|agent|hook|session|dashboard|app|"
-    r"service|component|feature)\b"
+    # ── determiner (+ up to 2 modifier words) + a code/project noun ──────────
+    # The optional "(\w+\s+){0,2}" tolerates adjectives so "the FAILING test",
+    # "this PYTHON repo", "my BROKEN build" all match — the old pattern needed
+    # the noun to immediately follow the determiner and so missed every prompt
+    # with an adjective in between.
+    r"\b(this|that|these|those|the|our|my|your)\s+(\w+\s+){0,2}"
+    r"(code\s?base|code|repo(sitory)?|project|file|module|package|library|"
+    r"function|class|method|test|suite|spec|script|bug|error|stack\s?trace|"
+    r"diff|pr|branch|commit|readme|config|directory|folder|swarm|agent|hook|"
+    r"session|dashboard|app|server|service|component|feature|build|parser|"
+    r"endpoint|route|api|database|db|schema|query|migration|deployment|pipeline|"
+    r"workflow|setup|environment|env|dependency|dependencies|import|variable|"
+    r"output|log|crash|failure|exception|stacktrace|codebase)s?\b"
+    # ── operational / modify-existing verbs that imply the LOCAL project ─────
+    # "run", "start the server", "deploy", "fix", "refactor" almost always
+    # refer to the user's actual project — a stateless model can't see it.
+    # (Create-new verbs like "add"/"write a function" are intentionally NOT
+    # here: those can be self-contained and a draft is still useful.)
+    r"|\b(run|start|startup|launch|serve|deploy|install|build|compile|lint|"
+    r"debug|fix|refactor|optimi[sz]e|rename|migrate|rerun|restart|reproduce|"
+    r"profile|redeploy|rollback)\b"
+    # ── prior-conversation references ───────────────────────────────────────
     r"|previous\s+session|prior\s+(session|conversation|turn|reply|message)"
     r"|earlier\s+(you|we|i)\b|last\s+(reply|message|session|turn|answer)"
     r"|you\s+(said|mentioned|wrote)|we\s+(discussed|talked|were|built)"
     r"|as\s+(above|before|discussed)|continue\s+(the|from|with|where)"
     r"|\b(loophole|chuzom)\b"
+    # ── file paths and source-file extensions ───────────────────────────────
     r"|[\w./-]+\.(py|js|ts|tsx|jsx|go|rs|md|json|toml|ya?ml|sh|txt|cfg|ini)\b"
     r"|(~|\./|\.\./|/Users/|/home/)[\w./-]+",
     re.I,
 )
 
+# Bare deictic pronouns ("run IT", "what does THIS do", "why doesn't IT work")
+# almost always point at something only Claude can see — a file just shown,
+# prior output, current state. In a short prompt that's a strong context signal.
+_DEICTIC_RE = re.compile(r"\b(it|this|that|these|those|here|them)\b", re.I)
+
 
 def _is_context_dependent(prompt: str) -> bool:
     """True when the prompt references the user's local code/files/history/state —
     things a stateless routed model cannot see, so a pre-generated draft would be
-    fabrication. Such prompts are left for Claude (which has the context + tools)."""
-    return bool(_CONTEXT_DEP_RE.search(prompt or ""))
+    fabrication. Such prompts are left for Claude (which has the context + tools).
+
+    Errs toward True: a false positive only costs a skipped draft (Claude still
+    answers from real context), while a false negative is exactly the failure the
+    user hit — a blind draft like ``npm run start`` for a Python repo. Correctness
+    outranks the token saving, so when in doubt we treat the prompt as needing
+    context.
+    """
+    p = prompt or ""
+    if _CONTEXT_DEP_RE.search(p):
+        return True
+    # Short prompt leaning on a bare deictic pronoun → almost certainly refers to
+    # something only Claude can see ("run it", "what does this do").
+    words = p.split()
+    if len(words) <= 12 and _DEICTIC_RE.search(p):
+        return True
+    return False
 
 
 def _is_short_code_followup(prompt: str, last_route: dict | None) -> bool:
@@ -2760,6 +2799,22 @@ def main() -> None:
         )
         indicator = f"✨ {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
         write_pending = True
+
+    # ── Context-aware routing (P0) ───────────────────────────────────────────────
+    # When the prompt references the user's local code/files/history/state, a
+    # blind draft was already suppressed (see DIRECT SKIP above). Tell the caller
+    # WHY and what to do instead: answer from real context, or route WITH context
+    # via llm_query(context=…) — never relay a context-free draft as an answer.
+    if not zero_claude and _is_context_dependent(prompt):
+        _context_note = (
+            "🧠 CONTEXT-DEPENDENT PROMPT — this references your local files / repo / "
+            "history / state, which a stateless routed model cannot see. No blind "
+            "draft was generated (it would be fabrication). Answer from your real "
+            "context (read the files, use tools, prior turns); if you do route, pass "
+            "the relevant slices via llm_query(context=…). Never present a context-"
+            "free draft as the answer.\n\n"
+        )
+        directive = _context_note + directive
 
     directive = _prior_violation_notice(previous_unrouted) + directive
 
