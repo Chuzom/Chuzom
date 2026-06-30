@@ -179,17 +179,36 @@ class AuditLog:
         self._conn = sqlite3.connect(
             str(self.db_path), check_same_thread=check_same_thread,
         )
-        self._conn.executescript(_SCHEMA)
+        self._add_seq_column_if_missing()   # before _SCHEMA: its index-on-seq + the
+        self._conn.executescript(_SCHEMA)   # inserts/updates all reference ``seq``
         self._conn.commit()
         self._migrate_seq()
+
+    def _add_seq_column_if_missing(self) -> None:
+        """A DB created before the ``seq`` column existed has an ``audit_events``
+        table without it. ``CREATE TABLE IF NOT EXISTS`` is a no-op on the existing
+        table, so the column is never added and the schema's ``idx_audit_seq`` index
+        plus every later INSERT/UPDATE referencing ``seq`` fail with
+        'no such column: seq'. Add the column here (idempotent) so the schema and
+        the backfill below can run."""
+        table = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='audit_events'"
+        ).fetchone()
+        if not table:
+            return                          # fresh DB — _SCHEMA's CREATE TABLE has seq
+        cols = {row[1] for row in self._conn.execute("PRAGMA table_info(audit_events)")}
+        if "seq" not in cols:
+            self._conn.execute("ALTER TABLE audit_events ADD COLUMN seq INTEGER")
+            self._conn.commit()
 
     def _migrate_seq(self) -> None:
         """P1-3: backfill the ``seq`` column on a pre-existing audit.db.
 
-        New DBs get ``seq`` from the schema; older ones added it via the
-        schema's nullable column. Backfill in rowid (insertion) order so the
-        existing hash chain keeps its original, deterministic order, then seed
-        the checkpoint anchor. Idempotent — only rows with NULL seq are touched.
+        New DBs get ``seq`` from the schema; older ones get the column added by
+        ``_add_seq_column_if_missing`` (it can't come from CREATE TABLE IF NOT
+        EXISTS on an existing table). Backfill in rowid (insertion) order so the
+        existing hash chain keeps its original, deterministic order, then seed the
+        checkpoint anchor. Idempotent — only rows with NULL seq are touched.
         """
         null_rows = self._conn.execute(
             "SELECT rowid FROM audit_events WHERE seq IS NULL ORDER BY rowid ASC"
