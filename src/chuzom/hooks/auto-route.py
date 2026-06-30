@@ -2439,7 +2439,19 @@ def main() -> None:
         except Exception:
             pass
     if not _enforce_mode:
-        _enforce_mode = "hard"
+        # Match enforce-route.py's own unset default ("smart" → never hard-blocks).
+        # Defaulting to "hard" here made the banner advertise a block the PreToolUse
+        # enforcer refuses to perform — an empty threat. "suggest" keeps the routing
+        # hint honest when no enforcement level is configured.
+        _enforce_mode = "suggest"
+
+    # enforce-route.py's vocabulary is advise|smart|soft|hard|off (default smart),
+    # but this hook only renders shadow|suggest|hard. Map every non-hard enforce
+    # level onto the honest "suggest" display so the banner can never advertise a
+    # block the PreToolUse enforcer won't actually perform. Only a literal "hard"
+    # reaches the hard-enforcement banner below.
+    if _enforce_mode in ("off", "advise", "smart", "soft", "observe"):
+        _enforce_mode = "suggest"
 
     # ── Standard external routing directive ───────────────────────────────────
     stale_suffix = " [⚠️ STALE USAGE DATA >30min — run llm_check_usage]" if _is_pressure_stale() else ""
@@ -2714,16 +2726,18 @@ def main() -> None:
         task_complexity = f"{task_type}/{complexity}"
         directive = (
             f"╔══════════════════════════════════════════════════╗\n"
-            f"║  ⚡ MANDATORY ROUTE — HARD CONSTRAINT            ║\n"
+            f"║  ⚡ ROUTE DIRECTIVE — HARD ENFORCEMENT           ║\n"
             f"║  task  : {task_complexity:35} ║\n"
             f"║  action: call {tool:32} ║\n"
             f"║  via   : {method:39} ║\n"
             f"║  saves : {_savings:39} ║\n"
             f"╚══════════════════════════════════════════════════╝\n"
             f"\n"
-            f"🚫 BLOCKED TOOLS: Read, Edit, Write, Bash, Glob, Grep, Agent\n"
-            f"   are ALL BLOCKED until you call {tool} first.\n"
-            f"   The PreToolUse hook will reject any native tool call.\n"
+            f"⚠ HARD ENFORCEMENT ACTIVE (CHUZOM_ENFORCE=hard): the PreToolUse hook\n"
+            f"   (enforce-route.py) blocks THIS task's reasoning/generation tools\n"
+            f"   until you call {tool}. File reads and implementation tools\n"
+            f"   (Edit/Write/Bash) stay allowed — only the route-first step is\n"
+            f"   enforced, and only for the blocklisted tools for {task_type}.\n"
             f"\n"
             f"✅ REQUIRED SEQUENCE:\n"
             f"   1. Call {tool}(prompt=<user's request>) — FIRST and ONLY action\n"

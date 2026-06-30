@@ -220,8 +220,10 @@ class TestAutoRouteClassification:
         out = run_hook("I need help with something interesting today")
         assert out is not None
         hint = _extract_hint(out)
-        # Should be classified by Ollama or API (not auto fallback)
-        assert "ROUTE" in hint
+        # Should be classified by Ollama or API (not auto fallback). Assert on the
+        # routing-arrow + "via" method, which appear in every enforce display mode
+        # (shadow/suggest/hard) — the old "ROUTE" proxy only matched the hard banner.
+        assert "→" in hint
         assert "via " in hint
 
 
