@@ -1784,6 +1784,36 @@ def _is_continuation(prompt: str) -> bool:
     return False
 
 
+# ── Context-dependence gate (v0.7.0) ─────────────────────────────────────────
+# A stateless cheap model has NO access to the user's files, repo, prior
+# conversation, or current state. Pre-generating a draft for prompts that depend
+# on any of that produces fabrication (it once invented a "previous session").
+# Detect those prompts and SKIP direct pre-generation entirely — both removing the
+# fabrication risk and saving the wasted local-model call. General-knowledge
+# prompts (no local reference) are unaffected and still route normally.
+_CONTEXT_DEP_RE = re.compile(
+    r"\b(this|the|our|my|that)\s+(code|code\s?base|repo(sitory)?|project|file|module|"
+    r"function|class|method|test|suite|script|bug|error|stack\s?trace|diff|pr|branch|"
+    r"commit|readme|config|directory|folder|swarm|agent|hook|session|dashboard|app|"
+    r"service|component|feature)\b"
+    r"|previous\s+session|prior\s+(session|conversation|turn|reply|message)"
+    r"|earlier\s+(you|we|i)\b|last\s+(reply|message|session|turn|answer)"
+    r"|you\s+(said|mentioned|wrote)|we\s+(discussed|talked|were|built)"
+    r"|as\s+(above|before|discussed)|continue\s+(the|from|with|where)"
+    r"|\b(loophole|chuzom)\b"
+    r"|[\w./-]+\.(py|js|ts|tsx|jsx|go|rs|md|json|toml|ya?ml|sh|txt|cfg|ini)\b"
+    r"|(~|\./|\.\./|/Users/|/home/)[\w./-]+",
+    re.I,
+)
+
+
+def _is_context_dependent(prompt: str) -> bool:
+    """True when the prompt references the user's local code/files/history/state —
+    things a stateless routed model cannot see, so a pre-generated draft would be
+    fabrication. Such prompts are left for Claude (which has the context + tools)."""
+    return bool(_CONTEXT_DEP_RE.search(prompt or ""))
+
+
 def _is_short_code_followup(prompt: str, last_route: dict | None) -> bool:
     """Return True if prompt is a short follow-up after a code task.
 
@@ -2507,6 +2537,14 @@ def main() -> None:
     if method in ("context-inherit", "code-context-inherit") and not zero_claude:
         _direct_enabled = False
         _debug_log(f"[INVOCATION {invocation_id:.3f}] DIRECT SKIP: conversational context")
+
+    # v0.7.0: Disable direct execution for context-DEPENDENT prompts. A stateless
+    # routed model can't see the user's files/repo/history/state, so a pre-generated
+    # draft would be fabrication. Leave these for Claude (it has context + tools);
+    # also saves the wasted local-model call. (zero_claude mode still routes.)
+    if _direct_enabled and not zero_claude and _is_context_dependent(prompt):
+        _direct_enabled = False
+        _debug_log(f"[INVOCATION {invocation_id:.3f}] DIRECT SKIP: context-dependent prompt")
 
     if _direct_enabled and _enforce_mode not in ("shadow", "off"):
         try:

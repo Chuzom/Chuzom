@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.7.0 — 2026-06-30 — multi-agent subagents + fabrication-safety fix
+
+### Features
+- **Subagents now WORK (route, don't block).** `chuzom-agent-route.py` no longer
+  blocks reasoning subagents. It ALLOWS a real spawn on a cheap Claude tier
+  (haiku/sonnet, capped — never opus) and injects the chuzom routing contract into
+  the subagent prompt, so the subagent self-routes its substantive work to the
+  chuzom MCP. Councils / parallel reviews / fan-out finally run as real subagents
+  while cost stays bounded (cheap harness + offloaded thinking + depth breaker).
+  - Helpers: `_allow_routed_spawn()`, `_spawn_model()` (downgrade-only),
+    `_with_routing_note()`. Toggle `CHUZOM_ALLOW_SUBAGENTS=off` for legacy behavior.
+- New `chuzom-worker` agent type for explicit cheap committees.
+
+### Fixed (safety)
+- **Fabricated answers no longer presented as fact.**
+  `response_formatter.format_echo_context` dropped the "deliver the cached answer
+  verbatim" instruction. A context-free local model can't see the user's files,
+  codebase, tools, or history, so it fabricated for context-dependent prompts (it
+  once invented a non-existent "previous session"). Drafts are now labeled
+  UNVERIFIED and the agent is told to ignore them and answer from real context
+  whenever the question depends on anything the draft model couldn't see. Block-mode
+  output carries the same warning.
+
+### Known / follow-up
+- Deeper fix: gate draft pre-generation in `chuzom-auto-route.py` to skip
+  context-dependent prompts entirely (saves the wasted local call; the formatter
+  fix already removes the harm).
+
 ## v0.6.3 — 2026-06-28 — IDE rules overhaul + routing reliability
 
 ### Features

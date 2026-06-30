@@ -571,6 +571,47 @@ def _emit_model_pin(tool_input: dict, model: str) -> None:
     }, sys.stdout)
 
 
+# ── chuzom multi-agent (v0.7.0): ALLOW real subagent spawns (cheap tier + routing) ──
+# Lets councils / parallel reviews actually run as subagents instead of being
+# replaced by a single cheap call. Cost stays bounded via the model pin below and
+# the depth circuit-breaker in main(). Default on; CHUZOM_ALLOW_SUBAGENTS=off
+# restores the legacy block-and-route behavior.
+_SPAWN_MODEL = {"simple": "haiku", "moderate": "sonnet", "complex": "sonnet"}
+_MODEL_RANK = {"haiku": 0, "sonnet": 1, "opus": 2, "fable": 2}
+
+
+def _spawn_model(complexity: str, caller_model: str | None) -> str:
+    """Pick the spawn tier by complexity, but only ever DOWNGRADE relative to a
+    model the caller explicitly requested (never spawn a costlier tier)."""
+    routed = _SPAWN_MODEL.get(complexity, "sonnet")
+    if caller_model and _MODEL_RANK.get(caller_model, 9) < _MODEL_RANK.get(routed, 9):
+        return caller_model
+    return routed
+
+
+def _allow_routed_spawn() -> bool:
+    return os.environ.get("CHUZOM_ALLOW_SUBAGENTS", "on").strip().lower() not in (
+        "0", "off", "false", "no")
+
+
+_SPAWN_ROUTING_NOTE = (
+    "\n\n--- chuzom routing (inherited) ---\n"
+    "You are a chuzom-routed subagent. For substantive generation, analysis, "
+    "research, or code synthesis, prefer the chuzom MCP tools (llm_query / "
+    "llm_analyze / llm_code / llm_research) over doing the heavy work directly; "
+    "use your own file/search tools to gather context and apply concrete edits. "
+    "Do NOT spawn further subagents."
+)
+
+
+def _with_routing_note(tool_input: dict) -> dict:
+    ti = dict(tool_input)
+    p = ti.get("prompt") or ""
+    if "chuzom routing (inherited)" not in p:
+        ti["prompt"] = p + _SPAWN_ROUTING_NOTE
+    return ti
+
+
 def _try_direct_subagent(
     prompt: str, task_type: str, complexity: str, session_id: str,
     subagent_type: str = "general-purpose",
@@ -808,6 +849,16 @@ def main() -> None:
     # ── Classify reasoning task ──────────────────────────────────────────────
     task_type = _classify_task_type(prompt)
     complexity = _classify_complexity(prompt)
+
+    # ── chuzom multi-agent: ALLOW a real spawn on a cheap tier + inherit routing ─
+    # (depth breaker above already bounds nesting; cheap model bounds cost). This
+    # is what makes councils / parallel reviews possible instead of collapsing
+    # every subagent into a single cheap call.
+    if _allow_routed_spawn():
+        model = _spawn_model(complexity, tool_input.get("model"))
+        _log_agent_call(subagent_type, prompt, "allowed_routed_spawn")
+        _emit_model_pin(_with_routing_note(tool_input), model)
+        return
 
     # ── DIRECT subagent execution: route the work onto a cheap model ─────────
     # Instead of merely blocking with advice, actually run the task on the

@@ -32,6 +32,8 @@ def format_direct_response(result: DirectResult, task_type: str, complexity: str
     metadata = f"[{model_label}] {tier} | {task_type}/{complexity} | {latency} | {tokens}"
 
     return (
+        "⚠ Unverified draft from a context-free model (no access to your files/history) "
+        "— verify before trusting:\n\n"
         f"{result.text}\n\n"
         f"{metadata}"
     )
@@ -78,20 +80,26 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
     except Exception:
         pass
     return (
-        f"ROUTING NOTICE — this prompt was classified as {task_type}/{complexity} and "
-        f"answered by {model_label} ({tier}, {latency}, {tokens}) to conserve your "
-        f"Claude subscription quota. The MANDATORY ROUTE step is complete for this turn.\n\n"
-        "A cached answer follows between the markers. Please:\n"
-        f"  - Begin your reply to the user with this exact line, then a blank line:\n"
+        f"ROUTING NOTICE — this prompt was classified as {task_type}/{complexity}. A cheap "
+        f"model ({model_label}, {tier}, {latency}, {tokens}) drafted a candidate answer to "
+        f"conserve your Claude subscription quota.\n\n"
+        "IMPORTANT — this draft was produced WITHOUT access to your files, codebase, tools, "
+        "shell, or this conversation's history. Treat it as an UNVERIFIED hint, never as "
+        "fact. Decide:\n"
+        "  - If the question is fully self-contained (general knowledge, no reference to the "
+        "user's code/files/project/data or earlier turns) AND you can confirm the draft is "
+        "correct: deliver it (lightly corrected), and begin your reply with this exact line "
+        "then a blank line:\n"
         f"      {route_prefix}\n"
-        "  - Then deliver the cached answer below verbatim if it is accurate and complete.\n"
-        "  - Fix only the specific errors if any are present; keep the rest.\n"
-        "  - Add a brief addendum only if critical context for this user is missing.\n"
-        "  - Do not re-route this prompt (no llm_query / llm_route calls) — routing is "
-        "already resolved for this turn.\n\n"
-        "───── CACHED ANSWER ─────\n"
+        "  - If the answer depends on ANYTHING the draft model could not see — the user's "
+        "files, repo, prior conversation, current state, tool output — IGNORE the draft "
+        "entirely and answer normally from real context. Do NOT relay it, and do NOT prefix "
+        "the routed line (you did not route).\n"
+        "  - If unsure whether the draft is trustworthy, discard it and answer from context. "
+        "Correctness outranks the token saving.\n\n"
+        "───── UNVERIFIED DRAFT (no context — verify or discard) ─────\n"
         f"{result.text}\n"
-        "───── END CACHED ANSWER ─────\n"
+        "───── END UNVERIFIED DRAFT ─────\n"
         f"Source: {metadata}"
     )
 
