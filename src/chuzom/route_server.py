@@ -2,8 +2,13 @@
 over HTTP, so external processes (e.g. LoopHole's ``chuzom:`` provider) can use
 Chuzom's model selection without importing chuzom or speaking MCP.
 
-Pure stdlib server (no FastAPI/uvicorn dependency). Launch it with the
-``chuzom-route`` console script, or ``python -m chuzom.route_server``.
+Pure stdlib server (no FastAPI/uvicorn dependency) — the **zero-dependency
+fallback**. The primary surface is ``chuzom.gateway`` (FastAPI on :17900), which
+also exposes ``/route`` plus OpenAI/Anthropic/Ollama wire formats and shares this
+module's :func:`route_payload` as its routing core, so both go through
+``route_and_call`` identically. Use this server where FastAPI/uvicorn aren't
+available. Launch it with the ``chuzom-route`` console script, or
+``python -m chuzom.route_server``.
 
     POST /route
       {"prompt": "...",                         # required
@@ -27,8 +32,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 def route_payload(payload: dict) -> dict:
-    """Run one routing call and return a JSON-able result. Importing inside keeps
-    module import cheap and lets tests monkeypatch ``chuzom.router.route_and_call``."""
+    """Run one routing call through Chuzom's FULL router and return a JSON-able
+    result. This is the single routing core shared by both HTTP surfaces — this
+    zero-dep server AND ``gateway.py`` — so every external caller goes through
+    ``route_and_call`` and uniformly gets budget caps, caching, the paid-spend
+    cap, and cost logging. Importing inside keeps module import cheap and lets
+    tests monkeypatch ``chuzom.router.route_and_call``."""
     from chuzom.router import route_and_call
     from chuzom.types import TaskType
 
@@ -40,10 +49,17 @@ def route_payload(payload: dict) -> dict:
     except ValueError:
         task_type = TaskType.CODE
 
+    # Optional tier override (OpenAI ``model`` field / explicit model_override).
+    # "chuzom-auto" or empty means "let Chuzom pick".
+    _override = payload.get("model_override") or payload.get("model")
+    if _override in ("chuzom-auto", "", None):
+        _override = None
+
     resp = asyncio.run(route_and_call(
         task_type, prompt,
         complexity_hint=payload.get("complexity") or None,
         system_prompt=payload.get("system") or None,
+        model_override=_override,
         max_tokens=payload.get("max_tokens"),
         temperature=payload.get("temperature"),
     ))
