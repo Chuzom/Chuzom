@@ -157,7 +157,7 @@ CLASSIFIER_MODELS: list[str] = [
 
 # Single source of truth lives in model_aliases (no chuzom deps -> no import
 # cycle). Re-exported here for backwards compatibility with existing callers.
-from chuzom.model_aliases import (  # noqa: E402
+from chuzom.model_aliases import (  # noqa: E402, F401  (re-exported for back-compat)
     LATEST_CLAUDE,
     model_family,
     model_matches,
