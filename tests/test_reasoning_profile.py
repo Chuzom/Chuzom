@@ -18,6 +18,7 @@ from unittest.mock import patch
 import pytest
 
 from chuzom.profiles import (
+    model_matches,
     COMPLEXITY_TO_PROFILE,
     MODELS_PER_PROFILE,
     ROUTING_TABLE,
@@ -100,7 +101,7 @@ class TestReasoningChainContent:
     def test_claude_opus_in_reasoning_chains(self) -> None:
         for task_type in (TaskType.QUERY, TaskType.ANALYZE, TaskType.CODE):
             chain = ROUTING_TABLE[(RoutingProfile.REASONING, task_type)]
-            assert "anthropic/claude-opus-4-6" in chain, (
+            assert any(model_matches(m, "anthropic/claude-opus") for m in chain), (
                 f"Claude Opus (use_thinking) must be in REASONING/{task_type.value}"
             )
 
@@ -115,7 +116,7 @@ class TestReasoningChainContent:
         """Haiku doesn't support extended thinking — must not be in REASONING chains."""
         for task_type in (TaskType.QUERY, TaskType.ANALYZE, TaskType.CODE):
             chain = ROUTING_TABLE[(RoutingProfile.REASONING, task_type)]
-            assert "anthropic/claude-haiku-4-5-20251001" not in chain, (
+            assert not any(model_matches(m, "anthropic/claude-haiku") for m in chain), (
                 f"Haiku (no extended thinking) must NOT be in REASONING/{task_type.value}"
             )
 
@@ -136,12 +137,13 @@ class TestReasoningModelConstraints:
         assert constraints["forbidden"] == []
 
     def test_reasoning_discourages_haiku(self) -> None:
+        # constraints are version-agnostic FAMILY prefixes (see model_matches)
         constraints = MODELS_PER_PROFILE[RoutingProfile.REASONING]
-        assert "anthropic/claude-haiku-4-5-20251001" in constraints["discouraged"]
+        assert "anthropic/claude-haiku" in constraints["discouraged"]
 
     def test_reasoning_allows_opus(self) -> None:
         constraints = MODELS_PER_PROFILE[RoutingProfile.REASONING]
-        assert "anthropic/claude-opus-4-6" in constraints["allowed_claude"]
+        assert "anthropic/claude-opus" in constraints["allowed_claude"]
 
 
 class TestValidateChainInvariantsForReasoning:

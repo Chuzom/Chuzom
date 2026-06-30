@@ -1962,10 +1962,19 @@ def _get_selected_model(task_type: str, complexity: str) -> tuple[str, str]:
         task_enum = task_map.get(task_type.lower())
         if not task_enum:
             return "unknown", "unknown"
-        
-        # Use BALANCED profile as default (can be customized per user)
-        profile_enum = RoutingProfile.BALANCED
-        
+
+        # Map complexity -> profile so the selected model tracks difficulty:
+        # simple->BUDGET, moderate->BALANCED, complex->PREMIUM, deep_reasoning->REASONING.
+        # (Previously hardcoded to BALANCED, which made complex tasks pick Ollama too.)
+        profile_map = {
+            "simple": RoutingProfile.BUDGET,
+            "moderate": RoutingProfile.BALANCED,
+            "complex": RoutingProfile.PREMIUM,
+            "deep_reasoning": getattr(RoutingProfile, "REASONING", RoutingProfile.PREMIUM),
+        }
+        profile_enum = profile_map.get((complexity or "moderate").lower(),
+                                       RoutingProfile.BALANCED)
+
         # Get the routing chain
         chain = ROUTING_TABLE.get((profile_enum, task_enum))
         if not chain or not chain:

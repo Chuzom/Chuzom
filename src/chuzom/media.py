@@ -687,14 +687,15 @@ IMAGE_GENERATORS = {
     "openai": generate_image_openai,
     "fal": generate_image_fal,
     "stability": generate_image_stability,
-    "gemini": generate_image_gemini,
+    # "gemini" intentionally removed — Gemini API disabled to stop billing.
+    # generate_image_gemini() still exists but is not reachable via routing.
 }
 """Provider-prefix to image generation function mapping."""
 
 VIDEO_GENERATORS = {
     "fal": generate_video_fal,
     "runway": generate_video_runway,
-    "gemini": generate_video_gemini,
+    # "gemini" intentionally removed — Gemini API disabled to stop billing.
 }
 """Provider-prefix to video generation function mapping."""
 

@@ -147,9 +147,28 @@ CLASSIFIER_MODELS: list[str] = [
 # from mid-tier quality (balanced), and complex tasks warrant frontier models
 # (premium). This mapping is the bridge between the classifier and the
 # routing table.
+# ── Model family matching (version-agnostic) ─────────────────────────────────
+# A "family" is a model id with its version/date suffix removed, e.g.
+#   anthropic/claude-opus-4-8        -> anthropic/claude-opus
+#   anthropic/claude-haiku-4-5-20251001 -> anthropic/claude-haiku
+# Constraints below are written as FAMILY prefixes so a new version (Opus 4.9,
+# Opus 5, …) is governed automatically without editing this file — it can never
+# silently break a chain or slip past a guard.
+
+# Single source of truth lives in model_aliases (no chuzom deps -> no import
+# cycle). Re-exported here for backwards compatibility with existing callers.
+from chuzom.model_aliases import (  # noqa: E402
+    LATEST_CLAUDE,
+    model_family,
+    model_matches,
+    resolve_model_alias,
+)
+
+
 # ── Model-Profile Constraints ───────────────────────────────────────────────
 # SAFEGUARD #3: Explicit data structures defining which models are allowed
 # per profile. Used by _validate_chain_invariants() to catch policy violations.
+# Entries are FAMILY prefixes (version-agnostic) — see model_matches().
 #
 # These constraints are the SOURCE OF TRUTH for policy enforcement:
 # - BUDGET: Never include Opus or even Sonnet (use Haiku only as last resort)
@@ -157,35 +176,35 @@ CLASSIFIER_MODELS: list[str] = [
 # - PREMIUM: Can include Opus, but it must be first (best quality)
 MODELS_PER_PROFILE: dict[RoutingProfile, dict[str, list[str]]] = {
     RoutingProfile.BUDGET: {
-        "forbidden": ["anthropic/claude-opus-4-6"],  # Opus forbidden in BUDGET
+        "forbidden": ["anthropic/claude-opus"],  # any Opus version forbidden in BUDGET
         "discouraged": [
-            "anthropic/claude-sonnet-4-6",  # Sonnet discouraged (use only Haiku)
+            "anthropic/claude-sonnet",  # Sonnet discouraged (use only Haiku)
         ],
-        "allowed_claude": ["anthropic/claude-haiku-4-5-20251001"],  # Haiku only as last resort
+        "allowed_claude": ["anthropic/claude-haiku"],  # Haiku only as last resort
     },
     RoutingProfile.BALANCED: {
-        "forbidden": ["anthropic/claude-opus-4-6"],  # Opus forbidden in BALANCED
+        "forbidden": ["anthropic/claude-opus"],  # any Opus version forbidden in BALANCED
         "discouraged": [],
         "allowed_claude": [
-            "anthropic/claude-sonnet-4-6",
-            "anthropic/claude-haiku-4-5-20251001",
+            "anthropic/claude-sonnet",
+            "anthropic/claude-haiku",
         ],
     },
     RoutingProfile.PREMIUM: {
         "forbidden": [],  # No models forbidden in PREMIUM
         "discouraged": [],
         "allowed_claude": [
-            "anthropic/claude-opus-4-6",  # Opus allowed, should be first
-            "anthropic/claude-sonnet-4-6",
-            "anthropic/claude-haiku-4-5-20251001",
+            "anthropic/claude-opus",  # any Opus version allowed, should be first
+            "anthropic/claude-sonnet",
+            "anthropic/claude-haiku",
         ],
     },
     RoutingProfile.REASONING: {
         "forbidden": [],  # Reasoning chain allows all models (reasoning specialists first)
-        "discouraged": ["anthropic/claude-haiku-4-5-20251001"],  # Haiku lacks extended thinking
+        "discouraged": ["anthropic/claude-haiku"],  # Haiku lacks extended thinking
         "allowed_claude": [
-            "anthropic/claude-opus-4-6",   # Primary Claude pick — extended thinking supported
-            "anthropic/claude-sonnet-4-6",  # Fallback — extended thinking supported on Sonnet 4+
+            "anthropic/claude-opus",   # Primary Claude pick — extended thinking supported
+            "anthropic/claude-sonnet",  # Fallback — extended thinking supported on Sonnet 4+
         ],
     },
 }
@@ -234,21 +253,26 @@ def _validate_chain_invariants(
     forbidden = constraints.get("forbidden", [])
     discouraged = constraints.get("discouraged", [])
 
-    # SAFEGUARD #1: Invariant assertions — these MUST never happen
+    # SAFEGUARD #1: Invariant assertions — these MUST never happen.
+    # Matching is FAMILY-AWARE (see model_matches): a pattern like
+    # "anthropic/claude-opus" matches "anthropic/claude-opus-4-8", "...-5", etc.
+    # so a new model version never silently slips past a guard or breaks a chain.
     for forbidden_model in forbidden:
-        if forbidden_model in chain:
+        hit = next((m for m in chain if model_matches(m, forbidden_model)), None)
+        if hit:
             error_msg = (
-                f"POLICY VIOLATION: {forbidden_model} appears in {profile.name} profile chain. "
-                f"Context: {context}. Chain: {chain}"
+                f"POLICY VIOLATION: {hit} (matches forbidden family {forbidden_model!r}) "
+                f"appears in {profile.name} profile chain. Context: {context}. Chain: {chain}"
             )
             log.error(error_msg)  # SAFEGUARD #2: Log the violation
             raise AssertionError(error_msg)
 
     # SAFEGUARD #2: Logging on discouraged matches
     for discouraged_model in discouraged:
-        if discouraged_model in chain:
+        match = next((m for m in chain if model_matches(m, discouraged_model)), None)
+        if match:
             # Check if it's at the front (bad) vs. end (acceptable fallback)
-            is_first = chain[0] == discouraged_model
+            is_first = model_matches(chain[0], discouraged_model)
             if is_first:
                 log.warning(
                     "POLICY MISMATCH: %s appears first in %s chain (should be fallback). "

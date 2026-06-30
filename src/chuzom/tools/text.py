@@ -224,7 +224,10 @@ _COST_PER_1K = {
     "mistral/mistral-large-latest": 0.008,
     "xai/grok-3": 0.009,
 }
-_HOST_COST = _COST_PER_1K["anthropic/claude-opus-4-6"]
+# Family-based so the host (Opus) baseline survives version bumps even if the
+# exact id in _COST_PER_1K changes (e.g. opus-4-6 -> opus-4-8 -> opus-5).
+from chuzom.model_aliases import family_lookup  # noqa: E402
+_HOST_COST = family_lookup(_COST_PER_1K, "anthropic/claude-opus", 0.075)
 
 
 def _get_explain_mode() -> str:
@@ -252,7 +255,9 @@ def _savings_info(resp: LLMResponse) -> tuple[str, float]:
             if k.endswith("/" + resp.model) or k == resp.model:
                 model_key = k
                 break
-    actual_cost = _COST_PER_1K.get(model_key, _HOST_COST) if model_key else _HOST_COST
+    # family_lookup lets a new version (opus-4-8, opus-5, …) inherit its
+    # family's cost instead of silently falling back to the host baseline.
+    actual_cost = family_lookup(_COST_PER_1K, model_key, _HOST_COST) if model_key else _HOST_COST
     if actual_cost < _HOST_COST and actual_cost > 0:
         ratio = _HOST_COST / actual_cost
         saved = resp.cost_usd * (ratio - 1) / ratio if resp.cost_usd else 0.0

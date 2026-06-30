@@ -17,25 +17,23 @@ prefer_ollama: true
 # single source of truth at read time. Test enforces these match the
 # corresponding chains entries.
 workhorses:
-  - ollama/qwen3.5:latest
+  - ollama/qwen3:32b
   - codex/gpt-4o
   - moonshot/moonshot-v1-128k
   - zhipu/glm-4
-  - gemini/gemini-2.5-pro
   - deepseek/deepseek-chat
   - openai/gpt-4o
   - anthropic/claude-sonnet-4-6
   - anthropic/claude-haiku-4-5-20251001
 
 fallback_chain_complex:
-  - ollama/qwen3.6:27b
-  - anthropic/claude-opus-4-6
+  - anthropic/claude-opus:latest
   - anthropic/claude-sonnet-4-6
   - deepseek/deepseek-chat
-  - gemini/gemini-2.5-pro
   - openai/gpt-4o
   - openai/o3
   - xai/grok-3
+  - ollama/qwen3:32b
 
 specialists: {}
 
@@ -43,58 +41,51 @@ specialists: {}
 chains:
   budget:
     query:
-      - ollama/qwen2.5:7b
+      - ollama/hermes3:8b
       - codex/gpt-4o-mini
       - moonshot/moonshot-v1-8k
       - minimax/MiniMax-Text-01
       - zhipu/glm-4-flash
-      - gemini/gemini-2.5-flash
       - groq/llama-3.3-70b-versatile
       - deepseek/deepseek-chat
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     research:
-      - ollama/qwen2.5:7b
+      - ollama/hermes3:8b
       - minimax/MiniMax-Text-01
       - anthropic/claude-haiku-4-5-20251001
-      - gemini/gemini-2.5-flash
       - openai/gpt-4o-mini
     generate:
-      - ollama/qwen2.5:7b
+      - ollama/hermes3:8b
       - codex/gpt-4o-mini
       - moonshot/moonshot-v1-8k
       - arcee/arcee-nova
-      - gemini/gemini-2.5-flash
       - deepseek/deepseek-chat
       - mistral/mistral-small-latest
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     analyze:
-      - ollama/qwen2.5:7b
+      - ollama/hermes3:8b
       - codex/gpt-4o-mini
       - zhipu/glm-4-flash
-      - gemini/gemini-2.5-flash
       - deepseek/deepseek-reasoner
       - groq/llama-3.3-70b-versatile
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     code:
-      - ollama/qwen2.5:7b
+      - ollama/hermes3:8b
       - codex/gpt-4o-mini
       - moonshot/moonshot-v1-8k
       - deepseek/deepseek-chat
-      - gemini/gemini-2.5-flash
       - groq/llama-3.3-70b-versatile
       - openai/gpt-4o-mini
       - anthropic/claude-haiku-4-5-20251001
     image:
       - fal/flux-dev
-      - gemini/imagen-3-fast
       - stability/stable-diffusion-3
       - openai/dall-e-2
     video:
       - fal/minimax-video
-      - gemini/veo-2
       - replicate/minimax-video
     audio:
       - openai/tts-1
@@ -102,112 +93,100 @@ chains:
 
   balanced:
     query:
-      - ollama/qwen3.5:latest
+      - ollama/qwen3:32b
       - codex/gpt-4o
       - moonshot/moonshot-v1-128k
       - zhipu/glm-4
-      - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
       - openai/gpt-4o
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     research:
-      - ollama/qwen3.5:latest
+      - ollama/qwen3:32b
       - minimax/MiniMax-Text-01
       - anthropic/claude-sonnet-4-6
-      - gemini/gemini-2.5-pro
       - openai/gpt-4o
     generate:
-      - ollama/qwen3.5:latest
+      - ollama/qwen3:32b
       - codex/gpt-4o
       - arcee/arcee-nova
-      - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
       - openai/gpt-4o
       - cohere/command-r-plus
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     analyze:
-      - ollama/qwen3.5:latest
+      - ollama/qwen3:32b
       - codex/gpt-4o
       - zhipu/glm-4
-      - gemini/gemini-2.5-pro
       - deepseek/deepseek-reasoner
       - openai/gpt-4o
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     code:
-      - ollama/qwen3.5:latest
+      - ollama/qwen3:32b
       - codex/gpt-4o
       - moonshot/moonshot-v1-128k
-      - gemini/gemini-2.5-pro
       - deepseek/deepseek-chat
       - openai/gpt-4o
       - anthropic/claude-sonnet-4-6
       - anthropic/claude-haiku-4-5-20251001
     image:
       - fal/flux-pro
-      - gemini/imagen-3
       - openai/dall-e-3
       - stability/stable-diffusion-3
     video:
       - fal/kling-video
-      - gemini/veo-2
       - runway/gen3a_turbo
       - replicate/minimax-video
     audio:
       - elevenlabs/eleven_multilingual_v2
       - openai/tts-1-hd
 
+  # PREMIUM = Complexity.COMPLEX. Strong models lead; Ollama is last-resort only
+  # (complex tasks should NOT be answered by a local model unless every API is down).
   premium:
     query:
-      - ollama/qwen3.6:27b
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
       - deepseek/deepseek-chat
-      - gemini/gemini-2.5-pro
       - openai/gpt-4o
       - openai/o3
       - xai/grok-3
+      - ollama/qwen3:32b
     research:
-      - ollama/qwen3.6:27b
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
       - minimax/MiniMax-Text-01
-      - gemini/gemini-2.5-pro
       - openai/o3
+      - ollama/qwen3:32b
     generate:
-      - ollama/qwen3.6:27b
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
       - arcee/arcee-nova
       - deepseek/deepseek-chat
-      - gemini/gemini-2.5-pro
       - openai/gpt-4o
       - openai/o3
+      - ollama/qwen3:32b
     analyze:
-      - ollama/qwen3.6:27b
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
       - zhipu/glm-4
       - deepseek/deepseek-reasoner
-      - gemini/gemini-2.5-pro
       - openai/o3
+      - ollama/qwen3:32b
     code:
-      - ollama/qwen3.6:27b
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
       - moonshot/moonshot-v1-128k
       - deepseek/deepseek-reasoner
-      - gemini/gemini-2.5-pro
       - openai/gpt-4o
       - openai/o3
+      - ollama/qwen3:32b
     image:
-      - gemini/imagen-3
       - openai/dall-e-3
       - fal/flux-pro
       - stability/stable-diffusion-3-ultra
     video:
-      - gemini/veo-2
       - runway/gen3a
       - fal/kling-video
     audio:
@@ -229,48 +208,43 @@ chains:
   # use_thinking=True is set by the router for ALL models in this chain;
   # only Anthropic and Gemini 2.5 Pro activate a provider-specific thinking
   # parameter — o3 and DeepSeek-R1 reason natively without an explicit flag.
+  # REASONING = Complexity.DEEP_REASONING. Native reasoning models lead; Ollama
+  # last-resort only (the hardest problems should not fall to a local model first).
   reasoning:
     query:
-      - ollama/qwen3.6:27b
       - deepseek/deepseek-reasoner
       - openai/o3
-      - gemini/gemini-2.5-pro
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - ollama/qwen3:32b
     analyze:
-      - ollama/qwen3.6:27b
       - deepseek/deepseek-reasoner
       - openai/o3
-      - gemini/gemini-2.5-pro
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - ollama/qwen3:32b
     code:
-      - ollama/qwen3.6:27b
       - deepseek/deepseek-reasoner
       - openai/o3
-      - anthropic/claude-opus-4-6
-      - gemini/gemini-2.5-pro
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - ollama/qwen3:32b
     research:
-      - ollama/qwen3.6:27b
       - deepseek/deepseek-reasoner
       - openai/o3
-      - gemini/gemini-2.5-pro
-      - anthropic/claude-opus-4-6
+      - anthropic/claude-opus:latest
+      - ollama/qwen3:32b
     generate:
-      - ollama/qwen3.6:27b
       - deepseek/deepseek-reasoner
       - openai/o3
-      - anthropic/claude-opus-4-6
-      - gemini/gemini-2.5-pro
+      - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - ollama/qwen3:32b
     image:
-      - gemini/imagen-3
       - openai/dall-e-3
       - fal/flux-pro
       - stability/stable-diffusion-3-ultra
     video:
-      - gemini/veo-2
       - runway/gen3a
       - fal/kling-video
     audio:
