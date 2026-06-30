@@ -561,6 +561,33 @@ def _total_saved(tools: dict[str, dict]) -> float:
     return max(0.0, baseline - total_cost)
 
 
+def _net_session_line(free_rows: list[dict], paid_rows: list[dict]) -> str | None:
+    """A prominent, HONEST net-savings line (#6).
+
+    Net = baseline (what all routed work would have cost on the Opus host) −
+    actual paid-API spend across ALL tiers. Reported UNCLAMPED: when wasteful
+    paid routing (e.g. a $0.10 draft) makes the session a net loss, it says so
+    in red instead of hiding it behind a notional free-tier "saved" figure.
+    """
+    rows = list(free_rows) + list(paid_rows)
+    if not rows:
+        return None
+    total_in  = sum(int(r.get("input_tokens")  or 0) for r in rows)
+    total_out = sum(int(r.get("output_tokens") or 0) for r in rows)
+    baseline  = _host_baseline(total_in, total_out)
+    actual    = sum(float(r.get("cost_usd") or 0.0) for r in paid_rows)
+    net       = baseline - actual
+    if net >= 0:
+        return (
+            f"  {_BOLD}Net saved{_RESET}      {_C_GREEN}${net:.4f}{_RESET}  "
+            f"{_C_MUTED}(${baseline:.4f} baseline − ${actual:.4f} paid){_RESET}"
+        )
+    return (
+        f"  {_BOLD}{_C_ORANGE}⚠ NET LOSS{_RESET}     {_C_ORANGE}-${abs(net):.4f}{_RESET}  "
+        f"{_C_MUTED}(${actual:.4f} paid exceeds ${baseline:.4f} baseline — wasteful paid routing){_RESET}"
+    )
+
+
 def _format_free_section(free_rows: list[dict], paid_rows: list[dict]) -> list[str]:
     """Format free-model (Ollama / Codex) session savings.
 
@@ -1435,6 +1462,13 @@ def _format(tools: dict[str, dict], cc_rows: list[dict], free_rows: list[dict],
     if session_lines:
         lines.append("")
         lines.append(f"  {_BOLD}This Session{_RESET}")
+        # Honest net FIRST — baseline − actual paid, unclamped (#6). The
+        # per-tier sections below show notional/gross figures; this is the
+        # bottom line, and it goes red when paid routing made it a net loss.
+        _net_line = _net_session_line(free_rows, paid_rows)
+        if _net_line:
+            lines.append(_net_line)
+            lines.append("")
         lines += session_lines
 
     # v9.3.0 — Codex CLI parallel section. Only renders if codex_usage has

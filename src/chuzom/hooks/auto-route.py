@@ -1830,6 +1830,33 @@ _CONTEXT_DEP_RE = re.compile(
 # prior output, current state. In a short prompt that's a strong context signal.
 _DEICTIC_RE = re.compile(r"\b(it|this|that|these|those|here|them)\b", re.I)
 
+# Free / local model providers — the only ones a DRAFT may use (#3). A
+# pre-generated draft routed to a paid API (gemini/openai) is wasted spend and
+# made routing net-negative. Mirrors cost._FREE_PROVIDERS.
+_FREE_DRAFT_PROVIDERS = frozenset({"ollama", "codex", "gemini_cli"})
+
+
+def _free_tier_draft_chain(chain: list) -> list:
+    """Keep only free/local-provider models so a draft never hits a paid API."""
+    return [m for m in chain if getattr(m, "provider", None) in _FREE_DRAFT_PROVIDERS]
+
+
+def _session_paid_spend() -> float:
+    """Total paid-API dollars spent this session (from session_spend.json)."""
+    try:
+        data = json.loads((Path.home() / ".chuzom" / "session_spend.json").read_text())
+        return float(data.get("total_usd", 0.0) or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _paid_spend_cap() -> float:
+    """Per-session paid-API spend cap in USD (0 disables). Default $0.50."""
+    try:
+        return float(os.environ.get("CHUZOM_SESSION_PAID_CAP", "0.50"))
+    except (TypeError, ValueError):
+        return 0.50
+
 
 def _is_context_dependent(prompt: str) -> bool:
     """True when the prompt references the user's local code/files/history/state —
@@ -2613,6 +2640,21 @@ def main() -> None:
             _zone, _raw_pct = _get_direct_pressure()
             _direct_chain = _build_direct_chain(complexity, _zone, task_type)
 
+            # #3: a DRAFT must NEVER hit a paid API. build_chain can include paid
+            # externals (gemini/openai); routing a pre-generated draft there is
+            # exactly the overspend that made routing net-negative (a $0.10 gpt-4o
+            # draft). Filter the draft chain to free/local tiers only. If that
+            # leaves the chain empty, no draft is generated and we fall through to
+            # Claude — the correct outcome (a free draft or none, never a paid one).
+            if os.environ.get("CHUZOM_FREE_TIER_DRAFTS", "on").strip().lower() not in ("0", "off", "false", "no"):
+                _before = len(_direct_chain)
+                _direct_chain = _free_tier_draft_chain(_direct_chain)
+                if len(_direct_chain) != _before:
+                    _debug_log(
+                        f"[INVOCATION {invocation_id:.3f}] FREE-TIER DRAFT: "
+                        f"dropped {_before - len(_direct_chain)} paid provider(s) from draft chain"
+                    )
+
             _debug_log(
                 f"[INVOCATION {invocation_id:.3f}] DIRECT: zone={_zone} "
                 f"pressure={_raw_pct:.0f}% needs_tools={_needs_claude_tools(prompt, task_type)} "
@@ -2621,7 +2663,11 @@ def main() -> None:
 
             _direct_result = None
 
-            if _needs_claude_tools(prompt, task_type):
+            if not _direct_chain:
+                # All providers were paid and got filtered out → no free draft to
+                # make. Falls through to Claude (which has context + tools).
+                _debug_log(f"[INVOCATION {invocation_id:.3f}] DIRECT SKIP: no free-tier model available")
+            elif _needs_claude_tools(prompt, task_type):
                 # File-op task — use agent loop (Ollama with tool calling)
                 from chuzom.hooks.direct_executor import execute_agent as _execute_agent
                 _direct_result = _execute_agent(prompt, _direct_chain, timeout=60)
@@ -2815,6 +2861,21 @@ def main() -> None:
             "free draft as the answer.\n\n"
         )
         directive = _context_note + directive
+
+    # ── Per-session paid-API spend cap (#3) ──────────────────────────────────────
+    # Drafts are already free-only; this is the backstop for the rest of routing.
+    # When cumulative paid spend crosses the cap, tell the caller to stop routing
+    # to paid tiers for the remainder of the session.
+    _paid = _session_paid_spend()
+    _cap = _paid_spend_cap()
+    if _cap > 0 and _paid >= _cap:
+        _cap_note = (
+            f"⛔ SESSION PAID-API CAP REACHED — ${_paid:.2f} spent ≥ ${_cap:.2f} cap. "
+            "Route only to FREE/local models (Ollama / Codex) or answer directly. Do NOT "
+            "call paid tiers for the rest of this session (raise CHUZOM_SESSION_PAID_CAP "
+            "to override).\n\n"
+        )
+        directive = _cap_note + directive
 
     directive = _prior_violation_notice(previous_unrouted) + directive
 
