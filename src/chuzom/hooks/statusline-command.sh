@@ -293,10 +293,43 @@ fi
 # ── 🛡 Enforce mode ──────────────────────────────────────────────────────────
 enforce="${CHUZOM_ENFORCE:-smart}"
 case "$enforce" in
-    hard|on) parts+=("🛡  ${_RED}enforce${_RESET}") ;;
-    soft)    parts+=("🛡  ${_YELLOW}suggest${_RESET}") ;;
-    off)     parts+=("🛡  ${_DIM}shadow${_RESET}") ;;
-    smart)   parts+=("🛡  ${_SKY}smart${_RESET}") ;;
+    hard|on)        parts+=("🛡  ${_RED}enforce${_RESET}") ;;
+    soft|suggest)   parts+=("🛡  ${_YELLOW}suggest${_RESET}") ;;
+    off|observe|shadow) parts+=("🛡  ${_DIM}shadow${_RESET}") ;;
+    smart|advise)   parts+=("🛡  ${_SKY}smart${_RESET}") ;;
+esac
+
+# ── ❤ Health (mirrors chuzom.surface_status, dependency-free) ────────────────
+# down ✗  : no model provider reachable (no API key, no recent local model)
+# degraded ⚠: usage data stale (>30 min)
+# ok ✓     : routing normally
+health=$(python3 -c "
+import json, os, time
+now = time.time()
+keys = ('ANTHROPIC_API_KEY','OPENAI_API_KEY','GEMINI_API_KEY','DEEPSEEK_API_KEY','GROQ_API_KEY')
+providers = any(os.environ.get(k) for k in keys)
+if not providers:
+    try:
+        from datetime import datetime
+        for line in reversed(open(os.path.expanduser('$SAVINGS_LOG')).readlines()[-200:]):
+            r = json.loads(line)
+            m = r.get('model','')
+            if isinstance(m,str) and m.startswith('ollama/'):
+                ts = datetime.fromisoformat(r['timestamp']).timestamp()
+                if now - ts <= 1800:
+                    providers = True; break
+    except Exception:
+        pass
+try:
+    stale = (now - os.path.getmtime(os.path.expanduser('$USAGE_JSON'))) > 1800
+except OSError:
+    stale = True
+print('down' if not providers else ('degraded' if stale else 'ok'))
+" 2>/dev/null)
+case "$health" in
+    ok)       parts+=("${_GREEN}✓${_RESET}") ;;
+    degraded) parts+=("${_YELLOW}⚠${_RESET}") ;;
+    down)     parts+=("${_RED}✗${_RESET}") ;;
 esac
 
 # ── 🔀 Last route (always shown) ─────────────────────────────────────────────

@@ -50,7 +50,7 @@ def _write_flush_time() -> None:
         pass
 
 
-def main() -> None:
+def _flush() -> None:
     # Read Codex hook payload (may be empty or invalid — always silent)
     try:
         json.load(sys.stdin)
@@ -79,6 +79,20 @@ def main() -> None:
         _write_flush_time()
     except OSError:
         pass
+
+
+def main() -> None:
+    # Flush savings, then ALWAYS surface the live indicator (even when there was
+    # nothing new to flush) so the user sees that Chuzom is working on Codex.
+    try:
+        _flush()
+    finally:
+        try:
+            from chuzom.surface_status import emit_indicator
+
+            emit_indicator("codex")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
