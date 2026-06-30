@@ -125,13 +125,24 @@ except Exception:
 " 2>/dev/null)
     if [ -n "$file_age_s" ] && [ "$file_age_s" -gt "$CHUZOM_USAGE_TTL_SEC" ]; then
         # Background refresh — fire & forget; statusline keeps drawing.
-        # The flock keeps us from launching parallel refreshes when the
-        # statusline re-renders before the first one finishes.
-        (
-            flock -n 9 || exit 0
-            "$REFRESH_SCRIPT" >/dev/null 2>&1 &
-        ) 9>"$STATE_DIR/.usage-refresh.lock" </dev/null >/dev/null 2>&1 &
-        disown 2>/dev/null || true
+        #
+        # Stampede guard via a timestamp file, NOT flock: flock is a Linux-only
+        # util and is absent on macOS, where `flock -n 9 || exit 0` failed with
+        # "command not found" and silently aborted EVERY refresh — so the quota
+        # never updated. A portable "last attempt" throttle launches at most one
+        # refresh per CHUZOM_REFRESH_THROTTLE_SEC (default 60s) on any OS.
+        LAST_TRY="$STATE_DIR/.usage-refresh.last"
+        throttle="${CHUZOM_REFRESH_THROTTLE_SEC:-60}"
+        do_refresh=1
+        if [ -f "$LAST_TRY" ]; then
+            try_age=$(python3 -c "import os,time;print(int(time.time()-os.path.getmtime('$LAST_TRY')))" 2>/dev/null)
+            [ -n "$try_age" ] && [ "$try_age" -lt "$throttle" ] && do_refresh=0
+        fi
+        if [ "$do_refresh" = "1" ]; then
+            : > "$LAST_TRY" 2>/dev/null
+            ( "$REFRESH_SCRIPT" </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1 &
+            disown 2>/dev/null || true
+        fi
     fi
 fi
 
