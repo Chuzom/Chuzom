@@ -149,7 +149,10 @@ def test_old_hint_warns(clean_env, fake_home):
 
 def _seed_routing(home: Path, *rows: tuple[str, str]) -> None:
     """Create a usage.db with the given (complexity, model) routing rows
-    timestamped to today's localtime so the WHERE clause matches."""
+    timestamped in UTC (as production does — routing_decisions.timestamp DEFAULT is
+    datetime('now') = UTC) so the handler's date(timestamp,'localtime') maps them
+    to today-local. Inserting 'localtime' here double-applied the offset and lost
+    the rows near midnight in non-UTC timezones."""
     db = home / ".chuzom" / "usage.db"
     conn = sqlite3.connect(db)
     try:
@@ -165,7 +168,7 @@ def _seed_routing(home: Path, *rows: tuple[str, str]) -> None:
         """)
         conn.executemany(
             "INSERT INTO routing_decisions (timestamp, complexity, final_model) "
-            "VALUES (datetime('now','localtime'), ?, ?)",
+            "VALUES (datetime('now'), ?, ?)",
             rows,
         )
         conn.commit()
@@ -230,7 +233,7 @@ def test_simple_share_ignores_sidecar_backfill(clean_env, fake_home):
     # report 0/1 = 0% simple, NOT 5/6 = 83%.
     conn.executemany(
         "INSERT INTO routing_decisions (timestamp, complexity, final_model, "
-        "reason_code) VALUES (datetime('now','localtime'), ?, ?, ?)",
+        "reason_code) VALUES (datetime('now'), ?, ?, ?)",
         [("simple", "flash", "sidecar_backfill")] * 5
         + [("moderate", "sonnet", None)],
     )
