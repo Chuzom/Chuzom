@@ -1289,11 +1289,23 @@ def classify_complexity(text: str, task_type: str) -> str:
         return "complex"
     if COMPLEXITY_SIMPLE.search(text):
         return "simple"
-    if len(text) > 500:
+    n = len(text)
+    # Length-based fallback — reached only when no lexical complexity/simplicity
+    # signal fired. The old flat gate (>150 chars → moderate, else moderate
+    # unless a query) tagged ordinary one-line prompts as moderate, so the
+    # simple-share sat at ~3% vs a ~30% target. Recalibrated so plain Q&A stays
+    # cheap far longer, while generation/analysis/code escalate to moderate once
+    # past a one-liner (they usually imply real work, not a lookup).
+    if n > 500:
         return "complex"
-    if len(text) > 150:
-        return "moderate"
-    return "simple" if task_type == "query" else "moderate"
+    if task_type == "query":
+        # Plain questions/lookups are cheap even when verbose. This is the fix
+        # for the moderate over-tagging: the old flat >150-char gate demoted
+        # ordinary questions to moderate; queries now stay simple up to ~400
+        # chars. Other task types (research/generate/analyze/code) imply real
+        # work and stay moderate.
+        return "moderate" if n > 400 else "simple"
+    return "moderate"
 
 
 # ── Main Classifier ──────────────────────────────────────────────────────────
