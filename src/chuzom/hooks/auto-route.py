@@ -2494,41 +2494,30 @@ def main() -> None:
                 json.dump({"decision": "block", "reason": _prior_violation_notice(previous_unrouted) + directive}, sys.stdout)
                 sys.exit(0)
 
-    # ── Activation mode (shadow / suggest / enforce) ──────────────────────────
-    # Priority: env var > .chuzom.yml repo config > ~/.chuzom/.env > "hard"
-    # shadow  — observe only; emit passive hint, write NO pending state
-    # suggest — show soft hint; write pending state (enforce-route treats it as soft/logged-only)
-    # enforce / hard (default) — block Claude if routing is violated
-    _enforce_mode = os.environ.get("CHUZOM_ENFORCE", "").lower()
-    if not _enforce_mode:
-        # Try reading from .chuzom.yml in cwd or ancestor
-        try:
-            import yaml as _yaml
-            _repo_yml = Path.cwd() / ".chuzom.yml"
-            if not _repo_yml.exists():
-                for _p in Path.cwd().parents:
-                    _c = _p / ".chuzom.yml"
-                    if _c.exists():
-                        _repo_yml = _c
-                        break
-            if _repo_yml.exists():
-                _repo_data = _yaml.safe_load(_repo_yml.read_text()) or {}
-                _enforce_mode = str(_repo_data.get("enforce", "")).lower()
-        except Exception:
-            pass
-    if not _enforce_mode:
-        # Match enforce-route.py's own unset default ("smart" → never hard-blocks).
-        # Defaulting to "hard" here made the banner advertise a block the PreToolUse
-        # enforcer refuses to perform — an empty threat. "suggest" keeps the routing
-        # hint honest when no enforcement level is configured.
-        _enforce_mode = "suggest"
+    # ── Activation mode — single source of truth (chuzom.enforce_config) ───────
+    # Resolved IDENTICALLY by enforce-route.py so the banner always reflects what
+    # the enforcer will actually do. Priority: env > repo .chuzom.yml >
+    # ~/.chuzom/routing.yaml > "smart".
+    try:
+        from chuzom.enforce_config import resolve_enforce_mode
+        _resolved_enforce = resolve_enforce_mode()
+    except Exception:
+        # Graceful fallback if the shared module isn't importable yet (partial
+        # install / pre-deploy): env override, else the "smart" default.
+        _resolved_enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower() or "smart"
 
-    # enforce-route.py's vocabulary is advise|smart|soft|hard|off (default smart),
-    # but this hook only renders shadow|suggest|hard. Map every non-hard enforce
-    # level onto the honest "suggest" display so the banner can never advertise a
-    # block the PreToolUse enforcer won't actually perform. Only a literal "hard"
-    # reaches the hard-enforcement banner below.
-    if _enforce_mode in ("off", "advise", "smart", "soft", "observe"):
+    # Map the resolved mode onto this hook's display vocabulary (shadow|suggest|
+    # hard), HONESTLY. "smart" hard-enforces Q&A tasks (query/research/generate/
+    # analyze) but is soft for code — so its banner tone must match per task type,
+    # never a blanket "you may answer directly" for a task the enforcer will block.
+    _qa_task = task_type in ("query", "research", "generate", "analyze")
+    if _resolved_enforce in ("off", "shadow", "observe"):
+        _enforce_mode = "shadow"
+    elif _resolved_enforce == "hard":
+        _enforce_mode = "hard"
+    elif _resolved_enforce == "smart":
+        _enforce_mode = "hard" if _qa_task else "suggest"
+    else:  # advise / advisory / suggest / soft / unknown → never blocks
         _enforce_mode = "suggest"
 
     # ── Standard external routing directive ───────────────────────────────────
@@ -2834,7 +2823,7 @@ def main() -> None:
             f"║  saves : {_savings:39} ║\n"
             f"╚══════════════════════════════════════════════════╝\n"
             f"\n"
-            f"⚠ HARD ENFORCEMENT ACTIVE (CHUZOM_ENFORCE=hard): the PreToolUse hook\n"
+            f"⚠ ENFORCEMENT ACTIVE (hard, or smart on a Q&A task): the PreToolUse hook\n"
             f"   (enforce-route.py) blocks THIS task's reasoning/generation tools\n"
             f"   until you call {tool}. File reads and implementation tools\n"
             f"   (Edit/Write/Bash) stay allowed — only the route-first step is\n"

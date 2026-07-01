@@ -520,35 +520,27 @@ def main() -> None:
     except (json.JSONDecodeError, EOFError):
         sys.exit(0)
 
-    enforce = os.environ.get("CHUZOM_ENFORCE", "").lower()
-    yaml_enforce = ""
+    # Single source of truth — the SAME resolver auto-route.py's banner uses, so
+    # the two can never disagree. Priority: env CHUZOM_ENFORCE > repo .chuzom.yml
+    # > ~/.chuzom/routing.yaml > "smart". File config (routing.yaml) is what makes
+    # enforcement consistent across sessions/launch methods; env vars don't
+    # propagate to GUI/desktop/other-host sessions.
     try:
-        _yaml = _ROUTER_DIR / "routing.yaml"
-        if _yaml.exists():
-            for _line in _yaml.read_text().splitlines():
-                if _line.strip().startswith("enforce:"):
-                    yaml_enforce = _line.split(":", 1)[1].strip().lower()
-                    break
+        from chuzom.enforce_config import resolve_enforce_mode
+        enforce = resolve_enforce_mode()
     except Exception:
-        pass
-    if not enforce:
-        # Fall back to ~/.chuzom/routing.yaml so users who set
-        # `enforce: hard` there get the expected behaviour without
-        # needing a separate env-var export.
-        enforce = yaml_enforce or "smart"
-    elif yaml_enforce and enforce != yaml_enforce:
-        # Env var overrides routing.yaml — log a warning so users
-        # can discover silent overrides from .zshrc / .bashrc.
-        try:
-            _log_msg = (
-                f"[{time.strftime('%H:%M:%S')}] WARNING: CHUZOM_ENFORCE={enforce} "
-                f"(env var) overrides routing.yaml enforce={yaml_enforce}. "
-                f"Remove from ~/.zshrc or unset CHUZOM_ENFORCE to use routing.yaml value.\n"
-            )
-            with open(_LOG_PATH, "a", encoding="utf-8") as _lf:
-                _lf.write(_log_msg)
-        except OSError:
-            pass
+        # Graceful fallback (partial install / pre-deploy): env override, else a
+        # minimal routing.yaml read, else "smart" — never crash the PreToolUse hook.
+        enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower()
+        if not enforce:
+            try:
+                for _line in (_ROUTER_DIR / "routing.yaml").read_text().splitlines():
+                    if _line.strip().startswith("enforce:"):
+                        enforce = _line.split(":", 1)[1].strip().strip("'\"").lower()
+                        break
+            except OSError:
+                pass
+            enforce = enforce or "smart"
     # shadow / off = pure observation (treat as off)
     if enforce in ("off", "shadow"):
         sys.exit(0)
