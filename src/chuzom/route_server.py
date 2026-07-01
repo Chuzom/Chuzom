@@ -63,6 +63,15 @@ def route_payload(payload: dict) -> dict:
         max_tokens=payload.get("max_tokens"),
         temperature=payload.get("temperature"),
     ))
+
+    # Surface this external route in the host-tagged savings pipeline so gateway /
+    # LoopHole traffic shows up in the cross-surface indicators + savings_stats.
+    # route_and_call already logged COST to usage.db, so we only add the
+    # host-tagged savings record (never usage.db → no double count).
+    _log_route_savings(resp, task_type.value,
+                       payload.get("complexity") or resp.complexity or "moderate",
+                       str(payload.get("host") or "gateway"))
+
     return {
         "text": resp.content,
         "model": resp.model,
@@ -72,6 +81,54 @@ def route_payload(payload: dict) -> dict:
         "output_tokens": resp.output_tokens,
         "complexity": resp.complexity,
     }
+
+
+def _log_route_savings(resp, task_type: str, complexity: str, host: str) -> None:
+    """Append a host-tagged record to ~/.chuzom/savings_log.jsonl for an external
+    (gateway/route) call. Fire-and-forget.
+
+    Deliberately does NOT touch session_spend.json (the CURRENT Claude Code
+    session's ledger) the way the hook's log_direct_savings does — external
+    traffic is not this session's spend. Cost is already in usage.db via
+    route_and_call; this only adds the host-tagged savings record so the traffic
+    is visible per-surface.
+    """
+    try:
+        import json as _json
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
+
+        from chuzom.hooks.savings_logger import (
+            _baseline_cost,
+            _cost_for,
+            _savings_log_path,
+        )
+
+        provider = resp.provider or ""
+        model = resp.model or ""
+        bare = model.split("/", 1)[1] if "/" in model and model.split("/", 1)[0] == provider else model
+        in_tok = max(0, int(resp.input_tokens or 0))
+        out_tok = max(0, int(resp.output_tokens or 0))
+        external = _cost_for(provider, bare, in_tok, out_tok)
+        baseline = _baseline_cost(complexity, in_tok, out_tok)
+        record = {
+            "timestamp": _dt.now(_tz.utc).isoformat(),
+            "session_id": host,
+            "task_type": task_type,
+            "complexity": complexity,
+            "estimated_saved": max(0.0, baseline - external),
+            "external_cost": external,
+            "model": model,
+            "input_tokens": in_tok,
+            "output_tokens": out_tok,
+            "host": host,
+        }
+        path = _savings_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as f:
+            f.write(_json.dumps(record) + "\n")
+    except Exception:
+        pass
 
 
 def make_handler():
