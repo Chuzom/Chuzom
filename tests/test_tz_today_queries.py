@@ -42,3 +42,30 @@ def test_cost_where_clauses_convert_column_to_localtime():
     assert "date(timestamp,'localtime') >=" in src
     # And the old bare-UTC column comparison is gone from those clauses.
     assert "WHERE date(timestamp) >=" not in src
+
+
+# ── Dashboard / statusline / cost "today" & daily follow-ups (localtime) ──────
+def _read(rel: str) -> str:
+    return (Path(__file__).resolve().parents[1] / "src" / "chuzom" / rel).read_text()
+
+
+def test_dashboards_group_daily_by_localtime():
+    for rel in ("tools/dashboard.py", "dashboard/server.py", "dashboard/tui.py"):
+        src = _read(rel)
+        assert "date(timestamp) as day" not in src, rel          # bare UTC grouping gone
+        assert "date(timestamp,'localtime') as day" in src, rel  # local grouping present
+
+
+def test_today_filters_no_bare_utc_start_of_day():
+    # cost.py + dashboards must not gate "today" on a UTC start-of-day boundary.
+    for rel in ("cost.py", "dashboard/server.py", "dashboard/tui.py"):
+        src = _read(rel)
+        assert "datetime('now', 'start of day')" not in src, rel
+        assert "datetime('now','start of day')" not in src, rel
+
+
+def test_statusline_today_savings_use_localtime():
+    sl = _read("hooks/statusline-command.sh")
+    assert "date -u +" not in sl                                   # no forced-UTC boundary
+    assert "datetime.datetime.utcnow()" not in sl                  # no UTC log filter
+    assert "date(timestamp,'localtime')=date('now','localtime')" in sl

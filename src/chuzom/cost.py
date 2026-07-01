@@ -797,7 +797,7 @@ async def get_daily_spend() -> float:
     try:
         cursor = await db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) FROM usage "
-            "WHERE timestamp >= datetime('now', 'start of day')"
+            "WHERE date(timestamp,'localtime') = date('now','localtime')"
         )
         row = await cursor.fetchone()
         return float(row[0]) if row else 0.0
@@ -818,7 +818,7 @@ async def get_daily_spend_by_task_type(task_type: str) -> float:
     try:
         cursor = await db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) FROM usage "
-            "WHERE timestamp >= datetime('now', 'start of day') AND task_type = ?",
+            "WHERE date(timestamp,'localtime') = date('now','localtime') AND task_type = ?",
             (task_type,),
         )
         row = await cursor.fetchone()
@@ -2913,7 +2913,7 @@ async def get_cache_savings(period: str = "today") -> dict[str, float]:
     try:
         # Determine time filter
         if period == "today":
-            time_filter = "timestamp >= datetime('now', 'start of day')"
+            time_filter = "date(timestamp,'localtime') = date('now','localtime')"
         elif period == "week":
             time_filter = "timestamp >= datetime('now', '-7 days')"
         elif period == "month":

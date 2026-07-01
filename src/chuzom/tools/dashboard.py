@@ -130,7 +130,7 @@ async def _query_daily_savings(since_sql: str, baseline: str = "opus") -> list[d
         cursor = await db.execute(
             f"""
             SELECT
-                date(timestamp) as day,
+                date(timestamp,'localtime') as day,
                 SUM(input_tokens + output_tokens) as total_tokens,
                 SUM(input_tokens) as input_tokens,
                 SUM(output_tokens) as output_tokens,
@@ -139,7 +139,7 @@ async def _query_daily_savings(since_sql: str, baseline: str = "opus") -> list[d
             FROM usage
             WHERE timestamp >= {since_sql}
               AND success = 1
-            GROUP BY date(timestamp)
+            GROUP BY date(timestamp,'localtime')
             ORDER BY day
             """,
         )
