@@ -140,7 +140,11 @@ def test_execute_routing_distribution_with_data(monkeypatch, tmp_path):
     conn.executemany(
         "INSERT INTO routing_decisions (timestamp, complexity, final_model, "
         "cost_usd, reason_code) VALUES "
-        "(datetime('now','localtime'), ?, ?, ?, NULL)",
+        # Store UTC to match production (routing_decisions.timestamp DEFAULT is
+        # datetime('now') = UTC); the handler's date(timestamp,'localtime') then
+        # maps it to today-local. Inserting 'localtime' here double-applied the
+        # offset and dropped the rows onto tomorrow near midnight in non-UTC zones.
+        "(datetime('now'), ?, ?, ?, NULL)",
         [("simple", "flash", 0.0001),
          ("moderate", "sonnet", 0.005)],
     )
