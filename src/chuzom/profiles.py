@@ -205,6 +205,7 @@ MODELS_PER_PROFILE: dict[RoutingProfile, dict[str, list[str]]] = {
         "allowed_claude": [
             "anthropic/claude-opus",   # Primary Claude pick — extended thinking supported
             "anthropic/claude-sonnet",  # Fallback — extended thinking supported on Sonnet 4+
+            "anthropic/claude-fable",  # Last-resort escalation — most sophisticated / most expensive
         ],
     },
 }
