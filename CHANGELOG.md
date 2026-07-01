@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.7.1 — 2026-07-01 — honest routing, context-aware drafts, unified gateway metering
+
+### Routing correctness & safety
+- **Context-aware routing (no blind drafts).** A much stronger `_is_context_dependent`
+  detector (adjective-tolerant nouns, operational verbs, deictic pronouns, file paths)
+  suppresses the DIRECT draft for prompts that reference the user's files/repo/history
+  and emits a "route WITH context via `llm_query(context=…)`" directive instead — the
+  fix for context-blind fabrication (e.g. `npm run start` for a Python repo).
+- **Free-tier-only drafts + per-session paid cap.** Drafts can never hit a paid API
+  (chain filtered to ollama/codex/gemini_cli); a `CHUZOM_SESSION_PAID_CAP` (default
+  $0.50) tells the caller to stop routing to paid tiers once crossed.
+
+### Honesty
+- **De-fanged the route banner and violation notice.** The "🚫 ALL BLOCKED / will
+  reject any native tool call" banner and the "PREVIOUS TURN VIOLATED ROUTING …
+  escalated" line were empty threats; both now reflect what the enforcer actually
+  does. Banner tone is task-aware under `smart`.
+- **Honest net savings.** Session summary shows an unclamped NET line (baseline −
+  actual across all tiers), flagged as `⚠ NET LOSS` when paid routing made it negative.
+
+### Enforcement
+- **Unified enforcement config.** New `chuzom.enforce_config.resolve_enforce_mode`
+  is the single source of truth for both the banner and the enforcer (priority: env
+  > repo `.chuzom.yml` > `~/.chuzom/routing.yaml` > `smart`), so enforcement is
+  consistent across sessions/launch methods instead of depending on a `~/.zshrc` export.
+
+### Gateway / external agents (LoopHole)
+- **Unified gateway on `route_and_call`.** All wire-format endpoints (OpenAI/Anthropic/
+  Ollama) plus a new native `POST /route` now go through the full router, so external
+  callers get budget caps, caching, and the paid-spend cap uniformly. `route_server`
+  kept as the zero-dependency fallback.
+- **Host-tagged metering for external traffic.** Gateway/LoopHole routes now write a
+  `host`-tagged savings record (without polluting the session ledger), and the
+  cross-surface indicators read the durable `savings_stats` store so they survive
+  `savings_log.jsonl` truncation and show external traffic.
+
+### Observability
+- **`llm_health` reflects the real routable set** (counts a reachable local Ollama
+  instead of reporting "0 providers" while routing to it).
+- **Cross-surface indicators + token amounts** on every routing surface (compact line,
+  terminal title, statusline, SUGGEST estimate).
+
+### Fixed
+- **macOS statusline quota never refreshed** — the refresh was gated behind `flock`
+  (Linux-only); replaced with a portable timestamp throttle.
+- **Timezone-correct "today"/period reporting** — savings, usage, digests, dashboards,
+  and the statusline now compare UTC-stored timestamps in the user's local timezone
+  (they mis-bucketed the last N hours near midnight for non-UTC users).
+- **Fully hermetic test suite** — removed environment dependence (timezone-seeded rows,
+  the BM25 result cache) so the suite is deterministic regardless of TZ, wall clock, or
+  the developer's `~/.chuzom` state.
+
 ## v0.7.0 — 2026-06-30 — multi-agent subagents + fabrication-safety fix
 
 ### Features
