@@ -360,20 +360,38 @@ def _check_savings_posture() -> list[str]:
             "before they hit Claude's context"
         ))
 
-    # 5. Enforcement mode.
-    enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower()
-    if enforce in {"off", "shadow"}:
+    # 5. Enforcement mode. Resolve through the same single source of truth the
+    #    hooks use (env > repo .chuzom.yml > ~/.chuzom/routing.yaml > "smart"),
+    #    so doctor reports what the enforcer ACTUALLY does — not a bare-env guess.
+    #    (Reading os.environ only made doctor claim "smart/blocked" even when
+    #    routing.yaml pinned "advise", i.e. never-block.)
+    try:
+        from chuzom.enforce_config import resolve_enforce_mode
+        enforce = resolve_enforce_mode()
+    except Exception:
+        enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower() or "smart"
+    if enforce in {"advise", "advisory"}:
+        lines.append(_ok(
+            f"CHUZOM_ENFORCE={enforce} — route everywhere, NEVER block a tool. "
+            "Routing is a helpful suggestion; Claude always keeps the final call."
+        ))
+    elif enforce in {"off", "shadow"}:
         lines.append(_warn(
             f"CHUZOM_ENFORCE={enforce} — route directives are advisory only. "
             "Claude can bypass without consequence; quota savings are best-effort."
         ))
+    elif enforce in {"suggest", "soft"}:
+        lines.append(_ok(
+            f"CHUZOM_ENFORCE={enforce} — log-only; nudges but never blocks"
+        ))
     elif enforce in {"hard", "strict"}:
         lines.append(_ok(
-            f"CHUZOM_ENFORCE={enforce} — bypasses are blocked"
+            f"CHUZOM_ENFORCE={enforce} — all work tools blocked until routed; "
+            "bypasses are blocked"
         ))
     else:
-        # Default / smart.
-        lines.append(_ok("CHUZOM_ENFORCE=smart (default) — write tools blocked until route honored"))
+        # smart (built-in default).
+        lines.append(_ok("CHUZOM_ENFORCE=smart (default) — blocks Q&A, allows code"))
 
     # 6. Hook hint freshness — per-session shards since INV-007.
     # Find the newest last_classification_*.json across all sessions; that's

@@ -910,11 +910,26 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"my\s+|our\s+|these\s+|those\s+)\w+|"
             r"fix (?:the |this |a )?(?:\w+ )*(?:bug|error|issue|crash|failing test|exception)|"
             r"add (?:a |the )?(?:\w+ )*(?:feature|method|test|endpoint|route|handler|"
-            r"middleware|support|integration|login)|"
+            r"middleware|support|integration|login|validation|form|field|button|column|"
+            r"index|migration|config|option|flag|component|hook|logging|logger)|"
+            # Deletion/removal of code artefacts — anchored to a code noun so it
+            # doesn't catch "remove me from the mailing list".
+            r"(?:remove|delete|drop|strip)\s+(?:the |this |these |all |any |unused |"
+            r"deprecated |dead )?(?:\w+ ){0,3}(?:import|imports|logging|log|logger|call|"
+            r"calls|function|method|dependency|dependencies|code|line|lines|file|test|"
+            r"tests|endpoint|route|handler|variable|field|column|comment|comments)|"
+            # "wire up the X button/handler/…", "hook up the …"
+            r"(?:wire|hook)\s+up\s+(?:the |this |a )?(?:\w+ ){0,3}(?:button|handler|"
+            r"endpoint|event|listener|callback|session|form|api|service|component|route)|"
+            r"(?:rename|replace|extract|inline|move)\s+(?:the |this |a )?(?:\w+ ){0,3}"
+            r"(?:function|method|class|variable|module|file|component|import|endpoint|handler)|"
             r"update (?:the |this )?(?:\w+ )*(?:code|logic|function|implementation|client|"
             r"api client|service|handler|middleware|endpoint)|"
             r"modify (?:the |this )|extend (?:the |this )|"
-            r"(?:optimize|improve) (?:the |this )?(?:code|query|performance|function)|"
+            # Relaxed so intervening adjectives are allowed ("optimize the slow
+            # database query").
+            r"(?:optimize|improve|speed up) (?:the |this )?(?:\w+ ){0,4}(?:code|query|"
+            r"performance|function|latency|throughput|speed|render|load time)|"
             r"set up|configure|install|bootstrap|initialize|"
             r"create (?:(?:a |the )?\w+ )*(?:function|class|module|component|hook|test|script|program|service|tool))\b",
             re.IGNORECASE,
@@ -1289,11 +1304,23 @@ def classify_complexity(text: str, task_type: str) -> str:
         return "complex"
     if COMPLEXITY_SIMPLE.search(text):
         return "simple"
-    if len(text) > 500:
+    n = len(text)
+    # Length-based fallback — reached only when no lexical complexity/simplicity
+    # signal fired. The old flat gate (>150 chars → moderate, else moderate
+    # unless a query) tagged ordinary one-line prompts as moderate, so the
+    # simple-share sat at ~3% vs a ~30% target. Recalibrated so plain Q&A stays
+    # cheap far longer, while generation/analysis/code escalate to moderate once
+    # past a one-liner (they usually imply real work, not a lookup).
+    if n > 500:
         return "complex"
-    if len(text) > 150:
-        return "moderate"
-    return "simple" if task_type == "query" else "moderate"
+    if task_type == "query":
+        # Plain questions/lookups are cheap even when verbose. This is the fix
+        # for the moderate over-tagging: the old flat >150-char gate demoted
+        # ordinary questions to moderate; queries now stay simple up to ~400
+        # chars. Other task types (research/generate/analyze/code) imply real
+        # work and stay moderate.
+        return "moderate" if n > 400 else "simple"
+    return "moderate"
 
 
 # ── Main Classifier ──────────────────────────────────────────────────────────
@@ -2513,11 +2540,16 @@ def main() -> None:
     _qa_task = task_type in ("query", "research", "generate", "analyze")
     if _resolved_enforce in ("off", "shadow", "observe"):
         _enforce_mode = "shadow"
+    elif _resolved_enforce in ("advise", "advisory"):
+        # Route everywhere, but NEVER block and NEVER nag. Distinct from "suggest":
+        # advise writes no pending state, so no "prior turn violated routing" notice
+        # can fire next turn — the mode is a pure helpful suggestion.
+        _enforce_mode = "advise"
     elif _resolved_enforce == "hard":
         _enforce_mode = "hard"
     elif _resolved_enforce == "smart":
         _enforce_mode = "hard" if _qa_task else "suggest"
-    else:  # advise / advisory / suggest / soft / unknown → never blocks
+    else:  # suggest / soft / unknown → soft nudge, never blocks
         _enforce_mode = "suggest"
 
     # ── Standard external routing directive ───────────────────────────────────
@@ -2791,6 +2823,20 @@ def main() -> None:
             f"would route to {tool} → 🧠 {selected_model} [via {method}{stale_suffix}]"
         )
         indicator = f"👁 {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
+        write_pending = False
+    elif _enforce_mode == "advise":
+        # Advise: a friendly suggestion that never blocks and never nags. No pending
+        # state is written, so no violation notice can follow on the next turn.
+        _est = _estimate_prompt_tokens(prompt)
+        _tok = f" · ~{_est} tok" if _est else ""
+        directive = (
+            f"⚡ ROUTE (advise): {task_type}/{complexity} → try {tool} → 🧠 {selected_model}{_tok} "
+            f"[via {method}{stale_suffix}]\n"
+            f"   Suggestion only — nothing is blocked. If {tool} can handle it, prefer it to "
+            f"save Claude quota; otherwise just do the task yourself. Never fabricate a routed "
+            f"answer — call the tool or handle it directly."
+        )
+        indicator = f"⚡ {task_type}/{complexity} → {tool} → 🧠 {selected_model}"
         write_pending = False
     elif _enforce_mode == "suggest":
         # Soft hint — pending state written but enforce-route only logs, never blocks.
