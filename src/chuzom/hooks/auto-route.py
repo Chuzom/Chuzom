@@ -2513,11 +2513,16 @@ def main() -> None:
     _qa_task = task_type in ("query", "research", "generate", "analyze")
     if _resolved_enforce in ("off", "shadow", "observe"):
         _enforce_mode = "shadow"
+    elif _resolved_enforce in ("advise", "advisory"):
+        # Route everywhere, but NEVER block and NEVER nag. Distinct from "suggest":
+        # advise writes no pending state, so no "prior turn violated routing" notice
+        # can fire next turn — the mode is a pure helpful suggestion.
+        _enforce_mode = "advise"
     elif _resolved_enforce == "hard":
         _enforce_mode = "hard"
     elif _resolved_enforce == "smart":
         _enforce_mode = "hard" if _qa_task else "suggest"
-    else:  # advise / advisory / suggest / soft / unknown → never blocks
+    else:  # suggest / soft / unknown → soft nudge, never blocks
         _enforce_mode = "suggest"
 
     # ── Standard external routing directive ───────────────────────────────────
@@ -2791,6 +2796,20 @@ def main() -> None:
             f"would route to {tool} → 🧠 {selected_model} [via {method}{stale_suffix}]"
         )
         indicator = f"👁 {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
+        write_pending = False
+    elif _enforce_mode == "advise":
+        # Advise: a friendly suggestion that never blocks and never nags. No pending
+        # state is written, so no violation notice can follow on the next turn.
+        _est = _estimate_prompt_tokens(prompt)
+        _tok = f" · ~{_est} tok" if _est else ""
+        directive = (
+            f"⚡ ROUTE (advise): {task_type}/{complexity} → try {tool} → 🧠 {selected_model}{_tok} "
+            f"[via {method}{stale_suffix}]\n"
+            f"   Suggestion only — nothing is blocked. If {tool} can handle it, prefer it to "
+            f"save Claude quota; otherwise just do the task yourself. Never fabricate a routed "
+            f"answer — call the tool or handle it directly."
+        )
+        indicator = f"⚡ {task_type}/{complexity} → {tool} → 🧠 {selected_model}"
         write_pending = False
     elif _enforce_mode == "suggest":
         # Soft hint — pending state written but enforce-route only logs, never blocks.

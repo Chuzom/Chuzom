@@ -1,57 +1,45 @@
-<!-- chuzom-rules-version: 5 -->
-# Chuzom — Global Routing Rules
+<!-- chuzom-rules-version: 6 -->
+# Chuzom — Global Routing Rules (advise mode: route everywhere, never block)
 
-> Installed by chuzom. These rules control which model handles every task.
-
----
-
-## ROUTING HINT = HARD CONSTRAINT (NOT a suggestion)
-
-When `⚡ MANDATORY ROUTE:` appears in your context, it was injected by the UserPromptSubmit
-hook BEFORE you processed this message. It is a binding routing decision, not advice.
-
-**The economic contract**: routing to Haiku/Gemini Flash costs 50–100x less than Opus handling
-the task directly. A "good enough" answer from a cheap model is always preferable to a
-"perfect" answer from you. The whole point is cost reduction, not quality maximisation.
+> Installed by chuzom. These rules help you route each task to the cheapest capable
+> model. They are a **default recommendation, not a constraint** — you always keep the
+> final call, and no tool is ever blocked.
 
 ---
 
-## What You MUST Do When a ROUTE Hint Is Present
+## How to read a routing hint
 
-1. Call the specified MCP tool **as your first and only substantive action**
-2. Return its output to the user
-3. Done
+When `⚡ ROUTE:` appears in your context, the UserPromptSubmit hook classified the prompt
+and is *suggesting* the cheapest model that can likely handle it. Format:
 
 ```
-⚡ MANDATORY ROUTE: query/simple → call llm_query(complexity="simple") [via heuristic]
-⚡ MANDATORY ROUTE: research/moderate → call llm_research [via ollama]
-⚡ MANDATORY ROUTE: code/complex → call llm_code(complexity="complex") [via api]
-⚡ MANDATORY ROUTE: analyze/moderate → call llm_analyze(complexity="moderate") [via heuristic]
-⚡ MANDATORY ROUTE: generate/simple → call llm_generate(complexity="simple") [via ollama]
+⚡ ROUTE: query/simple → try llm_query(complexity="simple") [via heuristic]
+⚡ ROUTE: research/moderate → try llm_research
+⚡ ROUTE: code/complex → try llm_code(complexity="complex")
 ```
 
-The format is: `⚡ MANDATORY ROUTE: {task_type}/{complexity} → call {tool}({args}) [via {method}]`
-Extract the tool name and call it with the shown arguments.
+**The economic point**: a good-enough answer from a local/cheap model (Ollama, Codex,
+Gemini, Kimi) costs 50–100× less than Claude handling it directly. So when the suggested
+model can clearly do the job, prefer it. That's the whole value of Chuzom.
 
----
+## What to do
 
-## What You MUST NOT Do When a ROUTE Hint Is Present
+1. If the task fits the hint, **call the suggested MCP tool** (`llm_query` / `llm_analyze`
+   / `llm_code` / `llm_research` / `llm_generate`) and return its result.
+2. If the tool's answer is weak, incomplete, or the model refuses, **you take over** —
+   fall back to handling it yourself. No penalty, no violation. This is expected.
+3. Use your judgment on where the hint is wrong (e.g. a "simple" prompt that actually
+   needs repo context). Routing is a suggestion; correctness wins.
 
-These actions are **explicitly forbidden** when a routing hint fires:
+## What NOT to do (honesty guardrails — these matter more than saving tokens)
 
-| Forbidden action | Why it violates routing |
-|-----------------|------------------------|
-| Using the **Agent tool** to spawn subagents | Subagents run on expensive models — defeats cost savings |
-| Using **WebSearch** or **WebFetch** directly | Route hint already decided which model handles research |
-| Using **Read / Grep / Glob** to answer the question yourself | You're doing the work the cheap model should do |
-| Using **Bash** to compute/research the answer | Same — you're the expensive model, stay out of it |
-| Answering from your own knowledge without calling the MCP tool | Direct Opus/Sonnet answer = no routing = full token cost |
-| Deciding the task is "complex enough" to warrant self-handling | The classifier already decided. It was right. |
-| Calling the MCP tool AND ALSO doing the research yourself | Double cost — defeats the purpose entirely |
-
-**The only permitted exception**: if the task requires editing/reading specific files in
-the current codebase (not answering a question — actually modifying code), you may use
-file tools. But questions about the codebase still route: "how does X work?" → `llm_query`.
+- **Never fabricate a routed answer.** If you route, actually call the tool; do not invent
+  what a cheap model "would have said." A pre-computed DRAFT injected by the hook is an
+  unverified hint, not ground truth — verify or route before presenting it as fact.
+- **Never present an uncertain routed answer as authoritative.** If the local model may
+  lack current or repo-specific context, say so or route WITH context (`context=…`).
+- Don't refuse or stall a task because a hint fired. There is no "blocked" state in advise
+  mode — if routing doesn't fit, just do the work.
 
 ---
 
@@ -62,52 +50,36 @@ file tools. But questions about the codebase still route: "how does X work?" →
 | `research/*` | `llm_research` | Perplexity / web-grounded models |
 | `generate/*` | `llm_generate` | Gemini Flash / Haiku for writing |
 | `analyze/*` | `llm_analyze` | Sonnet-class for deep analysis |
-| `code/*` | `llm_code` | Haiku / Sonnet for code tasks |
-| `query/*` | `llm_query` | Haiku / Gemini Flash for questions |
+| `code/*` | `llm_code` | Coder models (Ollama qwen-coder, Codex, etc.) |
+| `query/*` | `llm_query` | Haiku / Gemini Flash / Kimi for questions |
 | `image/*` | `llm_image` | Image generation models |
 | `auto/*` | `llm_route` | Full re-classification |
 
----
+The pool routes across whatever is available on this machine: local Ollama models,
+Codex CLI, Gemini, Kimi/Moonshot, OpenAI, and Claude (subscription or API) for the
+genuinely complex tier.
 
-## When No Hint Is Present
+## When no hint is present
 
-If no `⚡ MANDATORY ROUTE:` line appears (hook not installed or prompt was skipped):
+Prefer the cheap tools for offloadable work, but never force it:
 - Research / current events → `llm_research`
 - Writing / content → `llm_generate`
 - Deep analysis → `llm_analyze`
 - Code questions → `llm_code`
 - Simple questions → `llm_query`
 
----
-
-## What NOT to Do (Summary)
-
-- Do NOT ignore routing hints — ever
-- Do NOT use Agent subagents for routed tasks — this is the #1 violation
-- Do NOT treat "I could do this better myself" as a reason to skip routing
-- Do NOT route AND also do the work yourself — pick one (always pick routing)
-- Do NOT re-classify what the hook already classified
+Editing/reading files in the current repo is normal agent work — just do it. Chuzom routes
+the *thinking*, not your file tools.
 
 ---
 
 ## Token-Efficient Responses
 
-Routing already saves 50–100x on model cost. Apply these rules to also save output tokens:
+Independent of routing, keep replies tight:
 
-**Skip all preamble.** Never open with "I'll help", "Let me", "Great question", "Certainly", "Sure".
-
-**Lead with the result.** Answer first, reasoning only if asked or non-obvious.
-
-**Fragments are fine** when meaning is clear:
-- ✗ "I am routing this to Haiku. This saved you $0.012."
-- ✓ "Routed → Haiku. Saved $0.012."
-
-**Drop unnecessary articles** (a/an/the) when omitting them doesn't change meaning.
-
-**No trailing summaries.** User can read the output — don't restate it.
-
-**≥3 items → table or bullets**, not prose.
-
-**Never restate the user's request** before answering it.
-
-These rules stack with routing: cheaper model + fewer tokens = maximum cost reduction.
+- **Skip preamble** ("I'll help", "Let me", "Great question", "Certainly").
+- **Lead with the result**; reasoning only if asked or non-obvious.
+- **Fragments are fine**: ✓ "Routed → Gemini Flash. Saved ~$0.012." over a full sentence.
+- **No trailing summaries** restating what you just did.
+- **≥3 items → table or bullets**, not prose.
+- **Don't restate the user's request** before answering it.

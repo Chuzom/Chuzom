@@ -39,6 +39,12 @@ if TYPE_CHECKING:
     from chuzom.hooks.direct_executor import DirectResult
 
 
+# Strong references to fire-and-forget persistence tasks scheduled on an already
+# running loop (the gateway / SDK async path). Without this the loop would keep
+# only a weak reference and the task could be GC'd before it finishes writing.
+_INFLIGHT_PERSISTS: set = set()
+
+
 # ── Pricing table (USD per 1M tokens) ────────────────────────────────────────
 # Conservative rates as of late 2025 / early 2026. Used only for relative
 # savings estimation in the JSONL — not for billing. Unknown models map to
@@ -273,13 +279,22 @@ def log_direct_to_db(
                 reason_code="direct",
             )
 
-        # The UserPromptSubmit hook runs as a standalone synchronous script, so
-        # there is no ambient event loop — asyncio.run is safe. Guard anyway:
-        # if a loop is somehow already running, skip rather than crash.
+        # Persist. The standalone UserPromptSubmit hook is synchronous with no
+        # ambient loop, so asyncio.run is correct there. Inside the gateway / SDK
+        # a loop IS already running: schedule the coroutine on it (fire-and-forget
+        # with a strong reference) instead of dropping it. Previously the running-
+        # loop branch did nothing, so gateway/LoopHole routings were never metered
+        # (and older builds left an un-awaited coroutine → "never awaited" warning).
         try:
-            asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
+            loop = None
+        if loop is None:
             asyncio.run(_persist())
+        else:
+            task = loop.create_task(_persist())
+            _INFLIGHT_PERSISTS.add(task)
+            task.add_done_callback(_INFLIGHT_PERSISTS.discard)
     except Exception:
         # Silent — DB persistence must never break the routing hook.
         pass

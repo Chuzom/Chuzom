@@ -105,8 +105,8 @@ BANNER_SUBSCRIPTION = """
 ║  Subscription usage tracked for session-end delta reporting  ║
 ║  Inline OAuth refresh keeps pressure data fresh              ║
 ╠════════════════════════════════════════════════════════════════╣
-║  FORBIDDEN when ROUTE hint present:                          ║
-║  Agent subagents · self-answer · WebSearch · WebFetch        ║
+║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+║  Prefer the cheap tool when it fits, else just do the work  ║
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
@@ -123,8 +123,8 @@ BANNER_API_KEYS = """
 ║  Free-first chain: Ollama → Codex → paid API providers        ║
 ║  Set GEMINI_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, etc.      ║
 ╠════════════════════════════════════════════════════════════════╣
-║  FORBIDDEN when ROUTE hint present:                          ║
-║  Agent subagents · self-answer · WebSearch · WebFetch        ║
+║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+║  Prefer the cheap tool when it fits, else just do the work  ║
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
