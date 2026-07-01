@@ -239,7 +239,9 @@ fi
 # ── 💰 Today's gross savings ─────────────────────────────────────────────────
 today_saved=0
 if [ -f "$USAGE_DB" ]; then
-    today_start=$(date -u +"%Y-%m-%d 00:00:00")
+    # "Today" in the user's LOCAL timezone (timestamp is stored UTC). Matches the
+    # per-platform loop below; a UTC start-of-day boundary dropped the last N hours
+    # of local-today savings for non-UTC users near midnight.
     legacy=$(sqlite3 "$USAGE_DB" "
         SELECT COALESCE(SUM(
             CASE
@@ -250,7 +252,7 @@ if [ -f "$USAGE_DB" ]; then
             END
         ), 0)
         FROM usage
-        WHERE timestamp >= '$today_start' AND success=1;
+        WHERE date(timestamp,'localtime')=date('now','localtime') AND success=1;
     " 2>/dev/null)
     platform_sum=0
     for table in claude_usage codex_usage gemini_usage; do
@@ -270,7 +272,10 @@ SAVINGS_LOG="$STATE_DIR/savings_log.jsonl"
 if [ -f "$SAVINGS_LOG" ]; then
     pending=$(python3 -c "
 import json, datetime
-today = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+# savings_log timestamps are UTC ISO (…+00:00); compare in LOCAL time so 'today'
+# matches the user's wall clock, not UTC (which dropped the last N hours near
+# local midnight for non-UTC users).
+today = datetime.datetime.now().astimezone().date()
 total = 0.0
 try:
     with open('$SAVINGS_LOG') as f:
@@ -281,7 +286,10 @@ try:
             try:
                 rec = json.loads(line)
                 ts = rec.get('timestamp', '')
-                if ts.startswith(today):
+                dt = datetime.datetime.fromisoformat(ts)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                if dt.astimezone().date() == today:
                     total += float(rec.get('estimated_saved', 0))
             except Exception:
                 pass

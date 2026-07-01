@@ -63,7 +63,7 @@ async def _get_stats() -> dict:
             c = await db.execute(
                 "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), "
                 "COALESCE(SUM(input_tokens+output_tokens),0) "
-                "FROM usage WHERE timestamp >= datetime('now','start of day')"
+                "FROM usage WHERE date(timestamp,'localtime') = date('now','localtime')"
             )
             row = await c.fetchone()
             if row:
@@ -100,7 +100,7 @@ async def _get_stats() -> dict:
             stats["task_types"] = [{"task_type": r[0], "calls": r[1]} for r in await c.fetchall()]
 
             c = await db.execute(
-                "SELECT date(timestamp) as day, COALESCE(SUM(cost_usd),0) "
+                "SELECT date(timestamp,'localtime') as day, COALESCE(SUM(cost_usd),0) "
                 "FROM usage WHERE timestamp >= datetime('now','-14 days') "
                 "GROUP BY day ORDER BY day"
             )

@@ -226,7 +226,7 @@ def _fetch_data() -> DashboardData:
         row = conn.execute(
             "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), "
             "COALESCE(SUM(input_tokens+output_tokens),0) "
-            "FROM usage WHERE timestamp >= datetime('now','start of day')"
+            "FROM usage WHERE date(timestamp,'localtime') = date('now','localtime')"
         ).fetchone()
         if row:
             d.today_calls, d.today_cost, d.today_tokens = row[0], row[1], row[2]
@@ -333,7 +333,7 @@ def _fetch_data() -> DashboardData:
         # (free-model throughput + actual API cost paid). daily_cost is the
         # real cost paid to free APIs — NOT the savings figure (use l14_savings).
         rows = conn.execute(
-            "SELECT date(timestamp) as day, COUNT(*), "
+            "SELECT date(timestamp,'localtime') as day, COUNT(*), "
             "COALESCE(SUM(input_tokens+output_tokens),0), COALESCE(SUM(cost_usd),0) "
             "FROM usage WHERE timestamp >= datetime('now','-14 days') "
             "GROUP BY day ORDER BY day"
