@@ -126,6 +126,52 @@ def _read_tail(path: Path, max_lines: int = 500) -> list[dict]:
     return records
 
 
+def _read_stats_records(max_rows: int = 2000) -> list[dict]:
+    """Durable savings records from the ``savings_stats`` SQLite table.
+
+    ``savings_log.jsonl`` is a transient buffer — ``import_savings_log()`` flushes
+    it into ``savings_stats`` and truncates the file. So the file alone leaves the
+    indicators blind after any import. Reading ``savings_stats`` gives the durable,
+    host-tagged history (and captures gateway/external traffic once it's imported).
+    Mapped to the same record shape as the jsonl. Never raises.
+    """
+    import sqlite3
+
+    db = _state_dir() / "usage.db"
+    if not db.is_file():
+        return []
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1.0)
+    except sqlite3.Error:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT timestamp, host, model_used, task_type, "
+            "       estimated_claude_cost_saved, input_tokens, output_tokens "
+            "FROM savings_stats ORDER BY id DESC LIMIT ?",
+            (max_rows,),
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+    out: list[dict] = []
+    for ts, host, model, task, saved, in_tok, out_tok in rows:
+        out.append({
+            "timestamp": ts,
+            "host": host or "claude_code",
+            "model": model,
+            "task_type": task,
+            "estimated_saved": saved or 0.0,
+            "input_tokens": in_tok or 0,
+            "output_tokens": out_tok or 0,
+        })
+    return out
+
+
 def _rec_tokens(rec: dict) -> int:
     """input + output tokens for a savings-log record (0 if absent)."""
     try:
@@ -195,7 +241,12 @@ def compute_status(host: str, now: Optional[float] = None) -> SurfaceStatus:
     if now is None:
         now = time.time()
 
-    records = _read_tail(_state_dir() / _SAVINGS_LOG)
+    # Durable history (savings_stats) + the live buffer (savings_log.jsonl, not yet
+    # imported). A record lives in one or the other — the jsonl is truncated on
+    # import — so combining them double-counts nothing. Sort by timestamp so
+    # "last route" is correct across both sources.
+    records = _read_stats_records() + _read_tail(_state_dir() / _SAVINGS_LOG)
+    records.sort(key=lambda r: _parse_ts(r) or 0.0)
     match = _host_match_set(host)
     host_recs = [r for r in records if str(r.get("host", "")) in match]
 
