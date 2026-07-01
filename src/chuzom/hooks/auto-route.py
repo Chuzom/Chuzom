@@ -910,11 +910,26 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"my\s+|our\s+|these\s+|those\s+)\w+|"
             r"fix (?:the |this |a )?(?:\w+ )*(?:bug|error|issue|crash|failing test|exception)|"
             r"add (?:a |the )?(?:\w+ )*(?:feature|method|test|endpoint|route|handler|"
-            r"middleware|support|integration|login)|"
+            r"middleware|support|integration|login|validation|form|field|button|column|"
+            r"index|migration|config|option|flag|component|hook|logging|logger)|"
+            # Deletion/removal of code artefacts — anchored to a code noun so it
+            # doesn't catch "remove me from the mailing list".
+            r"(?:remove|delete|drop|strip)\s+(?:the |this |these |all |any |unused |"
+            r"deprecated |dead )?(?:\w+ ){0,3}(?:import|imports|logging|log|logger|call|"
+            r"calls|function|method|dependency|dependencies|code|line|lines|file|test|"
+            r"tests|endpoint|route|handler|variable|field|column|comment|comments)|"
+            # "wire up the X button/handler/…", "hook up the …"
+            r"(?:wire|hook)\s+up\s+(?:the |this |a )?(?:\w+ ){0,3}(?:button|handler|"
+            r"endpoint|event|listener|callback|session|form|api|service|component|route)|"
+            r"(?:rename|replace|extract|inline|move)\s+(?:the |this |a )?(?:\w+ ){0,3}"
+            r"(?:function|method|class|variable|module|file|component|import|endpoint|handler)|"
             r"update (?:the |this )?(?:\w+ )*(?:code|logic|function|implementation|client|"
             r"api client|service|handler|middleware|endpoint)|"
             r"modify (?:the |this )|extend (?:the |this )|"
-            r"(?:optimize|improve) (?:the |this )?(?:code|query|performance|function)|"
+            # Relaxed so intervening adjectives are allowed ("optimize the slow
+            # database query").
+            r"(?:optimize|improve|speed up) (?:the |this )?(?:\w+ ){0,4}(?:code|query|"
+            r"performance|function|latency|throughput|speed|render|load time)|"
             r"set up|configure|install|bootstrap|initialize|"
             r"create (?:(?:a |the )?\w+ )*(?:function|class|module|component|hook|test|script|program|service|tool))\b",
             re.IGNORECASE,
