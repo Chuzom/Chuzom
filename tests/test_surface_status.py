@@ -33,7 +33,7 @@ def _write_log(state_dir: Path, records: list[dict]) -> None:
 
 
 def _rec(host="codex", model="ollama/hermes3:8b", task="code", cx="moderate",
-         saved=0.01, ts=None, now=None) -> dict:
+         saved=0.01, ts=None, now=None, in_tok=0, out_tok=0) -> dict:
     if ts is None:
         ts = now if now is not None else time.time()
     return {
@@ -44,6 +44,8 @@ def _rec(host="codex", model="ollama/hermes3:8b", task="code", cx="moderate",
         "estimated_saved": saved,
         "model": model,
         "host": host,
+        "input_tokens": in_tok,
+        "output_tokens": out_tok,
     }
 
 
@@ -279,3 +281,44 @@ def test_emit_indicator_respects_off_switch(state_dir, monkeypatch):
     buf = io.StringIO()
     ss.emit_indicator("codex", now=now, notify=False, stream=buf)
     assert buf.getvalue() == ""      # disabled → nothing written
+
+
+# ── token amounts (#token-indicators) ────────────────────────────────────────
+def test_fmt_tokens():
+    assert ss.fmt_tokens(0) == ""
+    assert ss.fmt_tokens(None) == ""
+    assert ss.fmt_tokens(940) == "940 tok"
+    assert ss.fmt_tokens(1250) == "1.2k tok"
+
+
+def test_compute_status_last_and_session_tokens(state_dir):
+    now = 1_000_000.0
+    day_start = now - (now % 86400)
+    _write_log(state_dir, [
+        _rec(in_tok=100, out_tok=50, ts=day_start + 10),
+        _rec(in_tok=300, out_tok=200, ts=day_start + 20),   # last route
+    ])
+    s = ss.compute_status("codex", now=now)
+    assert s.last_tokens == 500          # 300 + 200, the most recent route
+    assert s.tokens_session == 650       # (100+50) + (300+200) today
+
+
+def test_compact_line_shows_tokens(state_dir):
+    now = 1_000_000.0
+    _write_log(state_dir, [_rec(in_tok=900, out_tok=350, ts=now - 30)])
+    line = ss.compact_line(ss.compute_status("codex", now=now), color=False)
+    assert "1.2k tok" in line
+
+
+def test_compact_line_omits_tokens_when_zero(state_dir):
+    now = 1_000_000.0
+    _write_log(state_dir, [_rec(in_tok=0, out_tok=0, ts=now - 30)])
+    line = ss.compact_line(ss.compute_status("codex", now=now), color=False)
+    assert "tok" not in line
+
+
+def test_terminal_title_shows_tokens(state_dir):
+    now = 1_000_000.0
+    _write_log(state_dir, [_rec(in_tok=500, out_tok=500, ts=now - 30)])
+    title = ss.terminal_title(ss.compute_status("codex", now=now))
+    assert "1.0k tok" in title
