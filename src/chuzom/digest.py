@@ -31,7 +31,10 @@ def _host_baseline(in_tok: int, out_tok: int) -> float:
 
 
 _PERIOD_SQL: dict[str, str] = {
-    "today":     "date(timestamp) = date('now')",
+    # timestamp is stored UTC (DEFAULT datetime('now')); convert to local before
+    # comparing to the local day, else "today" drops the last N hours of activity
+    # for non-UTC users near midnight.
+    "today":     "date(timestamp,'localtime') = date('now','localtime')",
     "week":      "timestamp >= datetime('now', '-7 days')",
     "month":     "timestamp >= datetime('now', 'start of month')",
     "all time":  "1=1",
@@ -104,7 +107,7 @@ async def detect_spend_spike(
     try:
         today_row = await (await db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) FROM usage "
-            "WHERE success=1 AND date(timestamp) = date('now')"
+            "WHERE success=1 AND date(timestamp,'localtime') = date('now','localtime')"
         )).fetchone()
         week_row = await (await db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) FROM usage "

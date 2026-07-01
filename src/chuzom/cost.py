@@ -2597,11 +2597,15 @@ async def get_savings_by_period() -> dict[str, dict]:
     """
     db = await _get_db()
     try:
-        # Build period boundaries as SQLite datetime expressions
+        # Build period boundaries as SQLite datetime expressions. timestamp is
+        # stored UTC; compare in the user's LOCAL timezone (both column and
+        # boundary get 'localtime') so "today"/"week"/"month" line up with the
+        # user's wall clock instead of UTC — otherwise savings for the last N
+        # hours before local midnight leak into the wrong period.
         periods = {
-            "today": "date('now')",
-            "week": "date('now', 'weekday 0', '-6 days')",
-            "month": "date('now', 'start of month')",
+            "today": "date('now','localtime')",
+            "week": "date('now','localtime', 'weekday 0', '-6 days')",
+            "month": "date('now','localtime', 'start of month')",
             "all_time": "'1970-01-01'",
         }
         result: dict[str, dict] = {}
@@ -2609,7 +2613,7 @@ async def get_savings_by_period() -> dict[str, dict]:
             rows = await db.execute_fetchall(
                 f"""SELECT provider, input_tokens, output_tokens, cost_usd, saved_usd
                     FROM usage
-                    WHERE date(timestamp) >= {since_expr}
+                    WHERE date(timestamp,'localtime') >= {since_expr}
                       AND success = 1
                       AND is_simulated IS NOT 1""",
             )
@@ -2745,15 +2749,17 @@ async def get_team_savings(
     Returns:
         Dict with total_calls, saved_usd, actual_usd, free_pct, top_models.
     """
+    # Local-timezone period boundaries (timestamp is stored UTC) so "today"/etc.
+    # track the user's wall clock, not UTC — see get_savings_by_period above.
     period_map = {
-        "today": "date('now')",
-        "week": "date('now', 'weekday 0', '-6 days')",
-        "month": "date('now', 'start of month')",
+        "today": "date('now','localtime')",
+        "week": "date('now','localtime', 'weekday 0', '-6 days')",
+        "month": "date('now','localtime', 'start of month')",
         "all": "'1970-01-01'",
     }
     since = period_map.get(period, period_map["week"])
 
-    where_parts = [f"timestamp >= {since}"]
+    where_parts = [f"date(timestamp,'localtime') >= {since}"]
     params: list = []
     if user_id:
         where_parts.append("user_id = ?")
