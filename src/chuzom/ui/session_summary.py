@@ -101,6 +101,34 @@ def _fmt_usd(amount: float) -> str:
     return f"${amount:.2f}" if amount >= 0.01 else f"${amount:.4f}"
 
 
+def _date_axis_label_row(n: int, today: datetime.date) -> str:
+    """Collision-safe x-axis date labels for the N-day activity charts.
+
+    oldest (d/m) left · today (d/m) right · a mid-point day between them ONLY when
+    it fits with a gap on each side. The previous logic placed the 4-char start
+    label at pos 0 and the mid label at (n-1)//2 with no start↔mid collision
+    guard, so a narrow chart (n≈9) ran "23/6" and "27" together into "23/627".
+    Returns the label row as a plain string (caller adds styling).
+    """
+    if n < 2:
+        return ""
+    d_start = (today - datetime.timedelta(days=n - 1)).strftime("%-d/%-m")
+    d_end = today.strftime("%-d/%-m")
+    width = max(n, len(d_start) + 1 + len(d_end))
+    row = [" "] * width
+    for i, ch in enumerate(d_start):          # oldest — left
+        row[i] = ch
+    end_start = max(len(d_start) + 1, width - len(d_end))  # today — right
+    for i, ch in enumerate(d_end):
+        row[end_start + i] = ch
+    d_mid = (today - datetime.timedelta(days=(n - 1) // 2)).strftime("%-d")
+    mid_pos = (width - 1) // 2 - len(d_mid) // 2
+    if mid_pos > len(d_start) and mid_pos + len(d_mid) < end_start - 1:
+        for i, ch in enumerate(d_mid):
+            row[mid_pos + i] = ch
+    return "".join(row)
+
+
 class SessionSummaryDashboard:
     """Modern two-panel session summary dashboard."""
 
@@ -631,32 +659,20 @@ class SessionSummaryDashboard:
         today = datetime.date.today()
 
         def _date_xaxis(n: int, y_width: int) -> list[Text]:
-            """Compact 3-marker axis: oldest · mid · today, fits in a narrow column."""
+            """Compact date axis: oldest (d/m) left, today (d/m) right, and a
+            mid-point day between them WHEN it fits with a gap on each side.
+
+            The old code placed the 4-char start label at pos 0 and the mid label
+            at (n-1)//2 with no collision guard, so for a narrow chart (n≈9) they
+            ran together — "23/6" + "27" rendered as "23/627".
+            """
             prefix = " " * y_width
             axis_line = f"{prefix} └{'─' * n}"
             if n < 2:
                 return [Text(axis_line, style=PALETTE.text_dim)]
-            d_start = (today - datetime.timedelta(days=n - 1)).strftime("%-d/%-m")
-            d_mid = (today - datetime.timedelta(days=(n - 1) // 2)).strftime("%-d")
-            d_end = today.strftime("%-d")
-            mid_pos = (n - 1) // 2
-            # Build label row: start at pos 0, mid at mid_pos, end at n-1
-            label_row = [" "] * n
-            for ch_i, ch in enumerate(d_start):
-                if ch_i < n:
-                    label_row[ch_i] = ch
-            for ch_i, ch in enumerate(d_mid):
-                pos = mid_pos + ch_i
-                if pos < n:
-                    label_row[pos] = ch
-            end_start = max(mid_pos + len(d_mid) + 1, n - len(d_end))
-            for ch_i, ch in enumerate(d_end):
-                pos = end_start + ch_i
-                if pos < n:
-                    label_row[pos] = ch
             return [
                 Text(axis_line, style=PALETTE.text_dim),
-                Text(f"{prefix} " + "".join(label_row), style=PALETTE.text_dim),
+                Text(f"{prefix} " + _date_axis_label_row(n, today), style=PALETTE.text_dim),
             ]
 
         # ── Chart 1: calls/day ────────────────────────────────────────────────
