@@ -1,18 +1,16 @@
-"""Plan 06 sub_10 benchmark — OpenRouter-pinned variant.
+"""DEPRECATED — legacy OpenRouter-pinned benchmark script (Plan 06 era).
 
-The standard run_sub10.py path goes through `route_and_call`, but Codex
-injection (always-on in subscription mode) preempts OpenRouter in the
-chain — every prompt ends up routed to codex/gpt-5.4 at $0 cost. That's
-a valid chuzom output (subscription users get free routing), but it
-doesn't exercise the routerarena_tuned workhorse pool the policy was
-designed for.
+This script was used to measure OpenRouter workhorse performance on the
+RouterArena sub_10 dataset during policy development. It is no longer
+actively maintained; the v3 router (router_inference/) uses content-pattern
+heuristics and public-corpus centroids, not the routerarena_tuned policy.
 
-This script picks the active model per prompt via the same
-predict_head_model logic policy_diff uses, then calls it directly via
-litellm so the OpenRouter workhorses actually see traffic. It still
-exercises Plan 07 Cat D.4 OpenRouterQuirks (anthropic/ rename +
-max_tokens cap via the transform_request hook) by passing through
-providers.call_llm.
+Retained for historical reference only. Do not use for routing decisions.
+
+Original purpose: the standard run_sub10.py path goes through route_and_call,
+but Codex injection (always-on in subscription mode) preempts OpenRouter in the
+chain. This script bypassed that by calling litellm directly so the OpenRouter
+workhorses actually saw traffic.
 """
 
 from __future__ import annotations
@@ -147,13 +145,7 @@ async def main() -> None:
     for s, (c, t) in sorted(by_subj.items(), key=lambda x: -x[1][1]):
         print(f"  {s:<10} {c}/{t} = {c/t:.4f}")
 
-    # Arena Score approximation: accuracy - 0.06 * (cost/1K)
-    # (Per Plan 06 leaderboard back-calculation: Sqwish 76.4%-1.13%=75.27 for $0.18/1K)
-    arena = accuracy - 0.06 * cost_per_1k
-    print(f"\nArena Score (approx, accuracy - 0.06×cost/1K): {arena:.4f}")
-    print(f"Compare:")
-    print(f"  Sqwish     0.7527 (#1)")
-    print(f"  chuzom {arena:.4f}  ({'BEATS #1!' if arena > 0.7527 else 'below #1'})")
+    print(f"\nAccuracy: {accuracy:.4f}    Cost/1K: ${cost_per_1k:.4f}")
 
     # Persist
     from chuzom.benchmark.regression import store_result
