@@ -908,8 +908,8 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"(?:fix|patch|repair|resolve)\s+"
             r"(?:the\s+|this\s+|a\s+|an\s+|for\s+the\s+|for\s+a\s+|for\s+an\s+|"
             r"my\s+|our\s+|these\s+|those\s+)\w+|"
-            r"fix (?:the |this |a )?(?:\w+ )*(?:bug|error|issue|crash|failing test|exception)|"
-            r"add (?:a |the )?(?:\w+ )*(?:feature|method|test|endpoint|route|handler|"
+            r"fix (?:the |this |a )?(?:\w+ ){0,4}(?:bug|error|issue|crash|failing test|exception)|"
+            r"add (?:a |the )?(?:\w+ ){0,4}(?:feature|method|test|endpoint|route|handler|"
             r"middleware|support|integration|login|validation|form|field|button|column|"
             r"index|migration|config|option|flag|component|hook|logging|logger)|"
             # Deletion/removal of code artefacts — anchored to a code noun so it
@@ -923,7 +923,7 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"endpoint|event|listener|callback|session|form|api|service|component|route)|"
             r"(?:rename|replace|extract|inline|move)\s+(?:the |this |a )?(?:\w+ ){0,3}"
             r"(?:function|method|class|variable|module|file|component|import|endpoint|handler)|"
-            r"update (?:the |this )?(?:\w+ )*(?:code|logic|function|implementation|client|"
+            r"update (?:the |this )?(?:\w+ ){0,4}(?:code|logic|function|implementation|client|"
             r"api client|service|handler|middleware|endpoint)|"
             r"modify (?:the |this )|extend (?:the |this )|"
             # Relaxed so intervening adjectives are allowed ("optimize the slow
@@ -931,7 +931,7 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"(?:optimize|improve|speed up) (?:the |this )?(?:\w+ ){0,4}(?:code|query|"
             r"performance|function|latency|throughput|speed|render|load time)|"
             r"set up|configure|install|bootstrap|initialize|"
-            r"create (?:(?:a |the )?\w+ )*(?:function|class|module|component|hook|test|script|program|service|tool))\b",
+            r"create (?:\w+ ){0,5}(?:function|class|module|component|hook|test|script|program|service|tool))\b",
             re.IGNORECASE,
         ),
         "topic": re.compile(
