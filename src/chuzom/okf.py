@@ -11,6 +11,7 @@ OKF format: markdown + YAML frontmatter. Spec:
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -26,6 +27,18 @@ _BUNDLE_CACHE: list[OKFConcept] | None = None
 _BUNDLE_LOADED_AT: float = 0.0
 _BUNDLE_BASE: Path | None = None
 _BUNDLE_TTL_S: float = 60.0  # reload if knowledge dir changes within this window
+
+# OKF context injection + enrichment are OPT-IN (default OFF). They store
+# unverified model output as "SourceFile knowledge" and re-inject it into later
+# prompts — a hallucination amplifier that self-poisoned the store in the field
+# (a `setup.py` doc captured a prompt + an echoed <knowledge_context> block and
+# kept re-injecting it). Enable deliberately with CHUZOM_OKF=on.
+def _okf_enabled() -> bool:
+    return os.environ.get("CHUZOM_OKF", "").strip().lower() in ("1", "true", "on", "yes")
+
+
+# Never re-capture an injected knowledge block back into the store (feedback loop).
+_KNOWLEDGE_CTX_RE = re.compile(r"<knowledge_context>.*?</knowledge_context>", re.DOTALL | re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +159,8 @@ def find_relevant(
     base: Path = KNOWLEDGE_DIR,
 ) -> list[OKFConcept]:
     """Find OKF concepts most relevant to prompt via keyword overlap."""
+    if not _okf_enabled():
+        return []  # opt-in; see _okf_enabled() — off by default to avoid contamination
     concepts = _get_bundle(base)
     if not concepts:
         return []
@@ -317,24 +332,39 @@ async def enrich_from_response(
     Designed as a fire-and-forget asyncio.create_task so it never blocks the
     response path. Failures are silently swallowed — enrichment is best-effort.
     """
+    if not _okf_enabled():
+        return  # opt-in; see _okf_enabled()
     try:
+        # Strip any injected knowledge block FIRST — never re-capture it into the
+        # store. Re-capturing it was the self-poisoning feedback loop.
+        clean_prompt = _KNOWLEDGE_CTX_RE.sub("", prompt)
+        clean_response = _KNOWLEDGE_CTX_RE.sub("", response_text)
+
         file_pat = re.compile(
             r'(?:^|\s)([\w./\-]+\.(?:py|ts|js|go|rs|java|md))\b', re.MULTILINE
         )
         files = list(dict.fromkeys(
             m.group(1).lstrip("./")
-            for m in file_pat.finditer(prompt + "\n" + response_text)
+            for m in file_pat.finditer(clean_prompt + "\n" + clean_response)
             if not m.group(1).startswith(".")
         ))[:5]
 
         if not files:
             return
 
-        resp_lines = [line.strip() for line in response_text.splitlines() if line.strip()]
-        summary = " ".join(resp_lines[:2])[:200] if resp_lines else ""
+        # Record ONLY checkable structure (extracted symbol names), never the
+        # model's free-text prose — that prose is unverified output and was the
+        # hallucination vector (e.g. a fabricated plugin API stored as "fact").
+        # Includes JS/TS's `function` keyword — .ts/.js are supported file
+        # types (tagged above) but weren't actually matched by this pattern.
+        sym_pat = re.compile(
+            r'(?:def |class |fn |func |function |async def |async function )(\w+)\s*[({<:]',
+            re.MULTILINE)
+        symbols = list(dict.fromkeys(m.group(1) for m in sym_pat.finditer(clean_response)))[:10]
+        if not symbols:
+            return  # nothing verifiable to record — don't invent a summary
 
-        sym_pat = re.compile(r'(?:def |class |fn |func |async def )(\w+)\s*[({<:]', re.MULTILINE)
-        symbols = list(dict.fromkeys(m.group(1) for m in sym_pat.finditer(response_text)))[:10]
+        summary = "Defines: " + ", ".join(symbols)
 
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(

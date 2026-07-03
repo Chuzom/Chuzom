@@ -193,6 +193,12 @@ class TestBundleLoading:
 # ---------------------------------------------------------------------------
 
 class TestFindRelevant:
+    # find_relevant() is opt-in (CHUZOM_OKF=on) — off by default to avoid the
+    # self-poisoning contamination bug; these tests exercise the enabled path.
+    @pytest.fixture(autouse=True)
+    def _enable_okf(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CHUZOM_OKF", "on")
+
     def setup_method(self) -> None:
         _reset_cache()
 
@@ -418,6 +424,11 @@ class TestLoadModelCapability:
 # ---------------------------------------------------------------------------
 
 class TestEnrichFromResponse:
+    # enrich_from_response() is opt-in (CHUZOM_OKF=on) — see TestFindRelevant.
+    @pytest.fixture(autouse=True)
+    def _enable_okf(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CHUZOM_OKF", "on")
+
     def setup_method(self) -> None:
         _reset_cache()
 
@@ -461,7 +472,9 @@ class TestEnrichFromResponse:
     async def test_records_model_name(self, tmp_path: Path) -> None:
         await enrich_from_response(
             "Fix src/chuzom/router.py",
-            "some response",
+            "def route_and_call(prompt, ctx): pass",  # must contain a real
+            # symbol — enrich_from_response only records checkable structure,
+            # never invents a summary from prose with nothing extractable
             "gemini-2.5-flash",
             base=tmp_path,
         )
@@ -541,6 +554,11 @@ class TestOkfConceptAsContextBlock:
 # ---------------------------------------------------------------------------
 
 class TestEndToEndPipeline:
+    # find_relevant()/enrich_from_response() are opt-in — see TestFindRelevant.
+    @pytest.fixture(autouse=True)
+    def _enable_okf(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CHUZOM_OKF", "on")
+
     def setup_method(self) -> None:
         _reset_cache()
 

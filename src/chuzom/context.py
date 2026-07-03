@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -26,8 +27,36 @@ from pathlib import Path
 
 from chuzom.compaction import compact_structural
 from chuzom.context_optimizer import ContextOptimizationResult, optimize_context
+from chuzom.okf import _KNOWLEDGE_CTX_RE
 
 log = logging.getLogger("chuzom")
+
+# Self-poisoning guard (same class of bug okf.py's enrich_from_response() already
+# guards against — see its comment: "a setup.py doc captured a prompt + an echoed
+# <knowledge_context> block and kept re-injecting it"). That fix only covers OKF's
+# OWN re-capture path; it does NOT cover THIS module, which records every routed
+# prompt/response verbatim into a session buffer (in-process, always on — not
+# gated by CHUZOM_OKF) and later replays it into unrelated future prompts. If any
+# ONE exchange gets OKF-injected (or carries a previously-injected context block
+# from this module itself), recording it here would re-inject it indefinitely —
+# including after OKF is disabled, since the buffer/summary no longer knows where
+# the content came from. Strip every known injected-context wrapper before it
+# ever reaches storage.
+_SELF_INJECTED_RE = re.compile(
+    r"\[(?:Recent conversation context|Previous session context|Additional context)\]"
+    r".*?(?=\n\n|\Z)",
+    re.DOTALL,
+)
+
+
+def _strip_injected_context(text: str) -> str:
+    """Remove OKF `<knowledge_context>` blocks and this module's own injected
+    `[...]` blocks from `text` before it is ever persisted or re-injected."""
+    if not text:
+        return text
+    text = _KNOWLEDGE_CTX_RE.sub("", text)
+    text = _SELF_INJECTED_RE.sub("", text)
+    return text.strip()
 
 # Module-level storage for last optimization result (for footer display)
 _last_optimization: ContextOptimizationResult | None = None
@@ -69,10 +98,17 @@ class SessionBuffer:
         self._session_start: float = time.time()
 
     def record(self, role: str, content: str, task_type: str = "") -> None:
-        """Add a message to the session buffer."""
+        """Add a message to the session buffer.
+
+        Strips injected-context blocks before storage — see module-level
+        _strip_injected_context() docstring. This is the single choke point
+        every recorded exchange passes through, so guarding here (rather than
+        at each call site) protects the buffer regardless of how a caller
+        obtained `content`.
+        """
         self._buffer.append(SessionMessage(
             role=role,
-            content=content[:2000],  # truncate long content on write
+            content=_strip_injected_context(content)[:2000],  # truncate on write
             timestamp=time.time(),
             task_type=task_type,
         ))
@@ -216,13 +252,18 @@ async def auto_summarize_session(min_messages: int = 3) -> str | None:
         log.info("Session too short (%d msgs) — skipping summary", len(messages))
         return None
 
-    # Build the conversation transcript for summarization
+    # Build the conversation transcript for summarization. Defense in depth:
+    # msg.content is already stripped at record()-time, but never feed the
+    # summarizer LLM anything that might still carry an injected-context marker
+    # (e.g. buffered content written before this guard existed in a
+    # long-running process).
     transcript_lines = []
     task_types_seen: set[str] = set()
     for msg in messages:
         prefix = "User" if msg.role == "user" else "Assistant"
-        content = msg.content[:300]
-        if len(msg.content) > 300:
+        clean = _strip_injected_context(msg.content)
+        content = clean[:300]
+        if len(clean) > 300:
             content += "..."
         transcript_lines.append(f"{prefix}: {content}")
         if msg.task_type:
@@ -301,7 +342,12 @@ async def get_recent_session_summaries(limit: int = 3) -> list[dict]:
 
     return [
         {
-            "summary": row[0],
+            # Retroactive guard: strip on READ too, not just on write — a row
+            # persisted before this fix existed (any process running an older
+            # build of this module) could still carry an injected-context
+            # block, and it would otherwise keep replaying into every future
+            # session indefinitely, surviving restarts, forever.
+            "summary": _strip_injected_context(row[0]),
             "session_start": row[1],
             "session_end": row[2],
             "message_count": row[3],
