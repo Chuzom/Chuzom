@@ -1,6 +1,7 @@
 ---
 description: Route tasks through Chuzom to save tokens and cost
-trigger: always_on
+globs: ["**/*"]
+alwaysApply: true
 ---
 
 # Chuzom routing — use MCP tools before answering directly
