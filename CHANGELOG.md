@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.7.2 — 2026-07-01 — audit mitigation: unified classifier, honest fixes, portability
+
+Follow-up to the v0.7.1 audit — closes credibility gaps in routing, onboarding, and
+observability. All changes ship green (full suite passing).
+
+### Routing
+- **Unified, parameterized classifier (`chuzom.classify`).** `router.py` and
+  `gateway.py` now share one scoring+complexity engine via per-path `ClassifyPolicy`,
+  replacing a pure-length heuristic (router) and a crude code/analyze regex (gateway) —
+  each keeps its tuned thresholds, so behavior is preserved while the drift is gone.
+  Tables backfilled verbatim from the hook (now includes image-task detection).
+- **Fable 5 as the last-resort deep-reasoning escalation** in the REASONING chain.
+
+### Fixes
+- **`onboard.py` no longer wipes unmanaged `.env` keys** on re-run (merges instead).
+- **Session-start stops nagging "ANTHROPIC_API_KEY missing"** under
+  `CHUZOM_CLAUDE_SUBSCRIPTION` — Claude arrives via the subscription.
+- **`session_spend` re-syncs** when the session-start hook resets the file, so a
+  long-lived router no longer clobbers the per-session reset with a stale total.
+- **14-day dashboard x-axis** no longer collides date labels (`23/627  1` → `23/6  1/7`),
+  via a testable `_date_axis_label_row` (oldest/today d/m at the edges, midpoint day
+  only when it fits with a gap on each side) with 6 regression tests.
+- **Session-end savings now tells one consistent story.** The headline ("Routing
+  saved N% of baseline") and the per-tier Routing Summary both derive from the same
+  rollups, so they always agree. Removed the "Opus would cost / Actually spent / Net
+  preserved" trio — it compared the Opus baseline of the *reclaimed* calls against
+  *total* spend (incl. non-reclaimed paid calls), a mixed-scope figure that
+  contradicted the tier table (e.g. "Net preserved $0.01" next to "Saved $0.05").
+- **Honest overspend signal.** When paid routes cost more than the Sonnet baseline,
+  the effective-ratio line now reads "⚠ paid routes ran N× OVER the baseline" instead
+  of presenting a sub-1× ratio as savings.
+- Removed hardcoded author paths from `cli.py` and `scripts/verify_three_checks.sh`.
+
+### Portability & docs
+- **Per-user gateway service generator** (`chuzom.gateway_service`) renders the launchd
+  agent (macOS) / systemd user unit (Linux) from `sys.executable` — no more checked-in
+  machine-specific paths; the reference plist is now a placeholder template.
+- Routing-savings dashboard labels the figure as an **estimate vs the Opus baseline**.
+- Synced plugin-manifest versions with `pyproject`.
+
 ## v0.7.1 — 2026-07-01 — honest routing, context-aware drafts, unified gateway metering
 
 ### Routing correctness & safety
