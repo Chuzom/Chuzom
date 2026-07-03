@@ -189,6 +189,7 @@ async def llm_usage(period: str = "today") -> str:
             pct_saved = (s["cost_saved_usd"] / opus_would_cost) * 100
             lines.append(row(""))
             lines.append(row(f"  Opus would cost: ${opus_would_cost:.4f}  ->  Actual: ${actual_cost:.4f}  ({pct_saved:.0f}% saved)"))
+        lines.append(row("  Note: estimate vs Opus baseline (equal tokens)"))
         lines.append(HR)
 
     # ── Section 6: Lifetime Savings (from routing_decisions SQLite table) ──

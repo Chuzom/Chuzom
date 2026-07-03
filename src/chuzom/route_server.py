@@ -151,13 +151,23 @@ def make_handler():
                 self._send(404, {"error": "not found"})
 
         def do_POST(self):
-            if self.path != "/route":
+            if self.path not in ("/route", "/feedback"):
                 return self._send(404, {"error": "not found"})
             try:
                 n = int(self.headers.get("Content-Length", 0) or 0)
                 payload = json.loads(self.rfile.read(n) or b"{}")
             except (ValueError, json.JSONDecodeError) as e:
                 return self._send(400, {"error": "bad json: {}".format(e)})
+            if self.path == "/feedback":
+                # Ground-truth routing quality from LoopHole verdicts. Best-effort:
+                # an unusable record is acknowledged (recorded=false), never 5xx'd,
+                # so the caller's fallback-to-JSONL is only for transport failures.
+                try:
+                    from chuzom.quality_feedback import record_loophole_verdict
+                    recorded = record_loophole_verdict(payload)
+                    return self._send(200, {"ok": True, "recorded": recorded})
+                except Exception as e:
+                    return self._send(500, {"error": "feedback failed: {}".format(e)})
             try:
                 self._send(200, route_payload(payload))
             except ValueError as e:

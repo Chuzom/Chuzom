@@ -748,8 +748,7 @@ def isolation_test_command() -> None:
         print()
         print("✅ Router health check passed!")
         print()
-        print("For comprehensive isolation tests, run from the repository:")
-        print("  cd /Users/yali.pollak/Projects/chuzom")
+        print("For comprehensive isolation tests, run from a chuzom repo clone:")
         print("  pytest tests/test_isolation_routing.py -v")
         sys.exit(0)
     except Exception as e:

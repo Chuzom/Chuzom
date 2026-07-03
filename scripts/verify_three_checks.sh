@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -u -o pipefail
 
-REPO_ROOT="/Users/yali.pollak/Projects/chuzom"
+# Derive the repo root from this script's location (scripts/..) so it works
+# on any clone, not just the author's machine.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || {
   echo "FAIL  unable to cd to $REPO_ROOT"
   exit 1

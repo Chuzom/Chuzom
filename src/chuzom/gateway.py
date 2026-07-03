@@ -17,7 +17,6 @@ Run:  chuzom gateway   (or: python -m chuzom.gateway)
 from __future__ import annotations
 
 import os
-import re
 import time
 import uuid
 from pathlib import Path
@@ -53,18 +52,13 @@ _load_dotenv()  # at import, before any routing
 
 app = FastAPI(title="Chuzom Gateway", version="2")
 
-_CODE = re.compile(
-    r"\b(code|function|class|def |bug|refactor|implement|compile|stack ?trace|"
-    r"api|sql|regex|unit test|typescript|python|rust|golang)\b",
-    re.IGNORECASE,
-)
-
-
 def _classify(prompt: str) -> tuple[str, str]:
-    task = "code" if _CODE.search(prompt) else "analyze"
-    n = len(prompt)
-    complexity = "complex" if n > 2000 else "moderate" if n > 400 else "simple"
-    return task, complexity
+    # Unified engine (chuzom.classify), gateway policy — richer task_type than the
+    # old code/analyze regex; same 400/2000 length tiers + analyze low-signal default.
+    from chuzom.classify import GATEWAY_POLICY, classify_signals
+
+    s = classify_signals(prompt, GATEWAY_POLICY)
+    return s.task_type.value, s.complexity.value
 
 
 class _ModelRef:

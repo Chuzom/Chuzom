@@ -1911,40 +1911,45 @@ def main() -> None:
         total = spend.get("total_usd", 0.0)
         calls = spend.get("call_count", 0)
         tokens_reclaimed = spend.get("tokens_reclaimed", 0)
-        net_savings = spend.get("net_savings_usd", 0.0)
-        opus_equiv = spend.get("opus_equivalent_usd", 0.0)
         ext_min = spend.get("extension_minutes", 0.0)
 
-        # Build savings panel
+        # Build savings panel. ONE consistent story: the headline % and the tier
+        # table below both derive from the SAME per-tier rollups (Sonnet baseline).
+        # The old "Opus would cost / Actually spent / Net preserved" trio was
+        # removed — it compared the Opus baseline of the *reclaimed* calls against
+        # *total* spend (which includes non-reclaimed paid calls), a mixed-scope
+        # figure that contradicted the tier table (e.g. "Net preserved $0.01" next
+        # to "Saved $0.05") and could green-wash a session that overspent.
         lines = []
-        if opus_equiv > 0:
-            pct_saved = (net_savings / opus_equiv * 100) if opus_equiv > 0 else 0
-            # Progress bar showing how much was preserved
+        per_model = spend.get("per_model", {}) or {}
+        rollups = []
+        try:
+            from chuzom.tiers import render_tier_table, summarize_tiers, total_savings
+            if per_model:
+                rollups = summarize_tiers(per_model)
+        except Exception:
+            rollups = []
+
+        if rollups:
+            _actual, _baseline, _saved = total_savings(rollups)
+            pct = (_saved / _baseline * 100) if _baseline > 0 else 0
             bar_len = 20
-            filled = int(pct_saved / 100 * bar_len)
+            filled = int(pct / 100 * bar_len)
             bar = _C_GREEN + "━" * filled + "\033[90m" + "─" * (bar_len - filled) + _RESET
-            lines.append(f"  Quota Preserved  {bar} {pct_saved:.0f}%")
+            lines.append(f"  Routing saved    {bar} {pct:.0f}% of baseline (${_saved:.4f})")
             if tokens_reclaimed > 0:
                 tok_k = tokens_reclaimed / 1000
                 lines.append(f"  {tok_k:.0f}K tokens reclaimed" + (f" · +{ext_min:.0f}min runway" if ext_min >= 1 else ""))
-            lines.append(f"  Opus would cost:  ${opus_equiv:.4f}")
-            lines.append(f"  Actually spent:   ${total:.4f}")
-            lines.append(f"  Net preserved:    {_C_GREEN}${net_savings:.4f}{_RESET}")
         else:
             lines.append(f"  Session spend: ${total:.4f} across {calls} call(s)")
 
         if spend.get("anomaly_flag"):
             lines.insert(0, f"  {_C_RED}⚠  ANOMALY: spend rate exceeded threshold{_RESET}")
 
-        # v10.1.0 — Tier-grouped savings rollup. Surfaces "how many calls
-        # went to free local / free subscription / paid API" + the savings
-        # vs Sonnet baseline. Critical for users who route heavily to
-        # Ollama/Codex but currently see only the paid-API spend number.
+        # Detailed per-tier breakdown (free local / free subscription / paid API)
+        # — the single source of truth for the savings figures above.
         try:
-            from chuzom.tiers import render_tier_table, summarize_tiers
-            per_model = spend.get("per_model", {}) or {}
-            if per_model:
-                rollups = summarize_tiers(per_model)
+            if rollups:
                 tier_lines = render_tier_table(rollups).split("\n")
                 lines.append("")
                 for tl in tier_lines:

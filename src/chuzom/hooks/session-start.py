@@ -574,6 +574,10 @@ def _preflight_check() -> str:
     ]:
         if os.environ.get(key, "").strip():
             ok.append(label)
+        elif key == "ANTHROPIC_API_KEY" and _CC_MODE:
+            # Claude arrives via the Pro/Max subscription in CC mode — no API key
+            # needed, so a missing ANTHROPIC_API_KEY is expected, not a problem.
+            ok.append("Anthropic (subscription)")
         else:
             issues.append(f"{key} missing")
 

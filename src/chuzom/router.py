@@ -645,8 +645,12 @@ def _resolve_profile(
             # genuine reasoning prompts in a coding session are rarely > 2k
             # chars. Operators who need the legacy behaviour can pass
             # ``complexity_hint`` explicitly.
-            n = len(prompt)
-            c = Complexity.SIMPLE if n < 600 else (Complexity.COMPLEX if n > 2000 else Complexity.MODERATE)
+            # Unified engine (chuzom.classify), router policy — reproduces the
+            # documented <600 / [600,2000] / >2000 partition exactly, now shared
+            # with the gateway/hook so a fix to the algorithm lands in one place.
+            from chuzom.classify import ROUTER_POLICY, complexity_for
+
+            c = complexity_for(prompt, policy=ROUTER_POLICY)
         if c == Complexity.DEEP_REASONING:
             use_thinking = True
         resolved = _COMPLEXITY_TO_PROFILE.get(c, config.chuzom_profile)

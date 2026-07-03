@@ -129,6 +129,17 @@ models:
     notes: "Web-grounded; cost includes search backend"
 
   # ─── PREMIUM tier ────────────────────────────────────────────────────
+  - id: anthropic/claude-fable-5
+    provider: anthropic
+    tier: premium
+    quality_score: 0.98
+    price_per_1m_input_usd: 10.0
+    price_per_1m_output_usd: 50.0
+    latency_p50_ms: 12000
+    context_window: 1000000
+    capabilities: [function-calling, vision, json, reasoning]
+    notes: "Frontier deep-reasoning tier — most sophisticated, most expensive. Reserve for very deep reasoning (deep_reasoning complexity)."
+
   - id: anthropic/claude-3-opus
     provider: anthropic
     tier: premium

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- launchd agent: keep the Chuzom OpenAI-compatible gateway always running, so any
-     external agent (Stockagent, cron jobs) that points OPENAI_BASE_URL at it routes
-     through Chuzom. Install: cp to ~/Library/LaunchAgents/ && launchctl load it. -->
+<!-- REFERENCE TEMPLATE — do not use verbatim. The __PYTHON__ / __HOME__ tokens are
+     placeholders. Generate a copy with your own interpreter/home paths via:
+         python -m chuzom.gateway_service
+     which writes ~/Library/LaunchAgents/com.chuzom.gateway.plist for this user.
+     Then: launchctl load ~/Library/LaunchAgents/com.chuzom.gateway.plist -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -9,7 +11,7 @@
     <string>com.chuzom.gateway</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/yaliandrona/Projects/Chuzom/.venv/bin/python</string>
+        <string>__PYTHON__</string>
         <string>-m</string>
         <string>chuzom.gateway</string>
     </array>
@@ -20,7 +22,7 @@
     </dict>
     <key>KeepAlive</key><true/>
     <key>RunAtLoad</key><true/>
-    <key>StandardOutPath</key><string>/Users/yaliandrona/.chuzom/gateway.out.log</string>
-    <key>StandardErrorPath</key><string>/Users/yaliandrona/.chuzom/gateway.err.log</string>
+    <key>StandardOutPath</key><string>__HOME__/.chuzom/gateway.out.log</string>
+    <key>StandardErrorPath</key><string>__HOME__/.chuzom/gateway.err.log</string>
 </dict>
 </plist>

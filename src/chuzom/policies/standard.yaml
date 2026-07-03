@@ -198,47 +198,57 @@ chains:
   # derivation, multi-step deductive chains, philosophical analysis, and any
   # prompt that explicitly asks for step-by-step / chain-of-thought reasoning.
   #
-  # Model strategy (ordered cheapest-capable-first):
-  #   1. Ollama local qwen3  — free, no quota hit; supports /think mode natively
-  #   2. DeepSeek-R1         — $0.0014/1K, best cost-adjusted reasoning benchmark
-  #   3. OpenAI o3           — frontier reasoning for the hardest problems
-  #   4. Gemini 2.5 Pro      — thinkingConfig support (budget=8192 thinking tokens)
-  #   5. Claude Opus         — use_thinking=True (extended thinking, budget=16K)
+  # Model strategy (ordered cheapest-capable-first, escalate on failure):
+  #   1. DeepSeek-R1         — $0.0014/1K, best cost-adjusted reasoning benchmark
+  #   2. OpenAI o3           — frontier reasoning for the hardest problems
+  #   3. Claude Opus         — use_thinking=True (extended thinking, budget=16K)
+  #   4. Gemini 2.5 Pro / Claude Sonnet — thinking-capable fallbacks
+  #   5. Claude Fable 5      — last-resort escalation: the most sophisticated and
+  #                            most expensive model ($10/$50 per 1M). Reached only
+  #                            after the cheaper reasoning specialists have failed,
+  #                            so its cost is spent only when nothing else sufficed.
+  #   6. Ollama local qwen3  — free absolute-last fallback; supports /think natively
   #
   # use_thinking=True is set by the router for ALL models in this chain;
   # only Anthropic and Gemini 2.5 Pro activate a provider-specific thinking
   # parameter — o3 and DeepSeek-R1 reason natively without an explicit flag.
-  # REASONING = Complexity.DEEP_REASONING. Native reasoning models lead; Ollama
-  # last-resort only (the hardest problems should not fall to a local model first).
+  # REASONING = Complexity.DEEP_REASONING. Native reasoning models lead; Fable 5
+  # is the paid escalation ceiling above them; Ollama is the free last resort
+  # (the hardest problems should not fall to a local model first).
   reasoning:
     query:
       - deepseek/deepseek-reasoner
       - openai/o3
       - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - anthropic/claude-fable-5
       - ollama/qwen3:32b
     analyze:
       - deepseek/deepseek-reasoner
       - openai/o3
       - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - anthropic/claude-fable-5
       - ollama/qwen3:32b
     code:
       - deepseek/deepseek-reasoner
       - openai/o3
       - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - anthropic/claude-fable-5
       - ollama/qwen3:32b
     research:
       - deepseek/deepseek-reasoner
       - openai/o3
       - anthropic/claude-opus:latest
+      - anthropic/claude-fable-5
       - ollama/qwen3:32b
     generate:
       - deepseek/deepseek-reasoner
       - openai/o3
       - anthropic/claude-opus:latest
       - anthropic/claude-sonnet-4-6
+      - anthropic/claude-fable-5
       - ollama/qwen3:32b
     image:
       - openai/dall-e-3

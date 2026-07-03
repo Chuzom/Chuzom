@@ -196,7 +196,15 @@ def render_tier_table(rollups: list[TierRollup]) -> str:
     if actual > 0:
         ratio = baseline / actual
         lines.append("")
-        lines.append(f"Effective savings ratio: {ratio:.2f}× (Sonnet baseline / actual paid)")
+        if ratio >= 1:
+            lines.append(f"Effective savings ratio: {ratio:.2f}× (Sonnet baseline / actual — higher is better)")
+        else:
+            # ratio < 1 means paid routes cost MORE than the baseline — don't dress
+            # an overspend up as savings; state it plainly.
+            lines.append(
+                f"Effective savings ratio: {ratio:.2f}× — ⚠ paid routes ran "
+                f"{1 / ratio:.2f}× OVER the Sonnet baseline this session"
+            )
     return "\n".join(lines)
 
 

@@ -9,17 +9,20 @@ Anomaly detection fires when session spend exceeds a threshold in under
 10 minutes — a signal of runaway costs (e.g. accidentally routing a tight
 loop to an expensive model).
 
-**Known limitation — spend resets on MCP server restart.**
-The in-memory accumulator (`_spend_singleton`) resets to $0.00 every time
-the MCP server process restarts (e.g. Claude Code update, crash, or manual
-restart). This means:
-  - ``CHUZOM_ESCALATE_ABOVE`` and ``CHUZOM_HARD_STOP_ABOVE`` thresholds
-    are per-process-lifetime, not per-session.
-  - A user who restarts mid-session gets a fresh $0.00 baseline, allowing
-    escalation thresholds to be crossed again.
-There is no fix without adding a persistent SQLite read on every call.
-Workaround: set thresholds conservatively, or use ``CHUZOM_MONTHLY_BUDGET``
-which reads from the persistent SQLite store and is not affected by restarts.
+**Cross-process persistence.**
+Spend survives an MCP-server restart: ``get_session_spend()`` reloads the JSON
+on first access, so a restarted router process continues the session's running
+total instead of starting from $0.
+
+The session-start hook resets ``session_spend.json`` directly (it is a standalone
+script and cannot touch the router's in-memory singleton). A long-lived router —
+one that stays up across a new Claude Code session — must notice that reset, or
+its stale singleton would keep accumulating on the old baseline and re-persist it,
+silently clobbering the reset. So ``get_session_spend()`` reloads whenever the
+on-disk ``session_start`` is newer than the in-memory one. Only the session-start
+reset writes a newer ``session_start``, so this never fires spuriously mid-session.
+Per-session thresholds (``CHUZOM_ANOMALY_THRESHOLD``, paid caps) therefore start
+clean each session even when the MCP server process is reused.
 
 Usage:
     from chuzom.session_spend import get_session_spend
@@ -347,10 +350,24 @@ _spend: SessionSpend | None = None
 
 
 def get_session_spend() -> SessionSpend:
-    """Return the singleton SessionSpend instance, loading from disk on first call."""
+    """Return the singleton SessionSpend instance, loading from disk on first call.
+
+    Re-syncs if the session-start hook reset ``session_spend.json`` for a new
+    session (detected by a newer on-disk ``session_start``) — otherwise a
+    long-lived router process would keep accumulating on the old session's
+    baseline and re-persist it, clobbering the reset. See the module docstring.
+    """
     global _spend
     if _spend is None:
         _spend = SessionSpend.load()
+        return _spend
+    try:
+        disk_start = float(json.loads(SESSION_SPEND_FILE.read_text()).get("session_start", 0.0))
+        # 1s guard against float jitter / same-session re-persists.
+        if disk_start > _spend.session_start + 1.0:
+            _spend = SessionSpend.load()
+    except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError):
+        pass  # Never let a spend-file read error break routing.
     return _spend
 
 
