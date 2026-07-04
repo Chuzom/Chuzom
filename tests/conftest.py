@@ -381,6 +381,21 @@ def _reset_config_singleton():
     config_module._config = None
 
 
+@pytest.fixture(autouse=True)
+def _reset_health_tracker():
+    """Reset the provider HealthTracker singleton before and after each test.
+
+    It's a process-lifetime singleton (see chuzom.health.get_tracker) — a test
+    that makes a real, failing provider call (e.g. an invalid test API key)
+    marks that provider unhealthy for the rest of the pytest run, silently
+    breaking any later, unrelated test that expects it to be healthy.
+    """
+    from chuzom.health import reset_tracker_for_tests
+    reset_tracker_for_tests()
+    yield
+    reset_tracker_for_tests()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _close_db_connections():
     """Force close all aiosqlite connections at end of test session.

@@ -273,3 +273,17 @@ def get_tracker() -> HealthTracker:
     if _tracker is None:
         _tracker = HealthTracker()
     return _tracker
+
+
+def reset_tracker_for_tests() -> None:
+    """Reset the global HealthTracker singleton.
+
+    A test that makes a real (failing) provider call marks that provider
+    unhealthy in this process-lifetime singleton — with no reset, that
+    failure silently poisons every later test in the same pytest run that
+    expects the same provider to be healthy, even though they have nothing
+    to do with each other. Call this from an autouse fixture so each test
+    starts with a clean slate.
+    """
+    global _tracker
+    _tracker = None

@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.7.5 — 2026-07-04 — test isolation: health tracker no longer leaks across tests
+
+Follow-up to v0.7.4's CI fix. No functional changes to the router itself.
+
+- **The provider `HealthTracker` is a process-lifetime singleton** — a test that
+  makes a real, failing provider call (v0.7.4 added a dummy `OPENAI_API_KEY` to CI
+  so ~20 pre-existing tests could reach the dispatch stage) marked "openai"
+  unhealthy for the rest of the pytest run, silently breaking two later,
+  unrelated tests (`test_chain_all_disallowed_raises_permission_denied`,
+  `test_strict_with_all_providers_forbidden_raises_permission_denied`) that
+  expected it to still be healthy. Added `reset_tracker_for_tests()` plus an
+  autouse conftest fixture so every test starts with a clean tracker.
+- Full local suite run (matching CI's exact command) confirmed clean.
+
 ## v0.7.4 — 2026-07-04 — CI fixes following v0.7.3 (no functional changes)
 
 v0.7.3's routing fixes are correct and unaffected — this release only fixes gaps the
