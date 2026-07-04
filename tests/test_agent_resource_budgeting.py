@@ -12,12 +12,23 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 AGENT_ROUTE_HOOK = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-route.py"
 AGENT_ERROR_HOOK = Path(__file__).parent.parent / "src" / "chuzom" / "hooks" / "agent-error.py"
+
+
+def _depth_path_for(tmp_path: Path, session_id: str) -> Path:
+    """Mirror agent-route.py's _depth_file() exactly — depth state now lives
+    in a per-session file, not one shared agent_depth.json. These tests reset
+    depth to 0 between simulated agent calls so the depth circuit breaker
+    doesn't interfere with the budget assertions actually under test; that
+    reset must target the same file the hook itself reads."""
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", session_id) or "unknown"
+    return tmp_path / ".chuzom" / f"agent_depth_{safe}.json"
 
 
 def _run_agent_route(
@@ -50,6 +61,7 @@ def _run_agent_route(
     # allow-and-pins the subagent and returns before the budget gate is reached.
     # Disable it too so the pre-routing budget/block decision is exercised.
     env["CHUZOM_ALLOW_SUBAGENTS"] = "off"
+    env.pop("CLAUDE_CODE_SESSION_ID", None)
     if tmp_path is not None:
         llmr_dir = tmp_path / ".chuzom"
         llmr_dir.mkdir(parents=True, exist_ok=True)
@@ -319,7 +331,7 @@ class TestBudgetReconciliation:
         first_remaining = data["remaining"]
 
         # Reset depth counter for next agent in same session
-        (llmr_dir / "agent_depth.json").write_text(json.dumps({
+        _depth_path_for(tmp_path, sid).write_text(json.dumps({
             "depth": 0,
             "session_id": sid,
             "ts": 0,
@@ -339,7 +351,7 @@ class TestBudgetReconciliation:
         )
 
         # Reset depth counter again
-        (llmr_dir / "agent_depth.json").write_text(json.dumps({
+        _depth_path_for(tmp_path, sid).write_text(json.dumps({
             "depth": 0,
             "session_id": sid,
             "ts": 0,
@@ -378,7 +390,7 @@ class TestBudgetStarvation:
         # Use prompts that clearly require reasoning to avoid retrieval classification
         for i in range(5):
             # Reset depth counter for each agent so circuit breaker doesn't interfere
-            (llmr_dir / "agent_depth.json").write_text(json.dumps({
+            _depth_path_for(tmp_path, sid).write_text(json.dumps({
                 "depth": 0,
                 "session_id": sid,
                 "ts": 0,
@@ -417,7 +429,7 @@ class TestBudgetStarvation:
         # Exhaust budget with 5 agents using explicit reasoning prompts
         for i in range(5):
             # Reset depth counter for each agent so circuit breaker doesn't interfere
-            (llmr_dir / "agent_depth.json").write_text(json.dumps({
+            _depth_path_for(tmp_path, sid).write_text(json.dumps({
                 "depth": 0,
                 "session_id": sid,
                 "ts": 0,
@@ -431,7 +443,7 @@ class TestBudgetStarvation:
             )
 
         # Reset depth counter one more time for sixth agent
-        (llmr_dir / "agent_depth.json").write_text(json.dumps({
+        _depth_path_for(tmp_path, sid).write_text(json.dumps({
             "depth": 0,
             "session_id": sid,
             "ts": 0,

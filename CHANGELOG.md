@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.7.4 — 2026-07-04 — CI fixes following v0.7.3 (no functional changes)
+
+v0.7.3's routing fixes are correct and unaffected — this release only fixes gaps the
+CI run surfaced *after* that release was already tagged and published, so main's
+test suite is green again. Nothing here changes runtime behavior.
+
+- **Plugin manifest versions were out of sync** — `.claude-plugin`, `.codex-plugin`,
+  and `.factory-plugin`'s `plugin.json`/`marketplace.json` files still said 0.7.2;
+  re-ran `scripts/sync-versions.py`.
+- **Two pre-existing test files hardcoded the old shared `agent_depth.json` path**
+  (`tests/test_agent_route_hook.py`, `tests/test_agent_resource_budgeting.py`) —
+  the v0.7.3 circuit-breaker fix moved depth-tracking to a per-session file on
+  purpose (that's the whole fix for cross-session interference), so these needed
+  updating to write/read the new per-session path instead of the retired one.
+- **CI's bare test runner had zero providers configured**, and a v0.7.3 fix
+  correctly stopped unavailable providers from silently surviving the chain
+  filter — surfacing that ~20 pre-existing tests (RBAC, deadlines, cancel-shield,
+  enterprise enforcement, redaction, idempotency) implicitly relied on that bug to
+  get any candidate into the chain at all, even though they patch the dispatch
+  layer and never make a real call. Added one dummy `OPENAI_API_KEY` to the CI
+  job so `available_providers` is non-empty — no real network calls are made.
+- **8 ruff lint errors** in the new `tests/audit/` files from v0.7.3 (unused
+  imports/variables) — fixed.
+
 ## v0.7.3 — 2026-07-04 — routing-variety audit: fixes a structural single-model collapse
 
 A full routing audit (chain-building, execution, policy switching, multi-provider

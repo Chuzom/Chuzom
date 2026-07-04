@@ -24,7 +24,6 @@ state.
 from __future__ import annotations
 
 import pathlib
-from unittest.mock import AsyncMock
 
 import pytest
 

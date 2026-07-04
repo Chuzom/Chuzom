@@ -30,12 +30,11 @@ keeps the original blocking behaviour.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from chuzom.repo_config import RepoConfig, TaskRouteOverride, _dict_to_config, _merge, effective_config
+from chuzom.repo_config import _dict_to_config, _merge, effective_config
 from chuzom.router import route_and_call
 from chuzom.types import BudgetExceededError, LLMResponse, RoutingProfile, TaskType
 from chuzom.user_routing_policy import apply_routing_policy
@@ -246,7 +245,8 @@ def routed_runtime(monkeypatch, temp_db):
             side_effect=lambda model, messages, **kw: _response(model),
         ),
     ]
-    entered = [p.start() for p in patches]
+    for p in patches:
+        p.start()
     try:
         yield _SimpleNamespace(route_log=route_log, tracker=tracker)
     finally:

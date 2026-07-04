@@ -94,6 +94,19 @@ jobs:
 
       - name: Run tests
         shell: bash
+        env:
+          # A routing-audit fix made _build_and_filter_chain correctly filter
+          # out providers that aren't actually available (codex/ollama/gemini_cli/
+          # subscription-anthropic used to survive the filter unconditionally —
+          # a real bug: a runner with none of them configured could still see
+          # phantom, undispatchable models in its chain). Many pre-existing
+          # tests here (RBAC, deadlines, cancel-shield, enterprise enforcement)
+          # don't care which provider they route to — they patch the dispatch
+          # layer itself — but implicitly relied on that bug to get ANY
+          # candidate into the chain on this bare runner (no real API keys, no
+          # Ollama). A dummy key is enough: these tests never make a real
+          # network call, they just need available_providers non-empty.
+          OPENAI_API_KEY: sk-test-dummy-key-for-ci-only-no-real-calls-made
         run: |
           # Run pytest in the background so we can detect the aiosqlite thread hang.
           # pytest writes junit xml before the hang; we read that to determine pass/fail.

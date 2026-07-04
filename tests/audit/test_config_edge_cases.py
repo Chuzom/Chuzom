@@ -16,9 +16,7 @@ Covers three areas from the task brief:
 
 from __future__ import annotations
 
-from pathlib import Path
 
-import pytest
 
 from chuzom.repo_config import (
     RepoConfig,
