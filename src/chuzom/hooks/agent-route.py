@@ -182,7 +182,21 @@ def _get_max_depth() -> int:
 
 
 def _get_session_id() -> str:
-    """Read current session ID from ~/.chuzom/session_id.txt."""
+    """Return a session identifier unique to THIS Claude Code process.
+
+    Prefers ``CLAUDE_CODE_SESSION_ID`` (set by Claude Code itself, unique per
+    running session) over the legacy ~/.chuzom/session_id.txt scheme. That
+    file is a single machine-wide singleton written fresh by every session's
+    SessionStart hook — so two Claude Code windows running concurrently (e.g.
+    one per project) silently share ONE session id, and therefore one agent
+    nesting-depth counter. A depth-3 circuit trip in project A then blocks
+    project B's very first, unrelated Agent call. CLAUDE_CODE_SESSION_ID is
+    genuinely unique per process, so keying on it (see _depth_file below)
+    gives each concurrent session its own counter instead.
+    """
+    env_session = os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip()
+    if env_session:
+        return env_session
     session_file = Path.home() / ".chuzom" / "session_id.txt"
     try:
         return session_file.read_text().strip()
@@ -190,25 +204,31 @@ def _get_session_id() -> str:
         return "unknown"
 
 
-def _read_agent_depth(session_id: str) -> int:
-    """Read current agent nesting depth for the given session.
+def _depth_file(session_id: str) -> Path:
+    """Per-session depth-state file — NOT a single shared file.
 
-    If the session ID in agent_depth.json doesn't match, return 0 (new session).
+    Keying the file itself (not just a session_id field inside one shared
+    file) means two concurrent sessions never read-modify-write the same
+    file, closing the race window entirely rather than relying on a string
+    comparison that both processes could pass at once.
     """
-    depth_file = Path.home() / ".chuzom" / "agent_depth.json"
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", session_id) or "unknown"
+    return Path.home() / ".chuzom" / f"agent_depth_{safe}.json"
+
+
+def _read_agent_depth(session_id: str) -> int:
+    """Read current agent nesting depth for the given session."""
     try:
-        data = json.loads(depth_file.read_text())
-        if data.get("session_id") != session_id:
-            return 0  # New session — reset depth
+        data = json.loads(_depth_file(session_id).read_text())
         return int(data.get("depth", 0))
     except (FileNotFoundError, json.JSONDecodeError, ValueError):
         return 0
 
 
 def _write_agent_depth(session_id: str, depth: int) -> None:
-    """Persist agent nesting depth for the current session."""
-    depth_file = Path.home() / ".chuzom" / "agent_depth.json"
-    depth_file.write_text(json.dumps({
+    """Persist agent nesting depth for the current session (never below 0)."""
+    depth = max(0, depth)
+    _depth_file(session_id).write_text(json.dumps({
         "depth": depth,
         "session_id": session_id,
         "ts": time.time(),

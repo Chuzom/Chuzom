@@ -18,6 +18,8 @@ import re
 import subprocess
 import threading
 import time
+import weakref
+import zlib
 from dataclasses import replace
 from typing import Any, AsyncIterator, TYPE_CHECKING
 from uuid import uuid4
@@ -220,6 +222,78 @@ def _format_subprocess_chain_error(
     return f"{agent} exited {exit_code}: {body}"
 
 
+def _param_size_hint(name: str) -> int:
+    """Best-effort parameter-count hint from a model name/tag.
+
+    e.g. "ollama/qwen3-coder:30b" -> 30, "hermes3:8b" -> 8. Returns 0 when no
+    such hint is present. Never used as the sole signal in
+    ``_task_aware_default_order`` — only one heuristic among several, since a
+    model name carrying no size hint at all is a normal, expected case.
+    """
+    m = re.search(r"(\d+(?:\.\d+)?)\s*b\b", name.lower())
+    return int(float(m.group(1))) if m else 0
+
+
+def _stable_task_offset(task_type_value: str, modulus: int) -> int:
+    """Deterministic, PYTHONHASHSEED-independent offset derived from a task
+    type string.
+
+    Python's built-in ``hash()`` for ``str`` is randomized per process (a
+    security feature, salted at interpreter startup) — using it here would
+    flip the default model ordering on every process restart, introducing
+    exactly the kind of hidden non-determinism this audit's concurrency
+    section flagged as a risk elsewhere in this file's set-based merges.
+    ``zlib.crc32`` is a plain, stable checksum: same input, same output,
+    forever, on every machine.
+    """
+    if modulus <= 0:
+        return 0
+    return zlib.crc32(task_type_value.encode()) % modulus
+
+
+def _task_aware_default_order(models: list[str], task_type: "TaskType") -> list[str]:
+    """Reorder a provider's candidate models for a task type when there is NO
+    explicit per-task pin, so QUERY/CODE/ANALYZE/... don't all collapse onto
+    whichever model happens to be configured first.
+
+    Without this, a user who never writes a per-task pin in routing.yaml —
+    which is most users, since pins are an opt-in power feature — sees the
+    exact same single model handle every kind of request, no matter how many
+    models they've actually configured. That defeats the entire point of
+    routing by use case, and it was true for every user's default experience,
+    not an edge case.
+
+    Combines a light, best-effort naming heuristic (coder-named models lead
+    for CODE; larger param counts lead for ANALYZE; smaller lead for
+    QUERY/GENERATE) with a deterministic per-task rotation as the baseline
+    order. The rotation is what guarantees SOME variation even when model
+    names carry no recognizable signal at all — a fully custom/opaque naming
+    scheme — which is exactly the scenario a naming-only heuristic would
+    silently fail at.
+    """
+    if len(models) <= 1:
+        return list(models)
+
+    offset = _stable_task_offset(task_type.value, len(models))
+    rotated = models[offset:] + models[:offset]
+
+    def _score(model: str) -> int:
+        name = model.lower()
+        size = _param_size_hint(name)
+        score = 0
+        if task_type == TaskType.CODE and any(
+            k in name for k in ("code", "coder", "devstral", "codestral")
+        ):
+            score += 10
+        if task_type == TaskType.ANALYZE and size >= 20:
+            score += 5
+        if task_type in (TaskType.QUERY, TaskType.GENERATE) and 0 < size <= 10:
+            score += 5
+        return score
+
+    return sorted(rotated, key=_score, reverse=True)
+
+
 async def _build_and_filter_chain(
     task_type: TaskType,
     profile: RoutingProfile,
@@ -334,11 +408,33 @@ async def _build_and_filter_chain(
         pressure = get_claude_pressure()
 
         # ── Provider filter (must run before injection) ───────────────────────
+        # The subprocess-backed tiers (codex/ollama/gemini_cli) used to survive
+        # this filter unconditionally, regardless of whether they were actually
+        # available — a static/dynamic base chain entry like "ollama/qwen3:32b"
+        # would sail through even with zero configured Ollama models, or
+        # "codex/gpt-4o" even with Codex not installed. Check real availability
+        # per tier instead, same checks injection uses further down.
+        # Claude-subscription mode has the same shape of gap: config.available_
+        # providers deliberately EXCLUDES "anthropic" there (see its docstring —
+        # subscription mode never routes back via a separate API key/billing),
+        # but the blanket exemption below never accounted for it either. That
+        # was invisible before this fix because the old blanket exemption let
+        # phantom ollama/codex entries through, keeping the chain non-empty;
+        # with those correctly filtered, a subscription-only environment's
+        # legitimate anthropic/* entries were ALSO being dropped, leaving an
+        # empty chain — the router's worst possible failure mode.
         available = config.available_providers
+        _codex_ok = is_codex_available()
+        _gemini_cli_ok = is_gemini_cli_available()
+        _ollama_ok = bool(config.all_ollama_models())
+        _claude_sub_ok = bool(config.chuzom_claude_subscription)
         models_to_try = [
             m for m in models_to_try
             if provider_from_model(m) in available
-            or provider_from_model(m) in {"codex", "ollama", "gemini_cli"}
+            or (provider_from_model(m) == "codex" and _codex_ok)
+            or (provider_from_model(m) == "gemini_cli" and _gemini_cli_ok)
+            or (provider_from_model(m) == "ollama" and _ollama_ok)
+            or (provider_from_model(m) == "anthropic" and _claude_sub_ok)
         ]
 
         # ── Repo config: block_providers + model/provider pin ─────────────────
@@ -368,9 +464,17 @@ async def _build_and_filter_chain(
                 models_to_try, task_type.value, _policy,
             )
 
+        # Per-task pins AND the local-first Ollama injection below apply ONLY to
+        # the cheap tiers (BUDGET / BALANCED). Complex and deep-reasoning tasks
+        # (PREMIUM / REASONING) must use their capable chain — Opus via the Claude
+        # subscription, dedicated reasoning models — instead of being pinned/
+        # collapsed onto a small local model. This is what lets routing actually
+        # reach Codex/Claude for the use cases that warrant them.
+        _cheap_tier = profile not in (RoutingProfile.PREMIUM, RoutingProfile.REASONING)
+
         # Model pin: prepend pinned model so it's tried first
-        pinned_model = repo_cfg.model_override(task_type.value)
-        pinned_provider = repo_cfg.provider_override(task_type.value)
+        pinned_model = repo_cfg.model_override(task_type.value) if _cheap_tier else None
+        pinned_provider = repo_cfg.provider_override(task_type.value) if _cheap_tier else None
         if pinned_model and pinned_model not in models_to_try:
             models_to_try = [pinned_model] + models_to_try
         elif pinned_provider and not pinned_model:
@@ -378,15 +482,32 @@ async def _build_and_filter_chain(
             rest   = [m for m in models_to_try if provider_from_model(m) != pinned_provider]
             models_to_try = pinned + rest
 
-        # ── Ollama injection ──────────────────────────────────────────────────
-        ollama_models = config.all_ollama_models()
+        # ── Ollama injection (cheap tiers only) ───────────────────────────────
+        ollama_models = config.all_ollama_models() if _cheap_tier else []
         if ollama_models:
+            # Without an explicit pin, every task type used to see this SAME
+            # list prepended in the SAME order — so whichever model happened to
+            # be configured first handled every task, for every user, no matter
+            # how many models they'd actually configured. Most users never write
+            # a per-task pin, so this was the default experience, not an edge
+            # case. Reorder by task type when there's no pin to override.
+            _ollama_for_injection = (
+                ollama_models if pinned_model
+                else _task_aware_default_order(ollama_models, task_type)
+            )
             # If claw-code is enabled, Ollama moves to the absolute front
             # (before pins, before everything else).
             if config.chuzom_claw_code:
-                models_to_try = ollama_models + [m for m in models_to_try if m not in ollama_models]
+                models_to_try = _ollama_for_injection + [m for m in models_to_try if m not in ollama_models]
             else:
-                models_to_try = ollama_models + models_to_try
+                models_to_try = _ollama_for_injection + models_to_try
+            # The Ollama list leads with a single model (e.g. hermes3:8b), which
+            # would otherwise clobber an explicit per-task pin — so EVERY task
+            # routes to that one local model regardless of use case. Re-assert the
+            # pin so per-use-case routing (code→coder, analyze→Codex, …) actually
+            # takes effect instead of collapsing to one model.
+            if pinned_model:
+                models_to_try = [pinned_model] + [m for m in models_to_try if m != pinned_model]
 
         # ── OpenAI-compat injection ───────────────────────────────────────────
         # Local servers (llama.cpp, vLLM, TGI, LM Studio) speaking the OpenAI
@@ -414,6 +535,7 @@ async def _build_and_filter_chain(
         if (
             task_type in _codex_eligible_tasks
             and is_codex_available()
+            and "codex" not in _disabled_subprocess_backends()
         ):
             codex_chain = [f"codex/{m}" for m in CODEX_MODELS[:2]]
             has_claude = any(m.startswith("anthropic/") for m in models_to_try)
@@ -457,6 +579,7 @@ async def _build_and_filter_chain(
             profile != RoutingProfile.BUDGET
             and task_type in _gemini_eligible_tasks
             and is_gemini_cli_available()
+            and "gemini_cli" not in _disabled_subprocess_backends()
         ):
             gemini_chain = [f"gemini_cli/{m}" for m in GEMINI_MODELS[:2]]
             has_claude = any(m.startswith("anthropic/") for m in models_to_try)
@@ -495,6 +618,25 @@ async def _build_and_filter_chain(
                     first_paid, task_type.value,
                 )
                 models_to_try = models_to_try[:first_paid] + gemini_chain + models_to_try[first_paid:]
+
+        # ── Re-apply block/allow filters after injection ───────────────────────
+        # block_providers/block_models/allow_models were only ever checked ONCE,
+        # before the Ollama/Codex/Gemini-CLI injection steps above — each of
+        # those injects candidates through its own independent code path that
+        # was never re-checked against the same filters. Concretely:
+        # `block_providers: [ollama]` did not stop a freshly-injected Ollama
+        # model from being tried. Re-apply the identical filters here so
+        # anything injected above is held to the same rule as the base chain.
+        if repo_cfg.block_providers:
+            _blocked_after = set(repo_cfg.block_providers)
+            models_to_try = [
+                m for m in models_to_try
+                if provider_from_model(m) not in _blocked_after
+            ]
+        if _merged_block or _merged_allow:
+            models_to_try, _ = apply_policy(
+                models_to_try, task_type.value, _policy,
+            )
 
         # ── Agent-context chain reordering ────────────────────────────────────
         active_agent = get_active_agent()
@@ -584,6 +726,28 @@ async def _build_and_filter_chain(
                 )
             except Exception as _quota_err:
                 log.warning("QUOTA_BALANCED reordering failed: %s", _quota_err)
+
+        # ── Final pin re-assert ─────────────────────────────────────────────
+        # _reorder_for_agent_context groups the chain strictly by provider tier
+        # (ollama/codex/gemini_cli/claude/rest) with no notion of an explicit
+        # per-task pin, so for SIMPLE/MODERATE complexity it unconditionally
+        # returns `ollama + codex + ...` — silently burying a pin like
+        # analyze -> codex/gpt-5.4 behind every local model. The routing-policy
+        # and QUOTA_BALANCED passes below it can do the same. An explicit user
+        # pin is the strongest signal in the system, so it must win over all of
+        # them; re-assert it here, after every reorder, right before return.
+        if pinned_model:
+            models_to_try = [pinned_model] + [m for m in models_to_try if m != pinned_model]
+        elif pinned_provider:
+            # A provider-only pin (no specific model) needs the same protection —
+            # it was only ever applied once, near the top of this function, so the
+            # same later reorders that buried a model pin buried this too. Match
+            # the original semantics: partition by provider match, don't collapse
+            # to a single model, since a provider can offer several candidates.
+            pinned = [m for m in models_to_try if provider_from_model(m) == pinned_provider]
+            rest   = [m for m in models_to_try if provider_from_model(m) != pinned_provider]
+            if pinned:
+                models_to_try = pinned + rest
 
     return models_to_try
 
@@ -711,10 +875,26 @@ def _reorder_for_agent_context(
 
 # Guards the check-then-spend budget sequence so concurrent calls cannot
 # both slip through the limit before either has recorded its spend.
-# _pending_spend tracks in-flight estimated costs so the next caller
-# sees the full committed + pending total when performing the budget check.
-_budget_lock = asyncio.Lock()
+# asyncio locks are bound to their event loop, and gateway requests can enter
+# through route_server.route_payload(), which uses asyncio.run() per request.
+# Keep one lock per active loop so the gateway does not trip "bound to a
+# different event loop" on its second routed request.
+_budget_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = weakref.WeakKeyDictionary()
 _pending_spend: float = 0.0  # sum of provisional spend for all in-flight calls
+
+
+def _budget_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _budget_locks.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _budget_locks[loop] = lock
+    return lock
+
+
+def _disabled_subprocess_backends() -> set[str]:
+    raw = os.environ.get("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "")
+    return {item.strip().lower() for item in raw.split(",") if item.strip()}
 
 # Task types routed to provider-specific media APIs instead of LiteLLM.
 # LiteLLM only supports text completion; media generation requires direct
@@ -1628,7 +1808,7 @@ async def _dispatch_model_loop(
                 except Exception as _sc_err:
                     log.debug("Semantic cache store failed (non-fatal): %s", _sc_err)
 
-            async with _budget_lock:
+            async with _budget_lock():
                 _pending_spend = max(0.0, _pending_spend - _reservation)
             return _enrich_response(
                 response, classification_data, effective_complexity,
@@ -1774,7 +1954,7 @@ async def _dispatch_model_loop(
                         f"✅ Emergency fallback {model_name} — {response.latency_ms:.0f}ms · ${response.cost_usd:.6f}"
                     )
 
-                    async with _budget_lock:
+                    async with _budget_lock():
                         _pending_spend = max(0.0, _pending_spend - _reservation)
                     chain_attempts.append(model)
                     return _enrich_response(
@@ -1806,7 +1986,7 @@ async def _dispatch_model_loop(
         attempts=len(models_to_try),
         last_error_type=type(last_error).__name__ if last_error else None,
     )
-    async with _budget_lock:
+    async with _budget_lock():
         _pending_spend = max(0.0, _pending_spend - _reservation)
     # P1-7: no hardcoded token release here — each attempt released its own
     # reservation in its finally, so nothing is outstanding at chain exhaustion.
@@ -2198,45 +2378,81 @@ async def route_and_call(
         # see the full committed + pending total (prevents TOCTOU overrun).
         global _pending_spend
         _reservation: float = 0.0
-        async with _budget_lock:
+        async with _budget_lock():
+            # routing.yaml's daily_caps/enforce used to be dead code: read only
+            # by the `chuzom config` display command, never by live routing
+            # here. Both are now real. `enforce: soft` downgrades every raise
+            # below to a warning instead of blocking the call — "hard" (the
+            # default) keeps the original blocking behaviour.
+            from chuzom.repo_config import effective_config as _get_repo_config_for_budget
+            _repo_cfg_budget = _get_repo_config_for_budget()
+            _enforce_mode = _repo_cfg_budget.effective_enforce()
+
+            def _enforce_or_warn(exc: BudgetExceededError) -> None:
+                if _enforce_mode == "soft":
+                    route_log.warning("Budget cap exceeded (soft enforce — call proceeding): %s", exc)
+                else:
+                    raise exc
+
             # Guard: chuzom_daily_spend_limit may be MagicMock in tests
             _raw_daily = getattr(config, "chuzom_daily_spend_limit", 0.0)
-            _daily_limit = float(_raw_daily) if isinstance(_raw_daily, (int, float)) else 0.0
+            _env_daily_limit = float(_raw_daily) if isinstance(_raw_daily, (int, float)) else 0.0
+            # routing.yaml daily_caps["_total"] is a second source for the same
+            # global cap. When both are set, use whichever is more restrictive —
+            # a cap is a safety ceiling, so the tighter of the two should win.
+            _yaml_daily_limit = _repo_cfg_budget.total_daily_cap() or 0.0
+            _daily_candidates = [v for v in (_env_daily_limit, _yaml_daily_limit) if v > 0]
+            _daily_limit = min(_daily_candidates) if _daily_candidates else 0.0
             if _daily_limit > 0:
                 daily_spend = await cost.get_daily_spend()
                 if daily_spend + _pending_spend >= _daily_limit:
-                    raise BudgetExceededError(
+                    _enforce_or_warn(BudgetExceededError(
                         f"Daily spend limit of ${_daily_limit:.2f} exceeded "
                         f"(spent: ${daily_spend:.4f} today UTC). "
                         "Resets at midnight UTC. "
-                        "To raise the limit: set CHUZOM_DAILY_SPEND_LIMIT env var."
-                    )
+                        "To raise the limit: set CHUZOM_DAILY_SPEND_LIMIT env var "
+                        "or routing.yaml's daily_caps._total."
+                    ))
 
-            # Per-task daily cap enforcement (from org policy)
+            # Per-task daily cap enforcement — two sources: org-policy.yaml
+            # (cents, org-wide) and routing.yaml's daily_caps (dollars,
+            # per-user/repo). task_caps is stored in CENTS (see OrgPolicy.
+            # task_caps docstring in policy.py, and policy.py:569's
+            # `${v/100:.2f}` display formatting, which already treats it that
+            # way correctly). This comparison used to compare the raw cents
+            # value directly against a dollar-denominated spend without
+            # converting — task_caps: {code: 5000} meant as a $50/day cap was
+            # silently enforced as $5000/day, 100x too permissive. When both
+            # sources are set for a task, use whichever is more restrictive.
             from chuzom.policy import get_task_cap, load_org_policy
             org_policy = load_org_policy()
-            task_cap = get_task_cap(task_type.value, org_policy)
-            if task_cap and task_cap > 0:
+            task_cap_cents = get_task_cap(task_type.value, org_policy)
+            _org_task_cap = (task_cap_cents / 100) if task_cap_cents else 0.0
+            _yaml_task_cap = _repo_cfg_budget.daily_cap_for(task_type.value) or 0.0
+            _task_cap_candidates = [v for v in (_org_task_cap, _yaml_task_cap) if v > 0]
+            task_cap = min(_task_cap_candidates) if _task_cap_candidates else 0.0
+            if task_cap > 0:
                 task_daily_spend = await cost.get_daily_spend_by_task_type(task_type.value)
                 if task_daily_spend + _pending_spend >= task_cap:
-                    raise BudgetExceededError(
+                    _enforce_or_warn(BudgetExceededError(
                         f"Task-type daily limit for {task_type.value} (${task_cap:.2f}) exceeded "
                         f"(spent: ${task_daily_spend:.4f} today UTC). "
                         f"Resets at midnight UTC. "
-                        f"To raise the limit: update ~/.chuzom/org-policy.yaml task_caps."
-                    )
+                        f"To raise the limit: update ~/.chuzom/org-policy.yaml task_caps "
+                        f"or routing.yaml's daily_caps.{task_type.value}."
+                    ))
 
             if config.chuzom_monthly_budget > 0:
                 monthly_spend = await cost.get_monthly_spend()
                 budget = config.chuzom_monthly_budget
                 if monthly_spend + _pending_spend >= budget:
-                    raise BudgetExceededError(
+                    _enforce_or_warn(BudgetExceededError(
                         f"Monthly budget of ${budget:.2f} exceeded "
                         f"(spent: ${monthly_spend:.2f}). "
                         "To continue: run llm_usage() to see the breakdown, or "
                         "llm_set_profile(profile='budget') to switch to cheaper models. "
                         "To raise the limit: set CHUZOM_MONTHLY_BUDGET env var."
-                    )
+                    ))
                 if (monthly_spend + _pending_spend) >= budget * 0.9:
                     log.warning(
                         "Monthly budget at %.0f%% ($%.2f / $%.2f)",
@@ -2465,7 +2681,7 @@ async def route_and_call(
                         f"Unset CHUZOM_HARD_STOP_ABOVE to continue."
                     )
             except BudgetExceededError:
-                async with _budget_lock:
+                async with _budget_lock():
                     _pending_spend = max(0.0, _pending_spend - _reservation)
                 raise
             except Exception as e:
@@ -2620,7 +2836,7 @@ async def route_and_call(
         # Re-check before dispatch rather than passing a negative timeout to wait_for
         # (negative timeout skips wait_for entirely, defeating the deadline).
         if _dl_remaining_at_dispatch is not None and _dl_remaining_at_dispatch <= 0:
-            async with _budget_lock:
+            async with _budget_lock():
                 _pending_spend = max(0.0, _pending_spend - _reservation)
             await release_envelope(_env_key, _reservation)
             try:
@@ -2678,7 +2894,7 @@ async def route_and_call(
             # audit. Re-raise so the asyncio cancellation chain
             # remains intact.
             elapsed = _t.monotonic() - _dispatch_started
-            async with _budget_lock:
+            async with _budget_lock():
                 _pending_spend = max(0.0, _pending_spend - _reservation)
             await release_envelope(_env_key, _reservation)
             try:
@@ -2701,7 +2917,7 @@ async def route_and_call(
             raise
         except asyncio.TimeoutError as _to_err:
             elapsed = _t.monotonic() - _dispatch_started
-            async with _budget_lock:
+            async with _budget_lock():
                 _pending_spend = max(0.0, _pending_spend - _reservation)
             await release_envelope(_env_key, _reservation)
             # T3-M2: distinguish deadline-driven timeout from
@@ -2761,7 +2977,7 @@ async def route_and_call(
                 cap_seconds=max_wall_clock_seconds,
                 elapsed_seconds=elapsed,
             ) from _to_err
-        async with _budget_lock:
+        async with _budget_lock():
             _pending_spend = max(0.0, _pending_spend - _reservation)
         _success_detail = {"correlation_id": correlation_id}
         # T4-M1: surface scrub-rate per turn so operators can observe

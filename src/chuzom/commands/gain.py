@@ -97,14 +97,22 @@ class SavingsAnalytics:
 
             cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
+            # routing_decisions has no original_tool/selected_model/estimated_cost_usd
+            # columns (see CREATE_ROUTING_DECISIONS_TABLE in cost.py) — those names
+            # belong to an unrelated table. This silently raised sqlite3.OperationalError
+            # on every call, caught below, so every caller of get_routing_decisions()
+            # (including the llm_savings MCP tool) always saw an empty list and
+            # reported zero savings regardless of real usage. Aliased to the real
+            # columns (task_type, final_model, cost_usd) so every downstream dict-key
+            # consumer in this file keeps working unchanged.
             rows = conn.execute(
                 """
                 SELECT
-                    original_tool,
-                    selected_model,
+                    task_type AS original_tool,
+                    final_model AS selected_model,
                     complexity,
                     budget_pct_used,
-                    estimated_cost_usd,
+                    cost_usd AS estimated_cost_usd,
                     session_id,
                     timestamp
                 FROM routing_decisions

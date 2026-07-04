@@ -97,6 +97,29 @@ def _fmt_tok(n: int) -> str:
     return str(n)
 
 
+def _tok_axis_unit(max_v: int) -> tuple[float, str]:
+    """Pick ONE unit (divisor, suffix) for a token Y-axis from its max value.
+
+    A Y-axis must use a single scale — formatting each tick independently mixes
+    units (e.g. "3.2M" at the top and "901.3k" lower down on the *same* axis).
+    Here the whole axis is locked to the unit implied by its maximum tick.
+    """
+    if max_v >= 1_000_000:
+        return 1_000_000.0, "M"
+    if max_v >= 1_000:
+        return 1_000.0, "k"
+    return 1.0, ""
+
+
+def _fmt_tok_axis(n: int, divisor: float, suffix: str) -> str:
+    """Format a single Y-axis tick against the axis-wide unit from _tok_axis_unit."""
+    if n == 0:
+        return "0"
+    if divisor == 1.0:
+        return str(n)
+    return f"{n / divisor:.1f}{suffix}"
+
+
 def _fmt_usd(amount: float) -> str:
     return f"${amount:.2f}" if amount >= 0.01 else f"${amount:.4f}"
 
@@ -714,11 +737,12 @@ class SessionSummaryDashboard:
         tok_lines: list[RenderableType] = [Text("tokens saved/day", style=PALETTE.text_dim)]
         if tok_saved_values and max(tok_saved_values) > 0:
             max_ts = max(tok_saved_values)
-            y_width_ts = max(len(_fmt_tok(max_ts)), 4)
+            _ts_div, _ts_suf = _tok_axis_unit(max_ts)  # lock the whole axis to one unit
+            y_width_ts = max(len(_fmt_tok_axis(max_ts, _ts_div, _ts_suf)), 4)
             for i, row_chars in enumerate(self._bar_chart_rows(tok_saved_values, n_rows=N_ROWS)):
                 y_val = int(max_ts * (N_ROWS - 1 - i) / N_ROWS)
                 tok_lines.append(Text.assemble(
-                    (f"{_fmt_tok(y_val):>{y_width_ts}} ┤ ", PALETTE.text_dim),
+                    (f"{_fmt_tok_axis(y_val, _ts_div, _ts_suf):>{y_width_ts}} ┤ ", PALETTE.text_dim),
                     (row_chars, PALETTE.accent),
                 ))
             tok_lines.extend(_date_xaxis(n_ts, y_width_ts + 2))

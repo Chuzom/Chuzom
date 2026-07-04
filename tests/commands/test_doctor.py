@@ -1,5 +1,6 @@
 """Tests for doctor command health checks."""
 
+import pathlib
 from unittest.mock import patch
 
 import pytest
@@ -120,6 +121,75 @@ class TestRunDoctorHost:
         except Exception:
             # Cursor may not be installed
             pass
+
+    def test_run_doctor_host_codex_gateway_reachable(self, capsys, tmp_path, monkeypatch):
+        """Codex doctor proves the chuzom provider is registered and reachable
+        for opt-in use, WITHOUT it being forced as Codex's global default —
+        forcing it breaks Codex CLI (gateway wire-format mismatch with
+        Codex's expected OpenAI "responses" shape)."""
+        monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
+        codex = tmp_path / ".codex"
+        codex.mkdir()
+        (codex / "config.toml").write_text(
+            '[model_providers.gemini]\n'
+            'base_url = "https://generativelanguage.googleapis.com/v1beta/openai"\n\n'
+            '[model_providers.chuzom]\n'
+            'base_url = "http://127.0.0.1:17900/v1"\n'
+            'wire_api = "responses"\n'
+        )
+        (codex / "config.yaml").write_text("mcp:\n  servers:\n    chuzom: {}\n")
+        (codex / "hooks.json").write_text("codex-post-tool.py\n")
+
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return b'{"ok": true}'
+
+        seen = {}
+
+        def _fake_urlopen(req, **_kwargs):
+            seen["url"] = req.full_url
+            return _Resp()
+
+        monkeypatch.setattr("chuzom.commands.doctor.urllib.request.urlopen", _fake_urlopen)
+        _run_doctor_host("codex")
+        output = capsys.readouterr().out
+        assert "Codex using its own default model provider" in output
+        assert "Chuzom model provider registered" in output
+        assert "gateway reachable" in output
+        assert "Opt-in routing" in output
+        assert seen["url"] == "http://127.0.0.1:17900/healthz"
+
+    def test_run_doctor_host_codex_reports_forced_default_as_broken(self, capsys, tmp_path, monkeypatch):
+        """A config with model_provider forced to chuzom (left over from an
+        older chuzom install) must be flagged as broken, not healthy — it
+        breaks every Codex call via the gateway wire-format mismatch."""
+        monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
+        codex = tmp_path / ".codex"
+        codex.mkdir()
+        (codex / "config.toml").write_text('model = "auto"\nmodel_provider = "chuzom"\n')
+
+        _run_doctor_host("codex")
+        output = capsys.readouterr().out
+        assert "force-set to 'chuzom'" in output
+        assert "chuzom install --host codex --mode gateway" in output
+
+    def test_run_doctor_host_codex_reports_not_gateway(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
+        codex = tmp_path / ".codex"
+        codex.mkdir()
+        (codex / "config.toml").write_text('model = "gpt-5.5"\nmodel_provider = "openai"\n')
+
+        _run_doctor_host("codex")
+        output = capsys.readouterr().out
+        assert "Codex using its own default model provider" in output
+        assert "Chuzom model provider table missing" in output
+        assert "chuzom install --host codex --mode gateway" in output
 
     def test_run_doctor_host_all(self, capsys):
         """Test doctor checks all hosts."""

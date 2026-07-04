@@ -79,14 +79,32 @@ def _hook_version_num(path: Path) -> int:
 
 # ── Doctor implementation ───────────────────────────────────────────────────
 
+def _extract_toml_string(text: str, key: str) -> str | None:
+    m = re.search(rf"^{re.escape(key)}\s*=\s*['\"]([^'\"]+)['\"]", text, re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def _extract_toml_section_string(text: str, section: str, key: str) -> str | None:
+    start = re.search(rf"^\[{re.escape(section)}\]\s*$", text, re.MULTILINE)
+    if not start:
+        return None
+    next_section = re.search(r"^\[", text[start.end():], re.MULTILINE)
+    section_text = (
+        text[start.end(): start.end() + next_section.start()]
+        if next_section
+        else text[start.end():]
+    )
+    return _extract_toml_string(section_text, key)
+
+
 def _run_doctor_host(host: str) -> None:
-    """Run host-specific installation checks for vscode, cursor, or claude."""
-    valid_hosts = {"claude", "vscode", "cursor", "all"}
+    """Run host-specific installation checks."""
+    valid_hosts = {"claude", "vscode", "cursor", "codex", "all"}
     if host not in valid_hosts:
         print(f"  Unknown host: {host}. Valid options: {', '.join(sorted(valid_hosts))}")
         return
 
-    hosts_to_check = list({"claude", "vscode", "cursor"}) if host == "all" else [host]
+    hosts_to_check = ["claude", "vscode", "cursor", "codex"] if host == "all" else [host]
 
     for h in hosts_to_check:
         print(f"\n{_bold(f'  Host: {h}')}")
@@ -199,6 +217,80 @@ def _run_doctor_host(host: str) -> None:
                 print(_ok(f"routing rules installed ({cursor_rules})"))
             else:
                 print(_warn(f"routing rules not found at {cursor_rules}"))
+
+        elif h == "codex":
+            codex_dir = Path.home() / ".codex"
+            config_toml = codex_dir / "config.toml"
+            config_yaml = codex_dir / "config.yaml"
+            hooks_json = codex_dir / "hooks.json"
+
+            gateway_url = None
+            if config_toml.exists():
+                try:
+                    text = config_toml.read_text()
+                    model_provider = _extract_toml_string(text, "model_provider")
+                    if model_provider == "chuzom":
+                        # The Chuzom gateway doesn't yet speak Codex's exact
+                        # OpenAI "responses" wire shape — forcing it as the
+                        # global default breaks EVERY Codex call (interactive
+                        # and Chuzom's own routed dispatch alike) with an
+                        # undecodable-stream error. An older chuzom install
+                        # set this; re-running the installer self-heals it.
+                        print(_fail(
+                            "Codex model_provider is force-set to 'chuzom' — "
+                            "this breaks Codex CLI (gateway wire-format mismatch)",
+                            fix="chuzom install --host codex --mode gateway",
+                        ))
+                        issues.append("Codex model_provider forced to chuzom (breaks Codex)")
+                    else:
+                        print(_ok(f"Codex using its own default model provider ({config_toml})"))
+
+                    if "[model_providers.chuzom]" in text:
+                        print(_ok("Chuzom model provider registered (available via -c model_provider=chuzom)"))
+                        gateway_url = _extract_toml_section_string(
+                            text, "model_providers.chuzom", "base_url"
+                        )
+                    else:
+                        print(_fail(
+                            "Chuzom model provider table missing",
+                            fix="chuzom install --host codex --mode gateway",
+                        ))
+                        issues.append("Codex Chuzom provider table missing")
+                except OSError as e:
+                    print(_fail(f"could not read {config_toml}: {e}"))
+                    issues.append("Codex config.toml unreadable")
+            else:
+                print(_fail(
+                    f"config.toml not found at {config_toml}",
+                    fix="chuzom install --host codex --mode gateway",
+                ))
+                issues.append("Codex config.toml missing")
+
+            if config_yaml.exists() and "chuzom" in config_yaml.read_text(errors="ignore"):
+                print(_ok("MCP companion registered in config.yaml"))
+            else:
+                print(_warn("MCP companion not found in config.yaml"))
+
+            if hooks_json.exists() and "codex-post-tool.py" in hooks_json.read_text(errors="ignore"):
+                print(_ok("PostToolUse telemetry hook installed"))
+            else:
+                print(_warn("PostToolUse telemetry hook not found"))
+
+            if gateway_url:
+                health_url = gateway_url.rstrip("/").removesuffix("/v1") + "/healthz"
+                try:
+                    req = urllib.request.Request(health_url, method="GET")
+                    with urllib.request.urlopen(req, timeout=2) as resp:
+                        data = json.loads(resp.read())
+                    if data.get("ok"):
+                        print(_ok(f"gateway reachable ({health_url})"))
+                        print(_green("  Opt-in routing (-c model_provider=chuzom): available"))
+                    else:
+                        print(_warn(f"gateway responded without ok=true ({health_url})"))
+                        print(_yellow("  Opt-in routing: registered, gateway health uncertain"))
+                except Exception as e:
+                    print(_warn(f"gateway not reachable at {health_url}: {e}"))
+                    print(_yellow("  Opt-in routing: registered, but gateway is not running"))
 
         if not issues:
             print(_green(f"  ✓ {h} is correctly configured"))
@@ -813,7 +905,7 @@ def cmd_doctor(args: list[str]) -> int:
     """Execute: chuzom doctor [--host H] [--posture] [--explain-host]
 
     Flags:
-        --host H        Run host-specific checks (claude|vscode|cursor|all)
+        --host H        Run host-specific checks (claude|vscode|cursor|codex|all)
                         IN ADDITION to the general health checks.
         --posture       Print ONLY the quota-savings posture section.
                         Skips the long general health scan; ideal for

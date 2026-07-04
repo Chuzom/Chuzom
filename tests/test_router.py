@@ -115,9 +115,21 @@ async def test_raises_when_all_fail(temp_db, mock_env):
 
 @pytest.mark.asyncio
 async def test_no_providers_configured(no_providers_env, monkeypatch):
-    """When no providers are configured, the router should raise an error."""
+    """When no providers are configured, the router should raise an error.
+
+    Before the provider-availability audit fix, codex/ollama/gemini_cli
+    candidates always survived the provider filter regardless of real
+    availability, so this scenario used to produce a non-empty chain of
+    phantom candidates that all failed at dispatch time, surfacing as
+    "All models failed" only after wasted attempts. The filter now checks
+    real availability, so a genuinely empty environment is caught upfront
+    with a clearer, more actionable message instead.
+    """
     monkeypatch.setattr("chuzom.router.is_codex_available", lambda: False)
-    with pytest.raises((ValueError, RuntimeError), match="No available models|All models failed"):
+    with pytest.raises(
+        (ValueError, RuntimeError),
+        match="No available models|All models failed|No providers available",
+    ):
         await route_and_call(TaskType.QUERY, "Hello")
 
 
@@ -265,10 +277,10 @@ async def test_claw_code_mode_injects_ollama_for_balanced_profile(
 
 
 @pytest.mark.asyncio
-async def test_claw_code_mode_injects_ollama_for_premium_profile(
+async def test_claw_code_mode_does_not_inject_ollama_for_premium_profile(
     temp_db, mock_env, mock_acompletion, monkeypatch
 ):
-    """In claw-code mode, Ollama should also be injected for PREMIUM profile."""
+    """PREMIUM keeps its capable chain; claw-code must not prepend Ollama."""
     monkeypatch.setenv("CHUZOM_CLAW_CODE", "true")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "llama3.2")
@@ -278,8 +290,28 @@ async def test_claw_code_mode_injects_ollama_for_premium_profile(
     await route_and_call(TaskType.QUERY, "Hello", profile=RoutingProfile.PREMIUM)
 
     call_kwargs = mock_acompletion.call_args.kwargs
-    assert "ollama" in call_kwargs["model"], (
-        f"Expected Ollama to be first in PREMIUM chain in claw-code mode, got {call_kwargs['model']}"
+    assert "ollama" not in call_kwargs["model"], (
+        f"Ollama must not be first in PREMIUM chain in claw-code mode, got {call_kwargs['model']}"
+    )
+    _config._config = None
+
+
+@pytest.mark.asyncio
+async def test_claw_code_mode_does_not_inject_ollama_for_reasoning_profile(
+    temp_db, mock_env, mock_acompletion, monkeypatch
+):
+    """REASONING keeps its dedicated chain; claw-code must not prepend Ollama."""
+    monkeypatch.setenv("CHUZOM_CLAW_CODE", "true")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "llama3.2")
+    import chuzom.config as _config
+    _config._config = None
+
+    await route_and_call(TaskType.QUERY, "Hello", profile=RoutingProfile.REASONING)
+
+    call_kwargs = mock_acompletion.call_args.kwargs
+    assert "ollama" not in call_kwargs["model"], (
+        f"Ollama must not be first in REASONING chain in claw-code mode, got {call_kwargs['model']}"
     )
     _config._config = None
 

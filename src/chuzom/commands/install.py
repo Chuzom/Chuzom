@@ -70,12 +70,16 @@ def _run_install(flags: list[str]) -> None:
     if "--host" in flags:
         idx = flags.index("--host")
         raw_host = (flags[idx + 1] if idx + 1 < len(flags) else "all").strip().lower()
+        mode = "gateway" if raw_host == "codex" else "auto"
+        if "--mode" in flags:
+            mode_idx = flags.index("--mode")
+            mode = (flags[mode_idx + 1] if mode_idx + 1 < len(flags) else mode).strip().lower()
         host = _HOST_ALIASES.get(raw_host, raw_host)
         # claude-code = the default install (hooks + rules + MCP for Claude
         # Code), so route it through the full install path below rather than
         # the snippet printer — this makes the documented headline command work.
         if host != "claude-code":
-            _install_host(host)
+            _install_host(host, mode=mode)
             return
         flags = [f for i, f in enumerate(flags) if i not in (idx, idx + 1)]
 
@@ -373,7 +377,116 @@ Note: cost-routing is not available in Copilot (no hook system).
 
 # ── Host-specific install functions ────────────────────────────────────────────
 
-def _install_codex_files() -> list[str]:
+def _replace_or_insert_toml_scalar(text: str, key: str, value: str) -> str:
+    """Replace a top-level TOML scalar, or insert it before the first table."""
+    import re
+
+    line = f'{key} = "{value}"'
+    pattern = re.compile(rf"^{re.escape(key)}\s*=.*$", re.MULTILINE)
+    if pattern.search(text):
+        return pattern.sub(line, text, count=1)
+    table_match = re.search(r"^\[", text, flags=re.MULTILINE)
+    if table_match:
+        return text[:table_match.start()] + line + "\n" + text[table_match.start():]
+    return (text.rstrip() + "\n" + line + "\n") if text.strip() else line + "\n"
+
+
+def _ensure_toml_table_block(text: str, header: str, block: str) -> str:
+    """Append a TOML table block if the table is not already present."""
+    if f"[{header}]" in text:
+        return text
+    sep = "" if text.endswith("\n") or not text else "\n"
+    return f"{text}{sep}\n[{header}]\n{block.rstrip()}\n"
+
+
+def _remove_toml_scalar_if_equals(text: str, key: str, value: str) -> str:
+    """Remove a top-level TOML scalar line, but only if it currently equals
+    `value` — used to self-heal a setting a previous chuzom install forced,
+    without touching a value the user (or another tool) set independently."""
+    import re
+
+    pattern = re.compile(
+        rf'^{re.escape(key)}\s*=\s*"{re.escape(value)}"\s*\n?', re.MULTILINE
+    )
+    return pattern.sub("", text, count=1)
+
+
+def _install_codex_gateway_config(codex_dir) -> list[str]:
+    """Register Chuzom as an available Codex model provider (opt-in).
+
+    Earlier versions of this installer also force-set `model = "auto"` and
+    `model_provider = "chuzom"` as Codex's GLOBAL defaults, silently looping
+    every Codex call — including Codex's own interactive/agentic use, and
+    Chuzom's own dispatch of Codex from its routing chain — through the local
+    Chuzom gateway. The gateway does not yet speak the exact OpenAI
+    "responses" wire shape Codex's client expects, so every such call failed
+    with an undecodable-stream error. Concretely: this broke Codex CLI itself
+    for any user who ran `chuzom install --host codex`, independent of
+    whether they ever touched Chuzom's own routing.
+    We now only REGISTER the provider (so it exists for future opt-in use,
+    e.g. `codex -c model_provider=chuzom` once wire compatibility lands) and
+    never force it as the default. If an earlier chuzom install already
+    forced it, this run reverts those two lines so Codex falls back to its
+    own built-in default — self-healing existing broken installs the next
+    time this function runs (e.g. via `chuzom install --host codex --mode
+    gateway` or `chuzom doctor --fix`).
+    """
+    import pathlib
+    import re
+    import shutil as _shutil
+
+    from chuzom import presets
+
+    actions: list[str] = []
+    config_toml = pathlib.Path(codex_dir) / "config.toml"
+    config_toml.parent.mkdir(parents=True, exist_ok=True)
+    original = config_toml.read_text() if config_toml.exists() else ""
+    updated = original
+
+    # Self-heal: undo a previous install's forced global default, if present.
+    had_forced_default = (
+        re.search(r'^model_provider\s*=\s*"chuzom"\s*$', updated, re.MULTILINE) is not None
+    )
+    updated = _remove_toml_scalar_if_equals(updated, "model", "auto")
+    updated = _remove_toml_scalar_if_equals(updated, "model_provider", "chuzom")
+
+    gateway = presets.gateway_url()
+    updated = _ensure_toml_table_block(
+        updated,
+        "model_providers.chuzom",
+        "\n".join([
+            'name = "Chuzom"',
+            f'base_url = "{gateway}"',
+            'env_key = "CHUZOM_API_KEY"',
+            'wire_api = "responses"',
+        ]),
+    )
+
+    if updated != original:
+        try:
+            if config_toml.exists() and not (config_toml.parent / "config.toml.chuzom-bak").exists():
+                _shutil.copy2(config_toml, config_toml.parent / "config.toml.chuzom-bak")
+                actions.append(f"✓ Backed up Codex config to {config_toml.parent / 'config.toml.chuzom-bak'}")
+            config_toml.write_text(updated)
+        except OSError as e:
+            actions.append(f"  Could not update Codex gateway config at {config_toml}: {e}")
+            return actions
+        if had_forced_default:
+            actions.append(
+                f"✓ Reverted Codex's default model_provider (was force-set to 'chuzom' by an "
+                f"earlier install, which broke Codex CLI — see {config_toml})"
+            )
+        actions.append(f"✓ Registered Chuzom as an available Codex model provider in {config_toml}")
+        actions.append(
+            f"  Not set as default (gateway doesn't yet support Codex's wire format) — "
+            f"opt in per-call with -c model_provider=chuzom ({gateway})"
+        )
+    else:
+        actions.append(f"  Codex gateway provider already configured in {config_toml} (skipped)")
+    return actions
+
+
+def _install_codex_files(mode: str = "gateway") -> list[str]:
     """Write Codex-specific config files and return a list of actions taken."""
     import pathlib
     import shutil as _shutil
@@ -463,6 +576,11 @@ def _install_codex_files() -> list[str]:
         else:
             instructions.write_text(rules_text)
             actions.append(f"✓ Created {instructions} with routing rules")
+
+    if mode == "gateway":
+        actions += _install_codex_gateway_config(codex_dir)
+    elif mode not in {"companion", "mcp", "mcp-only", "rules", "auto"}:
+        actions.append(f"  Unknown Codex mode {mode!r}; installed MCP companion only")
 
     return actions
 
@@ -813,7 +931,7 @@ def _install_cursor_files() -> list[str]:
     return actions
 
 
-def _install_host(host: str) -> None:
+def _install_host(host: str, mode: str = "auto") -> None:
     """Install config for non-Claude Code hosts (writes files for Codex; prints snippets for others)."""
     bold = "\033[1m" if _color_enabled() else ""
     reset = "\033[0m" if _color_enabled() else ""
@@ -831,7 +949,8 @@ def _install_host(host: str) -> None:
 
     # Hosts that write files; all others print snippets
     _FILE_WRITERS = {
-        "codex":      (_install_codex_files,       "Restart Codex and run llm_savings to verify."),
+        "codex":      (lambda: _install_codex_files(mode="gateway" if mode == "auto" else mode),
+                       "Restart Codex and run `chuzom doctor --host codex` to verify automatic routing."),
         "opencode":   (_install_opencode_files,     "Restart OpenCode and run llm_savings to verify."),
         "gemini-cli": (_install_gemini_cli_files,   "Restart Gemini CLI and run llm_savings to verify."),
         "copilot-cli":(_install_copilot_cli_files,  "Restart Copilot CLI and run llm_savings to verify."),

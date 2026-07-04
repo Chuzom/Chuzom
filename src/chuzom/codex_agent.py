@@ -313,10 +313,22 @@ async def run_codex(
     # entire chain. Always-on is safe because we never ask Codex to mutate
     # the working tree.
     # --json: emit JSONL events line-by-line for streaming progress visibility
+    #
+    # -c model_provider=openai: Chuzom's own installer (commands/install.py,
+    # _install_codex_gateway_config) sets `model_provider = "chuzom"` as the
+    # GLOBAL default in ~/.codex/config.toml, looping Codex's own calls back
+    # through Chuzom's local gateway (127.0.0.1:17900) for its own routing
+    # benefits. That gateway doesn't yet speak the exact OpenAI "responses"
+    # wire shape Codex's client expects, so every call through it fails with
+    # an undecodable-stream error. This dispatch must always reach the real
+    # ChatGPT-authenticated backend regardless of that global default, so the
+    # provider is pinned back to the built-in "openai" provider here — scoped
+    # to this one subprocess call, no edit to the user's global config.
     args = [
         binary, "exec",
         "--json",
         "-m", model,
+        "-c", "model_provider=openai",
         "--color", "never",
         "--skip-git-repo-check",
         "-C", cwd,
@@ -327,7 +339,18 @@ async def run_codex(
     try:
         # Use safe environment that excludes API keys and tokens
         safe_env = get_safe_env()
-        
+
+        # Codex CLI validates every configured model_provider at startup —
+        # including ones this call never uses — and hard-fails the whole turn
+        # if any declared `env_key` is unset. A stray [model_providers.chuzom]
+        # block (base_url http://127.0.0.1:17900/v1, env_key CHUZOM_API_KEY)
+        # in ~/.codex/config.toml trips this even though we always target the
+        # ChatGPT-authenticated OpenAI provider (-m gpt-5.x), never "chuzom".
+        # Only the variable's presence is checked, not its value, so a
+        # placeholder here — scoped to this subprocess only — satisfies Codex
+        # without touching the user's global CLI config.
+        safe_env.setdefault("CHUZOM_API_KEY", "unused-placeholder")
+
         proc = await asyncio.create_subprocess_exec(
             *args,
             stdin=asyncio.subprocess.DEVNULL,
