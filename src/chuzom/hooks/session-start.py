@@ -307,6 +307,119 @@ def _ensure_ollama_running() -> str:
         return f"\n⚠️  Ollama start failed: {e}"
 
 
+def _pxpipe_config() -> tuple[bool, str, str]:
+    """Read pxpipe settings without importing the full chuzom.config module
+    (hooks stay stdlib-only so they run in a fresh subprocess with no
+    dependency on the package's import graph being ready)."""
+    enabled = os.environ.get("CHUZOM_PXPIPE_ENABLED", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+    url = os.environ.get("CHUZOM_PXPIPE_URL", "http://127.0.0.1:47821").rstrip("/")
+    return enabled, url, os.environ.get("CHUZOM_PXPIPE_HEAVY_MODELS", "claude-fable-5")
+
+
+def _pxpipe_reachable(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=1):
+            return True
+    except Exception:
+        return False
+
+
+def _ensure_pxpipe_running() -> str:
+    """Auto-start a local pxpipe proxy for heavy-model context compression,
+    if CHUZOM_PXPIPE_ENABLED is set. Off by default — unlike Ollama, this
+    redirects Claude Code's OWN Anthropic traffic (via settings.json's
+    ANTHROPIC_BASE_URL, synced separately in _sync_pxpipe_anthropic_base_url),
+    so it must be an explicit opt-in, not an always-on convenience.
+    Returns a status line for the banner, or "" when disabled.
+    """
+    enabled, _url, _models = _pxpipe_config()
+    if not enabled:
+        return ""
+
+    script = os.path.join(os.path.dirname(__file__), "start-pxpipe.sh")
+    if not os.path.exists(script):
+        script = os.path.join(os.path.expanduser("~/.claude/hooks"), "start-pxpipe.sh")
+    if not os.path.exists(script):
+        return "\n⚠️  start-pxpipe.sh not found — pxpipe not managed"
+
+    try:
+        result = subprocess.run(
+            ["bash", script],
+            capture_output=True, text=True, timeout=subprocess_timeout(),
+        )
+        stdout = result.stdout.strip()
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            msg = stderr or stdout or "unknown error"
+            return f"\n⚠️  pxpipe: {msg}"
+        return f"\n{stdout}" if stdout else ""
+    except subprocess.TimeoutExpired:
+        return "\n⚠️  pxpipe start timed out — heavy-model calls will route normally"
+    except Exception as e:
+        return f"\n⚠️  pxpipe start failed: {e}"
+
+
+def _sync_pxpipe_anthropic_base_url() -> str:
+    """Wire (or self-heal) ANTHROPIC_BASE_URL in ~/.claude/settings.json so
+    Claude Code's OWN traffic — not just Chuzom-routed calls — goes through
+    pxpipe for heavy models. Read at Claude Code startup, before its API
+    client is constructed, so this only takes effect on the NEXT session,
+    never retroactively for the one currently starting.
+
+    Safety rule: only ever WRITE the key when it's currently unset — ANY
+    existing value (a corporate proxy, a different pxpipe port from a prior
+    config change, anything) is left alone rather than risk overwriting
+    something the user set deliberately. REMOVAL is the mirror case and can
+    be more precise: only remove when the current value exactly equals what
+    we would have set ourselves, so a genuinely unrelated value is never
+    touched there either. Removal always points at a currently-reachable
+    pxpipe, or clears the override entirely — Claude Code has no fallback
+    if the configured base URL doesn't answer, so a stale pointer would
+    break EVERY API call, not just heavy-model ones.
+    """
+    enabled, url, _models = _pxpipe_config()
+    settings_path = Path.home() / ".claude" / "settings.json"
+
+    try:
+        data = json.loads(settings_path.read_text()) if settings_path.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        return ""  # don't touch a file we can't safely parse
+
+    env = data.setdefault("env", {})
+    current = env.get("ANTHROPIC_BASE_URL")
+    want = url if (enabled and _pxpipe_reachable(url)) else None
+
+    if want is not None:
+        if current == want:
+            return ""  # already correct, no write needed
+        if current is not None:
+            # Something else is already there — could be a corporate proxy
+            # or any other reason the user set this deliberately. Never
+            # overwrite a value we didn't set ourselves.
+            return ""
+        env["ANTHROPIC_BASE_URL"] = want
+    else:
+        if current is None or current != url:
+            return ""  # nothing of ours to remove
+        # Self-heal: pxpipe is disabled or unreachable — remove OUR pointer
+        # rather than leave Claude Code aimed at a dead endpoint.
+        del env["ANTHROPIC_BASE_URL"]
+        if not env:
+            del data["env"]
+
+    try:
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json.dumps(data, indent=2) + "\n")
+    except OSError as e:
+        return f"\n⚠️  Could not update {settings_path}: {e}"
+
+    if want is not None:
+        return f"\n✅ Claude Code's own traffic now routes heavy models through pxpipe ({want})"
+    return "\n↩️  pxpipe unavailable — reverted Claude Code to Anthropic's default endpoint"
+
+
 def _refresh_claude_usage() -> str:
     """Fetch fresh Claude subscription usage from the OAuth API with retries.
 
@@ -845,6 +958,14 @@ def main() -> None:
 
     # 1. Ensure Ollama is running (start it if needed)
     hints += _ensure_ollama_running()
+
+    # 1b. pxpipe (opt-in): auto-start the local proxy for heavy-model context
+    # compression, then sync Claude Code's own ANTHROPIC_BASE_URL to it (or
+    # self-heal it away) so this session's settings.json reflects whether
+    # pxpipe actually came up. Takes effect next session, not this one —
+    # settings.json is read before this hook ever runs.
+    hints += _ensure_pxpipe_running()
+    hints += _sync_pxpipe_anthropic_base_url()
 
     # 2. Select banner from cached subscription state (no OAuth taint in this path).
     # The cache is written by _refresh_claude_usage() during the previous session.

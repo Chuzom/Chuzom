@@ -62,6 +62,37 @@ def probe_ollama(base_url: str) -> bool:
     return _ollama_reachable_cache
 
 
+# ── pxpipe reachability cache ──────────────────────────────────────────────
+# Same rationale as probe_ollama above — this runs from a sync quirk hook
+# on every dispatch to a heavy model, so it must not do a live network
+# probe each time.
+_pxpipe_reachable_cache: bool | None = None
+_pxpipe_cache_time: float = 0.0
+_PXPIPE_PROBE_TTL = 60.0  # seconds
+
+
+def probe_pxpipe(base_url: str) -> bool:
+    """Return True if a pxpipe proxy is reachable, with a 60-second cache.
+
+    Args:
+        base_url: pxpipe proxy base URL, e.g. ``"http://127.0.0.1:47821"``.
+
+    Returns:
+        True if the pxpipe dashboard responds within 1 second.
+    """
+    global _pxpipe_reachable_cache, _pxpipe_cache_time
+    now = time.monotonic()
+    if _pxpipe_reachable_cache is not None and (now - _pxpipe_cache_time) < _PXPIPE_PROBE_TTL:
+        return _pxpipe_reachable_cache
+    try:
+        with urllib.request.urlopen(base_url, timeout=1):
+            _pxpipe_reachable_cache = True
+    except Exception:
+        _pxpipe_reachable_cache = False
+    _pxpipe_cache_time = now
+    return _pxpipe_reachable_cache
+
+
 class RouterConfig(BaseSettings):
     """Central configuration for the Chuzom.
 
@@ -116,6 +147,29 @@ class RouterConfig(BaseSettings):
     # tried first before spending money on cloud APIs.
     # Set automatically by `chuzom install` when ~/.claw-code/ is detected.
     chuzom_claw_code: bool = False
+
+    # ── pxpipe integration (heavy-model context compression) ──
+    # pxpipe (https://github.com/teamchong/pxpipe) is a local proxy that
+    # rewrites bulky request context (system prompt, tool docs, older
+    # history) into compact PNGs before it reaches Claude's API — image
+    # tokens are cheaper than dense text tokens at Anthropic's pricing, so
+    # this cuts the bill on expensive, high-token-count calls. Opt-in and
+    # off by default: it requires `npx pxpipe-proxy` running locally, and
+    # only pays off for API-key-mode dispatch to the specific "heavy" models
+    # listed in chuzom_pxpipe_heavy_models — Chuzom never makes a real
+    # network call to Anthropic in subscription mode (see
+    # chuzom_claude_subscription above), so this has no effect there.
+    chuzom_pxpipe_enabled: bool = False
+
+    # Local pxpipe proxy endpoint. Matches pxpipe's own default port.
+    chuzom_pxpipe_url: str = "http://127.0.0.1:47821"
+
+    # Comma-separated model names (bare, no provider prefix) to route through
+    # pxpipe when chuzom_pxpipe_enabled is True. Deliberately mirrors
+    # pxpipe's own conservative default (PXPIPE_MODELS=claude-fable-5,gpt-5.6)
+    # rather than every Claude model — Opus 4.7/4.8 has a documented ~7%
+    # image-misread rate and is opt-in even within pxpipe itself.
+    chuzom_pxpipe_heavy_models: str = "claude-fable-5"
 
     # ── Ollama (local inference — no API key needed) ──
     # Set ollama_base_url to enable Ollama as a task answerer (e.g. http://localhost:11434).

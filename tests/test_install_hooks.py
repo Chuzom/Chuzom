@@ -283,3 +283,48 @@ class TestRegisterHook:
             "/Users/yali.pollak/Projects/chuzom/.venv/bin/python "
             "/Users/yali.pollak/.claude/hooks/chuzom-auto-route.py"
         )
+
+
+class TestInstallSidecarScripts:
+    """start-ollama.sh / start-pxpipe.sh are plain files session-start.py
+    shells out to, not hook-event scripts — they need their own copy step,
+    since _HOOK_DEFS only carries (event, matcher) entries. Confirmed via a
+    real bug: start-ollama.sh was never wired into install() at all, so a
+    fresh install left _ensure_ollama_running() unable to find it."""
+
+    def test_sidecar_scripts_copied_on_install(self, tmp_path, monkeypatch):
+        import chuzom.install_hooks as ih
+
+        hooks_dst = tmp_path / ".claude" / "hooks"
+        settings_path = tmp_path / ".claude" / "settings.json"
+        monkeypatch.setattr(ih, "_HOOKS_DST", hooks_dst)
+        monkeypatch.setattr(ih, "_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(ih, "_RULES_DST", tmp_path / ".claude" / "rules")
+
+        ih.install()
+
+        for name in ih._SIDECAR_SCRIPTS:
+            dst = hooks_dst / name
+            assert dst.exists(), f"{name} was not copied"
+            assert dst.read_bytes() == (ih._HOOKS_SRC / name).read_bytes()
+            assert os.access(dst, os.X_OK)
+
+    def test_sidecar_scripts_not_re_copied_when_unchanged(self, tmp_path, monkeypatch):
+        """Second install() run is a no-op for unchanged sidecar files —
+        mirrors the same-content skip the hook-script loop already does.
+        Checked via the returned action log rather than mtime: shutil.copy2
+        preserves the SOURCE's mtime on every copy, so the destination's
+        mtime can't distinguish "skipped" from "re-copied identical bytes".
+        """
+        import chuzom.install_hooks as ih
+
+        hooks_dst = tmp_path / ".claude" / "hooks"
+        settings_path = tmp_path / ".claude" / "settings.json"
+        monkeypatch.setattr(ih, "_HOOKS_DST", hooks_dst)
+        monkeypatch.setattr(ih, "_SETTINGS_PATH", settings_path)
+        monkeypatch.setattr(ih, "_RULES_DST", tmp_path / ".claude" / "rules")
+
+        ih.install()
+        second_actions = ih.install()
+        assert not any("Copied start-pxpipe.sh" in a for a in second_actions)
+        assert not any("Copied start-ollama.sh" in a for a in second_actions)

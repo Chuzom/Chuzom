@@ -206,6 +206,13 @@ _HOOK_DEFS = [
     ("session-end.py", "chuzom-session-end.py", "Stop", ""),
 ]
 
+# Sidecar shell scripts session-start.py shells out to (start-ollama.sh,
+# start-pxpipe.sh) — not hook-event scripts themselves (no event/matcher to
+# register), just plain files that must land next to it. These were never
+# wired into install() at all: same-named source/dest, so no chuzom- prefix
+# rename like the Python hooks above get.
+_SIDECAR_SCRIPTS = ["start-ollama.sh", "start-pxpipe.sh"]
+
 # claw-code hook definitions: same as above except:
 #   - cc-usage-track.py omitted (no Anthropic OAuth subscription in claw-code)
 #   - session-end and status-bar use claw-code variants (no CC pressure sections)
@@ -626,6 +633,21 @@ def install(force: bool = False) -> list[str]:
         if legacy_msg:
             actions.append(legacy_msg)
 
+    # ── Copy sidecar scripts (not hook-event scripts, just files
+    # session-start.py shells out to) ──────────────────────────────────────
+    for name in _SIDECAR_SCRIPTS:
+        src = _HOOKS_SRC / name
+        dst = _HOOKS_DST / name
+        if not src.exists():
+            actions.append(f"SKIP {name}: source not found at {src}")
+            continue
+        if not force and dst.exists() and src.read_bytes() == dst.read_bytes():
+            continue
+        shutil.copy2(src, dst)
+        if sys.platform != "win32":
+            dst.chmod(0o755)
+        actions.append(f"Copied {name} → {dst}")
+
     _save_settings(settings)
 
     # ── Register MCP server globally ─────────────────────────────────────
@@ -808,6 +830,18 @@ def install_claw_code() -> list[str]:
         legacy_msg = _sync_legacy_hook_alias(hooks_dst, settings, src_name, dst_name, src)
         if legacy_msg:
             actions.append(legacy_msg)
+
+    # ── Copy sidecar scripts (see install() for why) ────────────────────────
+    for name in _SIDECAR_SCRIPTS:
+        src = _HOOKS_SRC / name
+        dst = hooks_dst / name
+        if not src.exists():
+            actions.append(f"SKIP {name}: source not found at {src}")
+            continue
+        shutil.copy2(src, dst)
+        if sys.platform != "win32":
+            dst.chmod(0o755)
+        actions.append(f"Copied {name} → {dst}")
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")

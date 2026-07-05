@@ -38,6 +38,7 @@ __all__ = [
     "OllamaQuirks",
     "OpenRouterQuirks",
     "OpenAICompatQuirks",
+    "AnthropicPxpipeQuirk",
     "register_quirk",
     "get_quirk",
     "registered_providers",
@@ -238,6 +239,55 @@ class OpenAICompatQuirks:
         return raw
 
 
+class AnthropicPxpipeQuirk:
+    """Route heavy-model Anthropic calls through a local pxpipe proxy.
+
+    pxpipe (https://github.com/teamchong/pxpipe) rewrites bulky request
+    context (system prompt, tool docs, older history) into compact PNGs
+    before it reaches Claude's API — image tokens are cheaper than dense
+    text tokens at Anthropic's pricing, so this cuts the bill specifically
+    on expensive, high-token-count calls. Scoped to the configured
+    heavy-model allowlist only (``chuzom_pxpipe_heavy_models``) — routing a
+    cheap Haiku call through an extra local hop would add latency for no
+    benefit pxpipe's own per-request profitability gate wouldn't already
+    skip anyway. Opt-in (``chuzom_pxpipe_enabled``) and silently a no-op
+    when the proxy isn't actually running, so a user without pxpipe
+    installed sees zero behavior change.
+    """
+
+    def transform_model_name(self, name: str) -> str:
+        return name
+
+    def transform_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if "api_base" in payload:
+            return payload
+        try:
+            from chuzom.config import get_config, probe_pxpipe
+            cfg = get_config()
+        except Exception:
+            return payload
+        if not cfg.chuzom_pxpipe_enabled:
+            return payload
+
+        model_str = payload.get("model", "")
+        short = model_str.split("/", 1)[-1] if "/" in model_str else model_str
+        heavy_models = {
+            m.strip() for m in cfg.chuzom_pxpipe_heavy_models.split(",") if m.strip()
+        }
+        if short not in heavy_models:
+            return payload
+
+        if not probe_pxpipe(cfg.chuzom_pxpipe_url):
+            return payload
+
+        out = dict(payload)
+        out["api_base"] = cfg.chuzom_pxpipe_url.rstrip("/")
+        return out
+
+    def transform_response(self, raw: dict[str, Any]) -> dict[str, Any]:
+        return raw
+
+
 # ── Registry ────────────────────────────────────────────────────────────────
 
 
@@ -247,6 +297,7 @@ _REGISTRY: dict[str, ProviderQuirk] = {
     "ollama": OllamaQuirks(),
     "openrouter": OpenRouterQuirks(),
     "openai_compat": OpenAICompatQuirks(),
+    "anthropic": AnthropicPxpipeQuirk(),
 }
 
 

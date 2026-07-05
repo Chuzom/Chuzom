@@ -1,5 +1,59 @@
 # Changelog
 
+## v0.7.6 — 2026-07-05 — pxpipe integration: cut context cost on heavy-model calls
+
+New, fully opt-in (off by default). [pxpipe](https://github.com/teamchong/pxpipe)
+is a local proxy that rewrites bulky request context (system prompt, tool docs,
+older history) into compact PNGs before it reaches Claude's API — image tokens
+are cheaper than dense text tokens at Anthropic's pricing, cutting the bill on
+expensive, high-token-count calls. Two independent integration points, since
+Chuzom's own dispatch and Claude Code's own subscription traffic go through
+completely different paths:
+
+### Router-level (API-key mode)
+- New `AnthropicPxpipeQuirk` in `provider_quirks.py`, registered for the
+  `anthropic` provider in Chuzom's existing per-provider transform-hook
+  registry. When a dispatch's model is on the configured heavy-models list
+  (`CHUZOM_PXPIPE_HEAVY_MODELS`, default `claude-fable-5` — mirrors pxpipe's
+  own conservative default, since Opus has a documented ~7% image-misread
+  rate), pxpipe is enabled (`CHUZOM_PXPIPE_ENABLED`), and the proxy is
+  actually reachable, redirects that call through it. Everything else —
+  cheap models, pxpipe not running, feature disabled — passes through
+  completely untouched.
+
+### Claude Code subscription mode
+- Chuzom's own routing never makes a real Anthropic API call in subscription
+  mode (that's Claude Code's own turn), so the router-level quirk above has
+  no effect there. Added a second, independent path: a new SessionStart hook
+  step that auto-starts a local pxpipe proxy (`start-pxpipe.sh`, mirrors the
+  existing `start-ollama.sh` pattern) and syncs `ANTHROPIC_BASE_URL` into
+  `~/.claude/settings.json`'s `env` block — so Claude Code's *own* traffic,
+  not just Chuzom-routed calls, benefits.
+- Safety-critical since this affects *every* Claude Code API call, not just
+  heavy-model ones: only ever writes when the key is currently unset (never
+  overwrites a corporate proxy or anything else you set deliberately), and
+  always self-heals the override away — reverting to Anthropic's default
+  endpoint — the moment pxpipe is disabled or not actually reachable, rather
+  than leaving Claude Code pointed at a dead endpoint (it has no fallback if
+  the configured base URL doesn't answer).
+- Takes effect on the *next* Claude Code session — `ANTHROPIC_BASE_URL` is
+  read before this hook, or any hook, ever runs.
+
+### Installer fix (found along the way)
+- `start-ollama.sh` had never actually been wired into the installer at all
+  — a pre-existing gap independent of pxpipe. A fresh install always left
+  `_ensure_ollama_running()` unable to find the script it shells out to.
+  Fixed for both scripts via a small new sidecar-copy step.
+
+Verified against a real, live pxpipe instance (not just mocks): actually
+started it via `npx pxpipe-proxy`, confirmed reachability detection and the
+settings.json read-modify-write round-trip against a copy of a real
+`~/.claude/settings.json` (write, no-op-when-correct, and self-heal-on-down
+all confirmed, with every unrelated existing key left untouched), and sent a
+real request through it to `/v1/messages` — got back a genuine Anthropic
+`authentication_error` response, confirming the proxy correctly intercepts
+and forwards to the real API. 34 new tests, all passing; lint clean.
+
 ## v0.7.5 — 2026-07-04 — test isolation: health tracker no longer leaks across tests
 
 Follow-up to v0.7.4's CI fix. No functional changes to the router itself.
