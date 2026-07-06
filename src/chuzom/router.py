@@ -447,8 +447,11 @@ async def _build_and_filter_chain(
             ]
 
         # ── Policy engine ─────────────────────────────────────────────────────
-        from chuzom.policy import OrgPolicy, apply_policy, load_org_policy
-        _org = load_org_policy() or OrgPolicy()
+        from chuzom.policy import OrgPolicy, apply_policy
+        from chuzom.policy_runtime import get_effective_org_policy
+        # Effective policy = control-plane-installed policy if a sidecar has
+        # verified+installed one, else the local file policy (unchanged default).
+        _org = get_effective_org_policy()
         _merged_block = list({*_org.block_models, *repo_cfg.block_models})
         _merged_allow = list({*_org.allow_models, *repo_cfg.allow_models})
         _merged_block_prov = list({*_org.block_providers})
