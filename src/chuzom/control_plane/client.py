@@ -20,14 +20,24 @@ class CPClient:
             transport=transport,
         )
 
-    def get_current_policy(self, tenant_id: str) -> dict:
-        headers = {}
+    def _headers(self) -> dict:
         if self._sidecar_token is not None:
-            headers["Authorization"] = f"Bearer {self._sidecar_token}"
+            return {"Authorization": f"Bearer {self._sidecar_token}"}
+        return {}
 
+    def get_current_policy(self, tenant_id: str) -> dict:
         resp = self._client.get(
             f"/cp/v1/tenants/{tenant_id}/policy/current",
-            headers=headers,
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def post_heartbeat(self, tenant_id: str, payload: dict) -> dict:
+        resp = self._client.post(
+            f"/cp/v1/tenants/{tenant_id}/heartbeat",
+            json=payload,
+            headers=self._headers(),
         )
         resp.raise_for_status()
         return resp.json()

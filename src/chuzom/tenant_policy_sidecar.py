@@ -30,6 +30,7 @@ class TenantPolicySidecarConfig:
     cp_url: str
     trusted_public_key_b64: str
     cache_dir: Path
+    instance_id: str = "sidecar"
 
 
 class PolicyCache:
@@ -114,6 +115,28 @@ class TenantPolicySidecar:
             if cached is None:
                 raise NoUsablePolicyError("no usable policy available") from exc
             return self._verify_and_extract(cached)
+
+    def heartbeat_payload(
+        self, *, effective_version, effective_digest, source, last_apply_latency_ms=None
+    ) -> dict:
+        return {
+            "instance_id": self.config.instance_id,
+            "effective_version": effective_version,
+            "effective_digest": effective_digest,
+            "source": source,
+            "sidecar_version": "0.1.0",
+            "last_apply_latency_ms": last_apply_latency_ms,
+        }
+
+    def send_heartbeat(
+        self, *, effective_version, effective_digest, source, last_apply_latency_ms=None
+    ) -> dict:
+        """Report this instance's effective policy version to the control plane."""
+        payload = self.heartbeat_payload(
+            effective_version=effective_version, effective_digest=effective_digest,
+            source=source, last_apply_latency_ms=last_apply_latency_ms,
+        )
+        return self._client.post_heartbeat(self.config.tenant_id, payload)
 
     def close(self):
         self._client.close()

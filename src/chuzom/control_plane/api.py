@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from chuzom.control_plane import audit as cpa
 from chuzom.control_plane import signing
+from chuzom.control_plane.events import get_event_bus
 from chuzom.control_plane.policy_bundle import (
     bundle_payload_bytes,
     make_payload,
@@ -142,6 +143,17 @@ def get_signing_key():
     return _signing_key_singleton
 
 
+def publish_policy_change(tenant_id: str, version: int, digest: str) -> int:
+    """Notify subscribed sidecars that a new policy version is active.
+
+    Returns the number of subscribers notified (best-effort).
+    """
+    return get_event_bus().publish(
+        tenant_id,
+        {"type": "policy_change", "tenant_id": tenant_id, "version": version, "digest": digest},
+    )
+
+
 def create_control_plane_app() -> FastAPI:
     app = FastAPI(title="chuzom control plane")
 
@@ -191,6 +203,8 @@ def create_control_plane_app() -> FastAPI:
             version=rec.version,
             digest=digest,
         )
+        # Fast-path notify: subscribed sidecars pull immediately (5s SLO).
+        publish_policy_change(tenant_id, rec.version, digest)
         return PolicyPushResponse(
             tenant_id=tenant_id,
             version=rec.version,
@@ -238,6 +252,24 @@ def create_control_plane_app() -> FastAPI:
     def public_key(key=Depends(get_signing_key)) -> PublicKeyResponse:
         return PublicKeyResponse(algorithm="ed25519", public_key_b64=signing.public_key_b64(key))
 
+    @app.get("/cp/v1/tenants/{tenant_id}/policy/events")
+    async def policy_events(tenant_id: str, _token: str = Depends(authenticate_sidecar)):
+        """SSE stream of policy-change events for a tenant's sidecars."""
+        from sse_starlette.sse import EventSourceResponse
+
+        bus = get_event_bus()
+        queue = bus.subscribe(tenant_id)
+
+        async def _gen():
+            try:
+                while True:
+                    event = await queue.get()
+                    yield {"event": "policy_change", "data": json.dumps(event)}
+            finally:
+                bus.unsubscribe(tenant_id, queue)
+
+        return EventSourceResponse(_gen())
+
     @app.post(
         "/cp/v1/tenants/{tenant_id}/heartbeat",
         response_model=HeartbeatResponse,
@@ -248,6 +280,18 @@ def create_control_plane_app() -> FastAPI:
         store: ControlPlaneStore = Depends(get_cp_store),
         _token: str = Depends(authenticate_sidecar),
     ) -> HeartbeatResponse:
+        # Detect a version/source TRANSITION before the upsert overwrites the
+        # stored row, so the tamper-evident audit records transitions only —
+        # not every routine heartbeat (which would flood the chain).
+        prior = next(
+            (i for i in store.list_instances(tenant_id) if i.instance_id == req.instance_id),
+            None,
+        )
+        is_transition = (
+            prior is None
+            or prior.effective_version != req.effective_version
+            or prior.source != req.source
+        )
         store.record_heartbeat(
             instance_id=req.instance_id,
             tenant_id=tenant_id,
@@ -257,13 +301,14 @@ def create_control_plane_app() -> FastAPI:
             sidecar_version=req.sidecar_version,
             last_apply_latency_ms=req.last_apply_latency_ms,
         )
-        cpa.audit_heartbeat(
-            tenant_id=tenant_id,
-            instance_id=req.instance_id,
-            effective_version=req.effective_version,
-            effective_digest=req.effective_digest,
-            source=req.source,
-        )
+        if is_transition:
+            cpa.audit_heartbeat(
+                tenant_id=tenant_id,
+                instance_id=req.instance_id,
+                effective_version=req.effective_version,
+                effective_digest=req.effective_digest,
+                source=req.source,
+            )
         return HeartbeatResponse(ok=True, instance_id=req.instance_id)
 
     def _build_tenant_audit_status(
@@ -305,6 +350,16 @@ def create_control_plane_app() -> FastAPI:
         _identity=Depends(_require_manage_policy()),
     ) -> TenantAuditStatus:
         return _build_tenant_audit_status(tenant_id, store)
+
+    @app.get("/cp/v1/tenants/{tenant_id}/reconciliation")
+    def get_reconciliation(
+        tenant_id: str,
+        store: ControlPlaneStore = Depends(get_cp_store),
+        _identity=Depends(_require_manage_policy()),
+    ) -> dict:
+        from chuzom.control_plane.reconciliation import reconcile_tenant_effective_policy
+
+        return reconcile_tenant_effective_policy(store, tenant_id)
 
     return app
 
