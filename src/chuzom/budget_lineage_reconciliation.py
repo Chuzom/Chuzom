@@ -88,8 +88,57 @@ def reconcile_budget_lineage(
     }
 
 
+def reconcile_budget_lineage_audited(
+    backend,
+    *,
+    scope: str = "global",
+    audit: bool = True,
+) -> dict:
+    """Reconcile a backend's budget lineage **against the control-plane audit
+    log** (#70): run the subtree-conservation check over
+    ``backend.iter_lineage_consumed()``, record the result as a tamper-evident
+    row in the control-plane audit log, and report that log's chain integrity —
+    the same treatment policy reconciliation (#60) gets.
+
+    Returns the reconciliation summary plus ``audit_chain_status``
+    (``"ok"`` / ``"tampered"``). Reports rather than raises, so monitoring can
+    alert on either ``converged is False`` (a lineage leak) or
+    ``audit_chain_status == "tampered"`` (the attestation log was altered).
+
+    ``backend`` must expose ``iter_lineage_consumed()`` (SqliteBudgetBackend
+    does). ``audit=False`` skips the append — used by tamper tests that must not
+    extend a chain they have deliberately broken.
+    """
+    from chuzom.control_plane import audit as cpa
+
+    summary = reconcile_budget_lineage(backend.iter_lineage_consumed())
+
+    try:
+        cpa.verify_cp_audit_chain()
+        audit_chain_status = "ok"
+    except cpa.TamperDetected:
+        audit_chain_status = "tampered"
+
+    result = {**summary, "scope": scope, "audit_chain_status": audit_chain_status}
+
+    if audit:
+        cpa.audit_budget_lineage_reconciliation(
+            scope=scope,
+            summary={
+                "envelope_count": summary["envelope_count"],
+                "parent_count": summary["parent_count"],
+                "violation_count": summary["violation_count"],
+                "converged": summary["converged"],
+                "audit_chain_status": audit_chain_status,
+            },
+        )
+
+    return result
+
+
 __all__ = [
     "reconcile_budget_lineage",
+    "reconcile_budget_lineage_audited",
     "KIND_UNDERDEBITED",
     "KIND_UNREGISTERED",
     "LineageRow",

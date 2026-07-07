@@ -23,6 +23,7 @@ ACTION_HEARTBEAT = "cp.instance.heartbeat"
 ACTION_POLICY_EFFECTIVE = "cp.instance.policy_effective"
 ACTION_SIGNATURE_FAILED = "cp.policy.signature_failed"
 ACTION_RECONCILIATION = "cp.audit.reconciliation"
+ACTION_BUDGET_LINEAGE_RECON = "cp.budget.lineage_reconciliation"
 
 _CP_AUDIT_TYPE = "control_plane.event"
 
@@ -140,6 +141,18 @@ def audit_reconciliation(*, tenant_id, summary: dict) -> None:
     )
 
 
+def audit_budget_lineage_reconciliation(*, scope: str, summary: dict) -> None:
+    """Record a budget-lineage reconciliation result (#70) as a tamper-evident
+    control-plane audit row, so the reconciliation itself is attestable and its
+    integrity verifiable via ``verify_cp_audit_chain`` — the same treatment
+    policy reconciliation (#60) gets."""
+    append_cp_event(
+        action=ACTION_BUDGET_LINEAGE_RECON,
+        resource=f"budget:{scope}",
+        detail=summary,
+    )
+
+
 __all__ = [
     "ACTION_POLICY_VERSION_CREATED",
     "ACTION_POLICY_ACTIVATED",
@@ -148,6 +161,7 @@ __all__ = [
     "ACTION_POLICY_EFFECTIVE",
     "ACTION_SIGNATURE_FAILED",
     "ACTION_RECONCILIATION",
+    "ACTION_BUDGET_LINEAGE_RECON",
     "TamperDetected",
     "get_cp_audit_log",
     "reset_cp_audit_log_for_tests",
@@ -159,4 +173,5 @@ __all__ = [
     "audit_heartbeat",
     "audit_signature_failed",
     "audit_reconciliation",
+    "audit_budget_lineage_reconciliation",
 ]

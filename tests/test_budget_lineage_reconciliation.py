@@ -16,6 +16,7 @@ from chuzom.budget_lineage_reconciliation import (
     KIND_UNDERDEBITED,
     KIND_UNREGISTERED,
     reconcile_budget_lineage,
+    reconcile_budget_lineage_audited,
 )
 
 
@@ -125,5 +126,71 @@ async def test_backend_lineage_reconciles_after_real_spend(tmp_path) -> None:
         assert r["converged"] is True, r["violations"]
         assert backend.consumed(parent) == pytest.approx(5.0)
         assert backend.consumed(child) == pytest.approx(5.0)
+    finally:
+        backend.close()
+
+
+# ── Reconcile against the control-plane audit log (#70 titular half) ───────
+
+@pytest.fixture()
+def cp_audit(tmp_path, monkeypatch):
+    """Isolated control-plane audit log for the audited reconciliation tests."""
+    from chuzom.control_plane import audit as cpa
+
+    monkeypatch.setenv("CHUZOM_CP_AUDIT_PATH", str(tmp_path / "cp_audit.db"))
+    cpa.reset_cp_audit_log_for_tests()
+    yield cpa
+    cpa.reset_cp_audit_log_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_audited_reconcile_writes_tamper_evident_row(tmp_path, cp_audit) -> None:
+    backend = SqliteBudgetBackend(db_path=tmp_path / "b.db")
+    try:
+        parent = _k("team")
+        child = BudgetKey(tenant_id="t1", org_id="o1", user_id="team",
+                          agent_id="a1", scope=SCOPE_TURN)
+        backend.register(parent, cap_usd=50.0)
+        backend.register(child, cap_usd=50.0, parents=(parent,))
+        assert await backend.try_reserve(child, 4.0) is True
+        await backend.commit(child, 4.0)
+
+        r = reconcile_budget_lineage_audited(backend, scope="t1")
+        assert r["converged"] is True
+        assert r["audit_chain_status"] == "ok"
+        # The reconciliation itself is now an auditable control-plane event.
+        actions = {row["action"] for row in cp_audit.get_cp_audit_log().recent(limit=10)}
+        assert cp_audit.ACTION_BUDGET_LINEAGE_RECON in actions
+        # And the attestation chain verifies.
+        cp_audit.verify_cp_audit_chain()
+    finally:
+        backend.close()
+
+
+@pytest.mark.asyncio
+async def test_audited_reconcile_surfaces_tampered_chain(tmp_path, cp_audit) -> None:
+    import json
+    import sqlite3
+
+    backend = SqliteBudgetBackend(db_path=tmp_path / "b.db")
+    try:
+        backend.register(_k("solo"), cap_usd=10.0)
+        # Seed two audit rows, then tamper the CP audit DB directly.
+        reconcile_budget_lineage_audited(backend, scope="t1")
+        reconcile_budget_lineage_audited(backend, scope="t1")
+        cp_audit.reset_cp_audit_log_for_tests()
+        db = tmp_path / "cp_audit.db"
+        conn = sqlite3.connect(str(db))
+        conn.execute(
+            "UPDATE audit_events SET detail = ? WHERE seq = (SELECT MIN(seq) FROM audit_events)",
+            (json.dumps({"forged": True}),),
+        )
+        conn.commit()
+        conn.close()
+        cp_audit.reset_cp_audit_log_for_tests()
+
+        # audit=False: do not extend a chain we just broke.
+        r = reconcile_budget_lineage_audited(backend, scope="t1", audit=False)
+        assert r["audit_chain_status"] == "tampered"
     finally:
         backend.close()
