@@ -422,3 +422,206 @@ def test_tst003_multi_process_concurrency_acceptance() -> None:
         verify.close()
         with suppress(KeyError):
             del os.environ["CHUZOM_BUDGET_POSTGRES_DSN"]
+
+
+@pytest.mark.skipif(
+    not _DOCKER_AVAILABLE,
+    reason="Docker daemon not reachable — Postgres integration test skipped",
+)
+def test_tst003_stress_extreme_oversubscription() -> None:
+    """**G-002 stress variant — beyond the minimum acceptance.**
+
+    The minimum acceptance (:func:`test_tst003_multi_process_concurrency_acceptance`)
+    races 100 attempts / 4 processes against a cap that admits 50 — a 2×
+    oversubscription. This variant turns the contention up hard: **160
+    concurrent ``try_reserve`` calls spread across 8 processes fight over a
+    cap that admits only 3** (~53× oversubscription, every racer targeting
+    the *same* key). It exists to catch a lost-update / double-spend bug
+    that the gentle 2× case can miss — the exactly-N invariant must hold no
+    matter how many racers pile onto the atomic check-then-charge.
+
+    Asserts (a) **exactly 3** reservations win across all processes (no
+    overshoot, no starvation), and (b) the persisted ``pending`` equals
+    exactly ``3 × cost`` — i.e. not one cent was double-charged under the
+    stampede.
+    """
+    from testcontainers.postgres import PostgresContainer
+
+    with PostgresContainer("postgres:16-alpine") as pg:
+        dsn = pg.get_connection_url(driver=None)
+        if dsn.startswith("postgresql+psycopg2://"):
+            dsn = dsn.replace("postgresql+psycopg2://", "postgresql://", 1)
+
+        os.environ["CHUZOM_BUDGET_POSTGRES_DSN"] = dsn
+
+        from chuzom.budget_backend_postgres import PostgresBudgetBackend
+
+        cost = 1.0
+        winners_allowed = 3
+        cap = cost * winners_allowed  # $3.00 → exactly 3 of the racers win
+
+        bootstrap = PostgresBudgetBackend()
+        key = _k(user="stress-oversubscription")
+        bootstrap.register(key, cap_usd=cap)
+        bootstrap.close()
+
+        per_process = 20
+        process_count = 8  # 8 × 20 = 160 attempts, only 3 slots
+        with mp.get_context("spawn").Pool(process_count) as pool:
+            wins = pool.map(
+                _attempt_in_subprocess,
+                [
+                    (dsn, "stress-oversubscription", cost, per_process)
+                    for _ in range(process_count)
+                ],
+            )
+        total = sum(wins)
+        assert total == winners_allowed, (
+            f"Expected exactly {winners_allowed} successful reservations under "
+            f"{process_count * per_process}-way contention across {process_count} "
+            f"processes; got {total} (per-process: {wins}). A total > "
+            f"{winners_allowed} means the atomic check-then-charge lost an update "
+            f"(double-spend); < {winners_allowed} means spurious starvation."
+        )
+
+        verify = PostgresBudgetBackend()
+        assert verify.pending(key) == pytest.approx(cap), (
+            "Persisted pending must equal exactly cap (3 × cost) — any drift "
+            "means a reservation was charged without being counted, or vice versa."
+        )
+        verify.close()
+        with suppress(KeyError):
+            del os.environ["CHUZOM_BUDGET_POSTGRES_DSN"]
+
+
+def _load_worker(args: tuple[str, str, float, int]) -> dict[str, object]:
+    """Run realistic sequential reserve->commit spend cycles in a fresh
+    spawn-safe process and return successes plus per-op latencies."""
+    dsn, key_user, cost, ops = args
+    import asyncio
+    import os
+    import time
+
+    os.environ["CHUZOM_BUDGET_POSTGRES_DSN"] = dsn
+    from chuzom.budget_backend_postgres import PostgresBudgetBackend
+    from chuzom.budget_key import SCOPE_TURN as _SCOPE, BudgetKey as _BK
+
+    backend = PostgresBudgetBackend()
+    key = _BK(
+        tenant_id="t1",
+        org_id="o1",
+        user_id=key_user,
+        agent_id=None,
+        scope=_SCOPE,
+    )
+
+    async def _run() -> dict[str, object]:
+        ok = 0
+        latencies_ms: list[float] = []
+        for _ in range(ops):
+            started = time.perf_counter()
+            reserved = await backend.try_reserve(key, cost)
+            if reserved:
+                await backend.commit(key, cost)
+                ok += 1
+            latencies_ms.append((time.perf_counter() - started) * 1000.0)
+        return {"ok": ok, "attempts": ops, "latencies_ms": latencies_ms}
+
+    try:
+        return asyncio.run(_run())
+    finally:
+        backend.close()
+
+
+@pytest.mark.skipif(
+    not _DOCKER_AVAILABLE,
+    reason="Docker daemon not reachable — Postgres integration test skipped",
+)
+def test_load_realistic_concurrency() -> None:
+    """Realistic-load throughput/latency companion to the exactly-N contention
+    test.
+
+    This drives the normal reserve->commit spend path under real
+    multi-process concurrency with enough headroom that nearly every
+    reservation should succeed. The assertions guard correctness under
+    load and basic forward progress, not a hardware-specific SLA.
+    """
+    import math
+    import time
+
+    from testcontainers.postgres import PostgresContainer
+
+    workers = 6
+    ops_per_worker = 200
+    total_ops = workers * ops_per_worker
+    cost = 0.001
+    cap = total_ops * cost * 10.0
+
+    with PostgresContainer("postgres:16-alpine") as pg:
+        dsn = pg.get_connection_url(driver=None)
+        if dsn.startswith("postgresql+psycopg2://"):
+            dsn = dsn.replace("postgresql+psycopg2://", "postgresql://", 1)
+
+        os.environ["CHUZOM_BUDGET_POSTGRES_DSN"] = dsn
+
+        from chuzom.budget_backend_postgres import PostgresBudgetBackend
+
+        key = _k(user="realistic-load")
+        bootstrap = PostgresBudgetBackend()
+        bootstrap.register(key, cap_usd=cap)
+        bootstrap.close()
+
+        started = time.perf_counter()
+        with mp.get_context("spawn").Pool(workers) as pool:
+            results = pool.map(
+                _load_worker,
+                [(dsn, "realistic-load", cost, ops_per_worker) for _ in range(workers)],
+            )
+        elapsed = time.perf_counter() - started
+
+        total_attempts = sum(int(result["attempts"]) for result in results)
+        total_successes = sum(int(result["ok"]) for result in results)
+        latencies_ms = sorted(
+            latency
+            for result in results
+            for latency in result["latencies_ms"]  # type: ignore[index]
+        )
+        throughput = total_attempts / elapsed
+
+        def _percentile(sorted_values: list[float], pct: float) -> float:
+            if not sorted_values:
+                return float("nan")
+            index = min(
+                len(sorted_values) - 1,
+                max(0, int(math.ceil((pct / 100.0) * len(sorted_values)) - 1)),
+            )
+            return sorted_values[index]
+
+        p50 = _percentile(latencies_ms, 50)
+        p95 = _percentile(latencies_ms, 95)
+        p99 = _percentile(latencies_ms, 99)
+
+        print(
+            f"realistic-load throughput={throughput:.2f} ops/sec "
+            f"p50={p50:.2f}ms p95={p95:.2f}ms p99={p99:.2f}ms"
+        )
+
+        assert total_successes == total_ops, (
+            f"Expected every realistic-load op to succeed with large cap; "
+            f"got {total_successes}/{total_ops} successes"
+        )
+        assert total_attempts == total_ops
+
+        verify = PostgresBudgetBackend()
+        assert verify.consumed(key) == pytest.approx(total_successes * cost)
+        assert verify.pending(key) == pytest.approx(0.0)
+        verify.close()
+
+        assert throughput > 1.0, (
+            f"Realistic-load test made insufficient progress: throughput="
+            f"{throughput:.4f} ops/sec over {elapsed:.2f}s for {total_attempts} ops"
+        )
+        assert math.isfinite(p99) and p99 > 0.0
+
+        with suppress(KeyError):
+            del os.environ["CHUZOM_BUDGET_POSTGRES_DSN"]

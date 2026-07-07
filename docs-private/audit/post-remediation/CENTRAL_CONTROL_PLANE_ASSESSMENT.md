@@ -34,6 +34,17 @@ Legend:
 
 **Result.** No row has all five columns green. **There is no control plane.** What exists is a set of YAML / env / SQLite primitives that an operator could in principle assemble into one, with significant engineering work.
 
+> **Addendum — 2026-07 (the table above is the June snapshot; preserved as-is).**
+> The **Policy** row has since moved to `API ✅ · Enf ✅ · Aud ✅` for the
+> control-plane tenant-policy path: a signed, versioned policy pushed from the
+> control plane reaches all sidecar instances within the <5s SLO, changes
+> enforcement (a blocked model is dropped through the router seam), and is
+> centrally auditable. Proven end-to-end by
+> `tests/test_cp_g004_e2e.py` (commits `27cd25e`, `41c9eb3`). This is the first
+> genuinely green Enf cell (#61). **Rollout to real multi-tenant traffic (#59)
+> is still open** — the mechanism is proven, not yet in production. See
+> `GAP_LEDGER_UPDATES_2026-07.md` TICKET-1.
+
 ---
 
 ## 2. Configuration rollout
