@@ -132,6 +132,15 @@ class RouterConfig(BaseSettings):
     # (Codex, Ollama, Gemini, GPT-4o, Perplexity, etc.) to save your Claude quota.
     chuzom_claude_subscription: bool = False
 
+    # ── Claude offload pressure cap ──
+    # Max COMBINED Claude subscription pressure (5h session + weekly, from
+    # claude_usage.get_claude_pressure(), 0.0-1.0) at which Claude may still be
+    # used for OFFLOAD (the llm_* tools, via the claude CLI). Above this, anthropic/*
+    # is dropped from offload chains so offload never starves your primary Claude Code
+    # work. 1.0 = always allow; 0.0 = disable Claude offload entirely.
+    # Env: CHUZOM_CLAUDE_OFFLOAD_MAX_PRESSURE.
+    chuzom_claude_offload_max_pressure: float = 0.80
+
     # ── Gemini Subscription (Google One AI Pro) (v9.0.1) ──
     # Set to True when using chuzom inside Gemini CLI with a subscription.
     # When enabled, all gemini/* models (API) are EXCLUDED from routing chains.
