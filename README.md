@@ -119,7 +119,7 @@ Chuzom sits between your coding tool and your model providers. It classifies eac
 </table>
 
 <p align="center">
-  <img src="assets/flow-calm.webp" alt="A marmot resting on a lily pad in calm water at golden hour — the unhurried flow of a session that never hits the wall" width="92%"/>
+  <img src="assets/flow-animated.webp" alt="Animated: a marmot resting on a lily pad in calm, gently rippling water at golden hour — the unhurried flow of a session that never hits the wall" width="92%"/>
 </p>
 
 <p align="center">
