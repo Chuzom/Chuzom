@@ -10,7 +10,19 @@
 ---
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Chuzom/Chuzom/main/assets/chuzom-logo.png" alt="Chuzom — smart LLM router" width="200"/>
+  <img src="assets/hero-confluence.webp" alt="A marmot at a river confluence — rushing rapids on one side, deep calm water on the other — where fast and slow streams meet and each finds its path" width="92%"/>
+</p>
+
+<p align="center">
+  <em>A <strong>Chuzom</strong> is a <strong>confluence</strong> — the place where rivers meet.<br/>
+  Fast rapids and deep water, converging, each stream finding its natural path.<br/>
+  That's the router: every prompt flows to the model that fits it, and your Claude quota is spent only where it counts.</em>
+</p>
+
+---
+
+<p align="center">
+  <img src="assets/chuzom-logo.png" alt="Chuzom — smart LLM router" width="200"/>
 </p>
 
 <p align="center">
@@ -55,6 +67,10 @@ Your IDE (Claude Code, Cursor, etc)
 Result + streaming progress + quota savings banner
     🎯 chuzom → gemini-2.5-flash · code/moderate · 342ms · saved Claude quota!
 ```
+
+<p align="center">
+  <sub><em>🌊 Simple prompts take the fast rapids (local, free). Deep reasoning takes the slow, deep water (Claude). The router reads the current and picks the channel — you never think about it.</em></sub>
+</p>
 
 **A typical developer session burns ~200,000 Claude tokens.** Routing ~80% of prompts to free models saves ~160,000 Claude tokens per session — the difference between hitting the limit in 2 hours vs. working a full uninterrupted day.
 
@@ -101,6 +117,14 @@ Chuzom sits between your coding tool and your model providers. It classifies eac
 </td>
 </tr>
 </table>
+
+<p align="center">
+  <img src="assets/flow-animated.webp" alt="Animated: a marmot resting on a lily pad in calm, gently rippling water at golden hour — the unhurried flow of a session that never hits the wall" width="92%"/>
+</p>
+
+<p align="center">
+  <em>Fewer walls. Longer flow. The same workflow — just calmer underneath.</em>
+</p>
 
 ---
 
@@ -900,6 +924,9 @@ export CHUZOM_CLAUDE_SUBSCRIPTION=true
 export CHUZOM_ROUTING_POLICY=local-first   # or: cost, quality, balanced, dynamic
 
 # Maximum enforcement (block all direct Claude answers for Q&A tasks)
+# NOTE: `hard` is opt-in. The shipped default is `advise` — it routes on every
+# turn but does not block a tool call. Only `hard` actually blocks; `soft`/`off`
+# relax further. See "Enforcement Modes" for the full ladder.
 export CHUZOM_ENFORCE=hard
 
 # All settings can live in ~/.chuzom/.env — loaded automatically
