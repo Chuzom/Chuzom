@@ -24,8 +24,10 @@ def _repo_yml(cwd: Path, value: str) -> None:
     (cwd / ".chuzom.yml").write_text(f"enforce: {value}\n")
 
 
-def test_default_is_smart(tmp_path, monkeypatch):
-    assert resolve_enforce_mode(cwd=tmp_path, home=tmp_path) == DEFAULT_ENFORCE == "smart"
+def test_default_is_soft(tmp_path, monkeypatch):
+    # Default is "soft" (log-only, never blocks) so legitimate Bash/Read/Write/
+    # loophole work is never sabotaged unless a blocking mode is opted into.
+    assert resolve_enforce_mode(cwd=tmp_path, home=tmp_path) == DEFAULT_ENFORCE == "soft"
 
 
 def test_routing_yaml_is_read(tmp_path):
@@ -63,4 +65,4 @@ def test_value_is_normalized(tmp_path):
 
 
 def test_missing_files_fall_to_default(tmp_path):
-    assert resolve_enforce_mode(cwd=tmp_path / "nope", home=tmp_path / "nohome") == "smart"
+    assert resolve_enforce_mode(cwd=tmp_path / "nope", home=tmp_path / "nohome") == "soft"

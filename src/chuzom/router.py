@@ -904,6 +904,14 @@ def _disabled_subprocess_backends() -> set[str]:
 # calls to each provider's SDK (DALL-E, Flux, Runway, ElevenLabs, etc.).
 MEDIA_TASK_TYPES = {TaskType.IMAGE, TaskType.VIDEO, TaskType.AUDIO}
 
+# P3: substrings identifying the expensive "big-gun" premium models. Matched as
+# substrings so provider-prefixed variants (openai/o3, codex/o3, anthropic/
+# claude-opus-4-8, …) are all caught. Used to hard-cap premium spend under budget
+# pressure — see the premium gate in _dispatch_model_loop.
+_PREMIUM_MODEL_MARKERS = frozenset({
+    "opus", "fable", "gpt-5.5", "gpt-5.6-sol", "/o3",
+})
+
 # Task types treated as "agentic" / tool-reasoning work for CHUZOM_AGENTIC_MODEL.
 # CODE is intentionally excluded so dedicated coder models still win coding tasks.
 AGENTIC_TASK_TYPES = {
@@ -1236,6 +1244,32 @@ async def _dispatch_model_loop(
     last_error: Exception | None = None
     chain_errors: list[tuple[str, str]] = []  # (model, error_summary) for diagnostics
     chain_attempts: list[str] = []  # models tried, for explainability
+
+    # ── P2: quality-gated escalation state ───────────────────────────────────
+    # Try cheap first, escalate to the next (pricier) model ONLY when the cheap
+    # answer is actually inadequate — bounded to ONE hop so a weak chain can't
+    # cascade into premium. Read per-dispatch so tests/env changes take effect.
+    _escalated = False
+    _escalate_on_quality = os.environ.get(
+        "CHUZOM_ESCALATE_ON_QUALITY", "1"
+    ).strip().lower() not in ("0", "false", "no", "off")
+    try:
+        _escalate_threshold = float(os.environ.get("CHUZOM_ESCALATE_THRESHOLD", "0.4"))
+    except ValueError:
+        _escalate_threshold = 0.4
+
+    # ── P3: premium spend hard-cap ───────────────────────────────────────────
+    # Reserve the expensive big guns (Opus/o3/Fable/gpt-5.5/gpt-5.6-sol) for when
+    # they're genuinely needed: once a provider's budget pressure crosses this
+    # cap, skip its premium models and fall back to cheaper tiers. Default 0.85 =
+    # only protect quota when genuinely stressed; set lower (e.g. 0.5) for
+    # maximum savings, at some cost to complex-task quality.
+    try:
+        _premium_max_pressure = float(
+            os.environ.get("CHUZOM_PREMIUM_MAX_PRESSURE", "0.85")
+        )
+    except ValueError:
+        _premium_max_pressure = 0.85
     # T3-S1: track candidates skipped because their projected cost would
     # exceed ``max_cost_per_task``. If the whole chain is skipped this way,
     # raise CostBudgetExceeded with the cheapest projection so the caller
@@ -1451,6 +1485,37 @@ async def _dispatch_model_loop(
             chain_errors.append((model, "budget exhausted"))
             continue
 
+        # ── P3: premium spend hard-cap ───────────────────────────────────────
+        # Under budget pressure, hold back the expensive big guns and let the
+        # chain fall through to cheaper tiers. The emergency BUDGET fallback at
+        # the end catches the (rare) case where nothing cheaper remains, so this
+        # never strands a task. Media tasks are exempt (their models are
+        # specialized, not cost-tier "premium").
+        if (
+            task_type not in MEDIA_TASK_TYPES
+            and budget_state.pressure >= _premium_max_pressure
+            and any(mark in model for mark in _PREMIUM_MODEL_MARKERS)
+        ):
+            await _notify(
+                ctx, "info",
+                f"💰 {model_name} (premium) held back — {provider} at "
+                f"{budget_state.pressure:.0%} pressure (cap {_premium_max_pressure:.0%})",
+            )
+            log.info(
+                "Premium cap: skipping %s — %s pressure %.2f >= cap %.2f",
+                model, provider, budget_state.pressure, _premium_max_pressure,
+            )
+            route_log.info(
+                "premium_capped",
+                correlation_id=correlation_id,
+                model=model,
+                provider=provider,
+                pressure=budget_state.pressure,
+                cap=_premium_max_pressure,
+            )
+            chain_errors.append((model, f"premium_capped@{budget_state.pressure:.2f}"))
+            continue
+
         # Show provider context for QUOTA_BALANCED
         provider_context = f" [{provider.upper()}]" if profile == RoutingProfile.QUOTA_BALANCED else ""
         await _notify(ctx, "info", f"⏳ {model_name}{provider_context} working...")
@@ -1596,6 +1661,48 @@ async def _dispatch_model_loop(
                     continue
             else:
                 _gate_results = []
+
+            # ── P2: quality-gated escalation ─────────────────────────────────
+            # Score the cheap answer with content heuristics (no LLM call). If it
+            # is inadequate AND a pricier fallback remains AND we have not already
+            # escalated this dispatch, treat it as a soft miss and advance the
+            # chain — exactly like a failed gate above. Always record the score so
+            # `should_skip_model` keeps learning, even when we don't escalate
+            # (last model in chain, media task, or feature disabled).
+            if _escalate_on_quality and task_type not in MEDIA_TASK_TYPES:
+                try:
+                    from chuzom.quality_feedback import record_quality, score_response
+                    _qs = score_response(response.content, task_type.value, model, c.value)
+                    record_quality(model, task_type.value, c.value, _qs.score)
+                    if (
+                        not _escalated
+                        and attempt < len(models_to_try)
+                        and _qs.score < _escalate_threshold
+                    ):
+                        _escalated = True
+                        log.info(
+                            "Quality-gated escalation: %s scored %.2f (< %.2f) on "
+                            "%s/%s — escalating to next model",
+                            model, _qs.score, _escalate_threshold,
+                            task_type.value, c.value,
+                        )
+                        route_log.info(
+                            "quality_escalation",
+                            correlation_id=correlation_id,
+                            model=model,
+                            score=_qs.score,
+                            threshold=_escalate_threshold,
+                            reasons=list(_qs.reasons),
+                        )
+                        chain_errors.append((model, f"low_quality:{_qs.score:.2f}"))
+                        await _notify(
+                            ctx, "info",
+                            f"↑ escalating: {model_name} answer scored "
+                            f"{_qs.score:.2f} (<{_escalate_threshold:.2f})",
+                        )
+                        continue
+                except Exception as _esc_err:  # never let scoring break routing
+                    log.debug("quality escalation check skipped: %s", _esc_err)
 
             tracker.record_success(provider)
             await cost.log_usage(response, task_type, profile, correlation_id=correlation_id)
