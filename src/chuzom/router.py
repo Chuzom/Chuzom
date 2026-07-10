@@ -531,18 +531,41 @@ async def _build_and_filter_chain(
                 + models_to_try[first_paid:]
             )
 
+        # ── Broker-backed availability (headless daemon) ──────────────────────
+        # When the local subprocess backend is disabled (gateway daemon) but a
+        # session broker launched from the interactive terminal offers the
+        # provider, treat it as injectable so COMPLEX routes reach the capable
+        # free path (Codex/Gemini via broker) instead of churning through
+        # unreachable Claude + slow local reasoning models. Only pay the (cached)
+        # broker ping when a subprocess backend is actually disabled.
+        _disabled_backends = _disabled_subprocess_backends()
+        _broker_provs: frozenset[str] = frozenset()
+        if _disabled_backends:
+            try:
+                from chuzom.session_broker import broker_providers
+                _broker_provs = await broker_providers()
+            except Exception:
+                _broker_provs = frozenset()
+
         # ── Codex injection ───────────────────────────────────────────────────
         # Codex is free (uses OpenAI subscription) — inject for ALL profiles
         # including BUDGET to maximize free-first routing.
         _codex_eligible_tasks = {TaskType.CODE, TaskType.ANALYZE, TaskType.GENERATE, TaskType.QUERY}
-        if (
-            task_type in _codex_eligible_tasks
-            and is_codex_available()
-            and "codex" not in _disabled_subprocess_backends()
-        ):
+        _codex_reachable = (
+            (is_codex_available() and "codex" not in _disabled_backends)
+            or "codex" in _broker_provs
+        )
+        if task_type in _codex_eligible_tasks and _codex_reachable:
             codex_chain = [f"codex/{m}" for m in CODEX_MODELS[:2]]
             has_claude = any(m.startswith("anthropic/") for m in models_to_try)
-            if pressure >= 0.95:
+            if "codex" in _broker_provs:
+                # Headless daemon: broker-backed Codex is THE capable free path.
+                # Front-inject so complex routes reach it immediately instead of
+                # churning through unreachable Claude + slow local reasoning
+                # models (qwen3:32b ~50s). Unreachable Claude is skipped fast.
+                log.debug("Codex (broker-backed) injected at front — headless capable path")
+                models_to_try = codex_chain + models_to_try
+            elif pressure >= 0.95:
                 log.debug("Codex injected at front (pressure=%.0f%%)", pressure * 100)
                 models_to_try = codex_chain + models_to_try
             elif has_claude and task_type == TaskType.CODE:
@@ -578,11 +601,14 @@ async def _build_and_filter_chain(
 
         # ── Gemini CLI injection ──────────────────────────────────────────────
         _gemini_eligible_tasks = {TaskType.CODE, TaskType.ANALYZE, TaskType.GENERATE, TaskType.QUERY}
+        _gemini_reachable = (
+            (is_gemini_cli_available() and "gemini_cli" not in _disabled_backends)
+            or "gemini_cli" in _broker_provs
+        )
         if (
             profile != RoutingProfile.BUDGET
             and task_type in _gemini_eligible_tasks
-            and is_gemini_cli_available()
-            and "gemini_cli" not in _disabled_subprocess_backends()
+            and _gemini_reachable
         ):
             gemini_chain = [f"gemini_cli/{m}" for m in GEMINI_MODELS[:2]]
             has_claude = any(m.startswith("anthropic/") for m in models_to_try)
@@ -751,6 +777,22 @@ async def _build_and_filter_chain(
             rest   = [m for m in models_to_try if provider_from_model(m) != pinned_provider]
             if pinned:
                 models_to_try = pinned + rest
+
+    # ── Headless capable-path re-assert (P1 phase-2 latency tuning) ──────────
+    # In a headless daemon, broker-backed Codex is the capable FREE path. For
+    # COMPLEX (premium/reasoning) routes, the reorders above re-bury it behind
+    # unreachable Claude + slow local reasoning models (qwen3:32b ~50s), so
+    # complex requests time out before reaching it. Re-assert Codex to the front
+    # here — but ONLY for premium/reasoning profiles, so SIMPLE routes still
+    # prefer free local Ollama (cheap-first). No effect unless a broker is up.
+    if (
+        not pinned_model
+        and "codex" in _broker_provs
+        and profile in (RoutingProfile.PREMIUM, RoutingProfile.REASONING)
+    ):
+        _cx = [m for m in models_to_try if provider_from_model(m) == "codex"]
+        if _cx:
+            models_to_try = _cx + [m for m in models_to_try if provider_from_model(m) != "codex"]
 
     return models_to_try
 

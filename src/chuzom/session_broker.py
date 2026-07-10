@@ -352,7 +352,14 @@ async def run_broker_server() -> None:
     if not adapters:
         log.warning("session_broker: no interactive backends available "
                     "(is Codex CLI installed + authenticated?)")
-    server = BrokerServer(adapters)
+    # Concurrency > 1 so a parallel swarm (loophole) delegating to Codex/Gemini
+    # doesn't serialize at the broker. CLIs run as independent processes; the
+    # subscription rate-limiter is the real cap (and it degrades gracefully).
+    try:
+        concurrency = max(1, int(os.environ.get("CHUZOM_BROKER_CONCURRENCY", "4")))
+    except ValueError:
+        concurrency = 4
+    server = BrokerServer(adapters, concurrency=concurrency)
     await server.start()
     print(f"⚡ Chuzom session broker listening at {server._socket_path}")
     print(f"   backends: {', '.join(server.providers) or '(none)'}")
