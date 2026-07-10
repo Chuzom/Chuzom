@@ -1249,10 +1249,15 @@ async def _dispatch_model_loop(
     # Try cheap first, escalate to the next (pricier) model ONLY when the cheap
     # answer is actually inadequate — bounded to ONE hop so a weak chain can't
     # cascade into premium. Read per-dispatch so tests/env changes take effect.
+    #
+    # DEFAULT OFF (opt-in via CHUZOM_ESCALATE_ON_QUALITY=1): forcing a second
+    # in-chain attempt currently exposes a hang in the 2nd-attempt setup path
+    # (the model itself is fine; escalation-off routes cleanly). Until that is
+    # root-caused, escalation stays opt-in so it can never hang normal routing.
     _escalated = False
     _escalate_on_quality = os.environ.get(
-        "CHUZOM_ESCALATE_ON_QUALITY", "1"
-    ).strip().lower() not in ("0", "false", "no", "off")
+        "CHUZOM_ESCALATE_ON_QUALITY", "0"
+    ).strip().lower() in ("1", "true", "yes", "on")
     try:
         _escalate_threshold = float(os.environ.get("CHUZOM_ESCALATE_THRESHOLD", "0.4"))
     except ValueError:
