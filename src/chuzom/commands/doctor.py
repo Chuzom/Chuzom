@@ -377,8 +377,8 @@ def _check_savings_posture() -> list[str]:
     1. **OpenRouter key** — biggest unlock. Single key gives access to
        deepseek-v4-flash, qwen3-235b, claude-sonnet-4 via OpenRouter,
        which the ``cost_aggressive`` policy is wired for.
-    2. **DeepSeek key** — direct access to deepseek-chat /
-       deepseek-reasoner. Optional but unlocks the cheapest non-local
+    2. **DeepSeek key** — direct access to deepseek-v4-flash /
+       deepseek-v4-pro. Optional but unlocks the cheapest non-local
        reasoning tier when OpenRouter isn't set.
     3. **Sidecar pre-execution** — ``CHUZOM_SIDECAR_PREFETCH=1`` lets
        the hook answer introspection prompts without any tool calls.
@@ -421,10 +421,10 @@ def _check_savings_posture() -> list[str]:
 
     # 2. DeepSeek key (direct).
     if os.environ.get("DEEPSEEK_API_KEY"):
-        lines.append(_ok("DEEPSEEK_API_KEY set — direct deepseek-chat reachable"))
+        lines.append(_ok("DEEPSEEK_API_KEY set — direct deepseek-v4-flash reachable"))
     else:
         lines.append(_warn(
-            "DEEPSEEK_API_KEY not set — direct deepseek-chat unreachable "
+            "DEEPSEEK_API_KEY not set — direct deepseek-v4-flash unreachable "
             "(OpenRouter can still route there if its key is set)."
         ))
 

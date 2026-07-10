@@ -171,8 +171,7 @@ def generate_profile_yaml(detected: ServiceDetection) -> str:
     if detected.get("gemini_api_available"):
         cheap_apis.append("gemini/gemini-2.5-flash")
     if detected.get("deepseek_available"):
-        cheap_apis.append("deepseek/deepseek-chat")
-        cheap_apis.append("deepseek/deepseek-reasoner")
+        cheap_apis.append("deepseek/deepseek-v4-flash")   # was deepseek-chat; alias deprecates 2026-07-24
     if detected.get("groq_available"):
         cheap_apis.append("groq/llama-3.3-70b-versatile")
 
@@ -182,6 +181,9 @@ def generate_profile_yaml(detected: ServiceDetection) -> str:
     if detected.get("openai_available"):
         balanced_apis.append("openai/gpt-4o-mini")
         balanced_apis.append("openai/gpt-4o")
+        balanced_apis.append("openai/gpt-5.4")      # current production workhorse ($2.50/$15)
+    if detected.get("deepseek_available"):
+        balanced_apis.append("deepseek/deepseek-v4-pro")   # reasoning flagship; was deepseek-reasoner (deprecates 2026-07-24)
     if detected.get("mistral_available"):
         balanced_apis.append("mistral/mistral-large-latest")
     if detected.get("cohere_available"):
@@ -196,6 +198,7 @@ def generate_profile_yaml(detected: ServiceDetection) -> str:
     # Tier 5: Expensive APIs ($0.025+/1M)
     if detected.get("openai_available"):
         expensive_apis.append("openai/o3")
+        expensive_apis.append("openai/gpt-5.5")     # current flagship ($5/$30)
     if detected.get("perplexity_available"):
         expensive_apis.append("perplexity/sonar-pro")
         expensive_apis.append("perplexity/sonar")

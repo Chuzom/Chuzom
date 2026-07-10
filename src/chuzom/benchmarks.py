@@ -51,6 +51,8 @@ _MODEL_COST_PER_1K: dict[str, float] = {
     # DeepSeek
     "deepseek/deepseek-reasoner":          0.0014,
     "deepseek/deepseek-chat":              0.0007,
+    "deepseek/deepseek-v4-pro":            0.0026,
+    "deepseek/deepseek-v4-flash":          0.0002,
     # Groq
     "groq/llama-3.3-70b-versatile":        0.0007,
     # Perplexity

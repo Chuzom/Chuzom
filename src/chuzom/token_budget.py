@@ -27,22 +27,41 @@ MODEL_CONTEXT_LIMITS: dict[str, int] = {
     "ollama/qwen3.5": 32_768,
     "ollama/llama3.2": 128_000,
     "ollama/deepseek-r1": 64_000,
-    # OpenAI
+    # OpenAI (5.x windows conservative at 200k; vendor may allow more — reconcile w/ models.yaml)
     "openai/gpt-4o-mini": 128_000,
     "openai/gpt-4o": 128_000,
     "openai/o3": 200_000,
     "openai/gpt-5.4": 200_000,
+    "openai/gpt-5.4-mini": 200_000,
+    "openai/gpt-5.4-nano": 200_000,
+    "openai/gpt-5.5": 200_000,
+    "openai/gpt-5.6-sol": 200_000,
+    "openai/gpt-5.6-terra": 200_000,
+    "openai/gpt-5.6-luna": 200_000,
     # Gemini
     "gemini/gemini-2.5-flash": 1_048_576,
     "gemini/gemini-2.5-pro": 1_048_576,
+    "gemini/gemini-3-pro": 2_000_000,
+    "gemini/gemini-3.5-flash": 1_048_576,
+    "gemini/gemini-3.1-flash-lite": 1_048_576,
     # Anthropic
     "anthropic/claude-haiku-4-5-20251001": 200_000,
     "anthropic/claude-sonnet-4-6-20260320": 200_000,
     "anthropic/claude-opus-4-6-20260401": 200_000,
+    "anthropic/claude-sonnet-5": 1_000_000,
+    "anthropic/claude-opus-4-8": 1_000_000,
+    "anthropic/claude-fable-5": 1_000_000,
     # Groq
     "groq/llama-3.3-70b-versatile": 128_000,
-    # DeepSeek
+    # DeepSeek (deepseek-chat/reasoner aliases deprecate 2026-07-24 → v4-flash/pro)
     "deepseek/deepseek-chat": 64_000,
+    "deepseek/deepseek-v4-flash": 1_000_000,
+    "deepseek/deepseek-v4-pro": 1_000_000,
+    # xAI
+    "xai/grok-4.3": 2_000_000,
+    "xai/grok-4.1-fast": 2_000_000,
+    # Mistral
+    "mistral/mistral-large-latest": 128_000,
     # Codex
     "codex/gpt-5.4": 200_000,
     "codex/o3": 200_000,

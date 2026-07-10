@@ -53,6 +53,8 @@ _MODEL_OUTPUT_CAPS: dict[str, int] = {
     # ── DeepSeek V3+ chat & reasoner (8192 output) ──
     "deepseek/deepseek-chat": 8192,
     "deepseek/deepseek-reasoner": 8192,
+    "deepseek/deepseek-v4-flash": 8192,
+    "deepseek/deepseek-v4-pro": 8192,
     # ── Mistral Small Latest (8192 output) ──
     "mistral/mistral-small-latest": 8192,
     # ── Cohere Command R+ (4096 output) ──

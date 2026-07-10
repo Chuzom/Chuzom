@@ -46,14 +46,14 @@ _FREE_EXTERNAL_MODELS: frozenset[str] = frozenset({
 })
 
 # Cheap-but-not-free models (< $0.002/1K tokens blended).
-# deepseek-reasoner is $0.0014 — cheaper than Gemini Pro ($0.003) and outperforms
-# it on every benchmark, so it belongs in the cheap tier for pressure reordering.
+# deepseek-v4-flash is $0.14/$0.28 per 1M — belongs in the cheap tier for
+# pressure reordering. (v4-pro, the deepseek-reasoner successor, is mid-tier
+# now at $1.74/$3.48, so it is intentionally NOT listed here.)
 _CHEAP_MODELS: frozenset[str] = frozenset({
     "gemini/gemini-2.5-flash",
     "gemini/gemini-2.5-flash-lite",
     "groq/llama-3.3-70b-versatile",
-    "deepseek/deepseek-chat",
-    "deepseek/deepseek-reasoner",
+    "deepseek/deepseek-v4-flash",   # was deepseek-chat/reasoner; aliases deprecate 2026-07-24
     "openai/gpt-4o-mini",
 })
 
@@ -135,7 +135,7 @@ CLASSIFIER_MODELS: list[str] = [
     "gemini/gemini-2.5-flash-lite",  # non-thinking, fastest, cheapest external
     "groq/llama-3.3-70b-versatile",
     "openai/gpt-4o-mini",
-    "deepseek/deepseek-chat",
+    "deepseek/deepseek-v4-flash",   # was deepseek-chat; alias deprecates 2026-07-24
     "mistral/mistral-small-latest",
 ]
 # Ollama models (local, free) are prepended by router.py when ollama_base_url

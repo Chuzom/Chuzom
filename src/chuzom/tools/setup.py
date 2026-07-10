@@ -159,7 +159,7 @@ _TEST_MODELS: dict[str, str] = {
     "openai": "openai/gpt-4o-mini",
     "gemini": "gemini/gemini-2.5-flash-lite",
     "groq": "groq/llama-3.3-70b-versatile",
-    "deepseek": "deepseek/deepseek-chat",
+    "deepseek": "deepseek/deepseek-v4-flash",
     "mistral": "mistral/mistral-small-latest",
     "perplexity": "perplexity/sonar",
     "anthropic": "anthropic/claude-haiku-4-5-20251001",
