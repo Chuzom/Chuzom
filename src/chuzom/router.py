@@ -912,6 +912,15 @@ _PREMIUM_MODEL_MARKERS = frozenset({
     "opus", "fable", "gpt-5.5", "gpt-5.6-sol", "/o3",
 })
 
+# P2 guard: reasoning / "thinking" models that emit long chains-of-thought and
+# are slow for simple tasks. Quality-gated escalation must not escalate a simple
+# task INTO one of these (it buys latency, not a better short answer). Matched as
+# substrings against the candidate model id.
+_SLOW_MODEL_MARKERS = frozenset({
+    "qwen3.5", "qwen3:32b", "qwq", "reasoner", "deepseek-v4-pro",
+    "thinking", "/o3", "opus", "fable",
+})
+
 # Task types treated as "agentic" / tool-reasoning work for CHUZOM_AGENTIC_MODEL.
 # CODE is intentionally excluded so dedicated coder models still win coding tasks.
 AGENTIC_TASK_TYPES = {
@@ -1246,22 +1255,37 @@ async def _dispatch_model_loop(
     chain_attempts: list[str] = []  # models tried, for explainability
 
     # ── P2: quality-gated escalation state ───────────────────────────────────
-    # Try cheap first, escalate to the next (pricier) model ONLY when the cheap
-    # answer is actually inadequate — bounded to ONE hop so a weak chain can't
-    # cascade into premium. Read per-dispatch so tests/env changes take effect.
-    #
-    # DEFAULT OFF (opt-in via CHUZOM_ESCALATE_ON_QUALITY=1): forcing a second
-    # in-chain attempt currently exposes a hang in the 2nd-attempt setup path
-    # (the model itself is fine; escalation-off routes cleanly). Until that is
-    # root-caused, escalation stays opt-in so it can never hang normal routing.
+    # Try cheap first, escalate to the next model ONLY when the cheap answer is
+    # actually inadequate — bounded to ONE hop. Read per-dispatch so tests/env
+    # changes take effect. NOTE: the earlier "hang" was never a deadlock — it was
+    # escalating a short-but-correct answer (e.g. "OK", which scores low purely
+    # for length) into a slow reasoning model (~60s). Three guards below keep
+    # escalation from making things needlessly slow, so it's safe default-on.
     _escalated = False
     _escalate_on_quality = os.environ.get(
-        "CHUZOM_ESCALATE_ON_QUALITY", "0"
+        "CHUZOM_ESCALATE_ON_QUALITY", "1"
     ).strip().lower() in ("1", "true", "yes", "on")
     try:
         _escalate_threshold = float(os.environ.get("CHUZOM_ESCALATE_THRESHOLD", "0.4"))
     except ValueError:
         _escalate_threshold = 0.4
+    # Guard 1: don't escalate a short answer to a short prompt — a terse reply is
+    # proportionate (a 2-token "OK" is correct, not inadequate).
+    try:
+        _escalate_min_prompt_tokens = int(
+            os.environ.get("CHUZOM_ESCALATE_MIN_PROMPT_TOKENS", "24")
+        )
+    except ValueError:
+        _escalate_min_prompt_tokens = 24
+    # Guard 3: don't escalate once the dispatch has already spent this long —
+    # escalation must not compound latency on an already-slow request.
+    try:
+        _escalate_deadline_s = float(
+            os.environ.get("CHUZOM_ESCALATE_DEADLINE_S", "20")
+        )
+    except ValueError:
+        _escalate_deadline_s = 20.0
+    _dispatch_started = time.monotonic()
 
     # ── P3: premium spend hard-cap ───────────────────────────────────────────
     # Reserve the expensive big guns (Opus/o3/Fable/gpt-5.5/gpt-5.6-sol) for when
@@ -1679,17 +1703,31 @@ async def _dispatch_model_loop(
                     from chuzom.quality_feedback import record_quality, score_response
                     _qs = score_response(response.content, task_type.value, model, c.value)
                     record_quality(model, task_type.value, c.value, _qs.score)
+                    # Guards (see escalation-state block): a short answer to a short
+                    # prompt is proportionate; escalating a SIMPLE task into a slow
+                    # reasoning model buys latency not quality; and escalation must
+                    # not compound latency on an already-slow dispatch.
+                    _next_model = models_to_try[attempt] if attempt < len(models_to_try) else ""
+                    _short_prompt = (len(prompt) // 4) < _escalate_min_prompt_tokens
+                    _slow_target = (
+                        c == Complexity.SIMPLE
+                        and any(mk in _next_model for mk in _SLOW_MODEL_MARKERS)
+                    )
+                    _over_budget = (time.monotonic() - _dispatch_started) >= _escalate_deadline_s
                     if (
                         not _escalated
                         and attempt < len(models_to_try)
                         and _qs.score < _escalate_threshold
+                        and not _short_prompt
+                        and not _slow_target
+                        and not _over_budget
                     ):
                         _escalated = True
                         log.info(
                             "Quality-gated escalation: %s scored %.2f (< %.2f) on "
-                            "%s/%s — escalating to next model",
+                            "%s/%s — escalating to %s",
                             model, _qs.score, _escalate_threshold,
-                            task_type.value, c.value,
+                            task_type.value, c.value, _next_model,
                         )
                         route_log.info(
                             "quality_escalation",
