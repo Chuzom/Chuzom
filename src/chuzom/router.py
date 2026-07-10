@@ -899,6 +899,47 @@ def _disabled_subprocess_backends() -> set[str]:
     raw = os.environ.get("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "")
     return {item.strip().lower() for item in raw.split(",") if item.strip()}
 
+
+async def _maybe_broker_dispatch(
+    provider: str, model_name: str, prompt: str, *, timeout: float = 300.0
+) -> "LLMResponse | None":
+    """Delegate a gated backend call to the interactive session broker (P1 phase 2).
+
+    When the local subprocess backend is DISABLED (e.g. the headless gateway
+    daemon sets CHUZOM_DISABLE_SUBPROCESS_BACKENDS) but a broker launched from the
+    interactive session offers this provider, run the call there — the broker has
+    the live Codex/Gemini credentials the daemon lacks. Returns an LLMResponse on
+    success, or None when broker delegation doesn't apply (local exec is enabled,
+    or the broker isn't offering this provider) so the caller falls back to its
+    normal path.
+    """
+    if provider not in _disabled_subprocess_backends():
+        return None  # local exec available — no need to delegate
+    try:
+        from chuzom.session_broker import BrokerClient, broker_providers
+        if provider not in await broker_providers():
+            return None  # no broker, or it doesn't offer this provider
+        result = await BrokerClient().run(provider, model_name, prompt, timeout=timeout)
+    except Exception as e:
+        raise RuntimeError(f"session broker {provider} delegation failed: {e}") from e
+    if result.get("status") != "ok":
+        raise RuntimeError(
+            f"session broker {provider} error: {result.get('error', 'unknown')}"
+        )
+    text = result.get("text", "")
+    usage = result.get("usage", {}) or {}
+    log.info("Routed %s/%s via session broker (%d chars)",
+             provider, model_name, len(text))
+    return LLMResponse(
+        content=text,
+        model=f"{provider}/{model_name}",
+        input_tokens=int(usage.get("input_tokens", max(1, len(prompt) // 4))),
+        output_tokens=int(usage.get("output_tokens", max(1, len(text) // 4))),
+        cost_usd=float(usage.get("estimated_cost_usd", 0.0)),
+        latency_ms=0.0,
+        provider=provider,
+    )
+
 # Task types routed to provider-specific media APIs instead of LiteLLM.
 # LiteLLM only supports text completion; media generation requires direct
 # calls to each provider's SDK (DALL-E, Flux, Runway, ElevenLabs, etc.).
@@ -1592,6 +1633,12 @@ async def _dispatch_model_loop(
                     response = await _call_media(task_type, provider, model_name, prompt,
                                                  _filter_media_params(task_type, media_params),
                                                  correlation_id=correlation_id)
+                elif provider == "codex" and (
+                    _brokered := await _maybe_broker_dispatch("codex", model_name, prompt)
+                ) is not None:
+                    # P1 phase 2: local Codex disabled (headless daemon) but the
+                    # interactive session broker ran it with live credentials.
+                    response = _brokered
                 elif provider == "codex":
                     async def _codex_on_event(ev_type: str, text: str) -> None:
                         if ev_type == "item.completed" and text:
@@ -1620,6 +1667,11 @@ async def _dispatch_model_loop(
                         latency_ms=codex_result.duration_sec * 1000,
                         provider="codex",
                     )
+                elif provider == "gemini_cli" and (
+                    _brokered := await _maybe_broker_dispatch("gemini_cli", model_name, prompt)
+                ) is not None:
+                    # P1 phase 2: local Gemini CLI disabled but the session broker ran it.
+                    response = _brokered
                 elif provider == "gemini_cli":
                     async def _gemini_on_event(ev_type: str, text: str) -> None:
                         if text:

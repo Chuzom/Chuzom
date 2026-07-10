@@ -32,6 +32,7 @@ import hmac
 import json
 import os
 import secrets
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -279,6 +280,35 @@ def broker_socket_present() -> bool:
         return broker_socket_path().is_socket()
     except OSError:
         return False
+
+
+# Short-TTL cache of which providers the broker offers, so the router can check
+# on every dispatch without a socket round-trip each time. Negative results are
+# cached too (broker down), bounding delegation attempts when it's absent.
+_provider_cache: "tuple[frozenset[str], float] | None" = None
+_PROVIDER_CACHE_TTL = 10.0
+
+
+async def broker_providers(timeout: float = 1.0) -> frozenset[str]:
+    """Return the providers the running broker offers (empty set if unreachable).
+
+    Cached for ~10s. Fast path: if there's no socket file, skip the ping.
+    """
+    global _provider_cache
+    now = time.monotonic()
+    if _provider_cache is not None and now - _provider_cache[1] < _PROVIDER_CACHE_TTL:
+        return _provider_cache[0]
+    if not broker_socket_present():
+        _provider_cache = (frozenset(), now)
+        return _provider_cache[0]
+    resp = await BrokerClient().ping(timeout=timeout)
+    provs = (
+        frozenset(resp.get("providers", []))
+        if resp and resp.get("status") == "ok"
+        else frozenset()
+    )
+    _provider_cache = (provs, now)
+    return provs
 
 
 # ── Adapters ──────────────────────────────────────────────────────────────────

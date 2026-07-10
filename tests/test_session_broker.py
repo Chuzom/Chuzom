@@ -102,3 +102,50 @@ async def test_bad_signature_rejected(broker_paths):
 async def test_broker_socket_present_helper(broker_paths):
     async with _server():
         assert sb.broker_socket_present() is True
+
+
+# ── P1 phase 2: gateway/router delegation ─────────────────────────────────────
+
+async def _codex_echo(job: dict) -> dict:
+    return {"status": "ok", "text": f"BROKERED:{job.get('prompt', '')}",
+            "usage": {"input_tokens": 5, "output_tokens": 3, "estimated_cost_usd": 0.0}}
+
+
+@pytest.mark.asyncio
+async def test_maybe_broker_dispatch_delegates_when_local_disabled(
+    broker_paths, monkeypatch
+):
+    """When codex is locally disabled and the broker offers it, delegate."""
+    from chuzom.router import _maybe_broker_dispatch
+
+    sb._provider_cache = None  # reset capability cache
+    monkeypatch.setenv("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "codex,gemini_cli")
+    async with _server({"codex": _codex_echo}):
+        resp = await _maybe_broker_dispatch("codex", "gpt-5.5", "hello")
+    assert resp is not None
+    assert resp.provider == "codex"
+    assert resp.model == "codex/gpt-5.5"
+    assert resp.content == "BROKERED:hello"
+    assert resp.cost_usd == 0.0
+
+
+@pytest.mark.asyncio
+async def test_maybe_broker_dispatch_skips_when_local_enabled(broker_paths, monkeypatch):
+    """When codex is NOT disabled locally, don't delegate (use the local path)."""
+    from chuzom.router import _maybe_broker_dispatch
+
+    sb._provider_cache = None
+    monkeypatch.delenv("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", raising=False)
+    resp = await _maybe_broker_dispatch("codex", "gpt-5.5", "hello")
+    assert resp is None
+
+
+@pytest.mark.asyncio
+async def test_maybe_broker_dispatch_none_when_broker_absent(broker_paths, monkeypatch):
+    """Disabled locally but no broker running → None (caller falls back / errors)."""
+    from chuzom.router import _maybe_broker_dispatch
+
+    sb._provider_cache = None
+    monkeypatch.setenv("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "codex")
+    resp = await _maybe_broker_dispatch("codex", "gpt-5.5", "hello")  # no _server()
+    assert resp is None
