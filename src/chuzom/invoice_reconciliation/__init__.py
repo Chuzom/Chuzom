@@ -103,8 +103,192 @@ def compute_diff(
     )
 
 
+def alert_if_discrepant(
+    diff: "ReconciliationDiff",
+    *,
+    threshold_pct: float | None = None,
+) -> bool:
+    """Emit an ``invoice_discrepancy`` alert when a reconciliation diff
+    breaches the Finance tolerance, so an unreconciled month PAGES
+    instead of sitting unnoticed behind a pollable endpoint.
+
+    ``threshold_pct`` defaults to ``CHUZOM_INVOICE_DISCREPANCY_PCT``
+    (fraction, e.g. ``0.02`` for 2%) or ``0.02`` when unset — matching
+    the G-006 "within 2%" acceptance bar. Returns True iff an alert was
+    emitted. Best-effort: the alert sink itself never raises.
+    """
+    import os
+
+    if threshold_pct is None:
+        raw = (os.environ.get("CHUZOM_INVOICE_DISCREPANCY_PCT") or "").strip()
+        try:
+            threshold_pct = float(raw) if raw else 0.02
+        except ValueError:
+            threshold_pct = 0.02
+
+    if abs(diff.diff_pct) <= threshold_pct:
+        return False
+
+    from chuzom.alerts import INVOICE_DISCREPANCY, emit_alert
+
+    emit_alert(
+        INVOICE_DISCREPANCY,
+        detail={
+            "provider": diff.provider,
+            "period": diff.period,
+            "diff_pct": diff.diff_pct,
+            "diff_usd": diff.diff_usd,
+            "threshold_pct": threshold_pct,
+            "provider_reported_usd": diff.provider_reported_usd,
+            "chuzom_reported_usd": diff.chuzom_reported_usd,
+        },
+    )
+    return True
+
+
+def build_reconciliation_report(*, period: str, diffs: list[ReconciliationDiff]) -> dict:
+    """Aggregate per-provider ReconciliationDiffs into a finance-facing summary.
+
+    Produces one row per provider plus a TOTAL, and answers Finance's
+    "are we within 2% overall?" via ``within_2pct_aggregate`` (aggregate
+    pct uses summed provider dollars as the denominator).
+    """
+    providers = []
+    total_provider = 0.0
+    total_chuzom = 0.0
+    total_diff = 0.0
+
+    for diff in diffs:
+        total_provider += diff.provider_reported_usd
+        total_chuzom += diff.chuzom_reported_usd
+        total_diff += diff.diff_usd
+
+        providers.append(
+            {
+                "provider": diff.provider,
+                "provider_reported_usd": round(diff.provider_reported_usd, 2),
+                "chuzom_reported_usd": round(diff.chuzom_reported_usd, 2),
+                "diff_usd": round(diff.diff_usd, 2),
+                "diff_pct": round(diff.diff_pct, 4),
+                "within_2pct": abs(diff.diff_pct) <= 0.02,
+            }
+        )
+
+    aggregate_diff_pct = total_diff / total_provider if total_provider > 0 else 0.0
+
+    return {
+        "period": period,
+        "providers": providers,
+        "totals": {
+            "provider_reported_usd": round(total_provider, 2),
+            "chuzom_reported_usd": round(total_chuzom, 2),
+            "diff_usd": round(total_diff, 2),
+            "diff_pct": round(aggregate_diff_pct, 4),
+        },
+        "within_2pct_aggregate": abs(aggregate_diff_pct) <= 0.02,
+    }
+
+
+def format_report(report: dict, *, fmt: str = "text") -> str:
+    """Render a report dict (from build_reconciliation_report) as text or CSV."""
+    if fmt == "csv":
+        import csv
+        import io
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "provider",
+                "provider_reported_usd",
+                "chuzom_reported_usd",
+                "diff_usd",
+                "diff_pct",
+                "within_2pct",
+            ]
+        )
+
+        for provider in report["providers"]:
+            writer.writerow(
+                [
+                    provider["provider"],
+                    provider["provider_reported_usd"],
+                    provider["chuzom_reported_usd"],
+                    provider["diff_usd"],
+                    provider["diff_pct"],
+                    provider["within_2pct"],
+                ]
+            )
+
+        totals = report["totals"]
+        writer.writerow(
+            [
+                "TOTAL",
+                totals["provider_reported_usd"],
+                totals["chuzom_reported_usd"],
+                totals["diff_usd"],
+                totals["diff_pct"],
+                report["within_2pct_aggregate"],
+            ]
+        )
+        return output.getvalue()
+
+    if fmt == "text":
+        rows = report["providers"]
+        totals = report["totals"]
+
+        provider_width = max(
+            [len("Provider"), len("TOTAL"), *(len(str(row["provider"])) for row in rows)]
+        )
+        money_width = 14
+        pct_width = 9
+        tolerance_width = len("Within 2%")
+
+        lines = [
+            f"Invoice reconciliation — {report['period']}",
+            (
+                f"{'Provider':<{provider_width}}  "
+                f"{'Provider USD':>{money_width}}  "
+                f"{'Chuzom USD':>{money_width}}  "
+                f"{'Diff USD':>{money_width}}  "
+                f"{'Diff %':>{pct_width}}  "
+                f"{'Within 2%':>{tolerance_width}}"
+            ),
+        ]
+        lines.append("-" * len(lines[-1]))
+
+        for row in rows:
+            lines.append(
+                f"{row['provider']:<{provider_width}}  "
+                f"{row['provider_reported_usd']:>{money_width}.2f}  "
+                f"{row['chuzom_reported_usd']:>{money_width}.2f}  "
+                f"{row['diff_usd']:>{money_width}.2f}  "
+                f"{row['diff_pct']:>{pct_width}.4f}  "
+                f"{'yes' if row['within_2pct'] else 'no':>{tolerance_width}}"
+            )
+
+        lines.append("-" * len(lines[1]))
+        lines.append(
+            f"{'TOTAL':<{provider_width}}  "
+            f"{totals['provider_reported_usd']:>{money_width}.2f}  "
+            f"{totals['chuzom_reported_usd']:>{money_width}.2f}  "
+            f"{totals['diff_usd']:>{money_width}.2f}  "
+            f"{totals['diff_pct']:>{pct_width}.4f}  "
+            f"{'yes' if report['within_2pct_aggregate'] else 'no':>{tolerance_width}}"
+        )
+        lines.append(
+            f"WITHIN 2% TOLERANCE: {'yes' if report['within_2pct_aggregate'] else 'no'}"
+        )
+        return "\n".join(lines)
+
+    raise ValueError(f"unknown report format: {fmt}")
+
+
 __all__ = [
     "InvoiceReport",
     "ReconciliationDiff",
     "compute_diff",
+    "alert_if_discrepant",
+    "build_reconciliation_report",
+    "format_report",
 ]
