@@ -392,7 +392,15 @@ GATEWAY_POLICY = ClassifyPolicy(
 
 def _complexity(text: str, task_type: str, policy: ClassifyPolicy) -> Complexity:
     if policy.keyword_complexity:
-        if _COMPLEXITY_DEEP.search(text):
+        # Calibrated reason-gate replaces the bare `_COMPLEXITY_DEEP.search`.
+        # It uses that same regex as one feature (deep-keyword hit is sufficient
+        # by default, so this is a superset of the old behaviour), plus
+        # math-density / length / code-fence signals it can be calibrated on.
+        # Imported lazily to avoid an import cycle (reason_gate pulls the
+        # compiled regexes from this module).
+        from chuzom.reason_gate import needs_reasoning
+
+        if needs_reasoning(text):
             return Complexity.DEEP_REASONING
         if _COMPLEXITY_COMPLEX.search(text):
             return Complexity.COMPLEX
@@ -467,7 +475,26 @@ async def classify(
     if sig.confident or not allow_llm:
         return sig
 
-    # Ambiguous — spend one cheap classifier call for a smarter decision.
+    # Ambiguous category. Prefer the embedding classifier (calibrated softmax,
+    # no LLM call) when a Firewall-v2-clean centroid artifact is present. It
+    # abstains (returns None) with no artifact or an unreachable embedding
+    # backend, so this whole block is a no-op until such an artifact ships —
+    # behaviour is byte-identical to the LLM-only path below until then.
+    try:
+        from chuzom.semantic_classify import classify_semantic
+
+        sem = await classify_semantic(prompt)
+    except Exception:  # noqa: BLE001 — never let it stall routing
+        sem = None
+    if sem is not None:
+        # Sharper task_type without an API call. Recompute complexity for the
+        # new task_type so the query-aware length curve stays consistent.
+        complexity = complexity_for(prompt, task_type=sem.task_type.value, policy=policy)
+        return ClassifySignal(
+            sem.task_type, complexity, sig.score, confident=True, method="embedding"
+        )
+
+    # Embedding head abstained — spend one cheap classifier call instead.
     try:
         from chuzom.classifier import classify_complexity
 

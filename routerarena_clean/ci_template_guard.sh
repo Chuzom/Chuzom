@@ -17,6 +17,15 @@ for a in "$@"; do [[ "$a" == "--strict" ]] && STRICT=1; done
 ROUTER_SRC=(
     "routerarena_clean/router_core.py"
     "routerarena_clean/chuzom_clean_router.py"
+    # Production classification path (semantic classifier + reason-gate + the
+    # offline generator/audit). These inform routing parameters, so they are
+    # held to the same no-RA-template rule as the submission router.
+    "src/chuzom/semantic_classify.py"
+    "src/chuzom/reason_gate.py"
+    "src/chuzom/semantic_centroids.py"
+    "src/chuzom/contamination_audit.py"
+    "scripts/gen_semantic_corpus.py"
+    "scripts/build_semantic_centroids.py"
 )
 BANNED=(
     'Context:[[:space:]]*None'
