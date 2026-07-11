@@ -377,8 +377,8 @@ def _check_savings_posture() -> list[str]:
     1. **OpenRouter key** — biggest unlock. Single key gives access to
        deepseek-v4-flash, qwen3-235b, claude-sonnet-4 via OpenRouter,
        which the ``cost_aggressive`` policy is wired for.
-    2. **DeepSeek key** — direct access to deepseek-chat /
-       deepseek-reasoner. Optional but unlocks the cheapest non-local
+    2. **DeepSeek key** — direct access to deepseek-v4-flash /
+       deepseek-v4-pro. Optional but unlocks the cheapest non-local
        reasoning tier when OpenRouter isn't set.
     3. **Sidecar pre-execution** — ``CHUZOM_SIDECAR_PREFETCH=1`` lets
        the hook answer introspection prompts without any tool calls.
@@ -421,10 +421,10 @@ def _check_savings_posture() -> list[str]:
 
     # 2. DeepSeek key (direct).
     if os.environ.get("DEEPSEEK_API_KEY"):
-        lines.append(_ok("DEEPSEEK_API_KEY set — direct deepseek-chat reachable"))
+        lines.append(_ok("DEEPSEEK_API_KEY set — direct deepseek-v4-flash reachable"))
     else:
         lines.append(_warn(
-            "DEEPSEEK_API_KEY not set — direct deepseek-chat unreachable "
+            "DEEPSEEK_API_KEY not set — direct deepseek-v4-flash unreachable "
             "(OpenRouter can still route there if its key is set)."
         ))
 
@@ -461,7 +461,7 @@ def _check_savings_posture() -> list[str]:
         from chuzom.enforce_config import resolve_enforce_mode
         enforce = resolve_enforce_mode()
     except Exception:
-        enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower() or "smart"
+        enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower() or "soft"
     if enforce in {"advise", "advisory"}:
         lines.append(_ok(
             f"CHUZOM_ENFORCE={enforce} — route everywhere, NEVER block a tool. "
@@ -482,8 +482,31 @@ def _check_savings_posture() -> list[str]:
             "bypasses are blocked"
         ))
     else:
-        # smart (built-in default).
-        lines.append(_ok("CHUZOM_ENFORCE=smart (default) — blocks Q&A, allows code"))
+        # smart (opt-in; default is now "soft").
+        lines.append(_ok("CHUZOM_ENFORCE=smart — blocks Q&A, allows code (default is soft)"))
+
+    # 5b. Loophole → Chuzom routing (P5). Loophole only hits the FULL router
+    #     (policy + metering) when CHUZOM_URL points at a live gateway; without
+    #     it, the swarm silently falls back to local Ollama and its spend is
+    #     neither policy-routed nor metered.
+    _loophole_installed = (
+        (Path.home() / ".claude" / "commands" / "loophole.md").exists()
+        or shutil.which("loophole") is not None
+    )
+    if _loophole_installed:
+        chuzom_url = os.environ.get("CHUZOM_URL", "").strip()
+        if chuzom_url:
+            lines.append(_ok(
+                f"CHUZOM_URL={chuzom_url} — loophole routes through the full "
+                "Chuzom router (policy + metering)"
+            ))
+        else:
+            lines.append(_warn(
+                "CHUZOM_URL not set but loophole is installed — the swarm falls "
+                "back to local Ollama instead of the full router (no cheap-first "
+                "policy, no metering). Start the gateway and export "
+                "CHUZOM_URL=http://127.0.0.1:17900 to fix."
+            ))
 
     # 6. Hook hint freshness — per-session shards since INV-007.
     # Find the newest last_classification_*.json across all sessions; that's

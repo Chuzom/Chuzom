@@ -50,11 +50,15 @@ _INFLIGHT_PERSISTS: set = set()
 # savings estimation in the JSONL — not for billing. Unknown models map to
 # (0.0, 0.0) so they don't crash and don't claim spurious savings.
 
+# NOTE: these should ideally derive from config/models.yaml (the canonical
+# registry) rather than being hand-maintained here — a follow-up. Updated
+# 2026-07-10 to current prices; the prior table (opus $15/$75, o3 $15/$60) was
+# badly stale and INFLATED reported savings on complex tasks by ~3x.
 _PRICING_PER_MTOK: dict[tuple[str, str], tuple[float, float]] = {
     # Claude (baseline references — what the user's subscription would otherwise spend)
-    ("claude", "claude-haiku-4-5"):   (0.80,  4.00),
-    ("claude", "claude-sonnet-4-6"):  (3.00, 15.00),
-    ("claude", "claude-opus-4-7"):   (15.00, 75.00),
+    ("claude", "claude-haiku-4-5"):   (1.00,  5.00),
+    ("claude", "claude-sonnet-5"):    (2.00, 10.00),   # intro; standard $3/$15 from 2026-09-01
+    ("claude", "claude-opus-4-8"):    (5.00, 25.00),
     # Ollama — local, free
     ("ollama", "*"):                  (0.00,  0.00),
     # Gemini
@@ -64,15 +68,15 @@ _PRICING_PER_MTOK: dict[tuple[str, str], tuple[float, float]] = {
     # OpenAI
     ("openai", "gpt-4o-mini"):        (0.15,  0.60),
     ("openai", "gpt-4o"):             (2.50, 10.00),
-    ("openai", "o3"):                (15.00, 60.00),
+    ("openai", "o3"):                 (2.00,  8.00),   # repriced from stale $15/$60
     # Codex — prepaid subscription, marginal cost ≈ 0
     ("codex",  "*"):                  (0.00,  0.00),
 }
 
 _BASELINE_MODEL_BY_COMPLEXITY: dict[str, str] = {
     "simple":   "claude-haiku-4-5",
-    "moderate": "claude-sonnet-4-6",
-    "complex":  "claude-opus-4-7",
+    "moderate": "claude-sonnet-5",
+    "complex":  "claude-opus-4-8",
 }
 
 _SAVINGS_LOG_FILENAME = "savings_log.jsonl"
@@ -95,7 +99,7 @@ def _cost_for(provider: str, model: str, input_tokens: int, output_tokens: int) 
 
 
 def _baseline_cost(complexity: str, input_tokens: int, output_tokens: int) -> float:
-    baseline_model = _BASELINE_MODEL_BY_COMPLEXITY.get(complexity, "claude-sonnet-4-6")
+    baseline_model = _BASELINE_MODEL_BY_COMPLEXITY.get(complexity, "claude-sonnet-5")
     return _cost_for("claude", baseline_model, input_tokens, output_tokens)
 
 

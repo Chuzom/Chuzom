@@ -221,6 +221,8 @@ _COST_PER_1K = {
     "groq/llama-3.3-70b-versatile": 0.00059,
     "deepseek/deepseek-chat": 0.0007,
     "deepseek/deepseek-reasoner": 0.0014,
+    "deepseek/deepseek-v4-flash": 0.0002,
+    "deepseek/deepseek-v4-pro": 0.0026,
     "mistral/mistral-large-latest": 0.008,
     "xai/grok-3": 0.009,
 }

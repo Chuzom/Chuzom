@@ -214,6 +214,10 @@ def _response(model: str) -> LLMResponse:
 def routed_runtime(monkeypatch, temp_db):
     """Full route_and_call harness — same shape as tests/audit/test_failure_fallback.py's
     fixture, duplicated locally so this file stays self-contained."""
+    # Isolate policy/budget-cap enforcement from quality-gated escalation
+    # (default-on), which would add a second in-chain attempt on low-scoring
+    # answers and perturb the event counts these tests assert on.
+    monkeypatch.setenv("CHUZOM_ESCALATE_ON_QUALITY", "0")
     monkeypatch.setenv("CHUZOM_BANDIT", "off")
     route_log = MagicMock()
     mock_log = MagicMock()

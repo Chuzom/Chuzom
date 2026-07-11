@@ -290,6 +290,28 @@ class SqliteBudgetBackend:
             soft_cap_usd=row.soft_cap_usd,
         )
 
+    def iter_lineage_consumed(self) -> list[tuple[str, float, tuple[str, ...]]]:
+        """``(key_blob, consumed_usd, parent_key_blobs)`` for every registered
+        envelope — the minimal projection budget-lineage reconciliation (#70)
+        needs to verify subtree spend conservation across the parent chain.
+
+        Parent keys are re-serialised to blobs so a child's ``parents`` line up
+        with the enumerated parents' own ``key_blob`` without deserialising
+        either side back to a ``BudgetKey``.
+        """
+        cur = self._conn.execute(
+            "SELECT key_blob, consumed_usd, parents_json FROM envelopes"
+        )
+        out: list[tuple[str, float, tuple[str, ...]]] = []
+        for key_blob, consumed, parents_json in cur.fetchall():
+            parents_raw = json.loads(parents_json)
+            parent_blobs = tuple(
+                _serialise_key(BudgetKey(*p) if isinstance(p, list) else BudgetKey(**p))
+                for p in parents_raw
+            )
+            out.append((key_blob, float(consumed), parent_blobs))
+        return out
+
     def consumed(self, key: BudgetKey) -> float:
         row = self._load(key)
         return row.consumed_usd if row else 0.0
@@ -685,6 +707,10 @@ def get_budget_backend() -> BudgetBackend:
                 "postgres_backend_unavailable_fallback_sqlite",
                 error=str(err),
             )
+            # Active alert: a silent fallback to per-instance SQLite risks
+            # aggregate overspend across a cluster — page, don't just log.
+            from chuzom.alerts import BUDGET_POSTGRES_FALLBACK, emit_alert
+            emit_alert(BUDGET_POSTGRES_FALLBACK, detail={"error": str(err)})
             _backend = SqliteBudgetBackend()
     else:
         _backend = SqliteBudgetBackend()

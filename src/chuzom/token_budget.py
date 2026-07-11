@@ -11,6 +11,7 @@ on unnecessarily bloated prompts.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from chuzom.types import Complexity, TaskType
@@ -27,22 +28,41 @@ MODEL_CONTEXT_LIMITS: dict[str, int] = {
     "ollama/qwen3.5": 32_768,
     "ollama/llama3.2": 128_000,
     "ollama/deepseek-r1": 64_000,
-    # OpenAI
+    # OpenAI (5.x windows conservative at 200k; vendor may allow more — reconcile w/ models.yaml)
     "openai/gpt-4o-mini": 128_000,
     "openai/gpt-4o": 128_000,
     "openai/o3": 200_000,
     "openai/gpt-5.4": 200_000,
+    "openai/gpt-5.4-mini": 200_000,
+    "openai/gpt-5.4-nano": 200_000,
+    "openai/gpt-5.5": 200_000,
+    "openai/gpt-5.6-sol": 200_000,
+    "openai/gpt-5.6-terra": 200_000,
+    "openai/gpt-5.6-luna": 200_000,
     # Gemini
     "gemini/gemini-2.5-flash": 1_048_576,
     "gemini/gemini-2.5-pro": 1_048_576,
+    "gemini/gemini-3-pro": 2_000_000,
+    "gemini/gemini-3.5-flash": 1_048_576,
+    "gemini/gemini-3.1-flash-lite": 1_048_576,
     # Anthropic
     "anthropic/claude-haiku-4-5-20251001": 200_000,
     "anthropic/claude-sonnet-4-6-20260320": 200_000,
     "anthropic/claude-opus-4-6-20260401": 200_000,
+    "anthropic/claude-sonnet-5": 1_000_000,
+    "anthropic/claude-opus-4-8": 1_000_000,
+    "anthropic/claude-fable-5": 1_000_000,
     # Groq
     "groq/llama-3.3-70b-versatile": 128_000,
-    # DeepSeek
+    # DeepSeek (deepseek-chat/reasoner aliases deprecate 2026-07-24 → v4-flash/pro)
     "deepseek/deepseek-chat": 64_000,
+    "deepseek/deepseek-v4-flash": 1_000_000,
+    "deepseek/deepseek-v4-pro": 1_000_000,
+    # xAI
+    "xai/grok-4.3": 2_000_000,
+    "xai/grok-4.1-fast": 2_000_000,
+    # Mistral
+    "mistral/mistral-large-latest": 128_000,
     # Codex
     "codex/gpt-5.4": 200_000,
     "codex/o3": 200_000,
@@ -229,18 +249,83 @@ def _get_encoding(model: str | None):
     return enc
 
 
+# ── Open-weight tokenizers (HuggingFace) — opt-in, best-effort ────────────────
+# tiktoken's cl100k_base under-counts non-OpenAI models by ~5–10%. For the
+# open-weight / local tier Chuzom routes to most (Qwen, DeepSeek, Mistral,
+# Llama), the exact tokenizer is available from HuggingFace. This is OFF by
+# default (CHUZOM_HF_TOKENIZERS=1 to enable) because the first load downloads
+# tokenizer.json (network) and gated repos (Llama) may fail — we never want to
+# add surprise latency or failure to the counting path. When enabled and a
+# tokenizer loads, count_tokens becomes exact for that family; otherwise it
+# falls back to tiktoken, then chars/4. NOTE: this only sharpens PRE-CALL
+# estimation. Logged cost/savings already use provider-RETURNED usage counts,
+# which are exact and need no tokenizer.
+
+# Substring marker → HuggingFace repo id (ungated repos preferred).
+_HF_REPO_BY_MARKER: dict[str, str] = {
+    "qwen2.5-coder": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "qwen3-coder": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "qwen": "Qwen/Qwen2.5-7B-Instruct",
+    "deepseek": "deepseek-ai/DeepSeek-V3",
+    "mistral": "mistralai/Mistral-7B-Instruct-v0.3",
+}
+
+_hf_tokenizer_cache: dict[str, object] = {}
+
+
+def _hf_enabled() -> bool:
+    return os.environ.get("CHUZOM_HF_TOKENIZERS", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _get_hf_tokenizer(model: str | None):
+    """Return a cached HuggingFace ``Tokenizer`` for ``model``, or None.
+
+    Best-effort: returns None if disabled, the package is missing, the model
+    has no mapped repo, or the load fails (offline / gated repo). Never raises.
+    """
+    if not model or not _hf_enabled():
+        return None
+    key = next((m for m in _HF_REPO_BY_MARKER if m in model), None)
+    if key is None:
+        return None
+    repo = _HF_REPO_BY_MARKER[key]
+    if repo in _hf_tokenizer_cache:
+        cached = _hf_tokenizer_cache[repo]
+        return cached or None  # cache negative results as False
+    try:
+        from tokenizers import Tokenizer  # type: ignore[import-not-found]
+        tok = Tokenizer.from_pretrained(repo)
+    except Exception:
+        _hf_tokenizer_cache[repo] = False  # remember failure; don't retry per-call
+        return None
+    _hf_tokenizer_cache[repo] = tok
+    return tok
+
+
 def count_tokens(text: str, model: str | None = None) -> int:
     """Accurate token count for ``text`` against ``model``'s tokenizer.
 
-    Uses tiktoken when available; falls back to chars/4 when tiktoken is
-    absent, the model is unknown, or encoding load fails. Always returns
-    at least 1 to keep budget math non-degenerate.
+    Order of preference:
+      1. HuggingFace tokenizer (exact) for open-weight models — opt-in via
+         CHUZOM_HF_TOKENIZERS=1.
+      2. tiktoken (exact for OpenAI; ~5–10% approximation for others).
+      3. chars/4 heuristic when neither is available.
+    Always returns at least 1 to keep budget math non-degenerate.
 
     Preferred over :func:`estimate_tokens` for cost-attribution paths
     (logging, dashboards, quota enforcement) where the ~10–20% error of
     chars/4 distorts user-facing numbers. Hot-path budget checks can
     keep using ``estimate_tokens`` for speed.
     """
+    hf = _get_hf_tokenizer(model)
+    if hf is not None:
+        try:
+            return max(1, len(hf.encode(text).ids))
+        except Exception:
+            pass  # fall through to tiktoken / heuristic
+
     enc = _get_encoding(model)
     if enc is None:
         return max(1, len(text) // 4)

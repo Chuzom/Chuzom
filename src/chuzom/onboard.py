@@ -20,7 +20,7 @@ PROVIDERS = {
     "OPENAI_API_KEY": {
         "name": "OpenAI",
         "url": "https://platform.openai.com/api-keys",
-        "models": "GPT-4o, GPT-4o-mini, o3",
+        "models": "GPT-5.5, GPT-5.4 (+mini/nano), GPT-5.6, o3, GPT-4o",
     },
     "PERPLEXITY_API_KEY": {
         "name": "Perplexity",
@@ -37,9 +37,9 @@ to present each provider in turn.
 """
 
 PROFILES = {
-    "budget": "Cheapest models — Gemini Flash, GPT-4o-mini, Sonar",
-    "balanced": "Best quality/cost ratio — Gemini Pro, GPT-4o, Sonar Pro",
-    "premium": "Best available — o3, Gemini 2.5 Pro, Sonar Pro",
+    "budget": "Cheapest models — Gemini Flash-Lite, GPT-5.4-nano, DeepSeek V4 Flash",
+    "balanced": "Best quality/cost ratio — GPT-5.4, Claude Sonnet 5, Gemini 3 Pro",
+    "premium": "Best available — GPT-5.5, Claude Opus 4.8, Gemini 3 Pro",
 }
 """Available routing profiles and their human-readable descriptions.
 

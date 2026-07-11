@@ -92,6 +92,34 @@ _COMPLEXITY_TO_PROFILE: dict[Complexity, RoutingProfile] = {
 
 log = get_logger("chuzom.router")
 
+# ── Tracked fire-and-forget tasks ────────────────────────────────────────────
+# Bare ``asyncio.create_task(...)`` with no saved reference has two failure
+# modes: (1) the task can be garbage-collected mid-flight (asyncio only keeps
+# a weak reference), and (2) it cannot be drained at shutdown, so a pending
+# DB write is silently dropped when the loop closes — leaking its aiosqlite
+# connection. All fire-and-forget work must go through ``_spawn_bg``.
+_BG_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_bg(coro, *, name: str | None = None) -> asyncio.Task:
+    """Spawn a tracked fire-and-forget task (strong ref until done)."""
+    task = asyncio.get_running_loop().create_task(coro, name=name)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    return task
+
+
+async def drain_bg_tasks(timeout_s: float = 5.0) -> None:
+    """Await pending fire-and-forget tasks (call at shutdown / test teardown)."""
+    pending = [t for t in _BG_TASKS if not t.done()]
+    if not pending:
+        return
+    done, still_pending = await asyncio.wait(pending, timeout=timeout_s)
+    for t in still_pending:
+        t.cancel()
+    if still_pending:
+        await asyncio.gather(*still_pending, return_exceptions=True)
+
 
 # ── T3-XL1: agent-aware routing policy helpers ─────────────────────────────
 # Mode env follows the three-mode pattern used by RBAC + classification
@@ -319,6 +347,13 @@ async def _build_and_filter_chain(
     Returns:
         Ordered list of model identifiers, highest priority first. May be empty.
     """
+    # Defined up front so the pin re-assert and the headless codex re-assert
+    # (both near the return) never hit UnboundLocalError on paths that skip the
+    # cheap-tier pin block or the injection block below (PREMIUM/REASONING, MEDIA
+    # tasks, model_override early returns, or direct callers).
+    pinned_model = None
+    pinned_provider = None
+    _broker_provs: frozenset[str] = frozenset()
     if model_override:
         _local_prefixes = {"codex", "ollama", "gemini_cli"}
         if "/" not in model_override and model_override not in _local_prefixes:
@@ -362,11 +397,28 @@ async def _build_and_filter_chain(
                 get_model_failure_rates,
                 get_model_latency_stats,
             )
+            # return_exceptions=True is load-bearing: without it, gather()
+            # propagates the first exception while the sibling coroutines keep
+            # running as orphaned tasks. Each one holds a fresh aiosqlite
+            # connection (cost._get_db opens per-call, with a non-daemon worker
+            # thread); if the loop shuts down before they finish, their
+            # `finally: await db.close()` never runs — leaking the connection
+            # and hanging interpreter exit. (Same pattern as scorer.py.)
             _failure_rates, _latency_stats, _acceptance_scores = await asyncio.gather(
                 get_model_failure_rates(window_days=30),
                 get_model_latency_stats(window_days=7),
                 get_model_acceptance_scores(window_days=30),
+                return_exceptions=True,
             )
+            if isinstance(_failure_rates, BaseException):
+                log.warning("Failure-rate prefetch failed: %s", _failure_rates)
+                _failure_rates = None
+            if isinstance(_latency_stats, BaseException):
+                log.warning("Latency-stats prefetch failed: %s", _latency_stats)
+                _latency_stats = None
+            if isinstance(_acceptance_scores, BaseException):
+                log.warning("Acceptance-score prefetch failed: %s", _acceptance_scores)
+                _acceptance_scores = None
         except Exception as _penalty_err:
             log.warning(
                 "Failed to fetch benchmark penalty data — model ordering will use static chain: %s",
@@ -448,8 +500,11 @@ async def _build_and_filter_chain(
             ]
 
         # ── Policy engine ─────────────────────────────────────────────────────
-        from chuzom.policy import OrgPolicy, apply_policy, load_org_policy
-        _org = load_org_policy() or OrgPolicy()
+        from chuzom.policy import OrgPolicy, apply_policy
+        from chuzom.policy_runtime import get_effective_org_policy
+        # Effective policy = control-plane-installed policy if a sidecar has
+        # verified+installed one, else the local file policy (unchanged default).
+        _org = get_effective_org_policy()
         _merged_block = list({*_org.block_models, *repo_cfg.block_models})
         _merged_allow = list({*_org.allow_models, *repo_cfg.allow_models})
         _merged_block_prov = list({*_org.block_providers})
@@ -529,18 +584,41 @@ async def _build_and_filter_chain(
                 + models_to_try[first_paid:]
             )
 
+        # ── Broker-backed availability (headless daemon) ──────────────────────
+        # When the local subprocess backend is disabled (gateway daemon) but a
+        # session broker launched from the interactive terminal offers the
+        # provider, treat it as injectable so COMPLEX routes reach the capable
+        # free path (Codex/Gemini via broker) instead of churning through
+        # unreachable Claude + slow local reasoning models. Only pay the (cached)
+        # broker ping when a subprocess backend is actually disabled.
+        _disabled_backends = _disabled_subprocess_backends()
+        _broker_provs: frozenset[str] = frozenset()
+        if _disabled_backends:
+            try:
+                from chuzom.session_broker import broker_providers
+                _broker_provs = await broker_providers()
+            except Exception:
+                _broker_provs = frozenset()
+
         # ── Codex injection ───────────────────────────────────────────────────
         # Codex is free (uses OpenAI subscription) — inject for ALL profiles
         # including BUDGET to maximize free-first routing.
         _codex_eligible_tasks = {TaskType.CODE, TaskType.ANALYZE, TaskType.GENERATE, TaskType.QUERY}
-        if (
-            task_type in _codex_eligible_tasks
-            and is_codex_available()
-            and "codex" not in _disabled_subprocess_backends()
-        ):
+        _codex_reachable = (
+            (is_codex_available() and "codex" not in _disabled_backends)
+            or "codex" in _broker_provs
+        )
+        if task_type in _codex_eligible_tasks and _codex_reachable:
             codex_chain = [f"codex/{m}" for m in CODEX_MODELS[:2]]
             has_claude = any(m.startswith("anthropic/") for m in models_to_try)
-            if pressure >= 0.95:
+            if "codex" in _broker_provs:
+                # Headless daemon: broker-backed Codex is THE capable free path.
+                # Front-inject so complex routes reach it immediately instead of
+                # churning through unreachable Claude + slow local reasoning
+                # models (qwen3:32b ~50s). Unreachable Claude is skipped fast.
+                log.debug("Codex (broker-backed) injected at front — headless capable path")
+                models_to_try = codex_chain + models_to_try
+            elif pressure >= 0.95:
                 log.debug("Codex injected at front (pressure=%.0f%%)", pressure * 100)
                 models_to_try = codex_chain + models_to_try
             elif has_claude and task_type == TaskType.CODE:
@@ -576,11 +654,14 @@ async def _build_and_filter_chain(
 
         # ── Gemini CLI injection ──────────────────────────────────────────────
         _gemini_eligible_tasks = {TaskType.CODE, TaskType.ANALYZE, TaskType.GENERATE, TaskType.QUERY}
+        _gemini_reachable = (
+            (is_gemini_cli_available() and "gemini_cli" not in _disabled_backends)
+            or "gemini_cli" in _broker_provs
+        )
         if (
             profile != RoutingProfile.BUDGET
             and task_type in _gemini_eligible_tasks
-            and is_gemini_cli_available()
-            and "gemini_cli" not in _disabled_subprocess_backends()
+            and _gemini_reachable
         ):
             gemini_chain = [f"gemini_cli/{m}" for m in GEMINI_MODELS[:2]]
             has_claude = any(m.startswith("anthropic/") for m in models_to_try)
@@ -750,6 +831,22 @@ async def _build_and_filter_chain(
             if pinned:
                 models_to_try = pinned + rest
 
+    # ── Headless capable-path re-assert (P1 phase-2 latency tuning) ──────────
+    # In a headless daemon, broker-backed Codex is the capable FREE path. For
+    # COMPLEX (premium/reasoning) routes, the reorders above re-bury it behind
+    # unreachable Claude + slow local reasoning models (qwen3:32b ~50s), so
+    # complex requests time out before reaching it. Re-assert Codex to the front
+    # here — but ONLY for premium/reasoning profiles, so SIMPLE routes still
+    # prefer free local Ollama (cheap-first). No effect unless a broker is up.
+    if (
+        not pinned_model
+        and "codex" in _broker_provs
+        and profile in (RoutingProfile.PREMIUM, RoutingProfile.REASONING)
+    ):
+        _cx = [m for m in models_to_try if provider_from_model(m) == "codex"]
+        if _cx:
+            models_to_try = _cx + [m for m in models_to_try if provider_from_model(m) != "codex"]
+
     return models_to_try
 
 
@@ -897,10 +994,68 @@ def _disabled_subprocess_backends() -> set[str]:
     raw = os.environ.get("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "")
     return {item.strip().lower() for item in raw.split(",") if item.strip()}
 
+
+async def _maybe_broker_dispatch(
+    provider: str, model_name: str, prompt: str, *, timeout: float = 300.0
+) -> "LLMResponse | None":
+    """Delegate a gated backend call to the interactive session broker (P1 phase 2).
+
+    When the local subprocess backend is DISABLED (e.g. the headless gateway
+    daemon sets CHUZOM_DISABLE_SUBPROCESS_BACKENDS) but a broker launched from the
+    interactive session offers this provider, run the call there — the broker has
+    the live Codex/Gemini credentials the daemon lacks. Returns an LLMResponse on
+    success, or None when broker delegation doesn't apply (local exec is enabled,
+    or the broker isn't offering this provider) so the caller falls back to its
+    normal path.
+    """
+    if provider not in _disabled_subprocess_backends():
+        return None  # local exec available — no need to delegate
+    try:
+        from chuzom.session_broker import BrokerClient, broker_providers
+        if provider not in await broker_providers():
+            return None  # no broker, or it doesn't offer this provider
+        result = await BrokerClient().run(provider, model_name, prompt, timeout=timeout)
+    except Exception as e:
+        raise RuntimeError(f"session broker {provider} delegation failed: {e}") from e
+    if result.get("status") != "ok":
+        raise RuntimeError(
+            f"session broker {provider} error: {result.get('error', 'unknown')}"
+        )
+    text = result.get("text", "")
+    usage = result.get("usage", {}) or {}
+    log.info("Routed %s/%s via session broker (%d chars)",
+             provider, model_name, len(text))
+    return LLMResponse(
+        content=text,
+        model=f"{provider}/{model_name}",
+        input_tokens=int(usage.get("input_tokens", max(1, len(prompt) // 4))),
+        output_tokens=int(usage.get("output_tokens", max(1, len(text) // 4))),
+        cost_usd=float(usage.get("estimated_cost_usd", 0.0)),
+        latency_ms=0.0,
+        provider=provider,
+    )
+
 # Task types routed to provider-specific media APIs instead of LiteLLM.
 # LiteLLM only supports text completion; media generation requires direct
 # calls to each provider's SDK (DALL-E, Flux, Runway, ElevenLabs, etc.).
 MEDIA_TASK_TYPES = {TaskType.IMAGE, TaskType.VIDEO, TaskType.AUDIO}
+
+# P3: substrings identifying the expensive "big-gun" premium models. Matched as
+# substrings so provider-prefixed variants (openai/o3, codex/o3, anthropic/
+# claude-opus-4-8, …) are all caught. Used to hard-cap premium spend under budget
+# pressure — see the premium gate in _dispatch_model_loop.
+_PREMIUM_MODEL_MARKERS = frozenset({
+    "opus", "fable", "gpt-5.5", "gpt-5.6-sol", "/o3",
+})
+
+# P2 guard: reasoning / "thinking" models that emit long chains-of-thought and
+# are slow for simple tasks. Quality-gated escalation must not escalate a simple
+# task INTO one of these (it buys latency, not a better short answer). Matched as
+# substrings against the candidate model id.
+_SLOW_MODEL_MARKERS = frozenset({
+    "qwen3.5", "qwen3:32b", "qwq", "reasoner", "deepseek-v4-pro",
+    "thinking", "/o3", "opus", "fable",
+})
 
 # Task types treated as "agentic" / tool-reasoning work for CHUZOM_AGENTIC_MODEL.
 # CODE is intentionally excluded so dedicated coder models still win coding tasks.
@@ -1234,6 +1389,52 @@ async def _dispatch_model_loop(
     last_error: Exception | None = None
     chain_errors: list[tuple[str, str]] = []  # (model, error_summary) for diagnostics
     chain_attempts: list[str] = []  # models tried, for explainability
+
+    # ── P2: quality-gated escalation state ───────────────────────────────────
+    # Try cheap first, escalate to the next model ONLY when the cheap answer is
+    # actually inadequate — bounded to ONE hop. Read per-dispatch so tests/env
+    # changes take effect. NOTE: the earlier "hang" was never a deadlock — it was
+    # escalating a short-but-correct answer (e.g. "OK", which scores low purely
+    # for length) into a slow reasoning model (~60s). Three guards below keep
+    # escalation from making things needlessly slow, so it's safe default-on.
+    _escalated = False
+    _escalate_on_quality = os.environ.get(
+        "CHUZOM_ESCALATE_ON_QUALITY", "1"
+    ).strip().lower() in ("1", "true", "yes", "on")
+    try:
+        _escalate_threshold = float(os.environ.get("CHUZOM_ESCALATE_THRESHOLD", "0.4"))
+    except ValueError:
+        _escalate_threshold = 0.4
+    # Guard 1: don't escalate a short answer to a short prompt — a terse reply is
+    # proportionate (a 2-token "OK" is correct, not inadequate).
+    try:
+        _escalate_min_prompt_tokens = int(
+            os.environ.get("CHUZOM_ESCALATE_MIN_PROMPT_TOKENS", "24")
+        )
+    except ValueError:
+        _escalate_min_prompt_tokens = 24
+    # Guard 3: don't escalate once the dispatch has already spent this long —
+    # escalation must not compound latency on an already-slow request.
+    try:
+        _escalate_deadline_s = float(
+            os.environ.get("CHUZOM_ESCALATE_DEADLINE_S", "20")
+        )
+    except ValueError:
+        _escalate_deadline_s = 20.0
+    _dispatch_started = time.monotonic()
+
+    # ── P3: premium spend hard-cap ───────────────────────────────────────────
+    # Reserve the expensive big guns (Opus/o3/Fable/gpt-5.5/gpt-5.6-sol) for when
+    # they're genuinely needed: once a provider's budget pressure crosses this
+    # cap, skip its premium models and fall back to cheaper tiers. Default 0.85 =
+    # only protect quota when genuinely stressed; set lower (e.g. 0.5) for
+    # maximum savings, at some cost to complex-task quality.
+    try:
+        _premium_max_pressure = float(
+            os.environ.get("CHUZOM_PREMIUM_MAX_PRESSURE", "0.85")
+        )
+    except ValueError:
+        _premium_max_pressure = 0.85
     # T3-S1: track candidates skipped because their projected cost would
     # exceed ``max_cost_per_task``. If the whole chain is skipped this way,
     # raise CostBudgetExceeded with the cheapest projection so the caller
@@ -1449,6 +1650,37 @@ async def _dispatch_model_loop(
             chain_errors.append((model, "budget exhausted"))
             continue
 
+        # ── P3: premium spend hard-cap ───────────────────────────────────────
+        # Under budget pressure, hold back the expensive big guns and let the
+        # chain fall through to cheaper tiers. The emergency BUDGET fallback at
+        # the end catches the (rare) case where nothing cheaper remains, so this
+        # never strands a task. Media tasks are exempt (their models are
+        # specialized, not cost-tier "premium").
+        if (
+            task_type not in MEDIA_TASK_TYPES
+            and budget_state.pressure >= _premium_max_pressure
+            and any(mark in model for mark in _PREMIUM_MODEL_MARKERS)
+        ):
+            await _notify(
+                ctx, "info",
+                f"💰 {model_name} (premium) held back — {provider} at "
+                f"{budget_state.pressure:.0%} pressure (cap {_premium_max_pressure:.0%})",
+            )
+            log.info(
+                "Premium cap: skipping %s — %s pressure %.2f >= cap %.2f",
+                model, provider, budget_state.pressure, _premium_max_pressure,
+            )
+            route_log.info(
+                "premium_capped",
+                correlation_id=correlation_id,
+                model=model,
+                provider=provider,
+                pressure=budget_state.pressure,
+                cap=_premium_max_pressure,
+            )
+            chain_errors.append((model, f"premium_capped@{budget_state.pressure:.2f}"))
+            continue
+
         # Show provider context for QUOTA_BALANCED
         provider_context = f" [{provider.upper()}]" if profile == RoutingProfile.QUOTA_BALANCED else ""
         await _notify(ctx, "info", f"⏳ {model_name}{provider_context} working...")
@@ -1496,6 +1728,12 @@ async def _dispatch_model_loop(
                     response = await _call_media(task_type, provider, model_name, prompt,
                                                  _filter_media_params(task_type, media_params),
                                                  correlation_id=correlation_id)
+                elif provider == "codex" and (
+                    _brokered := await _maybe_broker_dispatch("codex", model_name, prompt)
+                ) is not None:
+                    # P1 phase 2: local Codex disabled (headless daemon) but the
+                    # interactive session broker ran it with live credentials.
+                    response = _brokered
                 elif provider == "codex":
                     async def _codex_on_event(ev_type: str, text: str) -> None:
                         if ev_type == "item.completed" and text:
@@ -1524,6 +1762,11 @@ async def _dispatch_model_loop(
                         latency_ms=codex_result.duration_sec * 1000,
                         provider="codex",
                     )
+                elif provider == "gemini_cli" and (
+                    _brokered := await _maybe_broker_dispatch("gemini_cli", model_name, prompt)
+                ) is not None:
+                    # P1 phase 2: local Gemini CLI disabled but the session broker ran it.
+                    response = _brokered
                 elif provider == "gemini_cli":
                     async def _gemini_on_event(ev_type: str, text: str) -> None:
                         if text:
@@ -1626,6 +1869,62 @@ async def _dispatch_model_loop(
             else:
                 _gate_results = []
 
+            # ── P2: quality-gated escalation ─────────────────────────────────
+            # Score the cheap answer with content heuristics (no LLM call). If it
+            # is inadequate AND a pricier fallback remains AND we have not already
+            # escalated this dispatch, treat it as a soft miss and advance the
+            # chain — exactly like a failed gate above. Always record the score so
+            # `should_skip_model` keeps learning, even when we don't escalate
+            # (last model in chain, media task, or feature disabled).
+            if _escalate_on_quality and task_type not in MEDIA_TASK_TYPES:
+                try:
+                    from chuzom.quality_feedback import record_quality, score_response
+                    _qs = score_response(response.content, task_type.value, model, c.value)
+                    record_quality(model, task_type.value, c.value, _qs.score)
+                    # Guards (see escalation-state block): a short answer to a short
+                    # prompt is proportionate; escalating a SIMPLE task into a slow
+                    # reasoning model buys latency not quality; and escalation must
+                    # not compound latency on an already-slow dispatch.
+                    _next_model = models_to_try[attempt] if attempt < len(models_to_try) else ""
+                    _short_prompt = (len(prompt) // 4) < _escalate_min_prompt_tokens
+                    _slow_target = (
+                        c == Complexity.SIMPLE
+                        and any(mk in _next_model for mk in _SLOW_MODEL_MARKERS)
+                    )
+                    _over_budget = (time.monotonic() - _dispatch_started) >= _escalate_deadline_s
+                    if (
+                        not _escalated
+                        and attempt < len(models_to_try)
+                        and _qs.score < _escalate_threshold
+                        and not _short_prompt
+                        and not _slow_target
+                        and not _over_budget
+                    ):
+                        _escalated = True
+                        log.info(
+                            "Quality-gated escalation: %s scored %.2f (< %.2f) on "
+                            "%s/%s — escalating to %s",
+                            model, _qs.score, _escalate_threshold,
+                            task_type.value, c.value, _next_model,
+                        )
+                        route_log.info(
+                            "quality_escalation",
+                            correlation_id=correlation_id,
+                            model=model,
+                            score=_qs.score,
+                            threshold=_escalate_threshold,
+                            reasons=list(_qs.reasons),
+                        )
+                        chain_errors.append((model, f"low_quality:{_qs.score:.2f}"))
+                        await _notify(
+                            ctx, "info",
+                            f"↑ escalating: {model_name} answer scored "
+                            f"{_qs.score:.2f} (<{_escalate_threshold:.2f})",
+                        )
+                        continue
+                except Exception as _esc_err:  # never let scoring break routing
+                    log.debug("quality escalation check skipped: %s", _esc_err)
+
             tracker.record_success(provider)
             await cost.log_usage(response, task_type, profile, correlation_id=correlation_id)
             # P1-7: the token reservation is released in this attempt's finally.
@@ -1639,8 +1938,10 @@ async def _dispatch_model_loop(
                 output_tokens=response.output_tokens,
                 cost_usd=response.cost_usd,
             )
-            # Fire-and-forget receipt storage (never blocks response)
-            asyncio.create_task(store_receipt(_receipt))
+            # Fire-and-forget receipt storage (never blocks response).
+            # Tracked so shutdown can drain it — an untracked pending write
+            # leaks its aiosqlite connection when the loop closes.
+            _spawn_bg(store_receipt(_receipt), name="store_receipt")
 
             # Record Codex/Gemini CLI requests for quota tracking (v7.1.0)
             if provider == "codex":
@@ -2807,8 +3108,9 @@ async def route_and_call(
             if _okf_concepts:
                 prompt = _okf.inject_context(prompt, _okf_concepts)
                 if ctx is not None:
-                    asyncio.create_task(
-                        _notify(ctx, "info", f"📚 OKF: injected {len(_okf_concepts)} context doc(s)")
+                    _spawn_bg(
+                        _notify(ctx, "info", f"📚 OKF: injected {len(_okf_concepts)} context doc(s)"),
+                        name="okf_notify",
                     )
         except Exception:  # noqa: BLE001
             pass
@@ -3048,8 +3350,9 @@ async def route_and_call(
         try:
             _resp_text = getattr(response, "content", "") or ""
             _resp_model = getattr(response, "model", "") or ""
-            asyncio.create_task(
-                _okf.enrich_from_response(prompt, _resp_text, _resp_model)
+            _spawn_bg(
+                _okf.enrich_from_response(prompt, _resp_text, _resp_model),
+                name="okf_enrich",
             )
         except Exception:  # noqa: BLE001
             pass

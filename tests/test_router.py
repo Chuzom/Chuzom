@@ -284,6 +284,12 @@ async def test_claw_code_mode_does_not_inject_ollama_for_premium_profile(
     monkeypatch.setenv("CHUZOM_CLAW_CODE", "true")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "llama3.2")
+    # Isolate the Ollama-injection behaviour under test: disable Codex/Gemini
+    # subprocess injection so the capable chain runs through call_llm (the mock),
+    # not run_codex. Otherwise, whether Codex is installed flips the routed path
+    # and mock_acompletion is never called. (No broker runs in tests, so the
+    # broker path is a no-op.)
+    monkeypatch.setenv("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "codex,gemini_cli")
     import chuzom.config as _config
     _config._config = None
 
@@ -304,6 +310,9 @@ async def test_claw_code_mode_does_not_inject_ollama_for_reasoning_profile(
     monkeypatch.setenv("CHUZOM_CLAW_CODE", "true")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_BUDGET_MODELS", "llama3.2")
+    # See premium test above: disable Codex/Gemini injection so the chain runs
+    # through call_llm (the mock), isolating the Ollama-injection behaviour.
+    monkeypatch.setenv("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "codex,gemini_cli")
     import chuzom.config as _config
     _config._config = None
 

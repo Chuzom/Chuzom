@@ -144,6 +144,31 @@ def _mode_label(is_subscription: bool) -> str:
     return "api-keys (Ollama → Codex → paid providers)"
 
 
+def _enforce_label() -> str:
+    """Human description of the RESOLVED enforcement mode (honest — no hardcoding).
+
+    Resolves through the same source of truth the PreToolUse enforcer uses, so
+    this line always matches actual behavior. After P0, no mode blocks file/shell
+    tools — the differences are only in logging.
+    """
+    try:
+        from chuzom.enforce_config import resolve_enforce_mode
+        mode = resolve_enforce_mode()
+    except Exception:
+        mode = "soft"
+    descriptions = {
+        "off": "off (no enforcement)",
+        "shadow": "shadow (observe-only)",
+        "advise": "advise (silent; never blocks)",
+        "suggest": "soft (logs routing misses; never blocks)",
+        "soft": "soft (logs routing misses; never blocks — default)",
+        "smart": "smart (logs misses; file/shell tools never blocked)",
+        "hard": "hard (logs misses; file/shell tools never blocked)",
+        "strict": "strict (logs misses; file/shell tools never blocked)",
+    }
+    return descriptions.get(mode, f"{mode} (never blocks file/shell tools)")
+
+
 def _render_welcome(is_subscription: bool) -> str:
     """Multi-line greeting printed to stderr at session start.
 
@@ -155,6 +180,7 @@ def _render_welcome(is_subscription: bool) -> str:
 
     now = datetime.now().strftime("%a %b %d · %H:%M")
     mode = _mode_label(is_subscription)
+    enforce = _enforce_label()
 
     # Painterly Chuzom banner — Chhuzom is the Bhutanese river confluence
     # where Paro Chhu + Thimphu Chhu meet to form Wang Chhu; three stupas
@@ -171,6 +197,7 @@ def _render_welcome(is_subscription: bool) -> str:
         "",
         _WELCOME_DIVIDER,
         f"   mode    → {mode}",
+        f"   enforce → {enforce}",
         f"   opened  → {now}",
         "   chain   → Ollama · Codex · Gemini Flash · GPT-4o · Perplexity",
         "   tip     → run `chuzom summary` to see what this session saved",

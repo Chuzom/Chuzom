@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.7.7 — 2026-07-10 — model registry refresh + DeepSeek alias migration
+
+Routing-critical model/pricing update. No API or behavior changes beyond the
+model set and cost data.
+
+### DeepSeek alias migration (the urgent bit)
+DeepSeek deprecates the `deepseek-chat` and `deepseek-reasoner` API aliases on
+**2026-07-24** (requests error after that). Migrated all runtime references:
+- `deepseek/deepseek-chat` → `deepseek/deepseek-v4-flash` ($0.14/$0.28 per 1M),
+  in `auto_profile.py`, `profiles.py` (`_CHEAP_MODELS`, `CLASSIFIER_MODELS`),
+  `tools/setup.py`.
+- `deepseek/deepseek-reasoner` → `deepseek/deepseek-v4-pro` ($1.74/$3.48),
+  retiered cheap→mid. v4-pro chosen (not v4-flash) because Chuzom has no
+  thinking-mode parameter wiring, so v4-flash would default to non-thinking and
+  silently drop reasoning. Follow-up: wire V4 Flash thinking mode to reclaim the
+  cheaper reasoning path.
+- Added v4-flash/v4-pro keys to all cost/limit/benchmark tables
+  (`provider_budget.py`, `benchmarks.py`, `tools/text.py`,
+  `inference_robustness.py`, `token_budget.py`, `benchmark_fetcher.py`).
+
+### OpenAI registry refresh
+- Added current lineup: `gpt-5.6-sol/terra/luna`, `gpt-5.5`, `gpt-5.4`/`-mini`/`-nano`.
+- **Repriced `o3` $60/$240 → $2/$8** (was badly stale, corrupted cost math).
+- Removed delisted base `gpt-5`.
+
+### Other providers refreshed in `config/models.yaml`
+- Anthropic: `claude-3.5-haiku`→`claude-haiku-4-5` ($1/$5),
+  `claude-3.5-sonnet`→`claude-sonnet-5` ($2/$10 intro, $3/$15 from 2026-09-01),
+  `claude-3-opus`→`claude-opus-4-8` ($5/$25).
+- Gemini (slug `google/`→`gemini/` to match the router): `gemini-3-pro`,
+  `gemini-3.5-flash`, `gemini-3.1-flash-lite`.
+- New providers added: `xai/grok-4.3` + `grok-4.1-fast`, `mistral/mistral-large-latest`.
+
+Known non-blocker: two pre-existing `test_router.py` claw-code tests fail on the
+current tree due to unrelated Codex subscription-mode injection work; not caused
+by this change (verified by stashing these edits).
+
 ## v0.7.6 — 2026-07-05 — pxpipe integration: cut context cost on heavy-model calls
 
 New, fully opt-in (off by default). [pxpipe](https://github.com/teamchong/pxpipe)

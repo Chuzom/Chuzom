@@ -61,7 +61,10 @@ _ROUTER_DIR = Path.home() / ".chuzom"
 _LOG_PATH = _ROUTER_DIR / "enforcement.log"
 _PENDING_TTL = 3600  # seconds — 1h TTL; survives context compaction; auto-route resets on each new prompt
 
-# Base blocklist: always blocked before routing is satisfied (all task types).
+# Base blocklist: blocked in explicit opt-in blocking modes (smart/hard/strict)
+# before routing is satisfied. NOT used by the default mode, which is now "soft"
+# (log-only, never blocks) — so legitimate Bash/Read/Write/loophole work is never
+# sabotaged unless a user deliberately opts into a blocking mode.
 _BASE_BLOCK_TOOLS = frozenset({
     "Bash", "Edit", "MultiEdit", "Write", "NotebookEdit",
 })
@@ -540,7 +543,7 @@ def main() -> None:
                         break
             except OSError:
                 pass
-            enforce = enforce or "smart"
+            enforce = enforce or "soft"
     # shadow / off = pure observation (treat as off)
     if enforce in ("off", "shadow"):
         sys.exit(0)

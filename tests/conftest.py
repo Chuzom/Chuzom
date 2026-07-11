@@ -396,6 +396,23 @@ def _reset_health_tracker():
     reset_tracker_for_tests()
 
 
+@pytest.fixture(autouse=True)
+def _reset_quality_store():
+    """Reset the module-global quality-feedback store before and after each test.
+
+    ``chuzom.quality_feedback._quality_store`` is process-lifetime state that
+    ``monkeypatch`` cannot restore. Since #130 wired quality-gated escalation
+    into chain building, ModelQuality entries recorded by one test (e.g. the
+    budget-cap concurrency test's mocked successes) silently change routing
+    chains built by later tests — see the order-dependent failures in
+    tests/audit/test_failure_fallback.py.
+    """
+    from chuzom.quality_feedback import reset_quality_store
+    reset_quality_store()
+    yield
+    reset_quality_store()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _close_db_connections():
     """Force close all aiosqlite connections at end of test session.

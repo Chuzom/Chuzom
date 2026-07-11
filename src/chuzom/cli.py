@@ -810,10 +810,26 @@ def main() -> None:
         # Chuzom by pointing OPENAI_BASE_URL at it. The Surface-C fix.
         from chuzom.gateway import main as gateway_main
         gateway_main()
+    elif args and args[0] == "broker":
+        # Session broker: run from an INTERACTIVE terminal so the headless gateway
+        # daemon can delegate gated backends (Codex/Gemini CLI) that need the
+        # session's live auth. See chuzom.session_broker.
+        import asyncio as _asyncio
+        from chuzom.session_broker import run_broker_server
+        try:
+            _asyncio.run(run_broker_server())
+        except KeyboardInterrupt:
+            print("\nsession broker stopped.")
     elif args and args[0] == "routing-report":
         # Observability: deep-dive report of what routed (tokens / latency / savings).
         from chuzom.routing_report import main as report_main
         report_main()
+    elif args and args[0] == "invoice":
+        from chuzom.commands.invoice import cmd_invoice
+        sys.exit(cmd_invoice(args[1:]))
+    elif args and args[0] == "cp":
+        from chuzom.commands.cp import cmd_cp
+        sys.exit(cmd_cp(args[1:]))
     elif args and args[0] == "routing":
         from chuzom.commands.routing import cmd_routing
         cmd_routing(args[1:])

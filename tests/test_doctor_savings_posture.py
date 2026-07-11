@@ -58,7 +58,8 @@ def test_baseline_warns_on_every_missing_signal(clean_env, fake_home):
     assert "CHUZOM_SIDECAR_PREFETCH not set" in body
     # response_router defaults on → not a warning
     assert "CHUZOM_RESPONSE_ROUTER" in body
-    assert "smart (default)" in body
+    # P0: default enforce mode is now "soft" (log-only, never blocks).
+    assert "CHUZOM_ENFORCE=soft" in body and "never blocks" in body
     # INV-007: doctor now reports per-session shards (last_classification_*.json).
     assert "last_classification_*.json missing" in body
     assert "usage.db missing" in body

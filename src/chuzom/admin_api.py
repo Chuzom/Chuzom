@@ -52,6 +52,7 @@ G-008.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any, Callable
 
 import structlog
@@ -59,7 +60,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from chuzom.admin_actions import AdminActionLog
 from chuzom.agents.session import SessionStore
@@ -98,6 +99,19 @@ from chuzom.provider_registry import (
 log = structlog.get_logger(__name__)
 
 __version__ = "0.1.0-skeleton"
+
+# Admin UI (#51): the read-only dashboard shell, loaded once from disk and
+# cached for the process. Kept as a static asset (not an inline string) so it
+# stays reviewable and diffable on its own.
+_ADMIN_UI_PATH = Path(__file__).with_name("static") / "admin_ui.html"
+_admin_ui_html_cache: str | None = None
+
+
+def _load_admin_ui_html() -> str:
+    global _admin_ui_html_cache
+    if _admin_ui_html_cache is None:
+        _admin_ui_html_cache = _ADMIN_UI_PATH.read_text(encoding="utf-8")
+    return _admin_ui_html_cache
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -553,6 +567,17 @@ def create_app() -> FastAPI:
             "kind": "chuzom-admin-api",
         }
 
+    # ── Minimal admin UI (#51) ──────────────────────────────────────────
+    # A single self-contained, read-only operational dashboard. The shell
+    # itself holds no secrets, so it is served without auth; every data call
+    # the page makes carries the operator's own `Authorization: Bearer` token
+    # (entered in the UI, kept only in sessionStorage) and is authorized by the
+    # same require_perm() dependencies as any other admin request. Read-only by
+    # design — no destructive control is exposed from the browser in v1.
+    @app.get("/v1/admin/ui", response_class=HTMLResponse, include_in_schema=False)
+    def admin_ui() -> HTMLResponse:
+        return HTMLResponse(content=_load_admin_ui_html())
+
     # ── Users ───────────────────────────────────────────────────────────
     @app.get("/v1/admin/users")
     def list_users(
@@ -937,12 +962,15 @@ def create_app() -> FastAPI:
         # offending row) rather than an error status, so monitoring can parse a
         # stable schema and alert on the flag instead of catching an HTTP error.
         # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        from chuzom.alerts import AUDIT_TAMPER, emit_alert
         from chuzom.enterprise.audit import TamperDetected
         rows = audit_log.count()
         try:
             audit_log.verify_chain()
         except TamperDetected as exc:
             log.warning("audit_chain_tamper_detected", tamper_row=exc.row_index, detail=sanitize_exception(exc))
+            # Active alert: a reconciliation failure must page, not just log.
+            emit_alert(AUDIT_TAMPER, detail={"tamper_row": exc.row_index, "rows_checked": rows})
             return {
                 "verified": False, "rows_checked": rows,
                 "tamper_row": exc.row_index,
@@ -1124,6 +1152,16 @@ def create_app() -> FastAPI:
             detail={
                 "reason": body.reason,
                 "descendants_cancelled": descendant_count,
+            },
+        )
+        # Active alert: an emergency stop is an ops event that should page.
+        from chuzom.alerts import AGENT_EMERGENCY_STOP, emit_alert
+        emit_alert(
+            AGENT_EMERGENCY_STOP,
+            detail={
+                "session_id": session_id,
+                "descendants_cancelled": descendant_count,
+                "reason": body.reason,
             },
         )
         return {
@@ -1346,6 +1384,10 @@ def create_app() -> FastAPI:
             chuzom_total_usd=chuzom_total_usd,
             chuzom_call_count=chuzom_call_count,
         )
+        # Active alert: page Finance when the month is out of tolerance,
+        # instead of relying on someone polling this endpoint.
+        from chuzom.invoice_reconciliation import alert_if_discrepant
+        alert_if_discrepant(diff)
         return {
             "provider": diff.provider,
             "period": diff.period,

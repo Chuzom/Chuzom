@@ -1,0 +1,18 @@
+{
+  "n": 24,
+  "note": "LOCAL PROXY \u2014 Ollama stand-ins, intended-pool costs. Not the submission number.",
+  "by_tau": {
+    "1.0": {
+      "accuracy": 0.8333,
+      "cost_per_1k": 98.2208,
+      "escalation_rate": 0.458,
+      "arena_proxy": 0.4062
+    },
+    "0.5": {
+      "accuracy": 0.5833,
+      "cost_per_1k": 12.1,
+      "escalation_rate": 0.0,
+      "arena_proxy": 0.5247
+    }
+  }
+}
