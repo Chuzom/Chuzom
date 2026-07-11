@@ -112,7 +112,19 @@ async def store_receipt(receipt: Receipt) -> None:
     """Persist a receipt to SQLite. Silent on failure."""
     try:
         _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        async with aiosqlite.connect(str(_DB_PATH)) as db:
+        # Daemon thread: store_receipt runs fire-and-forget; if the loop
+        # shuts down before this task finishes, the `async with` never exits
+        # and a non-daemon aiosqlite worker thread would hang interpreter exit.
+        _conn = aiosqlite.connect(str(_DB_PATH))
+        # See cost._get_db: mark the worker thread daemon before it starts
+        # (aiosqlite >=0.22 stores it as `_thread`; older versions were a
+        # Thread subclass) so a dropped pending write can't block exit.
+        _worker = getattr(_conn, "_thread", _conn)
+        try:
+            _worker.daemon = True
+        except (AttributeError, RuntimeError):
+            pass
+        async with _conn as db:
             await db.execute(_CREATE_TABLE)
             await db.execute(
                 """INSERT INTO receipts (

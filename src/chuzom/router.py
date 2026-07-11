@@ -91,6 +91,34 @@ _COMPLEXITY_TO_PROFILE: dict[Complexity, RoutingProfile] = {
 
 log = get_logger("chuzom.router")
 
+# ── Tracked fire-and-forget tasks ────────────────────────────────────────────
+# Bare ``asyncio.create_task(...)`` with no saved reference has two failure
+# modes: (1) the task can be garbage-collected mid-flight (asyncio only keeps
+# a weak reference), and (2) it cannot be drained at shutdown, so a pending
+# DB write is silently dropped when the loop closes — leaking its aiosqlite
+# connection. All fire-and-forget work must go through ``_spawn_bg``.
+_BG_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_bg(coro, *, name: str | None = None) -> asyncio.Task:
+    """Spawn a tracked fire-and-forget task (strong ref until done)."""
+    task = asyncio.get_running_loop().create_task(coro, name=name)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    return task
+
+
+async def drain_bg_tasks(timeout_s: float = 5.0) -> None:
+    """Await pending fire-and-forget tasks (call at shutdown / test teardown)."""
+    pending = [t for t in _BG_TASKS if not t.done()]
+    if not pending:
+        return
+    done, still_pending = await asyncio.wait(pending, timeout=timeout_s)
+    for t in still_pending:
+        t.cancel()
+    if still_pending:
+        await asyncio.gather(*still_pending, return_exceptions=True)
+
 
 # ── T3-XL1: agent-aware routing policy helpers ─────────────────────────────
 # Mode env follows the three-mode pattern used by RBAC + classification
@@ -368,11 +396,28 @@ async def _build_and_filter_chain(
                 get_model_failure_rates,
                 get_model_latency_stats,
             )
+            # return_exceptions=True is load-bearing: without it, gather()
+            # propagates the first exception while the sibling coroutines keep
+            # running as orphaned tasks. Each one holds a fresh aiosqlite
+            # connection (cost._get_db opens per-call, with a non-daemon worker
+            # thread); if the loop shuts down before they finish, their
+            # `finally: await db.close()` never runs — leaking the connection
+            # and hanging interpreter exit. (Same pattern as scorer.py.)
             _failure_rates, _latency_stats, _acceptance_scores = await asyncio.gather(
                 get_model_failure_rates(window_days=30),
                 get_model_latency_stats(window_days=7),
                 get_model_acceptance_scores(window_days=30),
+                return_exceptions=True,
             )
+            if isinstance(_failure_rates, BaseException):
+                log.warning("Failure-rate prefetch failed: %s", _failure_rates)
+                _failure_rates = None
+            if isinstance(_latency_stats, BaseException):
+                log.warning("Latency-stats prefetch failed: %s", _latency_stats)
+                _latency_stats = None
+            if isinstance(_acceptance_scores, BaseException):
+                log.warning("Acceptance-score prefetch failed: %s", _acceptance_scores)
+                _acceptance_scores = None
         except Exception as _penalty_err:
             log.warning(
                 "Failed to fetch benchmark penalty data — model ordering will use static chain: %s",
@@ -1861,8 +1906,10 @@ async def _dispatch_model_loop(
                 output_tokens=response.output_tokens,
                 cost_usd=response.cost_usd,
             )
-            # Fire-and-forget receipt storage (never blocks response)
-            asyncio.create_task(store_receipt(_receipt))
+            # Fire-and-forget receipt storage (never blocks response).
+            # Tracked so shutdown can drain it — an untracked pending write
+            # leaks its aiosqlite connection when the loop closes.
+            _spawn_bg(store_receipt(_receipt), name="store_receipt")
 
             # Record Codex/Gemini CLI requests for quota tracking (v7.1.0)
             if provider == "codex":
@@ -3029,8 +3076,9 @@ async def route_and_call(
             if _okf_concepts:
                 prompt = _okf.inject_context(prompt, _okf_concepts)
                 if ctx is not None:
-                    asyncio.create_task(
-                        _notify(ctx, "info", f"📚 OKF: injected {len(_okf_concepts)} context doc(s)")
+                    _spawn_bg(
+                        _notify(ctx, "info", f"📚 OKF: injected {len(_okf_concepts)} context doc(s)"),
+                        name="okf_notify",
                     )
         except Exception:  # noqa: BLE001
             pass
@@ -3270,8 +3318,9 @@ async def route_and_call(
         try:
             _resp_text = getattr(response, "content", "") or ""
             _resp_model = getattr(response, "model", "") or ""
-            asyncio.create_task(
-                _okf.enrich_from_response(prompt, _resp_text, _resp_model)
+            _spawn_bg(
+                _okf.enrich_from_response(prompt, _resp_text, _resp_model),
+                name="okf_enrich",
             )
         except Exception:  # noqa: BLE001
             pass
