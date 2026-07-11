@@ -17,6 +17,7 @@ Run:  chuzom gateway   (or: python -m chuzom.gateway)
 from __future__ import annotations
 
 import os
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -136,15 +137,27 @@ def _flatten(messages: list) -> str:
 
 
 # ── health / discovery ───────────────────────────────────────────────────────
+def _runtime_python() -> dict:
+    """Interpreter identity of the *running* daemon — lets ``chuzom doctor``
+    detect an orphaned interpreter (venv rebuilt under a different Python
+    while the daemon kept running; lazy imports then 500)."""
+    v = sys.version_info
+    return {
+        "python": f"{v.major}.{v.minor}.{v.micro}",
+        "executable": sys.executable,
+    }
+
+
 @app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True, "service": "chuzom-gateway",
-            "formats": ["openai", "anthropic", "ollama", "route"]}
+            "formats": ["openai", "anthropic", "ollama", "route"],
+            **_runtime_python()}
 
 
 @app.get("/health")  # alias — parity with the standalone route server
 def health() -> dict:
-    return {"ok": True}
+    return {"ok": True, **_runtime_python()}
 
 
 # ── Native: POST /route (parity with the zero-dep route_server) ───────────────

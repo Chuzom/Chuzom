@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import urllib.request
@@ -792,6 +793,86 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
                 f"not reachable at {ollama_url} — optional, but saves API cost"
             )
         )
+
+    # ── 5b. Gateway daemon — interpreter drift ─────────────────────────────
+    #    If the venv is rebuilt under a different Python (e.g. uv switches
+    #    3.14 → 3.11), the running daemon keeps its in-memory modules but the
+    #    site-packages tree it imports from is deleted; the first lazy import
+    #    (e.g. anyio._backends._asyncio) then 500s. Compare the daemon's
+    #    runtime interpreter against what's on disk and demand a restart on
+    #    mismatch.
+    print(f"\n{_bold('  Gateway daemon (interpreter drift)')}")
+    _gw_base = (
+        os.environ.get("CHUZOM_URL", "http://127.0.0.1:17900")
+        .rstrip("/")
+        .removesuffix("/v1")
+    )
+    _kickstart_fix = "launchctl kickstart -k gui/$UID/com.chuzom.gateway"
+    _gw_data = None
+    try:
+        _gw_req = urllib.request.Request(f"{_gw_base}/healthz", method="GET")
+        with urllib.request.urlopen(_gw_req, timeout=2) as _gw_resp:
+            _gw_data = json.loads(_gw_resp.read())
+    except Exception:
+        print(_warn(f"gateway not reachable at {_gw_base} — drift check skipped"))
+    if _gw_data is not None:
+        _daemon_py = _gw_data.get("python")
+        _daemon_exe = _gw_data.get("executable")
+        if not _daemon_py or not _daemon_exe:
+            print(
+                _warn(
+                    "daemon predates the drift check (no interpreter info in "
+                    f"/healthz) — restart to enable: {_kickstart_fix}"
+                )
+            )
+        elif not os.path.exists(_daemon_exe):
+            print(
+                _fail(
+                    f"daemon interpreter deleted: {_daemon_exe} — daemon "
+                    "running on orphaned interpreter — restart required",
+                    fix=_kickstart_fix,
+                )
+            )
+            issues.append(
+                "Gateway daemon running on a deleted interpreter — "
+                f"restart required: {_kickstart_fix}"
+            )
+        else:
+            _disk_py = ""
+            try:
+                _pv = subprocess.run(
+                    [_daemon_exe, "-V"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                _pv_out = (_pv.stdout or _pv.stderr or "").strip()
+                _disk_py = _pv_out.split()[-1] if _pv_out else ""
+            except Exception:
+                pass
+            if not _disk_py:
+                print(_warn(f"could not determine on-disk version of {_daemon_exe}"))
+            elif _disk_py != _daemon_py:
+                print(
+                    _fail(
+                        f"daemon runtime is Python {_daemon_py} but "
+                        f"{_daemon_exe} is now Python {_disk_py} — daemon "
+                        "running on orphaned interpreter — restart required",
+                        fix=_kickstart_fix,
+                    )
+                )
+                issues.append(
+                    f"Gateway daemon on orphaned interpreter ({_daemon_py} "
+                    f"runtime vs {_disk_py} on disk) — restart required: "
+                    f"{_kickstart_fix}"
+                )
+            else:
+                print(
+                    _ok(
+                        f"daemon Python {_daemon_py} matches on-disk venv "
+                        f"({_daemon_exe})"
+                    )
+                )
 
     # ── 6. Usage data freshness ────────────────────────────────────────────
     print(f"\n{_bold('  Usage data (Claude subscription pressure)')}")
