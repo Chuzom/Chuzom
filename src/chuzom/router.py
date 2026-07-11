@@ -318,6 +318,13 @@ async def _build_and_filter_chain(
     Returns:
         Ordered list of model identifiers, highest priority first. May be empty.
     """
+    # Defined up front so the pin re-assert and the headless codex re-assert
+    # (both near the return) never hit UnboundLocalError on paths that skip the
+    # cheap-tier pin block or the injection block below (PREMIUM/REASONING, MEDIA
+    # tasks, model_override early returns, or direct callers).
+    pinned_model = None
+    pinned_provider = None
+    _broker_provs: frozenset[str] = frozenset()
     if model_override:
         _local_prefixes = {"codex", "ollama", "gemini_cli"}
         if "/" not in model_override and model_override not in _local_prefixes:

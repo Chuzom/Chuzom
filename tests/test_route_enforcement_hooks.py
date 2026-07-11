@@ -23,11 +23,23 @@ def _run_hook(
     *,
     home: Path,
     extra_env: dict[str, str] | None = None,
+    inject_default_mode: str | None = "smart",
 ) -> subprocess.CompletedProcess[str]:
     # Strip shell-level enforcement overrides so tests are deterministic.
-    # The hook defaults to "smart"; tests that need a specific mode pass extra_env.
+    #
+    # The PRODUCT default is now "soft" (log-only, never blocks). Most tests here
+    # exercise the opt-in *blocking* modes, so the helper injects
+    # CHUZOM_ENFORCE="smart" — but ONLY when the test hasn't written its own
+    # routing.yaml (which would set the mode itself) and hasn't passed an explicit
+    # CHUZOM_ENFORCE. That keeps the routing.yaml tests reading their yaml and the
+    # blocking tests exercising smart, with no per-test churn. Tests that assert
+    # the real resolver DEFAULT ("soft") pass inject_default_mode=None.
     env = {k: v for k, v in os.environ.items() if k != "CHUZOM_ENFORCE"}
     env["HOME"] = str(home)
+    _yaml_present = (home / ".chuzom" / "routing.yaml").exists()
+    _explicit_mode = bool(extra_env and "CHUZOM_ENFORCE" in extra_env)
+    if inject_default_mode is not None and not _yaml_present and not _explicit_mode:
+        env["CHUZOM_ENFORCE"] = inject_default_mode
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -55,15 +67,33 @@ def _write_pending(home: Path, session_id: str, **overrides) -> Path:
     return pending_path
 
 
-def test_enforce_route_blocks_work_tools_by_default(tmp_path):
-    """Hard enforcement is the default when no env override is provided."""
-    session_id = "sess-hard-default"
+def test_enforce_route_allows_work_tools_by_default(tmp_path):
+    """The product default is now 'soft' — work tools are NEVER blocked by default
+    (blocking is opt-in via CHUZOM_ENFORCE=smart/hard)."""
+    session_id = "sess-soft-default"
     _write_pending(tmp_path, session_id)
 
     result = _run_hook(
         ENFORCE_ROUTE_HOOK,
         {"session_id": session_id, "tool_name": "Bash"},
         home=tmp_path,
+        inject_default_mode=None,  # exercise the real resolver default
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", "soft default must not block Bash"
+
+
+def test_enforce_route_blocks_work_tools_in_smart_mode(tmp_path):
+    """Opt-in smart mode still blocks work tools until routing is satisfied."""
+    session_id = "sess-smart-explicit"
+    _write_pending(tmp_path, session_id)
+
+    result = _run_hook(
+        ENFORCE_ROUTE_HOOK,
+        {"session_id": session_id, "tool_name": "Bash"},
+        home=tmp_path,
+        extra_env={"CHUZOM_ENFORCE": "smart"},
     )
 
     assert result.returncode == 0
@@ -277,35 +307,23 @@ def test_env_var_takes_priority_over_routing_yaml(tmp_path):
     assert out["decision"] == "block", "Env var 'hard' must override routing.yaml 'soft'"
 
 
-def test_defaults_to_smart_when_neither_env_var_nor_yaml(tmp_path):
-    """No env var + no routing.yaml → smart mode: blocks Q&A Bash, allows code Bash."""
-    # Smart mode blocks Bash for Q&A tasks
-    session_id_qa = "sess-default-qa"
-    _write_pending(tmp_path, session_id_qa, task_type="query")
+def test_defaults_to_soft_when_neither_env_var_nor_yaml(tmp_path):
+    """No env var + no routing.yaml → 'soft' default: never blocks (any task type)."""
+    for task_type, expected_tool in [("query", "llm_query"), ("code", "llm_code")]:
+        session_id = f"sess-default-{task_type}"
+        _write_pending(tmp_path, session_id, task_type=task_type, expected_tool=expected_tool)
 
-    result_qa = _run_hook(
-        ENFORCE_ROUTE_HOOK,
-        {"session_id": session_id_qa, "tool_name": "Bash"},
-        home=tmp_path,
-    )
+        result = _run_hook(
+            ENFORCE_ROUTE_HOOK,
+            {"session_id": session_id, "tool_name": "Bash"},
+            home=tmp_path,
+            inject_default_mode=None,  # exercise the real resolver default
+        )
 
-    assert result_qa.returncode == 0
-    out_qa = json.loads(result_qa.stdout)
-    assert out_qa["decision"] == "block", "Smart default must block Bash for Q&A tasks"
-
-    # v13: Smart mode blocks Bash for ALL task types until routing satisfied
-    session_id_code = "sess-default-code"
-    _write_pending(tmp_path, session_id_code, task_type="code", expected_tool="llm_code")
-
-    result_code = _run_hook(
-        ENFORCE_ROUTE_HOOK,
-        {"session_id": session_id_code, "tool_name": "Bash"},
-        home=tmp_path,
-    )
-
-    assert result_code.returncode == 0
-    out_code = json.loads(result_code.stdout)
-    assert out_code["decision"] == "block", "Smart default must block Bash for code tasks until routing satisfied"
+        assert result.returncode == 0
+        assert result.stdout.strip() == "", (
+            f"soft default must not block Bash for {task_type} tasks"
+        )
 
 
 def test_routing_yaml_with_leading_spaces_and_trailing_whitespace(tmp_path):
@@ -331,8 +349,8 @@ def test_routing_yaml_with_leading_spaces_and_trailing_whitespace(tmp_path):
     assert out["decision"] == "block", "Parser must strip whitespace from enforce: value"
 
 
-def test_routing_yaml_without_enforce_line_defaults_to_smart(tmp_path):
-    """routing.yaml exists but has no enforce: line → falls through to smart default."""
+def test_routing_yaml_without_enforce_line_defaults_to_soft(tmp_path):
+    """routing.yaml exists but has no enforce: line → falls through to 'soft' default."""
     _write_routing_yaml(tmp_path, "model_tier: auto\ndaily_budget: 5.00\n")
     session_id = "sess-yaml-no-enforce"
     _write_pending(tmp_path, session_id, task_type="query")
@@ -341,12 +359,12 @@ def test_routing_yaml_without_enforce_line_defaults_to_smart(tmp_path):
         ENFORCE_ROUTE_HOOK,
         {"session_id": session_id, "tool_name": "Bash"},
         home=tmp_path,
+        inject_default_mode=None,  # no env → read yaml (no enforce) → soft default
     )
 
     assert result.returncode == 0
-    # Smart mode for Q&A → Bash is blocked
-    out = json.loads(result.stdout)
-    assert out["decision"] == "block"
+    # No enforce line → soft default → Bash is allowed (not blocked).
+    assert result.stdout.strip() == ""
 
 
 def test_auto_route_logs_unrouted_previous_turn_on_next_prompt(tmp_path):
