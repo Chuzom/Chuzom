@@ -38,6 +38,11 @@ class RateLimitError(Exception):
 @pytest.fixture
 def routed_runtime(monkeypatch, temp_db):
     monkeypatch.setenv("CHUZOM_BANDIT", "off")
+    # These audit tests exercise the error/fallback path with mocked chains and
+    # fixed model counts. Quality-gated escalation (default-on) would add a
+    # second in-chain attempt on a low-scoring answer, changing the fallback
+    # event count — so disable it to isolate the fallback behaviour under test.
+    monkeypatch.setenv("CHUZOM_ESCALATE_ON_QUALITY", "0")
     route_log = MagicMock()
     mock_log = MagicMock()
     mock_log.bind.return_value = route_log

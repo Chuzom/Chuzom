@@ -37,18 +37,26 @@ async def test_headless_complex_puts_broker_codex_first(mock_env, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_headless_simple_keeps_local_first(mock_env, monkeypatch):
-    """SIMPLE/BUDGET must stay free-local even when the broker offers codex
-    (the re-assert is premium-only, preserving cheap-first)."""
+    """SIMPLE/BUDGET keeps a local model ahead of codex even when the broker
+    offers codex — the re-assert is premium-only, so cheap-first is preserved.
+
+    The base chain is pinned to include a local Ollama model so the assertion is
+    env-independent (CI has no live Ollama, which would otherwise drop it)."""
     sb._provider_cache = None
     monkeypatch.setenv("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "codex,gemini_cli")
-    with patch("chuzom.session_broker.broker_providers",
+    base = ["ollama/qwen2.5-coder:7b", "openai/gpt-4o-mini"]
+    with patch("chuzom.router.get_model_chain", return_value=list(base)), \
+         patch("chuzom.router.get_dynamic_chain", return_value=None, create=True), \
+         patch("chuzom.session_broker.broker_providers",
                new=AsyncMock(return_value=frozenset({"codex"}))):
         chain = await _build_and_filter_chain(
             TaskType.QUERY, RoutingProfile.BUDGET, None, "simple", Complexity.SIMPLE, _cfg()
         )
     assert chain
-    assert not chain[0].startswith("codex/"), \
-        f"simple route must not front codex (cheap-first), got {chain[:3]}"
+    # Codex may be injected (it's free), but the premium-only re-assert must NOT
+    # fire for BUDGET, so the local model stays ahead of it.
+    assert chain[0].startswith("ollama/"), \
+        f"simple route must keep a local model first (cheap-first), got {chain[:3]}"
 
 
 @pytest.mark.asyncio
