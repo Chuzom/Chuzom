@@ -47,6 +47,7 @@ from chuzom.rbac_routing import (
 from chuzom.redaction_routing import maybe_redact as _maybe_redact
 from chuzom.state import get_active_agent
 from chuzom.codex_agent import CODEX_MODELS, is_codex_available, run_codex
+from chuzom.claude_agent import offload_available as claude_offload_available, run_claude
 from chuzom.contract import build_contract
 from chuzom.gates import run_gates
 from chuzom.gemini_cli_agent import GEMINI_MODELS, is_gemini_cli_available, run_gemini_cli
@@ -1791,6 +1792,37 @@ async def _dispatch_model_loop(
                         cost_usd=0.0,
                         latency_ms=gemini_result.duration_sec * 1000,
                         provider="gemini_cli",
+                    )
+                elif provider == "anthropic" and claude_offload_available(config):
+                    # Claude Code CLI dispatch (subscription auth, no API key), taken
+                    # ONLY when offload is truly available: subscription on + `claude`
+                    # CLI installed + combined 5h/weekly pressure under the cap. When
+                    # not available, anthropic/* falls through to the normal completion
+                    # path (below) — so it degrades gracefully and stays mockable.
+                    async def _claude_on_event(ev_type: str, text: str) -> None:
+                        if text:
+                            await _notify(ctx, "info", f"⚡ claude: {text}")
+                    claude_result = await run_claude(
+                        prompt, model=model_name, on_event=_claude_on_event
+                    )
+                    if not claude_result.success:
+                        raise RuntimeError(
+                            _format_subprocess_chain_error(
+                                "Claude CLI",
+                                claude_result.exit_code,
+                                claude_result.content,
+                            )
+                        )
+                    in_tokens = max(1, len(prompt) // 4)
+                    out_tokens = max(1, len(claude_result.content) // 4)
+                    response = LLMResponse(
+                        content=claude_result.content,
+                        model=f"anthropic/{model_name}",
+                        input_tokens=in_tokens,
+                        output_tokens=out_tokens,
+                        cost_usd=0.0,
+                        latency_ms=claude_result.duration_sec * 1000,
+                        provider="anthropic",
                     )
                 else:
                     response = await _call_text(

@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.7.8 — 2026-07-11 — control plane (G-004), claude_agent offload provider, RouterArena sandbox
+
+Three merged feature PRs (#127–#129).
+
+### Sidecar-per-tenant control plane — gap G-004 closed (#129)
+Central control plane owning canonical, versioned per-tenant policy,
+distributing Ed25519-signed policy bundles to per-tenant sidecars. Instances
+keep routing, budget reservations, and their local audit chain; a
+control-plane outage never blocks a routed turn (fail-static).
+- Store: SQLite + Postgres backends (tenants, versioned policy, active
+  pointer, instances, append-only heartbeats).
+- Policy bundles: deterministic normalization + sha256 digest; secure YAML
+  scanner rejects plaintext secrets in bundles.
+- Signing: Ed25519 sign/verify; sidecars verify against a PINNED public key
+  (rejects key substitution), atomic last-known-good disk cache.
+- Control plane's own tamper-evident hash-chained audit log.
+- FastAPI admin/sidecar API: policy push, heartbeats, signed bundles,
+  /public-key; effective-version heartbeats with transition-only audit;
+  SSE policy-change push for the <5s SLO; migration + reconciliation.
+- Router enforces control-plane-installed policy via `apply_policy`;
+  behaviour-identical when none is installed.
+
+### claude_agent — Claude Code CLI as a pressure-gated offload provider (#127)
+Claude Code CLI wired in as an offload provider, engaged under budget
+pressure like other gated backends.
+
+### RouterArena Phase 0 sandbox (#129)
+RA-independent offline eval + sealed one-shot measurement: read-only
+sha256-pinned import of RA's official metrics, 192 self-generated proxy
+items (zero RA/RouterBench data), tamper-evident hash-chain ledger that
+refuses re-runs, PROVENANCE.md mapping each PR-155 rule to compliance.
+
+### Docs
+- README imagery refresh (#128).
+
+### Test reliability
+- Reset module-global quality-feedback store between tests (fixes
+  order-dependent failures under pytest-randomly).
+
 ## v0.7.7 — 2026-07-10 — model registry refresh + DeepSeek alias migration
 
 Routing-critical model/pricing update. No API or behavior changes beyond the
