@@ -26,6 +26,8 @@ jobs:
           enable-cache: false
       - run: uv python install 3.11
       - run: uvx ruff check src/ tests/
+      - name: Capability-claim guard (no new unbacked marketing claims)
+        run: bash scripts/lint_capability_claims.sh
 
   version-check:
     runs-on: ubuntu-latest
