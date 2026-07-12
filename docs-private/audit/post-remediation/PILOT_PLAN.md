@@ -76,6 +76,7 @@ A fixed task corpus is used at the start of each week to score quality independe
 | Bypass rate (developers reverting to direct provider) | < 20% by week 4; < 10% by week 6 |
 | Audit-row attribution (rows / total turns) | ≥ 99.5% |
 | `verify_chain()` per developer at end of pilot | passes |
+| Real-task outcome correctness (routed-model edits/answers accepted without a corrective re-prompt, sampled weekly) | within −3 pp vs. baseline |
 
 ## Failure metrics (early-exit triggers)
 

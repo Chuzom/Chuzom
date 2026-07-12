@@ -298,11 +298,51 @@ The following are explicit gaps from `docs/audit/post-remediation/GAP_ANALYSIS.m
 
 ---
 
+## 5a. Budget backend incidents
+
+Backends: **SQLite** (default, `~/.chuzom`, single-instance) and **Postgres**
+(multi-instance, needs the `postgres` extra + `CHUZOM_BUDGET_POSTGRES_DSN`).
+Selected by `CHUZOM_BUDGET_BACKEND` (`sqlite` | `postgres` | `memory`).
+
+**Symptom.** Aggregate spend across instances exceeds the intended cap even
+though each instance reports being under budget.
+
+**Detect.** The budget backend is **fail-open**: if `postgres` is requested but
+the dep or DSN is missing, the factory logs `postgres_backend_unavailable_fallback_sqlite`
+and silently falls back to SQLite — boot never breaks, but multi-instance
+coordination is lost. Check for the fallback:
+```bash
+# did any instance silently fall back?
+grep -r "postgres_backend_unavailable_fallback_sqlite" <your-log-sink>
+# what backend does this instance THINK it's using?
+echo "$CHUZOM_BUDGET_BACKEND"          # expect: postgres in a cluster
+python -c "from chuzom.budget_backend import get_budget_backend; print(type(get_budget_backend()).__name__)"
+```
+`SqliteBudgetBackend` on a node that should be clustered = you're in this incident.
+
+**Impact.** The "budget N → exactly N succeed" invariant holds only *within one
+backend/instance* (reservations are per-key locks, not cross-node). Under
+fallback, each instance enforces its own local SQLite budget, so N instances can
+each spend the full cap → up to N× overspend.
+
+**Immediate mitigation.** Point every instance at the same reachable Postgres DSN
+and confirm the `postgres` extra is installed, then restart so the factory picks
+Postgres (the backend is a process-lifetime singleton — it will not re-probe live).
+If Postgres can't be restored now, temporarily lower each instance's per-node cap
+to `intended_cap / instance_count` to bound aggregate spend.
+
+**Root-cause fixes.** Install the `postgres` extra; set `CHUZOM_BUDGET_POSTGRES_DSN`
+in every instance's environment; add the `postgres_backend_unavailable_fallback_sqlite`
+warning to alerting so a silent fallback pages instead of overspending unnoticed.
+
+---
+
 ## 6. Changelog for this runbook
 
 | Version | Date | Notes |
 |---|---|---|
 | v1 | 2026-06-08 | First runbook. Install, upgrade, rollback, secret rotation. Single-process scope. |
+| v1.1 | 2026-07-06 | Added §5a Budget backend incidents (Postgres fail-open → SQLite, overspend risk, detect/mitigate). Advances the v3 incident-response scope. |
 
 ---
 
