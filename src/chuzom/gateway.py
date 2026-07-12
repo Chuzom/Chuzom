@@ -53,6 +53,11 @@ _load_dotenv()  # at import, before any routing
 
 app = FastAPI(title="Chuzom Gateway", version="2")
 
+# Gateway mode fronts host tools such as Codex/Cursor/Pi. Calling Codex or
+# Gemini CLI again from inside the gateway can recurse or fail under launchd's
+# trimmed PATH, so keep subprocess host backends out unless an operator opts in.
+os.environ.setdefault("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "codex,gemini_cli")
+
 def _classify(prompt: str) -> tuple[str, str]:
     # Unified engine (chuzom.classify), gateway policy — richer task_type than the
     # old code/analyze regex; same 400/2000 length tiers + analyze low-signal default.
@@ -93,8 +98,8 @@ class _RoutedResult:
         self.model = _ModelRef(prov, bare)
 
 
-def _route(prompt: str, task_type: str | None, complexity: str | None,
-           prefer_model: str | None = None):
+async def _route(prompt: str, task_type: str | None, complexity: str | None,
+                 prefer_model: str | None = None):
     """Shared core for every wire-format endpoint: classify (if needed) → route
     through Chuzom's FULL router and adapt the result.
 
@@ -109,9 +114,9 @@ def _route(prompt: str, task_type: str | None, complexity: str | None,
         _t, _c = _classify(prompt)
         task_type, complexity = task_type or _t, complexity or _c
 
-    from chuzom.route_server import route_payload
+    from chuzom.route_server import route_payload_async
     try:
-        out = route_payload({
+        out = await route_payload_async({
             "prompt": prompt,
             "task_type": task_type,
             "complexity": complexity,
@@ -136,6 +141,43 @@ def _flatten(messages: list) -> str:
     return "\n".join(parts)
 
 
+def _flatten_responses_input(value) -> str:
+    """Flatten OpenAI Responses ``input`` into the prompt text Chuzom routes.
+
+    Supports the common shapes:
+      - string input
+      - list of message dicts with content as string
+      - list of content parts like {"type": "input_text", "text": "..."}
+    """
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, list):
+        return str(value or "")
+
+    parts: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            if item:
+                parts.append(str(item))
+            continue
+
+        role = item.get("role", "user")
+        content = item.get("content", "")
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            text = " ".join(
+                p.get("text", "")
+                for p in content
+                if isinstance(p, dict) and p.get("text")
+            )
+        else:
+            text = str(content or "")
+        if text:
+            parts.append(f"{role}: {text}")
+    return "\n".join(parts)
+
+
 # ── health / discovery ───────────────────────────────────────────────────────
 def _runtime_python() -> dict:
     """Interpreter identity of the *running* daemon — lets ``chuzom doctor``
@@ -151,7 +193,7 @@ def _runtime_python() -> dict:
 @app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True, "service": "chuzom-gateway",
-            "formats": ["openai", "anthropic", "ollama", "route"],
+            "formats": ["openai", "responses", "anthropic", "ollama", "route"],
             **_runtime_python()}
 
 
@@ -162,7 +204,7 @@ def health() -> dict:
 
 # ── Native: POST /route (parity with the zero-dep route_server) ───────────────
 @app.post("/route")
-def route(payload: dict) -> dict:
+async def route(payload: dict) -> dict:
     """Minimal native routing endpoint — same contract as ``chuzom.route_server``.
 
     Body: ``{"prompt", "complexity"?, "system"?, "task_type"?, "max_tokens"?,
@@ -170,9 +212,9 @@ def route(payload: dict) -> dict:
     "input_tokens","output_tokens","complexity"}``. Goes through the same
     ``route_payload`` core as every other endpoint.
     """
-    from chuzom.route_server import route_payload
+    from chuzom.route_server import route_payload_async
     try:
-        return route_payload(payload)
+        return await route_payload_async(payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -199,8 +241,8 @@ class _OAIRequest(BaseModel):
 
 
 @app.post("/v1/chat/completions")
-def openai_chat(req: _OAIRequest) -> dict:
-    r = _route(_flatten(req.messages), req.task_type, req.complexity, prefer_model=req.model)
+async def openai_chat(req: _OAIRequest) -> dict:
+    r = await _route(_flatten(req.messages), req.task_type, req.complexity, prefer_model=req.model)
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
         "object": "chat.completion",
@@ -213,6 +255,52 @@ def openai_chat(req: _OAIRequest) -> dict:
     }
 
 
+# ── OpenAI Responses: POST /v1/responses ────────────────────────────────────
+class _ResponsesRequest(BaseModel):
+    model: str | None = None
+    input: object
+    instructions: str | None = None
+    task_type: str | None = None
+    complexity: str | None = None
+
+
+@app.post("/v1/responses")
+async def openai_responses(req: _ResponsesRequest) -> dict:
+    prompt = _flatten_responses_input(req.input)
+    if req.instructions:
+        prompt = f"system: {req.instructions}\n{prompt}"
+    r = await _route(prompt, req.task_type, req.complexity, prefer_model=req.model)
+    output_id = f"msg_{uuid.uuid4().hex[:24]}"
+    return {
+        "id": f"resp_{uuid.uuid4().hex[:24]}",
+        "object": "response",
+        "created_at": int(time.time()),
+        "status": "completed",
+        "model": f"{r.model.provider}/{r.model.model}",
+        "output": [
+            {
+                "id": output_id,
+                "type": "message",
+                "status": "completed",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": r.text,
+                        "annotations": [],
+                    }
+                ],
+            }
+        ],
+        "output_text": r.text,
+        "usage": {
+            "input_tokens": r.input_tokens,
+            "output_tokens": r.output_tokens,
+            "total_tokens": r.input_tokens + r.output_tokens,
+        },
+    }
+
+
 # ── Anthropic: POST /v1/messages ─────────────────────────────────────────────
 class _AnthropicRequest(BaseModel):
     model: str | None = None
@@ -222,9 +310,9 @@ class _AnthropicRequest(BaseModel):
 
 
 @app.post("/v1/messages")
-def anthropic_messages(req: _AnthropicRequest) -> dict:
+async def anthropic_messages(req: _AnthropicRequest) -> dict:
     prompt = (f"system: {req.system}\n" if req.system else "") + _flatten(req.messages)
-    r = _route(prompt, None, None)
+    r = await _route(prompt, None, None)
     return {
         "id": f"msg_{uuid.uuid4().hex[:24]}",
         "type": "message",
@@ -248,8 +336,8 @@ class _OllamaGenerate(BaseModel):
 
 
 @app.post("/api/chat")
-def ollama_chat(req: _OllamaChat) -> dict:
-    r = _route(_flatten(req.messages), None, None)
+async def ollama_chat(req: _OllamaChat) -> dict:
+    r = await _route(_flatten(req.messages), None, None)
     return {
         "model": f"{r.model.provider}/{r.model.model}",
         "message": {"role": "assistant", "content": r.text},
@@ -259,8 +347,8 @@ def ollama_chat(req: _OllamaChat) -> dict:
 
 
 @app.post("/api/generate")
-def ollama_generate(req: _OllamaGenerate) -> dict:
-    r = _route(req.prompt, None, None)
+async def ollama_generate(req: _OllamaGenerate) -> dict:
+    r = await _route(req.prompt, None, None)
     return {
         "model": f"{r.model.provider}/{r.model.model}",
         "response": r.text,

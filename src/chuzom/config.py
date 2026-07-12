@@ -365,7 +365,11 @@ class RouterConfig(BaseSettings):
     # timeout prevents premature cancellation of long-running generation jobs.
     media_request_timeout: int = 600
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {
+        "env_file": (Path.home() / ".chuzom" / ".env", ".env"),
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
     # Maps each Pydantic field name to (provider_name, litellm_env_var).
     # This dual mapping serves two purposes:
@@ -398,6 +402,19 @@ class RouterConfig(BaseSettings):
         "huggingface_api_key": ("huggingface", "HF_TOKEN"),
     }
 
+    def provider_api_key(self, provider: str) -> str | None:
+        """Resolve a provider's API key through the pluggable secrets vault.
+
+        Default backend (``CHUZOM_SECRETS_BACKEND`` unset / ``env``) reads
+        the same env vars as before — zero behaviour change. Registering a
+        real vault backend (HashiCorp / AWS / GCP via
+        ``secrets_vault.register_backend``) transparently redirects key
+        resolution here without touching callers. Fail-open: a vault
+        outage degrades to env.
+        """
+        from chuzom.secrets_vault import get_provider_key
+        return get_provider_key(provider)
+
     @property
     def available_providers(self) -> set[str]:
         """Return the set of all providers that have a non-empty API key configured.
@@ -415,7 +432,8 @@ class RouterConfig(BaseSettings):
         for field_name, (provider_name, _) in self._PROVIDER_MAP.items():
             if getattr(self, field_name, ""):
                 providers.add(provider_name)
-        if self.ollama_base_url and probe_ollama(self.ollama_base_url):
+        ollama_url = self.effective_ollama_base_url
+        if ollama_url and probe_ollama(ollama_url):
             providers.add("ollama")
         if self.openai_compat_base_url:
             providers.add("openai_compat")
@@ -428,6 +446,22 @@ class RouterConfig(BaseSettings):
         if self.chuzom_gemini_subscription:
             providers.discard("gemini")
         return providers
+
+    @property
+    def effective_ollama_base_url(self) -> str:
+        """Return the Ollama endpoint Chuzom should probe/use.
+
+        Chuzom should work on a default Ollama install without a local preset:
+        if no URL is configured, probe the standard local daemon endpoint.
+        """
+        import os
+
+        return (
+            self.ollama_base_url
+            or os.getenv("OLLAMA_BASE_URL", "")
+            or os.getenv("OLLAMA_URL", "")
+            or ("" if os.getenv("PYTEST_CURRENT_TEST") else "http://localhost:11434")
+        )
 
     @property
     def text_providers(self) -> set[str]:
@@ -462,7 +496,7 @@ class RouterConfig(BaseSettings):
         Kept for backward compatibility. Prefer ``all_ollama_models()`` when
         injecting Ollama under quota pressure regardless of profile.
         """
-        if not self.ollama_base_url or profile != RoutingProfile.BUDGET:
+        if not self.effective_ollama_base_url or profile != RoutingProfile.BUDGET:
             return []
         return self.all_ollama_models()
 
@@ -482,11 +516,7 @@ class RouterConfig(BaseSettings):
         import os
 
         # Resolve the effective base URL: explicit config > env var > localhost default.
-        effective_url = (
-            self.ollama_base_url
-            or os.getenv("OLLAMA_BASE_URL", "")
-            or "http://localhost:11434"
-        )
+        effective_url = self.effective_ollama_base_url
 
         # Discovery cache takes priority — it represents what's actually running.
         # Only trust the cache if Ollama is also reachable at the effective URL.
@@ -501,11 +531,14 @@ class RouterConfig(BaseSettings):
             except Exception:
                 pass
 
-        # Without an explicit base URL we can't reach Ollama; nothing more to try.
-        if not self.ollama_base_url:
+        # Fall back to env/configured model names for backward compatibility.
+        # If the user gave an explicit base URL, preserve historical behavior and
+        # return the configured names without requiring a live probe in this method.
+        # For auto-default localhost, require a successful probe first.
+        if not self.ollama_base_url and not probe_ollama(effective_url):
             return []
 
-        # Fall back to env var for backward compatibility
+        os.environ.setdefault("OLLAMA_API_BASE", effective_url)
         return [f"ollama/{m.strip()}" for m in self.ollama_budget_models.split(",") if m.strip()]
 
     def all_openai_compat_models(self) -> list[str]:

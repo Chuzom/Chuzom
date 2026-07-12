@@ -181,9 +181,11 @@ def test_unknown_provider_returns_safe_record(savings_log_path):
     assert "estimated_saved" in record
 
 
-def test_records_match_baseline_per_complexity(savings_log_path):
-    """Complex tasks should imply higher Claude baseline (Opus) than simple (Haiku),
-    so estimated_saved should grow with complexity for identical token counts."""
+def test_records_use_opus_baseline_for_all_complexities(savings_log_path):
+    """2026-07-12 (user decision): savings are opus-equivalent ONLY — the
+    baseline is claude-opus-4-8 regardless of complexity, so identical token
+    counts must yield identical estimated_saved across all tiers. (The old
+    tiered haiku/sonnet/opus 'honest' baseline was dropped.)"""
     from chuzom.hooks.savings_logger import log_direct_savings
 
     for complexity in ("simple", "moderate", "complex"):
@@ -196,8 +198,14 @@ def test_records_match_baseline_per_complexity(savings_log_path):
 
     lines = savings_log_path.read_text().strip().splitlines()
     records = {json.loads(line)["session_id"]: json.loads(line) for line in lines}
-    assert records["simple"]["estimated_saved"] < records["moderate"]["estimated_saved"]
-    assert records["moderate"]["estimated_saved"] < records["complex"]["estimated_saved"]
+    assert (
+        records["simple"]["estimated_saved"]
+        == records["moderate"]["estimated_saved"]
+        == records["complex"]["estimated_saved"]
+    )
+    # opus-4-8 @ $5/$25 per 1M: 1000 in + 500 out on a free local model
+    # → baseline (and savings) = 0.005 + 0.0125 = $0.0175
+    assert abs(records["simple"]["estimated_saved"] - 0.0175) < 1e-9
 
 
 # ── DIRECT → usage / routing_decisions table persistence ─────────────────────

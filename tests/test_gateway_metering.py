@@ -65,6 +65,24 @@ def test_route_payload_honors_host_override(tmp_path, monkeypatch):
     assert rec["host"] == "loophole"
 
 
+def test_route_payload_treats_auto_model_as_no_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".chuzom").mkdir(parents=True)
+    import chuzom.router as R
+
+    seen = {}
+
+    async def _fake(task_type, prompt, **kw):
+        seen.update(kw)
+        return _fake_resp()
+
+    monkeypatch.setattr(R, "route_and_call", _fake)
+
+    from chuzom import route_server
+    route_server.route_payload({"prompt": "hi", "model": "auto"})
+    assert seen["model_override"] is None
+
+
 def test_route_payload_does_not_touch_session_spend(tmp_path, monkeypatch):
     # External traffic must NOT pollute the current session's session_spend.json.
     monkeypatch.setenv("HOME", str(tmp_path))

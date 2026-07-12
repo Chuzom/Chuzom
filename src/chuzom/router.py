@@ -1942,6 +1942,19 @@ async def _dispatch_model_loop(
             # Tracked so shutdown can drain it — an untracked pending write
             # leaks its aiosqlite connection when the loop closes.
             _spawn_bg(store_receipt(_receipt), name="store_receipt")
+            # Bridge the receipt into ~/.chuzom/savings_log.jsonl so the
+            # dashboard / session-end summary see gateway-routed calls too.
+            # Without this, JSONL consumers showed $0 while receipts.db had
+            # hundreds of rows (2026-07-12). Sync append, fire-and-forget —
+            # the helper swallows all errors internally.
+            try:
+                from chuzom.hooks.savings_logger import log_receipt_savings
+                log_receipt_savings(
+                    _receipt,
+                    session_id=os.environ.get("CHUZOM_SESSION_ID", "") or correlation_id or "",
+                )
+            except Exception as _sl_err:
+                log.debug("savings_log bridge skipped: %s", _sl_err)
 
             # Record Codex/Gemini CLI requests for quota tracking (v7.1.0)
             if provider == "codex":

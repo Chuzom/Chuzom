@@ -10,6 +10,7 @@ def test_gateway_mounts_all_formats():
     from chuzom.gateway import app
     paths = {r.path for r in app.routes if hasattr(r, "path")}
     assert "/v1/chat/completions" in paths     # OpenAI
+    assert "/v1/responses" in paths            # OpenAI Responses
     assert "/v1/messages" in paths             # Anthropic
     assert "/api/chat" in paths                # Ollama chat
     assert "/api/generate" in paths            # Ollama generate
@@ -17,7 +18,7 @@ def test_gateway_mounts_all_formats():
     assert "/route" in paths                   # native (folded in from route_server)
 
 
-# ── Consolidation: every endpoint goes through route_payload → route_and_call ──
+# ── Consolidation: every endpoint goes through route_payload_async → route_and_call ──
 def test_routed_result_adapter_normalizes_model():
     from chuzom.gateway import _RoutedResult
     # provider-prefixed model → bare model behind .model.model (no double prefix)
@@ -34,18 +35,18 @@ def test_routed_result_adapter_normalizes_model():
 
 def test_all_endpoints_route_through_route_payload(monkeypatch):
     """OpenAI / Anthropic / Ollama / native /route must all funnel through the one
-    route_payload core — so external callers uniformly get budget caps + the cap."""
+    route_payload_async core — so external callers uniformly get budget caps + the cap."""
     import chuzom.route_server as rs
     from chuzom.gateway import app
 
     calls = []
 
-    def _fake_payload(payload):
+    async def _fake_payload(payload):
         calls.append(payload)
         return {"text": "ok", "provider": "ollama", "model": "ollama/hermes3:8b",
                 "cost_usd": 0.0, "input_tokens": 3, "output_tokens": 1, "complexity": "simple"}
 
-    monkeypatch.setattr(rs, "route_payload", _fake_payload)
+    monkeypatch.setattr(rs, "route_payload_async", _fake_payload)
 
     from fastapi.testclient import TestClient
     client = TestClient(app)
@@ -70,8 +71,45 @@ def test_all_endpoints_route_through_route_payload(monkeypatch):
     r = client.post("/api/generate", json={"prompt": "hi"})
     assert r.status_code == 200 and r.json()["response"] == "ok"
 
-    # All four endpoints went through the single core.
-    assert len(calls) == 4
+    # OpenAI Responses
+    r = client.post("/v1/responses", json={"model": "auto", "input": "hi"})
+    assert r.status_code == 200
+    assert r.json()["output_text"] == "ok"
+    assert r.json()["model"] == "ollama/hermes3:8b"
+
+    # All five endpoints went through the single core.
+    assert len(calls) == 5
+
+
+def test_responses_input_shapes_route_through_route_payload(monkeypatch):
+    import chuzom.route_server as rs
+    from chuzom.gateway import app
+    from fastapi.testclient import TestClient
+
+    calls = []
+
+    async def _fake_payload(payload):
+        calls.append(payload)
+        return {"text": "ok", "provider": "ollama", "model": "ollama/hermes3:8b",
+                "cost_usd": 0.0, "input_tokens": 3, "output_tokens": 1, "complexity": "simple"}
+
+    monkeypatch.setattr(rs, "route_payload_async", _fake_payload)
+    client = TestClient(app)
+    r = client.post("/v1/responses", json={
+        "model": "auto",
+        "instructions": "be terse",
+        "input": [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": "hello"}],
+            }
+        ],
+    })
+    assert r.status_code == 200
+    assert r.json()["output"][0]["content"][0]["text"] == "ok"
+    assert calls[0]["model"] == "auto"
+    assert "system: be terse" in calls[0]["prompt"]
+    assert "user: hello" in calls[0]["prompt"]
 
 
 def test_route_endpoint_missing_prompt_is_400(monkeypatch):

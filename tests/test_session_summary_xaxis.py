@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from chuzom.ui.session_summary import _date_axis_label_row
+from chuzom.ui.session_summary import _date_axis_label_row, _fmt_tok_axis, _tok_axis_unit
 
 
 def _labels(row: str) -> list[str]:
@@ -51,3 +51,19 @@ def test_narrow_chart_drops_midpoint_cleanly():
     # A 9-day chart can't fit 3 labels without collision → just the 2 endpoints.
     tokens = _labels(_date_axis_label_row(9, datetime.date(2026, 7, 1)))
     assert len(tokens) == 2
+
+
+def test_token_axis_uses_one_unit_for_million_scale():
+    divisor, suffix = _tok_axis_unit(3_200_000)
+
+    assert suffix == "M"
+    assert _fmt_tok_axis(3_200_000, divisor, suffix) == "3.2M"
+    assert _fmt_tok_axis(901_300, divisor, suffix) == "0.9M"
+
+
+def test_token_axis_uses_one_unit_for_thousand_scale():
+    divisor, suffix = _tok_axis_unit(950_000)
+
+    assert suffix == "k"
+    assert _fmt_tok_axis(950_000, divisor, suffix) == "950.0k"
+    assert _fmt_tok_axis(12_500, divisor, suffix) == "12.5k"

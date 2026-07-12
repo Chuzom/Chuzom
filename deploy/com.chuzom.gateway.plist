@@ -19,6 +19,7 @@
     <dict>
         <key>CHUZOM_GATEWAY_HOST</key><string>127.0.0.1</string>
         <key>CHUZOM_GATEWAY_PORT</key><string>17900</string>
+        <key>CHUZOM_DISABLE_SUBPROCESS_BACKENDS</key><string>codex,gemini_cli</string>
     </dict>
     <key>KeepAlive</key><true/>
     <key>RunAtLoad</key><true/>

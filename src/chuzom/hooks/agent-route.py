@@ -845,6 +845,22 @@ def main() -> None:
     max_depth = _get_max_depth()
 
     if current_depth >= max_depth:
+        # Active alert: a runaway-nesting breaker trip should page ops,
+        # not just silently block. Guarded so the hook never breaks.
+        # stdout is the hook's JSON decision channel — structlog's default
+        # sink is stdout, so redirect any alert logging to stderr to keep
+        # the decision payload parseable.
+        try:
+            import contextlib
+
+            from chuzom.alerts import RUNAWAY_BREAKER_TRIP, emit_alert
+            with contextlib.redirect_stdout(sys.stderr):
+                emit_alert(
+                    RUNAWAY_BREAKER_TRIP,
+                    detail={"session_id": session_id, "depth": current_depth, "max_depth": max_depth},
+                )
+        except Exception:
+            pass
         result = {
             "decision": "block",
             "reason": (

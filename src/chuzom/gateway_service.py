@@ -40,6 +40,7 @@ def render_launchd_plist(
     <dict>
         <key>CHUZOM_GATEWAY_HOST</key><string>{host}</string>
         <key>CHUZOM_GATEWAY_PORT</key><string>{port}</string>
+        <key>CHUZOM_DISABLE_SUBPROCESS_BACKENDS</key><string>codex,gemini_cli</string>
     </dict>
     <key>KeepAlive</key><true/>
     <key>RunAtLoad</key><true/>
@@ -64,6 +65,7 @@ Type=simple
 ExecStart={python} -m chuzom.gateway
 Environment=CHUZOM_GATEWAY_HOST={host}
 Environment=CHUZOM_GATEWAY_PORT={port}
+Environment=CHUZOM_DISABLE_SUBPROCESS_BACKENDS=codex,gemini_cli
 Restart=on-failure
 RestartSec=5
 

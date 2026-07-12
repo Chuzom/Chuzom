@@ -73,9 +73,15 @@ _PRICING_PER_MTOK: dict[tuple[str, str], tuple[float, float]] = {
     ("codex",  "*"):                  (0.00,  0.00),
 }
 
+# 2026-07-12 (user decision): savings are reported as OPUS-EQUIVALENT only —
+# the counterfactual is always claude-opus-4-8 regardless of complexity. The
+# earlier complexity-tiered ("honest") baseline was dropped because routing
+# baseline comparison doesn't reflect how the user actually works. This keeps
+# the inline DIRECT-hook path consistent with receipt_store.compute_receipt,
+# which already prices savings against Opus ($15/$75 per 1M).
 _BASELINE_MODEL_BY_COMPLEXITY: dict[str, str] = {
-    "simple":   "claude-haiku-4-5",
-    "moderate": "claude-sonnet-5",
+    "simple":   "claude-opus-4-8",
+    "moderate": "claude-opus-4-8",
     "complex":  "claude-opus-4-8",
 }
 
@@ -177,6 +183,45 @@ def log_direct_savings(
             pass
     except Exception:
         # Silent — savings logging must never break the routing hook.
+        pass
+
+
+def log_receipt_savings(
+    receipt: "Receipt",  # chuzom.receipt_store.Receipt (duck-typed; no import cycle)
+    session_id: str,
+    *,
+    host: str = "router",
+) -> None:
+    """Append a savings record for a router/gateway-routed call.
+
+    Bridges the receipt path (router.py → receipts.db) into
+    ``savings_log.jsonl`` so the dashboard/session-end summary see the same
+    calls. Before this bridge existed, gateway-routed turns landed ONLY in
+    receipts.db and the JSONL ledger stayed empty (488 receipts vs 0 lines,
+    2026-07-12). Savings are opus-equivalent by construction — see
+    receipt_store.compute_receipt.
+
+    Fire-and-forget — never raises.
+    """
+    try:
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "session_id": session_id,
+            "task_type": receipt.task_type,
+            "complexity": receipt.complexity,
+            "estimated_saved": max(0.0, float(receipt.savings_usd)),
+            "external_cost": float(receipt.cost_usd),
+            "model": receipt.model,
+            "input_tokens": int(receipt.input_tokens),
+            "output_tokens": int(receipt.output_tokens),
+            "host": host,
+        }
+        path = _savings_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        # Silent — savings logging must never break the routing path.
         pass
 
 

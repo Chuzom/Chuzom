@@ -80,9 +80,11 @@ def compute_receipt(
     Calculates tokens_reclaimed and savings_usd by comparing actual cost
     against what Opus would have charged for the same token volume.
     """
-    # Opus pricing: $15/1M input, $75/1M output
-    opus_input_cost = (input_tokens / 1_000_000) * 15.0
-    opus_output_cost = (output_tokens / 1_000_000) * 75.0
+    # Opus pricing: $5/1M input, $25/1M output (claude-opus-4-8, repriced
+    # 2026-07-10 — the old $15/$75 was stale and inflated reported savings
+    # ~3x; keep in sync with hooks/savings_logger._PRICING_PER_MTOK).
+    opus_input_cost = (input_tokens / 1_000_000) * 5.0
+    opus_output_cost = (output_tokens / 1_000_000) * 25.0
     opus_equivalent = opus_input_cost + opus_output_cost
 
     savings = opus_equivalent - cost_usd

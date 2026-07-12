@@ -21,6 +21,7 @@ def test_launchd_plist_uses_given_paths_not_hardcoded():
     assert "/opt/venv/bin/python" in out
     assert "/home/alice/.chuzom/gateway.out.log" in out
     assert f"<string>{LABEL}</string>" in out
+    assert "<key>CHUZOM_DISABLE_SUBPROCESS_BACKENDS</key><string>codex,gemini_cli</string>" in out
     # No author-specific paths leaked in.
     assert "yaliandrona" not in out and "yali.pollak" not in out
 
@@ -28,6 +29,7 @@ def test_launchd_plist_uses_given_paths_not_hardcoded():
 def test_systemd_user_unit_uses_given_python():
     out = render_systemd_user_unit("/opt/venv/bin/python")
     assert "ExecStart=/opt/venv/bin/python -m chuzom.gateway" in out
+    assert "Environment=CHUZOM_DISABLE_SUBPROCESS_BACKENDS=codex,gemini_cli" in out
     assert "WantedBy=default.target" in out
 
 

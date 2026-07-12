@@ -31,7 +31,7 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def route_payload(payload: dict) -> dict:
+async def route_payload_async(payload: dict) -> dict:
     """Run one routing call through Chuzom's FULL router and return a JSON-able
     result. This is the single routing core shared by both HTTP surfaces — this
     zero-dep server AND ``gateway.py`` — so every external caller goes through
@@ -50,19 +50,20 @@ def route_payload(payload: dict) -> dict:
         task_type = TaskType.CODE
 
     # Optional tier override (OpenAI ``model`` field / explicit model_override).
-    # "chuzom-auto" or empty means "let Chuzom pick".
+    # Gateway hosts should be able to request plain "auto"; all auto aliases mean
+    # "let Chuzom pick".
     _override = payload.get("model_override") or payload.get("model")
-    if _override in ("chuzom-auto", "", None):
+    if _override in ("auto", "chuzom-auto", "", None):
         _override = None
 
-    resp = asyncio.run(route_and_call(
+    resp = await route_and_call(
         task_type, prompt,
         complexity_hint=payload.get("complexity") or None,
         system_prompt=payload.get("system") or None,
         model_override=_override,
         max_tokens=payload.get("max_tokens"),
         temperature=payload.get("temperature"),
-    ))
+    )
 
     # Surface this external route in the host-tagged savings pipeline so gateway /
     # LoopHole traffic shows up in the cross-surface indicators + savings_stats.
@@ -81,6 +82,11 @@ def route_payload(payload: dict) -> dict:
         "output_tokens": resp.output_tokens,
         "complexity": resp.complexity,
     }
+
+
+def route_payload(payload: dict) -> dict:
+    """Synchronous compatibility wrapper for stdlib server/tests/CLI callers."""
+    return asyncio.run(route_payload_async(payload))
 
 
 def _log_route_savings(resp, task_type: str, complexity: str, host: str) -> None:
