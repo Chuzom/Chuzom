@@ -230,8 +230,13 @@ class TestOllamaProviderInclusion:
         assert models == ["ollama/llama3.2", "ollama/qwen2.5-coder:7b"]
 
     def test_ollama_models_empty_when_no_base_url(self):
-        cfg = RouterConfig(ollama_base_url="")
-        assert cfg.all_ollama_models() == []
+        # Patch the probe: on dev machines with a live localhost Ollama the
+        # auto-default fallback would legitimately return budget models, and
+        # the module-level probe cache (warmed by earlier tests) makes the
+        # outcome order-dependent. No base URL + unreachable => empty.
+        with patch("chuzom.config.probe_ollama", return_value=False):
+            cfg = RouterConfig(ollama_base_url="")
+            assert cfg.all_ollama_models() == []
 
     def test_ollama_models_discovered_without_preset(self, monkeypatch):
         monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)

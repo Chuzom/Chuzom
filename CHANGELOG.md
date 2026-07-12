@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.8.0 — 2026-07-12 — opus-equivalent savings ledger, secrets vault, invoice reporting, RouterArena closeout
+
+### Savings ledger — opus-equivalent baseline
+Savings display rewired to an opus-equivalent-only baseline: every routed
+turn is compared against the cost of the same tokens through Opus, with
+DIRECT-call metering and a per-session JSONL bridge from the gateway to the
+session ledger. Receipt store persists fire-and-forget receipts to SQLite
+with token/savings reclamation and correlation-id tracking.
+
+### Secrets vault + gated live OIDC test
+New `chuzom.secrets_vault` module. A live Okta OIDC integration test
+exercises the full production validation path; it is env-gated and never
+runs in CI or without an operator-provided tenant.
+
+### Invoice reporting
+New `chuzom invoice` command producing per-session cost/savings reports
+from the receipt store.
+
+### Gateway/router
+Routing-value config fixes, gateway presets, runtime router wiring,
+session-summary x-axis fix, and fail-open alert-sink tests.
+
+### CI
+Capability-claim lint guard (`scripts/lint_capability_claims.sh`) with a
+recorded baseline blocks new unbaselined capability claims.
+
+### RouterArena closeout
+Submission scripts, eval harnesses (cascade/hedge/vote/self-consistency,
+killgates, MCTS council, memorytree), history + commit chronicle committed;
+derived artifacts (logs, result/eval JSONs, npz) gitignored.
+
 ## v0.7.8 — 2026-07-11 — control plane (G-004), claude_agent offload provider, RouterArena sandbox
 
 Three merged feature PRs (#127–#129).
