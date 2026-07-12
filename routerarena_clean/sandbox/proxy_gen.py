@@ -136,6 +136,48 @@ def c_logic(r):
             f"Does {who} always tell the truth? Answer Yes or No.", ans)
 
 
+# ── HARD computed cores (induce real errors even in strong models) ────────────
+def c_bigmul4(r):
+    a, b = r.randint(1000, 9999), r.randint(1000, 9999)
+    return f"Compute {a} × {b}. Give the exact product.", str(a * b)
+
+
+def c_modexp(r):
+    base, exp = r.randint(3, 9), r.randint(6, 15)
+    mod = r.choice([97, 100, 101, 1000])
+    return f"Compute {base}^{exp} mod {mod}.", str(pow(base, exp, mod))
+
+
+def c_nested(r):
+    a, b, c, d = (r.randint(3, 19) for _ in range(4))
+    return (f"Evaluate ((({a} + {b}) × {c}) − {d})². Give the exact value.",
+            str(((a + b) * c - d) ** 2))
+
+
+def c_det3(r):
+    m = [[r.randint(-5, 5) for _ in range(3)] for _ in range(3)]
+    det = (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+           - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+           + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
+    return (f"Find the determinant of the 3×3 matrix {m}. Give the exact value.", str(det))
+
+
+def c_polyeval(r):
+    a, b, c, x = r.randint(2, 9), r.randint(-9, 9), r.randint(-9, 9), r.randint(6, 15)
+    return (f"Evaluate the polynomial {a}x² + {b}x + {c} at x = {x}. Give the exact value.",
+            str(a * x * x + b * x + c))
+
+
+def c_chain(r):
+    start = r.randint(5, 20)
+    val, desc = start, []
+    for _ in range(6):
+        op = r.choice(["+", "-", "*"]); k = r.randint(2, 9)
+        desc.append(f"{op} {k}")
+        val = {"+": val + k, "-": val - k, "*": val * k}[op]
+    return (f"Start at {start}, then apply in order: {', '.join(desc)}. What is the result?", str(val))
+
+
 # ── String cores: return (question_text, correct_string) ──────────────────────
 def s_reverse(r):
     w = r.choice(["router", "cascade", "gateway", "signal", "vector", "kernel", "entropy", "probe"])
@@ -168,6 +210,9 @@ _NUMERIC = [
     (c_gcd, NUMTH, "hard"), (c_primefactor, NUMTH, "hard"),
     (c_linear, ALGEBRA, "hard"), (c_combin, COMBIN, "hard"),
     (c_fib, SEQ, "hard"), (c_work, QUANT, "hard"), (c_interest, QUANT, "hard"),
+    # adversarial multi-step / large-number cores — induce real slips
+    (c_bigmul4, ARITH, "hard"), (c_modexp, NUMTH, "hard"), (c_nested, ARITH, "hard"),
+    (c_det3, ALGEBRA, "hard"), (c_polyeval, ALGEBRA, "hard"), (c_chain, ARITH, "hard"),
 ]
 _STRING = [
     (s_reverse, STRINGS, "easy"), (s_nth_word, STRINGS, "easy"),
@@ -177,6 +222,7 @@ _MCQ_CORES = [  # numeric/logic cores presented as 4-option MCQ
     (c_add, ARITH, "easy"), (c_percent, ARITH, "easy"),
     (c_divisors, NUMTH, "medium"), (c_logic, LOGIC, "medium"),
     (c_gcd, NUMTH, "hard"), (c_combin, COMBIN, "hard"), (c_primefactor, NUMTH, "hard"),
+    (c_bigmul4, ARITH, "hard"), (c_modexp, NUMTH, "hard"), (c_det3, ALGEBRA, "hard"),
 ]
 
 

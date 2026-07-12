@@ -1,0 +1,295 @@
+{
+  "overall": {
+    "qwen/qwen3-235b-a22b-2507": {
+      "accuracy": 0.9394,
+      "cost_per_1k": 0.035
+    },
+    "deepseek/deepseek-v4-flash": {
+      "accuracy": 0.9924,
+      "cost_per_1k": 0.0424
+    },
+    "deepseek/deepseek-v3.2": {
+      "accuracy": 0.9924,
+      "cost_per_1k": 0.0896
+    },
+    "qwen/qwen3.7-plus": {
+      "accuracy": 0.9924,
+      "cost_per_1k": 0.6114
+    }
+  },
+  "axes": {
+    "Algebra": {
+      "n": 32,
+      "best_accuracy_model": "deepseek/deepseek-v4-flash",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "deepseek/deepseek-v4-flash",
+      "ranked": [
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0713
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.1336
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.8308
+        },
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 0.9062,
+          "cost_per_1k": 0.047
+        }
+      ]
+    },
+    "Arithmetic": {
+      "n": 72,
+      "best_accuracy_model": "deepseek/deepseek-v4-flash",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "deepseek/deepseek-v4-flash",
+      "ranked": [
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0361
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0755
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.5475
+        },
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 0.9306,
+          "cost_per_1k": 0.0317
+        }
+      ]
+    },
+    "Combinatorics": {
+      "n": 16,
+      "best_accuracy_model": "deepseek/deepseek-v4-flash",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "deepseek/deepseek-v4-flash",
+      "ranked": [
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0337
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0663
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.4823
+        },
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 0.9375,
+          "cost_per_1k": 0.0299
+        }
+      ]
+    },
+    "LogicReasoning": {
+      "n": 8,
+      "best_accuracy_model": "qwen/qwen3-235b-a22b-2507",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "qwen/qwen3-235b-a22b-2507",
+      "ranked": [
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0175
+        },
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0553
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0625
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.4942
+        }
+      ]
+    },
+    "NumberTheory": {
+      "n": 72,
+      "best_accuracy_model": "deepseek/deepseek-v4-flash",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "deepseek/deepseek-v4-flash",
+      "ranked": [
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0414
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.1034
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.7082
+        },
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 0.9306,
+          "cost_per_1k": 0.0436
+        }
+      ]
+    },
+    "QuantitativeWord": {
+      "n": 24,
+      "best_accuracy_model": "qwen/qwen3-235b-a22b-2507",
+      "best_accuracy": 0.9167,
+      "cost_efficient_target": "qwen/qwen3-235b-a22b-2507",
+      "ranked": [
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 0.9167,
+          "cost_per_1k": 0.0227
+        },
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 0.9167,
+          "cost_per_1k": 0.0367
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 0.9167,
+          "cost_per_1k": 0.0741
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 0.9167,
+          "cost_per_1k": 0.4389
+        }
+      ]
+    },
+    "Sequences": {
+      "n": 16,
+      "best_accuracy_model": "qwen/qwen3-235b-a22b-2507",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "qwen/qwen3-235b-a22b-2507",
+      "ranked": [
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.038
+        },
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.052
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.1248
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.8498
+        }
+      ]
+    },
+    "StringManipulation": {
+      "n": 16,
+      "best_accuracy_model": "deepseek/deepseek-v4-flash",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "deepseek/deepseek-v4-flash",
+      "ranked": [
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0149
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0192
+        },
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0205
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.1997
+        }
+      ]
+    },
+    "UnitsConversion": {
+      "n": 8,
+      "best_accuracy_model": "qwen/qwen3-235b-a22b-2507",
+      "best_accuracy": 1.0,
+      "cost_efficient_target": "qwen/qwen3-235b-a22b-2507",
+      "ranked": [
+        {
+          "model": "qwen/qwen3-235b-a22b-2507",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0258
+        },
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.0496
+        },
+        {
+          "model": "deepseek/deepseek-v3.2",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.1049
+        },
+        {
+          "model": "qwen/qwen3.7-plus",
+          "accuracy": 1.0,
+          "cost_per_1k": 0.6768
+        }
+      ]
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "qwen/qwen3-235b-a22b-2507": 1.0,
+      "deepseek/deepseek-v4-flash": 1.0,
+      "deepseek/deepseek-v3.2": 1.0,
+      "qwen/qwen3.7-plus": 1.0
+    },
+    "medium": {
+      "qwen/qwen3-235b-a22b-2507": 0.9844,
+      "deepseek/deepseek-v4-flash": 1.0,
+      "deepseek/deepseek-v3.2": 1.0,
+      "qwen/qwen3.7-plus": 1.0
+    },
+    "hard": {
+      "qwen/qwen3-235b-a22b-2507": 0.9013,
+      "deepseek/deepseek-v4-flash": 0.9868,
+      "deepseek/deepseek-v3.2": 0.9868,
+      "qwen/qwen3.7-plus": 0.9868
+    }
+  },
+  "provenance": "self-generated proxy (proxy_gen), computed answers, RA-independent; measured by build_label_table.py"
+}

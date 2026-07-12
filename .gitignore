@@ -125,3 +125,12 @@ tmp/
 .Spotlight-V100
 .Trashes
 tests/fixtures/routing_expectations.local.yaml
+routerarena_clean/quarantine/
+routerarena_clean/**/*.log
+routerarena_clean/**/*.err
+routerarena_clean/**/*.bak
+routerarena_clean/**/*.npz
+routerarena_clean/**/*_result.json
+routerarena_clean/sandbox/label_table.json
+routerarena_clean/sandbox/mcts/*.json
+routerarena_clean/sandbox/memorytree/memory_meta.json
