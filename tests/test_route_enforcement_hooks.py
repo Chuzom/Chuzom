@@ -709,3 +709,50 @@ def test_hard_mode_still_blocks_pure_qa(tmp_path):
     # Not exempt → hard mode blocks (stderr message + non-zero exit).
     assert result.returncode != 0 or (result.stdout.strip() and json.loads(result.stdout).get("decision") == "block"), \
         "pure Q&A should still be enforced in hard mode"
+
+
+def test_hard_mode_exempts_local_git_write(tmp_path):
+    """v0.8.3: a local git WRITE (push --delete / branch -d) is non-routable —
+    no stateless model can perform it — so it must not block, even in hard mode
+    and even on a terse follow-up prompt (the git-branch-delete drift class)."""
+    session_id = "sess-local-git"
+    _write_pending(tmp_path, session_id, task_type="coordination",
+                   expected_tool="llm_query", original_prompt="yes, delete the merged branch")
+    result = _run_hook(
+        ENFORCE_ROUTE_HOOK,
+        {"session_id": session_id, "tool_name": "Bash",
+         "tool_input": {"command": "git push origin --delete fix/foo"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "", "local git write must not block in hard mode"
+
+
+def test_hard_mode_exempts_local_dev_tools(tmp_path):
+    """Package managers, test runners, and fs mutations are local ops → allowed."""
+    for cmd in ("npm install", "pytest -q tests/", "mkdir -p build && touch build/x", "uv sync"):
+        session_id = f"sess-dev-{abs(hash(cmd))}"
+        _write_pending(tmp_path, session_id, task_type="coordination",
+                       expected_tool="llm_query", original_prompt="go ahead")
+        result = _run_hook(
+            ENFORCE_ROUTE_HOOK,
+            {"session_id": session_id, "tool_name": "Bash", "tool_input": {"command": cmd}},
+            home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+        )
+        assert result.returncode == 0 and result.stdout.strip() == "", f"{cmd!r} should be exempt"
+
+
+def test_hard_mode_still_blocks_network_fetch_bash(tmp_path):
+    """Control: curl-to-URL is offloadable research work → stays route-blocked,
+    so the exemption doesn't become a routing bypass."""
+    session_id = "sess-curl"
+    _write_pending(tmp_path, session_id, task_type="query",
+                   expected_tool="llm_query", original_prompt="what's the latest news")
+    result = _run_hook(
+        ENFORCE_ROUTE_HOOK,
+        {"session_id": session_id, "tool_name": "Bash",
+         "tool_input": {"command": "curl https://example.com/api/news"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+    )
+    blocked = bool(result.stdout.strip()) and json.loads(result.stdout).get("decision") == "block"
+    assert blocked, "network-fetch Bash should still route in hard mode"

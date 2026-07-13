@@ -205,6 +205,62 @@ def _is_readonly_bash(command: str) -> bool:
     return bool(_BASH_READONLY_PREFIX_RE.match(command))
 
 
+# ── Local-only (non-routable) Bash allowlist ──────────────────────────────────
+# Routing exists to offload LLM *reasoning* to a cheaper model. A shell command
+# that invokes a local dev tool — version control, package managers, build/test,
+# filesystem, infra CLIs — is NEVER LLM reasoning, so no routed model can perform
+# it. Blocking such a command to "force routing" therefore saves nothing; it just
+# traps the user (e.g. `git push --delete`, `npm install`, `mkdir`). This is
+# broader than _is_readonly_bash: it deliberately includes local WRITE tooling.
+_BASH_LOCAL_TOOL_RE = re.compile(
+    r"""^\s*(?:
+        git|gh|                                            # VCS / GitHub CLI
+        npm|pnpm|yarn|npx|                                 # JS package/runners
+        pip|pip3|uv|uvx|poetry|pipenv|pyenv|conda|hatch|   # Python packaging
+        pytest|tox|nox|ruff|black|isort|mypy|flake8|pylint|# Python test/lint
+        node|deno|bun|tsc|eslint|prettier|jest|vitest|     # JS test/lint/run
+        cargo|rustc|rustup|go|gofmt|                       # Rust / Go
+        make|cmake|ninja|gradle|mvn|bazel|                 # build systems
+        mkdir|rmdir|rm|mv|cp|cd|chmod|chown|chgrp|ln|touch|# filesystem
+        docker|docker-compose|kubectl|helm|terraform|ansible| # infra (local CLI)
+        sed|awk|sort|uniq|cut|tr|xargs|tee|jq|             # local text pipelines
+        python|python3                                     # local script runner
+    )(?:\s|$|;|\||&)""",
+    re.VERBOSE | re.IGNORECASE,
+)
+
+# Even a local-looking command stays route-eligible if it fetches from the
+# network or drives another LLM in the shell — those ARE offloadable work the
+# router should own, so the model can't use them to dodge routing.
+_BASH_ROUTABLE_ESCAPE_RE = re.compile(
+    r"""(?:
+        \bcurl\s+(?:https?://|-[A-Za-z]*\s*https?://|.*\s+https?://)|
+        \bwget\s+|\bhttpie\b|
+        \bollama\s+run\b|\bllm\s+|\baichat\b|
+        \bclaude\s+-|\bgemini\s+-|\bcodex\s+(?:exec|run)\b
+    )""",
+    re.VERBOSE | re.IGNORECASE,
+)
+
+
+def _is_local_only_bash(command: str) -> bool:
+    """Return True if a Bash command is an inherently-local operation that no
+    routed model could perform — so route-blocking it is drift, not a saving.
+
+    Broader than :func:`_is_readonly_bash`: it also covers local WRITE tooling
+    (``git commit``, ``npm install``, ``mkdir``, ``mv`` …). It excludes network
+    fetches and shell-driven LLM calls (``curl http…``, ``ollama run``), which
+    stay route-eligible so the model cannot bypass routing via the shell.
+    """
+    if not command or not command.strip():
+        return False
+    if _BASH_ROUTABLE_ESCAPE_RE.search(command):
+        return False
+    if _is_readonly_bash(command):
+        return True
+    return bool(_BASH_LOCAL_TOOL_RE.match(command))
+
+
 # ── Session-Type Tracking ─────────────────────────────────────────────────────
 # Written to ~/.chuzom/session_{id}.json when Claude's first file edit in
 # a session is detected. Once marked "coding", enforcement downgrades to soft.
@@ -668,6 +724,37 @@ def main() -> None:
                         )
                 except OSError:
                     pass
+
+    # Local-tool Bash exemption (v0.8.3): a Bash command that runs an inherently
+    # local dev operation (git/gh, package managers, build/test, filesystem,
+    # infra CLIs) is never LLM reasoning, so no routed model can perform it —
+    # blocking it to "force routing" is pure drift (the git-branch-delete class).
+    #
+    # Scoped deliberately: QA tasks route by passing file content to llm_analyze,
+    # and CODE tasks use the route-first gate (one llm_code call clears the lock)
+    # — both are intended, so the exemption skips them. The drift lives in
+    # OPERATIONAL task types (e.g. "coordination": "yes, delete the merged
+    # branch") where a local command has nothing to route. Prompt-wording-
+    # independent, so terse contextual follow-ups are covered. Network fetches
+    # and shell-driven LLM calls stay route-eligible (_BASH_ROUTABLE_ESCAPE_RE).
+    # Disabled under strict, consistent with the read-only-Bash valve.
+    if (pending is not None and enforce in ("hard", "smart") and not _strict
+            and tool_name == "Bash"):
+        _lb_task = pending.get("task_type", "")
+        _bash_cmd = hook_input.get("tool_input", {}).get("command", "")
+        if (_lb_task not in _QA_TASK_TYPES and _lb_task != "code"
+                and _is_local_only_bash(_bash_cmd)):
+            enforce = "soft"
+            try:
+                _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
+                ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                with _LOG_PATH.open("a", encoding="utf-8") as f:
+                    f.write(
+                        f"[{ts}] LOCAL_BASH_EXEMPT session={session_id[:12]} "
+                        f"task={_lb_task} reason=non_routable_local_command\n"
+                    )
+            except OSError:
+                pass
 
     if pending is None:
         sys.exit(0)  # No routing directive was issued
