@@ -1,6 +1,6 @@
 [project]
 name = "chuzom-router"
-version = "0.8.0"
+version = "0.8.1"
 description = "Smart LLM router for Claude Code, Cursor & Copilot — 3× longer sessions, 60–90% token savings. Auto-routes to Ollama, Codex CLI, and Gemini CLI before burning Claude quota."
 readme = "README.md"
 license = "MIT"
@@ -236,6 +236,7 @@ markers = [
     "requires_api_keys: marks tests that require mocked API keys (skip in CI)",
     "performance: marks tests as performance benchmarks with explicit budgets",
     "mcp_handshake: marks tests that spawn the MCP server as a subprocess",
+    "routing_hermetic: routing suites that must pass with zero real host state (empty repo config, no codex/gemini CLI) — run as a unit with '-m routing_hermetic'",
 ]
 addopts = "-m 'not slow and not requires_ollama and not requires_api_keys' -q --tb=short"
 

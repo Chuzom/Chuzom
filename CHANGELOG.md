@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.8.1 — 2026-07-12 — Library layer (context distillation), hermetic routing CI, domain-router exploration
+
+### Library layer — persistent session memory
+New `chuzom.library` package: an OKF-frontmatter Library store with index
+regeneration (`store.py`), a PostToolUse harvest hook
+(`hooks/library-harvest.py`) appending JSONL events + entities + delta.md,
+chapter sealing on git events with librarian distillation (`sealer.py`),
+book closing with conservative Biography merge (`book_closer.py`), budget-
+tiered abridgement with a (chapter_sha, tier) cache (`abridge.py`), and
+router integration via `pack_for()` with 5 freshness gates (`pack.py`).
+Covered by the `tests/library/` suite.
+
+### CI — hermetic routing unit
+New `routing-hermetic` CI job runs the `routing_hermetic`-tagged suites on
+a bare runner with no API keys and no `~/.chuzom` state, proving the
+autouse `_hermetic_host_state` fixture guarantee holds and catching tests
+that silently lean on local routing.yaml pins or CLIs.
+
+### RouterArena — domain-expert routing exploration
+Domain centroid build/measure/fetch scripts, domain train/holdout datasets,
+domain model map, and sandbox runners (`run_domain_router.py`,
+`run_solo.py`) for per-domain expert routing experiments.
+
 ## v0.8.0 — 2026-07-12 — opus-equivalent savings ledger, secrets vault, invoice reporting, RouterArena closeout
 
 ### Savings ledger — opus-equivalent baseline
