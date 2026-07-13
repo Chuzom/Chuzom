@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.8.2 — 2026-07-13 — Drift-free local agent loop + self-calibrating model registry
+
+### Agent loop reliability
+Local tool-calling models could silently no-op: small models (e.g.
+qwen2.5-coder:7b) emit the tool call as text in `content` instead of a
+structured `tool_calls` entry, so the loop returned the blob as a "final
+answer" and wrote nothing.
+- **Repair shim** (`hooks/agent_loop.py`): recover text-embedded tool calls
+  and execute them (qwen2.5-coder:7b: 0/3 → 3/3; no-op for well-behaved models).
+- **Loud fallback ladder** (`hooks/agent_loop.py`, `hooks/direct_executor.py`):
+  zero tools executed on a file task returns `None` (no fake success);
+  verified tool-callers ordered first; stderr on chain exhaustion instead of a
+  silent `None`.
+
+### Enforcement — no more blocking on local tasks
+- **FS_EXEMPT** (`hooks/enforce-route.py`): filesystem/local prompts (detected
+  via `needs_claude_tools`) never block native tools in any mode — fixes the
+  hard-mode `BLOCKED`/`AUTO-PIVOT` churn on tasks a stateless routed model
+  cannot satisfy.
+
+### Self-calibrating agentic model registry
+- **`agentic_registry.py`**: best-of-N ground-truth probe of each installed
+  Ollama model (the `tools` capability flag is not trustworthy), cached to
+  `~/.chuzom/agentic_models.json` keyed by model-set hash + TTL so new/drifting
+  models auto re-probe.
+- **`best_agentic_model()`**: dynamic, per-user pick of the best *verified*
+  model — cache-only on the router hot path, gated on availability so
+  PREMIUM/REASONING and no-local-provider environments never get a phantom
+  local model.
+- **`chuzom probe`** CLI + first-run background probe on install.
+
 ## v0.8.1 — 2026-07-12 — Library layer (context distillation), hermetic routing CI, domain-router exploration
 
 ### Library layer — persistent session memory
