@@ -65,6 +65,34 @@ jobs:
       - name: Verify plugin distribution sync
         run: python scripts/verify-plugin-sync.py
 
+  routing-hermetic:
+    # Runs the routing suites tagged `routing_hermetic` (see
+    # tests/conftest.py::_ROUTING_HERMETIC_FILES) as a standalone unit.
+    # DELIBERATELY no API keys and no ~/.chuzom state: the autouse
+    # `_hermetic_host_state` fixture guarantees these tests see an empty
+    # repo config and codex/gemini-unavailable, and this job proves that
+    # guarantee holds on a bare runner — catching any new test that
+    # silently leans on a developer's local routing.yaml pins or CLIs.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+        continue-on-error: true
+        id: uv-setup
+      - name: Retry uv setup
+        if: steps.uv-setup.outcome == 'failure'
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: false
+      - run: uv python install 3.11
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Run hermetic routing unit
+        run: uv run pytest -m routing_hermetic -q --timeout=30
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10

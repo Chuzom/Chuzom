@@ -246,6 +246,14 @@ class TestOllamaProviderInclusion:
              patch("chuzom.config.probe_ollama", return_value=True):
             assert cfg.all_ollama_models() == ["ollama/hermes3:8b", "ollama/qwen3-coder:30b"]
 
+    def test_ollama_models_discovered_without_preset(self, monkeypatch):
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        cfg = RouterConfig(ollama_base_url="", ollama_budget_models="")
+        with patch("chuzom.discover.get_cached_ollama_models",
+                   return_value=["ollama/hermes3:8b", "ollama/qwen3-coder:30b"]), \
+             patch("chuzom.config.probe_ollama", return_value=True):
+            assert cfg.all_ollama_models() == ["ollama/hermes3:8b", "ollama/qwen3-coder:30b"]
+
     def test_ollama_models_empty_when_no_model_names(self):
         cfg = RouterConfig(
             ollama_base_url="http://localhost:11434",

@@ -87,8 +87,23 @@ _KNOWN_BROKEN_TESTS = [
 ]
 
 
+# ── Hermetic routing unit ─────────────────────────────────────────────────
+# Files whose tests must pass with ZERO real host state (empty repo config,
+# codex/gemini CLIs unavailable) — enforced by the autouse
+# `_hermetic_host_state` fixture below. Auto-marked `routing_hermetic` here
+# (rather than per-file `pytestmark`) so the set is defined in one place and
+# can be run as a unit: `pytest -m routing_hermetic`.
+_ROUTING_HERMETIC_FILES = (
+    "tests/test_router.py",
+    "tests/test_p1_4_deploy_probes.py",
+    "tests/test_config_routing_value.py",
+    "tests/test_quality_escalation.py",
+    "tests/audit/test_policy_switching.py",
+)
+
+
 def pytest_collection_modifyitems(config, items):  # noqa: ARG001 — pytest API
-    """Mark known-broken tests as skipped with their documented reason.
+    """Mark known-broken tests as skipped, and tag the hermetic routing unit.
 
     Substring match on `nodeid` so parametrize-id changes don't silently
     break the skip list. Each skip carries the reason in `pytest -v` output
@@ -98,7 +113,11 @@ def pytest_collection_modifyitems(config, items):  # noqa: ARG001 — pytest API
         substring: pytest.mark.skip(reason=f"v0.1.x known-broken: {reason}")
         for substring, reason in _KNOWN_BROKEN_TESTS
     }
+    hermetic_marker = pytest.mark.routing_hermetic
     for item in items:
+        # nodeid paths are always /-separated, relative to rootdir
+        if item.nodeid.split("::")[0] in _ROUTING_HERMETIC_FILES or item.nodeid.split("::")[0] in tuple(p.removeprefix("tests/") for p in _ROUTING_HERMETIC_FILES):
+            item.add_marker(hermetic_marker)
         for substring, marker in skip_markers.items():
             if substring in item.nodeid:
                 item.add_marker(marker)
@@ -283,7 +302,7 @@ def no_providers_env(monkeypatch):
         chuzom_claw_code = False
         chuzom_claude_subscription = False
         chuzom_enforce = "soft"
-        chuzom_db_path = str(Path.home() / ".chuzom" / "routing.db")
+        chuzom_db_path = Path.home() / ".chuzom" / "routing.db"
         token_budget = 10_000_000
         quality = QualityMode.BALANCED
         min_model_floor = "haiku"
@@ -291,18 +310,51 @@ def no_providers_env(monkeypatch):
         health_circuit_breaker_threshold = 0.5
         health_circuit_breaker_ttl = 300
         health_request_timeout = 30
-        
+        chuzom_gemini_subscription = False
+        openai_compat_base_url = ""
+        effective_ollama_base_url = ""
+        # No providers at all — mirrors RouterConfig.available_providers
+        # for an environment with no keys and no reachable Ollama.
+        available_providers = frozenset()
+        chuzom_monthly_budget = 0.0
+        chuzom_agentic_model = ""
+        chuzom_routing_policy = "balanced"
+        codex_daily_limit = 1000
+        prompt_cache_enabled = True
+        prompt_cache_min_tokens = 1024
+
+        def all_ollama_models(self):
+            return []
+
+        def all_openai_compat_models(self):
+            return []
+
         def apply_keys_to_env(self):
             pass  # No-op
-    
+
+        def __getattr__(self, name):
+            # Fall back to RouterConfig's pydantic field defaults for any
+            # attribute not explicitly overridden above. Keeps this fixture
+            # from breaking every time the router reads a new config knob,
+            # while guaranteeing no env/.env values leak into tests.
+            from chuzom.config import RouterConfig
+
+            field = RouterConfig.model_fields.get(name)
+            if field is not None:
+                return field.get_default(call_default_factory=True)
+            raise AttributeError(
+                f"EmptyConfig has no attribute {name!r} and RouterConfig "
+                f"declares no such field"
+            )
+
     empty_config = EmptyConfig()
 
-    # Mock the get_config function to return our empty config
+    # Replace the singleton itself: get_config() returns `_config` directly,
+    # so this takes effect in every module even when get_config was bound
+    # by value at import time (`from chuzom.config import get_config`).
     import chuzom.config as config_module
+    monkeypatch.setattr(config_module, "_config", empty_config)
     monkeypatch.setattr(config_module, "get_config", lambda: empty_config)
-
-    # Also reset the singleton
-    config_module._config = None
 
     yield empty_config
 
@@ -411,6 +463,38 @@ def _reset_quality_store():
     reset_quality_store()
     yield
     reset_quality_store()
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_host_state(monkeypatch):
+    """Isolate router tests from real host state (repo config + CLI probes).
+
+    Even with ``cm._config`` fully stubbed, chain building still reads two
+    host-side side doors:
+
+    1. ``chuzom.router.get_repo_config`` (= ``repo_config.effective_config``)
+       loads the developer's real ``~/.chuzom/routing.yaml``. A per-task pin
+       there (e.g. ``query: ollama/qwen2.5-coder:7b``) is silently prepended
+       to every chain a test builds — phantom models that don't exist on CI.
+    2. ``is_codex_available()`` / ``is_gemini_cli_available()`` probe for the
+       real CLIs, so subprocess-tier entries survive the provider filter on
+       a dev machine but not on CI.
+
+    Both were bound by name at import time in ``chuzom.router``, so we patch
+    the *router's* bindings, plus the source loaders for other call sites.
+    Tests that exercise pins or codex/gemini injection explicitly re-patch
+    these on top (test-level monkeypatch wins over this autouse default).
+    """
+    import chuzom.repo_config as repo_config_module
+    import chuzom.router as router_module
+    from chuzom.repo_config import RepoConfig
+
+    _empty = RepoConfig()
+    monkeypatch.setattr(router_module, "get_repo_config", lambda *a, **k: _empty)
+    monkeypatch.setattr(repo_config_module, "load_user_config", lambda *a, **k: RepoConfig())
+    monkeypatch.setattr(router_module, "is_codex_available", lambda: False)
+    monkeypatch.setattr(router_module, "is_gemini_cli_available", lambda: False)
+    yield
 
 
 @pytest.fixture(scope="session", autouse=True)
