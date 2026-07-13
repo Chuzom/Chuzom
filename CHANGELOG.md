@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.8.3 — 2026-07-14 — Stop route-blocking non-routable local shell commands
+
+### Enforcement — local dev commands are never routable
+A Bash command that runs a local dev tool (git/gh writes, package managers,
+build/test/lint, filesystem mutations, infra CLIs) is never LLM reasoning, so
+no routed model can perform it — blocking it to "force routing" saves nothing
+and just traps the user, especially on terse operational follow-ups like
+"yes, delete the merged branch" (the git-branch-delete drift class).
+- New `_is_local_only_bash()` + local-tool allowlist and a routable-escape
+  guard: `curl https://…`, `wget`, `ollama run`, and other shell-driven LLM
+  calls stay route-eligible so the shell can't be used to dodge routing.
+- Such Bash is exempted in `hard`/`smart` modes, **scoped to non-QA, non-code
+  task types**: QA still routes by passing content to `llm_analyze`, and code
+  keeps the route-first gate (one `llm_code` call clears the lock). Only
+  operational task types (e.g. `coordination`) are exempted — that is where
+  the drift was. Disabled under `strict`, consistent with the read-only valve.
+
 ## v0.8.2 — 2026-07-13 — Drift-free local agent loop + self-calibrating model registry
 
 ### Agent loop reliability
