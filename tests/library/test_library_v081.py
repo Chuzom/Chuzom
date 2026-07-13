@@ -17,6 +17,12 @@ from chuzom.library.store import LibraryStore, scrub_secrets
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    # Bare CI runners have no global git identity — set one repo-locally so
+    # the empty init commit (and any sealer-triggered commits) never fail.
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "chuzom-test"],
+                   check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email",
+                    "chuzom-test@localhost"], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "commit", "--allow-empty",
                     "-q", "-m", "init"], check=True)
     (tmp_path / ".chuzom").mkdir()

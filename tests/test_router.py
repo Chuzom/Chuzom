@@ -96,7 +96,13 @@ async def test_falls_back_on_failure(temp_db, mock_env, mock_litellm_response):
             provider="test",
         )
 
-    with patch("chuzom.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
+    # Pin the chain: on a bare runner (no ollama, no discovered providers) the
+    # environment-built chain can collapse to a single model, leaving nothing
+    # to fall back to. Two models makes the fallback assertion hermetic.
+    with patch("chuzom.router._build_and_filter_chain",
+               new_callable=lambda: AsyncMock(
+                   return_value=["openai/gpt-4o-mini", "gemini/gemini-2.5-flash"])), \
+         patch("chuzom.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
         resp = await route_and_call(
             TaskType.QUERY, "Hello",
             profile=RoutingProfile.BUDGET,
@@ -177,7 +183,12 @@ async def test_content_filter_error_is_silent_fallback(temp_db, mock_env, mock_l
             provider="test",
         )
 
-    with patch("chuzom.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
+    # Pin the chain (see test_falls_back_on_failure): bare runners can build a
+    # single-model chain, which breaks the "skip to next model" assertion.
+    with patch("chuzom.router._build_and_filter_chain",
+               new_callable=lambda: AsyncMock(
+                   return_value=["openai/gpt-4o-mini", "gemini/gemini-2.5-flash"])), \
+         patch("chuzom.providers.call_llm", new_callable=lambda: AsyncMock(side_effect=side_effect)):
         resp = await route_and_call(
             TaskType.QUERY, "Hello",
             profile=RoutingProfile.BUDGET,

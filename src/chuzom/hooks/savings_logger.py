@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from chuzom.hooks.direct_executor import DirectResult
+    from chuzom.receipt_store import Receipt
 
 
 # Strong references to fire-and-forget persistence tasks scheduled on an already

@@ -19,7 +19,6 @@ Invariants:
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from chuzom.library.abridge import abridge
 from chuzom.library.store import LibraryStore
