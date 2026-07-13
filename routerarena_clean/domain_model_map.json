@@ -1,0 +1,27 @@
+{
+  "_provenance": "MEASURED per-domain on hash-audited MMLU-Pro (public benchmark; 0 overlap with RA). Each domain -> argmax arena_score(cost,acc). No RouterArena data. Rebuilt by scripts/measure_domain_experts.py.",
+  "_pool": [
+    "qwen/qwen3-235b-a22b-2507",
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v3.2",
+    "qwen/qwen3-coder-30b-a3b-instruct",
+    "deepseek/deepseek-r1"
+  ],
+  "default": "deepseek/deepseek-v3.2",
+  "domain": {
+    "biology": "qwen/qwen3-235b-a22b-2507",
+    "business": "deepseek/deepseek-v3.2",
+    "chemistry": "deepseek/deepseek-v4-flash",
+    "computer science": "qwen/qwen3-235b-a22b-2507",
+    "economics": "deepseek/deepseek-v3.2",
+    "engineering": "qwen/qwen3-235b-a22b-2507",
+    "health": "qwen/qwen3-235b-a22b-2507",
+    "history": "deepseek/deepseek-v3.2",
+    "law": "qwen/qwen3-235b-a22b-2507",
+    "math": "deepseek/deepseek-v3.2",
+    "other": "qwen/qwen3-235b-a22b-2507",
+    "philosophy": "qwen/qwen3-235b-a22b-2507",
+    "physics": "deepseek/deepseek-v3.2",
+    "psychology": "qwen/qwen3-235b-a22b-2507"
+  }
+}

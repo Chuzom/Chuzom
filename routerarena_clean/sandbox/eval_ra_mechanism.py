@@ -33,6 +33,13 @@ RA_PRICE = {
     "qwen/qwen3-coder-30b-a3b-instruct": (0.07, 0.27),
     "google/gemini-2.5-flash-lite": (0.10, 0.40),
     "deepseek/deepseek-r1": (0.28, 0.42),  # RA "deepseek-reasoner" price (reasoning tiebreak)
+    # Strong models that ARE in RA's fixed 82-model pool (prices from RA model_cost.json).
+    "openai/gpt-5-mini": (0.25, 2.0),
+    "openai/o4-mini": (1.1, 4.4),
+    "deepseek/deepseek-v4-pro": (0.435, 0.87),
+    "openai/gpt-5.4-mini": (0.4, 1.6),
+    "google/gemini-3-flash-preview": (0.5, 3.0),
+    "openai/gpt-5.1": (1.25, 10.0),
 }
 
 

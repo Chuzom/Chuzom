@@ -20,9 +20,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_ra_mechanism import cost_of, robust_extract, run  # noqa: E402
 
-# Pool ordered cheap→expensive; matches chuzom_clean_router.py exactly.
+# Pool ordered cheap→expensive. The escalation target is overridable so we can
+# point the proven agreement gate at a STRONG in-pool model that actually fixes
+# the hard tail (e.g. gpt-5-mini / deepseek-v4-pro) instead of deepseek-v3.2.
+import os as _os
 _CHEAP = ["qwen/qwen3-235b-a22b-2507", "deepseek/deepseek-v4-flash"]
-_STRONG = "deepseek/deepseek-v3.2"
+_STRONG = _os.environ.get("CHUZOM_CASCADE_STRONG", "deepseek/deepseek-v3.2")
 
 
 def route_and_answer(query, call, key):
