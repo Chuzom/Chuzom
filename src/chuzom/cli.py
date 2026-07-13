@@ -784,6 +784,11 @@ def main() -> None:
     elif args and args[0] == "status":
         from chuzom.commands.status import cmd_status
         cmd_status(args[1:])
+    elif args and args[0] == "probe":
+        # Probe which locally-installed Ollama models can actually drive the
+        # agentic tool-loop, cache the verdicts, and show the dynamic pick.
+        from chuzom.commands.probe import cmd_probe
+        sys.exit(cmd_probe(args[1:]))
     elif args and args[0] == "welcome":
         # Print the painterly Chuzom banner on demand. Use this from your
         # shell rc (e.g., `claude` wrapper function in ~/.zshrc) to put the

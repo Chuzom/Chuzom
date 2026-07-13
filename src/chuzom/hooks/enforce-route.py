@@ -640,6 +640,35 @@ def main() -> None:
             except OSError:
                 pass
 
+    # Filesystem / local-context exemption (Fix #1): a stateless routed model
+    # cannot read the user's files, repo, shell, or ~/.chuzom state — so blocking
+    # the native tool on such a task just traps the user behind a directive no
+    # cheap model can satisfy (the root cause of hard-mode drift). Reuse the SAME
+    # detector the routing path uses (needs_claude_tools) so enforcement and
+    # routing agree, and downgrade to soft: the route still logs, but native
+    # Bash/Read/Edit run. Applies in every blocking mode, including hard.
+    if pending is not None and enforce in ("hard", "smart"):
+        _fs_prompt = pending.get("original_prompt", "")
+        _fs_task = pending.get("task_type", "")
+        if _fs_prompt:
+            try:
+                from chuzom.hooks.chain_builder import needs_claude_tools
+                _needs_local_tools = needs_claude_tools(_fs_prompt, _fs_task)
+            except Exception:
+                _needs_local_tools = False
+            if _needs_local_tools:
+                enforce = "soft"
+                try:
+                    _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
+                    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                    with _LOG_PATH.open("a", encoding="utf-8") as f:
+                        f.write(
+                            f"[{ts}] FS_EXEMPT session={session_id[:12]} "
+                            f"task={_fs_task} reason=needs_local_tools\n"
+                        )
+                except OSError:
+                    pass
+
     if pending is None:
         sys.exit(0)  # No routing directive was issued
     pending = _downgrade_pending_for_pressure(pending)

@@ -280,6 +280,55 @@ def _get_ollama_url() -> str:
            "http://localhost:11434"
 
 
+# Tool names the model may call — used to spot a tool call the model dumped
+# into its text `content` instead of the structured `tool_calls` field.
+_TOOL_NAMES = "|".join(t["function"]["name"] for t in TOOL_DEFINITIONS)
+_TOOLCALL_TEXT_RE = re.compile(r'\{\s*"name"\s*:\s*"(?:' + _TOOL_NAMES + r')"', re.IGNORECASE)
+
+
+def _repair_toolcalls(content: str) -> list[dict]:
+    """Recover tool calls a model emitted as TEXT instead of structured output.
+
+    Small tool-capable models (observed: qwen2.5-coder:7b) frequently return
+    ``{"name": "write_file", "arguments": {...}}`` inside the assistant
+    ``content`` string and leave ``tool_calls`` empty. Without recovery the loop
+    sees "no tool calls", treats the blob as the final answer, and silently does
+    nothing. This brace-matches each embedded object and rebuilds the tool_calls
+    shape the executor expects. Empirically flips qwen2.5-coder:7b 0/3 → 3/3 on a
+    write-then-run task; a no-op (returns ``[]``) for well-behaved models.
+    """
+    if not content or not _TOOLCALL_TEXT_RE.search(content):
+        return []
+    calls: list[dict] = []
+    for m in _TOOLCALL_TEXT_RE.finditer(content):
+        start = content.rfind("{", 0, m.start() + 1)
+        depth, i, in_str, esc = 0, start, False, False
+        while i < len(content):
+            c = content[i]
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = not in_str
+            elif not in_str and c == "{":
+                depth += 1
+            elif not in_str and c == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = json.loads(content[start:i + 1])
+                        args = obj.get("arguments") or obj.get("parameters") or {}
+                        if isinstance(args, str):
+                            args = json.loads(args)
+                        calls.append({"function": {"name": obj["name"], "arguments": args}})
+                    except (ValueError, KeyError):
+                        pass
+                    break
+            i += 1
+    return calls
+
+
 def run_agent_loop(
     prompt: str,
     model: str,
@@ -312,6 +361,7 @@ def run_agent_loop(
     messages.append({"role": "user", "content": prompt})
 
     ollama_url = _get_ollama_url()
+    tools_used = 0  # How many tool calls actually executed across the whole loop.
 
     for iteration in range(1, _MAX_ITERATIONS + 1):
         body = json.dumps({
@@ -339,8 +389,20 @@ def run_agent_loop(
         content = msg.get("content", "")
         thinking = msg.get("thinking", "")
 
-        # If no tool calls → this is the final response
+        # Repair shim (Fix #2): recover a tool call the model dumped into text
+        # instead of the structured tool_calls field. No-op for good models.
+        if not tool_calls and content:
+            tool_calls = _repair_toolcalls(content)
+
+        # If (still) no tool calls → this is the final response.
         if not tool_calls:
+            # Loud-fallback guard (Fix #4): this loop is only entered for tasks
+            # that need file/command tools. If the model produced a final text
+            # response WITHOUT ever executing a tool, it only chatted — return
+            # None so the caller's fallback ladder tries the next model, rather
+            # than passing off a plausible-looking no-op as success.
+            if tools_used == 0:
+                return None
             return content or thinking or None
 
         # Add assistant message with tool calls to conversation
@@ -353,6 +415,7 @@ def run_agent_loop(
             tool_args = func.get("arguments", {})
 
             tool_result = execute_tool(tool_name, tool_args, project_root)
+            tools_used += 1
 
             messages.append({
                 "role": "tool",

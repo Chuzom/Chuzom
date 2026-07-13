@@ -658,3 +658,54 @@ def test_block_message_documents_escape_valve(tmp_path):
     assert "Escape valves" in out["reason"]
     assert "llm_" in out["reason"]
     assert "loop" in out["reason"].lower() or "retry the same tool" in out["reason"].lower()
+
+
+def test_hard_mode_exempts_filesystem_task(tmp_path):
+    """Fix #1: a prompt that needs local files/shell is auto-exempted even in
+    hard mode — a stateless routed model can't satisfy it, so blocking the
+    native tool would just trap the user. Reuses needs_claude_tools()."""
+    session_id = "sess-fs-exempt"
+    _write_pending(
+        tmp_path,
+        session_id,
+        task_type="query",
+        expected_tool="llm_query",
+        original_prompt="verify run_agent_loop in src/chuzom/hooks/agent_loop.py works",
+    )
+
+    result = _run_hook(
+        ENFORCE_ROUTE_HOOK,
+        {"session_id": session_id, "tool_name": "Bash",
+         "tool_input": {"command": "grep -n run_agent_loop src/chuzom/hooks/agent_loop.py"}},
+        home=tmp_path,
+        extra_env={"CHUZOM_ENFORCE": "hard"},
+    )
+
+    # Downgraded to soft → allowed, no block JSON on stdout, clean exit.
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "", "filesystem task must not be blocked in hard mode"
+
+
+def test_hard_mode_still_blocks_pure_qa(tmp_path):
+    """Control: a self-contained Q&A prompt (no local-file need) is NOT exempted
+    and still blocks in hard mode, so routing still fires where it should."""
+    session_id = "sess-qa-control"
+    _write_pending(
+        tmp_path,
+        session_id,
+        task_type="query",
+        expected_tool="llm_query",
+        original_prompt="what is the capital of France",
+    )
+
+    result = _run_hook(
+        ENFORCE_ROUTE_HOOK,
+        {"session_id": session_id, "tool_name": "Bash",
+         "tool_input": {"command": "echo hello"}},
+        home=tmp_path,
+        extra_env={"CHUZOM_ENFORCE": "hard"},
+    )
+
+    # Not exempt → hard mode blocks (stderr message + non-zero exit).
+    assert result.returncode != 0 or (result.stdout.strip() and json.loads(result.stdout).get("decision") == "block"), \
+        "pure Q&A should still be enforced in hard mode"

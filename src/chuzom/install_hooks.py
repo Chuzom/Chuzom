@@ -718,6 +718,17 @@ def install(force: bool = False) -> list[str]:
     # ── Register in Claude Desktop ────────────────────────────────────────
     actions.extend(_install_claude_desktop())
 
+    # ── Populate the agentic-model registry (Fix #3) ──────────────────────
+    # Probe which installed Ollama models can actually drive the tool-loop, so
+    # the dynamic model picker has verified verdicts without a cold-probe stall
+    # on first agentic use. Runs detached (best-effort) — never blocks install.
+    try:
+        from chuzom.agentic_registry import populate_in_background
+        if populate_in_background():
+            actions.append("Probing local models for agentic capability (background; see `chuzom probe`)")
+    except Exception:
+        pass
+
     return actions
 
 

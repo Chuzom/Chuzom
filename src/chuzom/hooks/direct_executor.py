@@ -282,10 +282,46 @@ def execute_agent(
     else:
         root = _Path.cwd()
 
+    # Fix #4 + #3: try empirically-reliable Ollama tool-callers FIRST. Some
+    # models advertise the `tools` capability but can't actually use the
+    # structured protocol (observed: qwen2.5-coder:7b), so we order by PROVEN
+    # reliability, not the capability flag.
+    #
+    # Primary signal is the self-calibrating registry (Fix #3): models that
+    # passed a live ground-truth probe rank first, unknown next, known-failers
+    # last. This auto-adapts to any future model without a code change. The
+    # static substring priority below is the tiebreaker AND the fallback when
+    # the registry is empty (never probed / Ollama down). Stable sort preserves
+    # chain order among equally-ranked models; non-Ollama entries are skipped.
+    _AGENT_PRIORITY = ("hermes", "qwen3-coder", "devstral", "qwen3")
+
+    try:
+        from chuzom.agentic_registry import get_registry, rank as _registry_rank
+        _verdicts = get_registry()  # cached; only probes when model set changes
+    except Exception:
+        _verdicts = {}
+
+    def _static_rank(name: str) -> int:
+        for idx, sub in enumerate(_AGENT_PRIORITY):
+            if sub in name:
+                return idx
+        return len(_AGENT_PRIORITY)
+
+    def _agent_rank(m: ModelSpec) -> tuple[int, int]:
+        if m.provider != "ollama":
+            return (3, len(_AGENT_PRIORITY))  # non-ollama skipped anyway
+        name = m.model.lower()
+        reg = _registry_rank(m.model, _verdicts) if _verdicts else 1
+        return (reg, _static_rank(name))
+
+    chain = sorted(chain, key=_agent_rank)
+
+    ollama_attempted = 0
     for model in chain:
         if model.provider != "ollama":
             continue  # Only Ollama supports tool calling from the hook (for now)
 
+        ollama_attempted += 1
         t0 = time.monotonic()
         # run_agent_loop might need to return usage as well
         # For now, we'll just capture the response
@@ -304,4 +340,14 @@ def execute_agent(
                 latency_ms=latency_ms,
             )
 
+    # Loud failure (Fix #4): the whole chain drifted/failed. Surface it on
+    # stderr (which Claude Code shows) instead of returning a silent None —
+    # callers can then fall back to native tools knowing the local loop gave up.
+    if ollama_attempted:
+        import sys as _sys
+        print(
+            f"[chuzom] agent-loop: all {ollama_attempted} ollama model(s) "
+            f"failed or drifted — falling back",
+            file=_sys.stderr,
+        )
     return None

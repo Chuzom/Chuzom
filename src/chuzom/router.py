@@ -767,6 +767,23 @@ async def _build_and_filter_chain(
         # intentionally excluded so dedicated coders still win coding tasks.
         # env takes precedence over the YAML pin (env > repo > user).
         _agentic_model = config.chuzom_agentic_model or repo_cfg.agentic_model
+        if not _agentic_model and ollama_models:
+            # Dynamic fallback (Fix #3): with no explicit env/repo pin, use the
+            # best VERIFIED model from THIS machine's registry. Gated on
+            # `ollama_models` — which already encodes _cheap_tier AND real
+            # availability — so PREMIUM/REASONING (capable cloud chain) and
+            # no-local-provider environments are never given a phantom local
+            # model. Only honored if the pick is actually available here.
+            # Cache-only: never probes on the routing hot path; adapts per user.
+            try:
+                from chuzom.agentic_registry import best_agentic_model
+                _cand = best_agentic_model()
+                if _cand and any(
+                    _cand.split("/", 1)[-1] == m.split("/", 1)[-1] for m in ollama_models
+                ):
+                    _agentic_model = _cand
+            except Exception:
+                pass
         if _agentic_model and task_type in AGENTIC_TASK_TYPES:
             models_to_try = [_agentic_model] + [
                 m for m in models_to_try if m != _agentic_model
