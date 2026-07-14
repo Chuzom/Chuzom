@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.8.3 — 2026-07-14 — Stop route-blocking non-routable local shell commands
+## v0.8.3 — 2026-07-14 — Stop route-blocking non-routable local operations
 
 ### Enforcement — local dev commands are never routable
 A Bash command that runs a local dev tool (git/gh writes, package managers,
@@ -16,6 +16,15 @@ and just traps the user, especially on terse operational follow-ups like
   keeps the route-first gate (one `llm_code` call clears the lock). Only
   operational task types (e.g. `coordination`) are exempted — that is where
   the drift was. Disabled under `strict`, consistent with the read-only valve.
+
+### Enforcement — native local file ops are never routable
+`Edit` / `Write` / `MultiEdit` / `NotebookEdit` (mutations) and `Read` / `Grep`
+/ `Glob` / `LS` (inspection) only ever touch local files, which no stateless
+routed model can do — so blocking them to force routing is drift on terse
+operational follow-ups ("yes, do it"). Exempted in `hard`/`smart` with the
+**same scoping** as the Bash rule: QA keeps routing via `llm_analyze`, code
+keeps the route-first gate, only operational task types are exempted. Disabled
+under `strict`.
 
 ## v0.8.2 — 2026-07-13 — Drift-free local agent loop + self-calibrating model registry
 

@@ -756,6 +756,34 @@ def main() -> None:
             except OSError:
                 pass
 
+    # Native local-tool exemption (v0.8.3, drift class #2): Edit / Write /
+    # MultiEdit / NotebookEdit (local file mutations) and Read / Grep / Glob / LS
+    # (local file inspection) only ever touch LOCAL files — no stateless routed
+    # model can perform them, so blocking them to "force routing" is drift on
+    # OPERATIONAL task types (the terse "yes, do it" follow-up class). Same
+    # scoping as the local-Bash exemption: QA still routes by passing content to
+    # llm_analyze, and CODE keeps the route-first gate (one llm_code call clears
+    # the lock), so both are skipped — only operational task types are exempted.
+    # (Bash is handled by its own block above, which also keeps network fetches
+    # route-eligible.) Disabled under strict, consistent with the other valves.
+    _NATIVE_LOCAL_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit",
+                           "Read", "Grep", "Glob", "LS")
+    if (pending is not None and enforce in ("hard", "smart") and not _strict
+            and tool_name in _NATIVE_LOCAL_TOOLS):
+        _em_task = pending.get("task_type", "")
+        if _em_task not in _QA_TASK_TYPES and _em_task != "code":
+            enforce = "soft"
+            try:
+                _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
+                ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                with _LOG_PATH.open("a", encoding="utf-8") as f:
+                    f.write(
+                        f"[{ts}] NATIVE_LOCAL_EXEMPT session={session_id[:12]} "
+                        f"task={_em_task} tool={tool_name} reason=local_file_op\n"
+                    )
+            except OSError:
+                pass
+
     if pending is None:
         sys.exit(0)  # No routing directive was issued
     pending = _downgrade_pending_for_pressure(pending)

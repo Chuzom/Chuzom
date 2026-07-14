@@ -756,3 +756,52 @@ def test_hard_mode_still_blocks_network_fetch_bash(tmp_path):
     )
     blocked = bool(result.stdout.strip()) and json.loads(result.stdout).get("decision") == "block"
     assert blocked, "network-fetch Bash should still route in hard mode"
+
+
+def test_hard_mode_exempts_edit_on_operational_task(tmp_path):
+    """v0.8.3 drift class #2: an Edit on an operational (non-QA, non-code) task
+    is a local file mutation — never routable — so it must not block, even in
+    hard mode on a terse follow-up ("yes, do it")."""
+    session_id = "sess-edit-op"
+    _write_pending(tmp_path, session_id, task_type="coordination",
+                   expected_tool="llm_query", original_prompt="yes, do it")
+    result = _run_hook(
+        ENFORCE_ROUTE_HOOK,
+        {"session_id": session_id, "tool_name": "Edit",
+         "tool_input": {"file_path": "/tmp/x", "old_string": "a", "new_string": "b"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "", "Edit on operational task must not block"
+
+
+def test_hard_mode_still_gates_write_on_code_task(tmp_path):
+    """Control: CODE tasks keep the route-first gate — Write blocks until the
+    llm_code call clears the lock. The Edit exemption must not weaken this."""
+    session_id = "sess-write-code"
+    _write_pending(tmp_path, session_id, task_type="code", complexity="moderate",
+                   expected_tool="llm_code")
+    result = _run_hook(
+        ENFORCE_ROUTE_HOOK,
+        {"session_id": session_id, "tool_name": "Write",
+         "tool_input": {"file_path": "/tmp/y", "content": "x"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+    )
+    blocked = bool(result.stdout.strip()) and json.loads(result.stdout).get("decision") == "block"
+    assert blocked, "Write on a code task should keep the route-first gate"
+
+
+def test_hard_mode_exempts_read_on_operational_task(tmp_path):
+    """Native local inspection (Read/Grep/Glob/LS) on an operational task is
+    non-routable → allowed, same as the mutation tools."""
+    for tool in ("Read", "Grep", "Glob", "LS"):
+        session_id = f"sess-read-{tool}"
+        _write_pending(tmp_path, session_id, task_type="coordination",
+                       expected_tool="llm_query", original_prompt="show me the branches")
+        result = _run_hook(
+            ENFORCE_ROUTE_HOOK,
+            {"session_id": session_id, "tool_name": tool,
+             "tool_input": {"file_path": "/tmp/x"}},
+            home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+        )
+        assert result.returncode == 0 and result.stdout.strip() == "", f"{tool} should be exempt"
