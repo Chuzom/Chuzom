@@ -13,7 +13,8 @@
       "mcp__chuzom__llm_session_spend",
       "mcp__chuzom__llm_health",
       "Bash(.venv/bin/ruff check --output-format*)",
-      "Bash(.venv/bin/ruff check --select*)"
+      "Bash(.venv/bin/ruff check --select*)",
+      "Bash(scripts/release.sh:*)"
     ]
   }
 }
