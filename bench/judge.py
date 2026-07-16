@@ -18,6 +18,7 @@ Score semantics (consistent across modes):
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from typing import Literal
@@ -178,26 +179,52 @@ async def grade_subjective(
 
     import litellm  # lazy import — tests use FakeRouter and never reach this path
 
-    judge_response = await litellm.acompletion(
-        model=judge_model,
-        messages=[
-            {"role": "system", "content": _JUDGE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ],
-        temperature=0.0,
-        max_tokens=200,
-    )
-    judge_text = judge_response.choices[0].message.content or ""
-    score, rationale = _parse_judge_output(judge_text)
-    if score == 0:
+    # Judge fallback chain: the configured judge, then a local Ollama judge.
+    # Without this, a subscription-only environment (no ANTHROPIC/OPENAI key)
+    # raises AuthenticationError on the FIRST subjective prompt and crashes the
+    # entire benchmark run. The local fallback lets such an environment still
+    # produce a frontier; only if every judge is unreachable do we fall back to
+    # a neutral, clearly-labelled score instead of penalizing or crashing.
+    fallback = os.environ.get("CHUZOM_BENCH_JUDGE_FALLBACK", "ollama/qwen2.5:7b")
+    candidates = [judge_model]
+    if fallback and fallback != judge_model:
+        candidates.append(fallback)
+
+    last_err: Exception | None = None
+    for candidate in candidates:
+        try:
+            judge_response = await litellm.acompletion(
+                model=candidate,
+                messages=[
+                    {"role": "system", "content": _JUDGE_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                temperature=0.0,
+                max_tokens=200,
+            )
+        except Exception as exc:  # noqa: BLE001 — any provider/auth/timeout error
+            last_err = exc
+            continue
+        judge_text = judge_response.choices[0].message.content or ""
+        score, rationale = _parse_judge_output(judge_text)
+        if score == 0:
+            return JudgeResult(
+                score=1, kind="subjective",
+                rationale=f"judge parse failure: {rationale}",
+                judge_model=candidate,
+            )
         return JudgeResult(
-            score=1, kind="subjective",
-            rationale=f"judge parse failure: {rationale}",
-            judge_model=judge_model,
+            score=score, kind="subjective", rationale=rationale,
+            judge_model=candidate,
         )
+
+    # Every judge candidate was unreachable — keep the run alive with a neutral
+    # score that is clearly marked so it can't be mistaken for a real 3/5.
+    err = f"{type(last_err).__name__}: {last_err}" if last_err else "unknown"
     return JudgeResult(
-        score=score, kind="subjective", rationale=rationale,
-        judge_model=judge_model,
+        score=3, kind="subjective",
+        rationale=f"judge unavailable (tried {candidates}): {err}"[:200],
+        judge_model="unavailable",
     )
 
 

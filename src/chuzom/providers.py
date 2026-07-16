@@ -96,6 +96,26 @@ class ProviderStreamEvent(TypedDict, total=False):
     usage: ProviderUsageInfo
 
 
+def _ollama_num_ctx() -> int | None:
+    """Configured Ollama context window (CHUZOM_OLLAMA_NUM_CTX), or None.
+
+    Returns None when unset or invalid so callers keep Ollama's own default —
+    passing num_ctx is opt-in. A positive integer raises the context window
+    for page-sized prompts/outputs that otherwise overflow the 4096 default
+    and return empty content.
+    """
+    import os
+
+    raw = os.environ.get("CHUZOM_OLLAMA_NUM_CTX", "").strip()
+    if not raw:
+        return None
+    try:
+        val = int(raw)
+    except ValueError:
+        return None
+    return val if val > 0 else None
+
+
 async def call_llm(
     model: str,
     messages: list[dict[str, str]],
@@ -167,6 +187,15 @@ async def call_llm(
     # This is safe since Ollama typically returns reasonable-length responses.
     if not model.startswith("ollama/"):
         kwargs["max_tokens"] = max_tokens
+    else:
+        # Ollama defaults to a 4096-token context window, which silently
+        # overflows on page-sized prompts/outputs and returns EMPTY content
+        # (surfaced downstream as EmptyResponseError → chain failover). Let
+        # operators raise it via CHUZOM_OLLAMA_NUM_CTX so large generations
+        # don't empty out. Unset = keep Ollama's own default (no change).
+        _num_ctx = _ollama_num_ctx()
+        if _num_ctx:
+            kwargs["num_ctx"] = _num_ctx
 
     if extra_params:
         safe = {k: v for k, v in extra_params.items() if k in _ALLOWED_EXTRA_PARAMS}
