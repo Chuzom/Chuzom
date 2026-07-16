@@ -1841,7 +1841,13 @@ _CONTEXT_DEP_RE = re.compile(
     # here: those can be self-contained and a draft is still useful.)
     r"|\b(run|start|startup|launch|serve|deploy|install|build|compile|lint|"
     r"debug|fix|refactor|optimi[sz]e|rename|migrate|rerun|restart|reproduce|"
-    r"profile|redeploy|rollback)\b"
+    r"profile|redeploy|rollback"
+    # operational commands that act on EXISTING local/session state (processes,
+    # runs, files the user already has) — a stateless model can neither see the
+    # target nor perform the action. This closes G-ENF-1: "stop the rest" /
+    # "kill the worktrees" were classified query/simple and hard-blocked Bash.
+    r"|stop|kill|cancel|terminate|abort|halt|remove|delete|purge|prune|"
+    r"resume|pause|retry|revert|undo|clean\s?up)\b"
     # ── prior-conversation references ───────────────────────────────────────
     r"|previous\s+session|prior\s+(session|conversation|turn|reply|message)"
     r"|earlier\s+(you|we|i)\b|last\s+(reply|message|session|turn|answer)"
@@ -1858,6 +1864,13 @@ _CONTEXT_DEP_RE = re.compile(
 # almost always point at something only Claude can see — a file just shown,
 # prior output, current state. In a short prompt that's a strong context signal.
 _DEICTIC_RE = re.compile(r"\b(it|this|that|these|those|here|them)\b", re.I)
+
+# Definite anaphora that points at a set established in a PRIOR turn — "the rest",
+# "the others", "the remaining", "the ones". In a short prompt this reliably means
+# the user is referring to conversation state a stateless model can't see
+# ("check the 5 and stop THE REST"). Kept tight (no "the N"/"the first") so
+# general-knowledge prompts like "the 5 love languages" aren't over-caught.
+_ANAPHORA_RE = re.compile(r"\bthe\s+(rest|remaining|others?|ones?)\b", re.I)
 
 # Free / local model providers — the only ones a DRAFT may use (#3). A
 # pre-generated draft routed to a paid API (gemini/openai) is wasted spend and
@@ -1909,10 +1922,12 @@ def _is_context_dependent(prompt: str) -> bool:
     p = prompt or ""
     if _CONTEXT_DEP_RE.search(p):
         return True
-    # Short prompt leaning on a bare deictic pronoun → almost certainly refers to
-    # something only Claude can see ("run it", "what does this do").
+    # Short prompt leaning on a bare deictic pronoun ("run it", "what does this
+    # do") or definite anaphora ("stop the rest", "delete the others") → almost
+    # certainly refers to something only Claude can see. Length-gated so a long
+    # general-knowledge prompt that merely contains "this"/"the rest" isn't caught.
     words = p.split()
-    if len(words) <= 12 and _DEICTIC_RE.search(p):
+    if len(words) <= 12 and (_DEICTIC_RE.search(p) or _ANAPHORA_RE.search(p)):
         return True
     return False
 

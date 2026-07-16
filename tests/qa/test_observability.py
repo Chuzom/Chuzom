@@ -86,26 +86,9 @@ def test_lineage_record_succeeds_when_otel_disabled(tmp_path, monkeypatch):
 # ────────────────────────────────────────────────────────────────────────
 
 @requires_otel
-def test_span_created_per_routing_decision(monkeypatch):
+def test_span_created_per_routing_decision():
     """Verify a span is created with the right attributes when OTLP is on."""
-    from opentelemetry import trace
-    from opentelemetry.sdk.resources import Resource
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
-        InMemorySpanExporter,
-    )
-
-    # Set the endpoint so is_enabled() returns True
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
-
-    # Replace setup() to wire an in-memory exporter instead of OTLP
-    exporter = InMemorySpanExporter()
-    provider = TracerProvider(resource=Resource.create({"service.name": "chuzom"}))
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
-    observability._tracer = trace.get_tracer("chuzom")
-    observability._initialized = True
+    exporter = observability.install_in_memory_exporter_for_test()
 
     record = make_record(
         host="claude-code", prompt_fingerprint="fp",
@@ -132,24 +115,10 @@ def test_span_created_per_routing_decision(monkeypatch):
 
 
 @requires_otel
-def test_inversion_emits_span_event(monkeypatch):
+def test_inversion_emits_span_event():
     """When a routing decision has inversion='up_inversion', the span
     must carry an 'inversion_detected' event."""
-    from opentelemetry import trace
-    from opentelemetry.sdk.resources import Resource
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
-        InMemorySpanExporter,
-    )
-
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
-    exporter = InMemorySpanExporter()
-    provider = TracerProvider(resource=Resource.create({"service.name": "chuzom"}))
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
-    observability._tracer = trace.get_tracer("chuzom")
-    observability._initialized = True
+    exporter = observability.install_in_memory_exporter_for_test()
 
     # A complex prompt routed to local is UP-inversion
     record = make_record(
@@ -170,24 +139,10 @@ def test_inversion_emits_span_event(monkeypatch):
 
 
 @requires_otel
-def test_pii_detected_emits_span_event(monkeypatch):
+def test_pii_detected_emits_span_event():
     """A lineage record whose notes mention 'pii' should add a
     pii_detected event to the span."""
-    from opentelemetry import trace
-    from opentelemetry.sdk.resources import Resource
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
-        InMemorySpanExporter,
-    )
-
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
-    exporter = InMemorySpanExporter()
-    provider = TracerProvider(resource=Resource.create({"service.name": "chuzom"}))
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
-    observability._tracer = trace.get_tracer("chuzom")
-    observability._initialized = True
+    exporter = observability.install_in_memory_exporter_for_test()
 
     record = make_record(
         host="x", prompt_fingerprint="fp", task_type="code",

@@ -175,7 +175,10 @@ async def test_external_task_cancel_triggers_shield(
     ``_dispatch_model_loop`` is awaiting the provider. The child sees
     CancelledError; the shield does its cleanup; the cancel propagates."""
 
+    entered_dispatch = asyncio.Event()
+
     async def _slow_dispatch(**kwargs: Any):
+        entered_dispatch.set()  # signal we've reached the dispatch await
         await asyncio.sleep(5)  # parent cancels us before this completes
         raise AssertionError("dispatch should have been cancelled")
 
@@ -185,8 +188,11 @@ async def test_external_task_cancel_triggers_shield(
         return await route_and_call(task_type=TaskType.QUERY, prompt="hi")
 
     task = asyncio.create_task(_do_routed_call())
-    # Give the task a moment to enter the dispatch await.
-    await asyncio.sleep(0.05)
+    # Deterministically wait until the task is actually inside dispatch before
+    # cancelling — a fixed sleep is racy on a cold process where routing setup
+    # (classifier/registry load) can exceed the delay, landing the cancel in
+    # setup instead of dispatch (the flake that masked G-OBS-2).
+    await asyncio.wait_for(entered_dispatch.wait(), timeout=10)
     task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
