@@ -203,6 +203,41 @@ async def test_external_task_cancel_triggers_shield(
     assert _detail_of(rows[0]).get("outcome") == "cancelled"
 
 
+@pytest.mark.asyncio
+async def test_external_cancel_releases_budget_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_audit_db: Path,
+) -> None:
+    """A turn cancelled externally mid-dispatch must release its provisional
+    budget reservation — otherwise ``_pending_spend`` leaks and inflates the
+    perceived in-flight spend, wrongly throttling future turns. (Hardening the
+    tail of G-OBS-2: the audit row is guaranteed, but the async budget release
+    must survive the pending cancel too.)"""
+    monkeypatch.setattr(router_mod, "_pending_spend", 0.0)
+
+    entered_dispatch = asyncio.Event()
+
+    async def _slow_dispatch(**kwargs: Any):
+        entered_dispatch.set()
+        await asyncio.sleep(5)
+        raise AssertionError("dispatch should have been cancelled")
+
+    monkeypatch.setattr(router_mod, "_dispatch_model_loop", _slow_dispatch)
+
+    task = asyncio.create_task(
+        route_and_call(task_type=TaskType.QUERY, prompt="hi")
+    )
+    await asyncio.wait_for(entered_dispatch.wait(), timeout=10)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # The reservation added before dispatch must be fully released back to 0.
+    assert router_mod._pending_spend == 0.0, (
+        f"budget reservation leaked: _pending_spend={router_mod._pending_spend}"
+    )
+
+
 # ── 3. Timeout path still works unchanged ────────────────────────────────────
 
 
