@@ -9,8 +9,10 @@ Task type — CRITICAL DISTINCTION:
     Examples: "Build X component", "Fix the bug in Y", "Refactor Z", "Redesign the UI for...", "Implement feature X"
   * "generate": Create content (text, creative writing, prose, non-code)
     Examples: "Write a blog post about...", "Draft an email", "Brainstorm ideas"
-  * "research": Investigate topics, synthesize information, gather data
+  * "research": Investigate topics, synthesize information, gather up-to-date/external data
     Examples: "Research how X is used", "Find information about Y", "Analyze market trends"
+    IMPORTANT: "Find/look up the latest|current|recent|newest X", "current best practices for X",
+    "latest guidance/recommendations on X" → research (needs fresh external info), NOT query.
   * "analyze": Examine/understand existing work, identify patterns, evaluate trade-offs
     Examples: "Review this code", "Identify bottlenecks", "Compare approaches", "What are the pros/cons?"
 

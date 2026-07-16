@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Chuzom (github.com/ypollak2/chuzom)
 # SPDX-License-Identifier: MIT
-"""Chuzom router for RouterArena — v0.5.2.
+"""Chuzom router for RouterArena — v0.8.4.
 
 Self-contained heuristic classifier + model-tier selector.
 RouterArena's evaluation environment only needs this file and the JSON

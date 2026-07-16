@@ -28,17 +28,42 @@ _BUNDLE_LOADED_AT: float = 0.0
 _BUNDLE_BASE: Path | None = None
 _BUNDLE_TTL_S: float = 60.0  # reload if knowledge dir changes within this window
 
-# OKF context injection + enrichment are OPT-IN (default OFF). They store
-# unverified model output as "SourceFile knowledge" and re-inject it into later
-# prompts — a hallucination amplifier that self-poisoned the store in the field
-# (a `setup.py` doc captured a prompt + an echoed <knowledge_context> block and
-# kept re-injecting it). Enable deliberately with CHUZOM_OKF=on.
+# OKF context injection + enrichment are ON by default (verified-only policy).
+# The store holds ONLY checkable facts — seeded ModelCapability docs, extracted
+# symbol NAMES, real file paths, and the user's own prompts (SessionNote) — and
+# NEVER model free-text prose, which was the hallucination amplifier that
+# self-poisoned the store in the field (a `setup.py` doc captured a prompt + an
+# echoed <knowledge_context> block and re-injected it forever). That loop is
+# closed two ways: prose is never stored, and injected <knowledge_context> blocks
+# are stripped before any re-capture (see _KNOWLEDGE_CTX_RE). With prose excluded
+# there is nothing left to hallucinate, so default-on is safe. Disable with
+# CHUZOM_OKF=off.
 def _okf_enabled() -> bool:
-    return os.environ.get("CHUZOM_OKF", "").strip().lower() in ("1", "true", "on", "yes")
+    return os.environ.get("CHUZOM_OKF", "on").strip().lower() not in ("0", "false", "off", "no")
 
 
 # Never re-capture an injected knowledge block back into the store (feedback loop).
 _KNOWLEDGE_CTX_RE = re.compile(r"<knowledge_context>.*?</knowledge_context>", re.DOTALL | re.IGNORECASE)
+
+# Verified-structure extractors — the ONLY things pulled from text into the store.
+# Real file paths (checkable) and defined symbol NAMES (checkable), never prose.
+_FILE_PAT = re.compile(r'(?:^|\s)([\w./\-]+\.(?:py|ts|js|go|rs|java|md))\b', re.MULTILINE)
+_SYM_PAT = re.compile(
+    r'(?:def |class |fn |func |function |async def |async function )(\w+)\s*[({<:]',
+    re.MULTILINE,
+)
+
+
+def _extract_files_and_symbols(clean_prompt: str, clean_response: str) -> tuple[list[str], list[str]]:
+    """Pull checkable structure only: real file paths + defined symbol names.
+    Shared by enrichment and session capture so both honor the verified-only rule."""
+    files = list(dict.fromkeys(
+        m.group(1).lstrip("./")
+        for m in _FILE_PAT.finditer(clean_prompt + "\n" + clean_response)
+        if not m.group(1).startswith(".")
+    ))[:5]
+    symbols = list(dict.fromkeys(m.group(1) for m in _SYM_PAT.finditer(clean_response)))[:10]
+    return files, symbols
 
 
 # ---------------------------------------------------------------------------
@@ -340,27 +365,13 @@ async def enrich_from_response(
         clean_prompt = _KNOWLEDGE_CTX_RE.sub("", prompt)
         clean_response = _KNOWLEDGE_CTX_RE.sub("", response_text)
 
-        file_pat = re.compile(
-            r'(?:^|\s)([\w./\-]+\.(?:py|ts|js|go|rs|java|md))\b', re.MULTILINE
-        )
-        files = list(dict.fromkeys(
-            m.group(1).lstrip("./")
-            for m in file_pat.finditer(clean_prompt + "\n" + clean_response)
-            if not m.group(1).startswith(".")
-        ))[:5]
-
+        # Record ONLY checkable structure (real files + extracted symbol names),
+        # never the model's free-text prose — that prose is unverified output and
+        # was the hallucination vector (e.g. a fabricated plugin API stored as
+        # "fact"). See _extract_files_and_symbols.
+        files, symbols = _extract_files_and_symbols(clean_prompt, clean_response)
         if not files:
             return
-
-        # Record ONLY checkable structure (extracted symbol names), never the
-        # model's free-text prose — that prose is unverified output and was the
-        # hallucination vector (e.g. a fabricated plugin API stored as "fact").
-        # Includes JS/TS's `function` keyword — .ts/.js are supported file
-        # types (tagged above) but weren't actually matched by this pattern.
-        sym_pat = re.compile(
-            r'(?:def |class |fn |func |function |async def |async function )(\w+)\s*[({<:]',
-            re.MULTILINE)
-        symbols = list(dict.fromkeys(m.group(1) for m in sym_pat.finditer(clean_response)))[:10]
         if not symbols:
             return  # nothing verifiable to record — don't invent a summary
 
@@ -372,3 +383,103 @@ async def enrich_from_response(
         )
     except Exception:  # noqa: BLE001 — enrichment must never crash the caller
         pass
+
+
+# ---------------------------------------------------------------------------
+# Session context (#2) — per-session, verified-only, cross-session retrievable
+# ---------------------------------------------------------------------------
+
+SESSIONS_DIR = KNOWLEDGE_DIR / "sessions"
+
+_SID_SAFE_RE = re.compile(r"[^\w.-]")
+
+
+def _safe_session_id(session_id: str) -> str:
+    return _SID_SAFE_RE.sub("_", str(session_id))[:64]
+
+
+def record_session_turn(
+    session_id: str,
+    prompt: str,
+    response_text: str,
+    model: str,
+    base: Path = KNOWLEDGE_DIR,
+) -> Path | None:
+    """Capture VERIFIED-ONLY context for a turn → ``sessions/<id>/turn-NNNN.md``.
+
+    Stores the user's real prompt (a checkable fact — it is their literal input)
+    plus extracted file paths and symbol names. NEVER stores model prose. Because
+    ``find_relevant`` rglobs the whole knowledge dir, these notes automatically
+    become retrievable from ANY later session — the cross-session memory the user
+    asked for. A turn with no verifiable structure (no file, no symbol) is skipped
+    as chatter. Returns the written path, or None when disabled/skipped/failed.
+    """
+    if not _okf_enabled() or not session_id:
+        return None
+    try:
+        clean_prompt = _KNOWLEDGE_CTX_RE.sub("", prompt or "").strip()
+        clean_response = _KNOWLEDGE_CTX_RE.sub("", response_text or "")
+        files, symbols = _extract_files_and_symbols(clean_prompt, clean_response)
+        if not files and not symbols:
+            return None  # nothing verifiable → don't store chatter
+
+        safe_sid = _safe_session_id(session_id)
+        sess_dir = base / "sessions" / safe_sid
+        sess_dir.mkdir(parents=True, exist_ok=True)
+        turn_n = len(list(sess_dir.glob("turn-*.md"))) + 1
+
+        title = (clean_prompt.splitlines() or ["(empty prompt)"])[0][:100]
+        body_parts = []
+        if files:
+            body_parts.append("Files: " + ", ".join(files))
+        if symbols:
+            body_parts.append("Symbols: " + ", ".join(symbols))
+        body_parts.append(f"User request: {title}")
+
+        fm: dict[str, Any] = {
+            "type": "SessionNote",
+            "title": title,
+            "description": f"session {safe_sid} · turn {turn_n}",
+            "tags": ["session", safe_sid, *files],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "session_id": safe_sid,
+        }
+        if model:
+            fm["last_model"] = model
+        text = f"---\n{yaml.dump(fm, default_flow_style=False).strip()}\n---\n\n" + "\n".join(body_parts) + "\n"
+
+        path = sess_dir / f"turn-{turn_n:04d}.md"
+        path.write_text(text, encoding="utf-8")
+        invalidate_cache()
+        return path
+    except Exception:  # noqa: BLE001 — session capture must never crash the caller
+        return None
+
+
+def find_relevant_sessions(
+    prompt: str,
+    exclude_session: str | None = None,
+    limit: int = 3,
+    base: Path = KNOWLEDGE_DIR,
+) -> list[OKFConcept]:
+    """Retrieve SessionNote concepts from PRIOR sessions most relevant to ``prompt``.
+
+    Same keyword-overlap scoring as ``find_relevant``, restricted to SessionNotes
+    and excluding the caller's own session so a session never just echoes itself.
+    """
+    if not _okf_enabled():
+        return []
+    concepts = [c for c in _get_bundle(base) if c.type == "SessionNote"]
+    if exclude_session:
+        safe = _safe_session_id(exclude_session)
+        concepts = [c for c in concepts if c.extra.get("session_id") != safe]
+    if not concepts:
+        return []
+    keywords = list(dict.fromkeys(
+        w for w in re.findall(r"\b\w{5,}\b", prompt.lower()) if not w.isdigit()
+    ))[:25]
+    if not keywords:
+        return []
+    scored = [(c, _score(c, keywords)) for c in concepts]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [c for c, s in scored[:limit] if s > 0]

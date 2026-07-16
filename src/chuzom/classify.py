@@ -98,6 +98,8 @@ _SIGNALS: dict[str, dict[str, re.Pattern]] = {
     "research": {
         "intent": re.compile(
             r"\b(?:research|look up|look into|search for|find out|investigate|discover|"
+            r"find (?:the |current |recent )?(?:latest|current|recent|newest|"
+            r"best practices?|guidance|recommendations?)|"
             r"what(?:'s| is) (?:the )?(?:latest|newest|most recent|current)|"
             r"what happened|who (?:won|raised|acquired|launched|announced|released|founded|created)|"
             r"how (?:much|many) (?:did|has|have|does|were|are|is|was)|"
@@ -331,6 +333,36 @@ _COMPLEXITY_SIMPLE = re.compile(
     re.IGNORECASE,
 )
 
+# ── Task-type complexity FLOOR (anti-under-classification policy) ──────────────
+# Under-routing is the expensive mistake: a task sent to too-cheap a tier fails
+# and bounces back to the subscription agent (double work). Each task type carries
+# a minimum routing tier — analysis/research are premium-tier work by nature,
+# codegen/writing are at least mid-tier. A classifier may raise complexity above
+# the floor, never below it. ``query`` has no floor (lookups stay cheap). Measured
+# lift: golden-set exact accuracy 48% → 76% at 0ms/$0 (scripts/eval_router_ensemble.py).
+_TASK_COMPLEXITY_FLOOR: dict[str, Complexity] = {
+    "generate": Complexity.MODERATE,
+    "code": Complexity.MODERATE,
+    "analyze": Complexity.COMPLEX,
+    "research": Complexity.COMPLEX,
+}
+_COMPLEXITY_RANK: dict[Complexity, int] = {
+    c: i
+    for i, c in enumerate(
+        [Complexity.SIMPLE, Complexity.MODERATE, Complexity.COMPLEX, Complexity.DEEP_REASONING]
+    )
+}
+
+
+def apply_complexity_floor(complexity: Complexity, task_type: str | TaskType) -> Complexity:
+    """Clamp ``complexity`` UP to the task-type floor (never down). Single source
+    of truth for the floor policy — also imported by chuzom.ensemble."""
+    key = task_type.value if isinstance(task_type, TaskType) else str(task_type)
+    floor = _TASK_COMPLEXITY_FLOOR.get(key)
+    if floor is None:
+        return complexity
+    return floor if _COMPLEXITY_RANK[floor] > _COMPLEXITY_RANK.get(complexity, 0) else complexity
+
 
 def _score_categories(text: str) -> dict[str, int]:
     scores: dict[str, int] = {}
@@ -364,6 +396,7 @@ class ClassifyPolicy:
     task_aware_query: bool = True  # queries get their own length curve
     query_moderate_min: int = 400  # query: len > this → moderate, else simple
     low_signal_default: str = "query"  # task_type when no category scores confidently
+    apply_floor: bool = True  # clamp complexity up to the task-type floor (anti-under-routing)
 
 
 # Reference policy (the UserPromptSubmit hook): keyword-aware, >500 → complex,
@@ -387,10 +420,11 @@ GATEWAY_POLICY = ClassifyPolicy(
     simple_max=400,
     task_aware_query=False,
     low_signal_default="analyze",
+    apply_floor=False,  # external side door keeps its own tuned length curve
 )
 
 
-def _complexity(text: str, task_type: str, policy: ClassifyPolicy) -> Complexity:
+def _base_complexity(text: str, task_type: str, policy: ClassifyPolicy) -> Complexity:
     if policy.keyword_complexity:
         # Calibrated reason-gate replaces the bare `_COMPLEXITY_DEEP.search`.
         # It uses that same regex as one feature (deep-keyword hit is sufficient
@@ -414,6 +448,13 @@ def _complexity(text: str, task_type: str, policy: ClassifyPolicy) -> Complexity
     if n <= policy.simple_max:
         return Complexity.SIMPLE
     return Complexity.MODERATE
+
+
+def _complexity(text: str, task_type: str, policy: ClassifyPolicy) -> Complexity:
+    base = _base_complexity(text, task_type, policy)
+    if policy.apply_floor:
+        return apply_complexity_floor(base, task_type)
+    return base
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

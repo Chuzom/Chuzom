@@ -79,6 +79,15 @@ try:
 except Exception:
     pass
 
+# Warm the local ensemble classifier so the first routed prompt pays warm latency
+# (~2.5s) rather than an Ollama cold start (~56s). Fire-and-forget daemon thread;
+# no-op when the ensemble is disabled or the primary is not local.
+try:
+    from chuzom.ensemble import warm_primary as _warm_primary
+    _warm_primary()
+except Exception:
+    pass
+
 # ── Initialize dynamic routing tables on startup ────────────────────────────────
 # Build custom routing tables based on discovered available providers.
 # This happens once at session start, so all routing decisions use optimized

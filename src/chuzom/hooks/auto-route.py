@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 24
+# chuzom-hook-version: 26
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -58,7 +58,7 @@ except ImportError:
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 24"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 26"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -852,6 +852,8 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
     "research": {
         "intent": re.compile(
             r"\b(?:research|look up|look into|search for|find out|investigate|discover|"
+            r"find (?:the |current |recent )?(?:latest|current|recent|newest|"
+            r"best practices?|guidance|recommendations?)|"
             r"what(?:'s| is) (?:the )?(?:latest|newest|most recent|current)|"
             r"what happened|who (?:won|raised|acquired|launched|announced|released|founded|created)|"
             r"how (?:much|many) (?:did|has|have|does|were|are|is|was)|"
@@ -2907,7 +2909,23 @@ def main() -> None:
             "the relevant slices via llm_query(context=…). Never present a context-"
             "free draft as the answer.\n\n"
         )
-        directive = _context_note + directive
+        # Part B (bounce-back fix): a context-dependent prompt references local
+        # state a stateless routed model can't see, so writing pending enforcement
+        # state here is what forced the throwaway-llm_query dance (enforce-route.py
+        # blocked Bash/Edit/Read until a chuzom tool was called, then Claude did the
+        # real work anyway — double cost). So SUPPRESS ENFORCEMENT: write no pending
+        # state (enforce-route can't block). Aligned with v0.8.3's philosophy, the
+        # route SUGGESTION is preserved (advisory, still names the tool) so the
+        # caller may route WITH context if useful — it just isn't forced. Keeping
+        # the tool in the directive also keeps the routing display consistent.
+        write_pending = False
+        directive = _context_note + (
+            f"⚡ ROUTE (advisory): {task_type}/{complexity} → {tool} [via {method}] — but "
+            f"this prompt is context-dependent, so a stateless routed model can't see your "
+            f"repo. Nothing is blocked; prefer handling it DIRECTLY with your tools, or "
+            f"route WITH context via {tool}(context=…). Never relay a context-free draft."
+        )
+        indicator = f"🧠 {task_type}/{complexity} → {tool} · context-dependent [via {method}]"
 
     # ── Per-session paid-API spend cap (#3) ──────────────────────────────────────
     # Drafts are already free-only; this is the backstop for the rest of routing.

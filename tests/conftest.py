@@ -494,6 +494,13 @@ def _hermetic_host_state(monkeypatch):
     monkeypatch.setattr(repo_config_module, "load_user_config", lambda *a, **k: RepoConfig())
     monkeypatch.setattr(router_module, "is_codex_available", lambda: False)
     monkeypatch.setattr(router_module, "is_gemini_cli_available", lambda: False)
+    # The LLM-first ensemble makes live Ollama classifier calls, which in unit
+    # tests punch through host-state isolation — real model latency,
+    # non-determinism, and background warmup threads that leak global state
+    # across tests. Default it OFF here (ON in production); the ensemble suite
+    # re-enables per-test (test-level monkeypatch wins). OKF stays ON — it is
+    # part of the shipped default and its suites exercise it with a tmp base.
+    monkeypatch.setenv("CHUZOM_ENSEMBLE", "off")
     yield
 
 

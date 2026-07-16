@@ -6,8 +6,8 @@ import os
 
 from mcp.server.fastmcp import Context
 
-from chuzom.classifier import classify_complexity
 from chuzom.config import get_config
+from chuzom.ensemble import classify_for_routing
 from chuzom.cost import (
     get_correction_count, get_daily_claude_breakdown, get_daily_claude_tokens,
     get_savings_summary, log_claude_usage, log_correction, log_usage,
@@ -57,7 +57,7 @@ async def llm_classify(
     # Classify complexity
     try:
         await ctx.info("🔍 Analyzing task complexity...")
-        classification = await classify_complexity(prompt, timeout_seconds=10.0)
+        classification = await classify_for_routing(prompt, timeout_seconds=10.0)
         await ctx.info(f"✓ Classified as {classification.complexity.value} ({classification.confidence:.0%} confidence)")
     except Exception as e:
         await ctx.warning(f"Classification failed: {e}")
@@ -309,7 +309,7 @@ async def llm_route(
             # Notify user that classification is starting (prevents silent hangs)
             # Use animated spinner in interactive contexts, text feedback in MCP
             await ctx.info("🔍 Analyzing task complexity...")
-            classification = await classify_complexity(prompt, timeout_seconds=10.0)
+            classification = await classify_for_routing(prompt, timeout_seconds=10.0)
             task_type_label = classification.inferred_task_type.value if classification.inferred_task_type else "generic"
             await ctx.info(f"✓ Classified: {classification.complexity.value}/{task_type_label} ({classification.confidence:.0%} confidence)")
         except Exception as e:
@@ -478,7 +478,7 @@ async def llm_auto(
 
     # Classify complexity (or skip if profile_override forces a specific profile)
     try:
-        classification = await classify_complexity(prompt)
+        classification = await classify_for_routing(prompt)
     except Exception as e:
         await ctx.warning(f"Classification failed: {e} — defaulting to moderate")
         classification = ClassificationResult(
@@ -750,7 +750,7 @@ async def llm_select_agent(
         profile = "balanced"
 
     try:
-        classification = await classify_complexity(prompt)
+        classification = await classify_for_routing(prompt)
         task_type_val = classification.inferred_task_type or TaskType.CODE
         complexity_val = classification.complexity
         confidence = classification.confidence

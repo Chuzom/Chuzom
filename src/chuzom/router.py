@@ -3377,6 +3377,9 @@ async def route_and_call(
 
         # OKF #4: side-effect enrichment — write SourceFile concept docs from
         # file mentions in the prompt+response. Fire-and-forget; never blocks.
+        # OKF #2: verified-only session capture — record this turn's user prompt +
+        # extracted structure under sessions/<id>/ so future prompts (this session
+        # or any other) can retrieve it. Both are best-effort and never block.
         try:
             _resp_text = getattr(response, "content", "") or ""
             _resp_model = getattr(response, "model", "") or ""
@@ -3384,6 +3387,14 @@ async def route_and_call(
                 _okf.enrich_from_response(prompt, _resp_text, _resp_model),
                 name="okf_enrich",
             )
+            if agent_session_id:
+                _spawn_bg(
+                    asyncio.to_thread(
+                        _okf.record_session_turn,
+                        agent_session_id, prompt, _resp_text, _resp_model,
+                    ),
+                    name="okf_session",
+                )
         except Exception:  # noqa: BLE001
             pass
 

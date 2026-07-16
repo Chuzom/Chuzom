@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.8.4 — 2026-07-15 — LLM-first ensemble routing, verified-only OKF session context
+
+A routing-quality release. The classifier becomes LLM-first with a measured golden-set
+lift, OKF context is safe-by-default and now carries verified-only session memory, and
+the enforcement hook stops writing a pending route for prompts that can't be routed.
+All changes ship green (full suite passing on the v0.8.3 base).
+
+### Routing / Classifier
+- **LLM-first ensemble classifier (`chuzom.ensemble`).** Every routed prompt is
+  classified by a local Ollama model first, blended by weight with the deterministic
+  signal engine, with a second local model breaking only thin-margin ties. Wired into
+  the MCP routing tools via `classify_for_routing` (`CHUZOM_ENSEMBLE`, default on);
+  degrades internally to the heuristic on cold start / model failure, so it never
+  stalls or bounces. Full-100 golden set: **48% → 95% exact** (ensemble), **→ 85%** on
+  the free 0ms heuristic path alone.
+- **Task-type complexity floor** in the shared classifier — the anti-under-routing
+  rule. Analysis/research route to the premium tier and code/writing to at least
+  mid-tier regardless of how "easy" a prompt reads, so work isn't sent to a too-cheap
+  model that fails and bounces back. Free (0ms/$0); **+28 points alone** (48% → 76%).
+- **`research` signal fix.** "Find the latest/current/best-practices X" now classifies
+  as research (fresh external info), not a query lookup (heuristic 76% → 85%); the
+  classifier prompt was updated to match.
+- **Cold-start warmup (`warm_primary`).** The primary local classifier is loaded at
+  server startup in a daemon thread, so the first routed prompt pays warm latency
+  (~2.5s) instead of an Ollama cold start (~56s).
+
+### Enforcement
+- **Context-dependent prompts write no pending route state.** Complements v0.8.3
+  (which stopped blocking read-only local ops): a prompt referencing local files/repo/
+  history has no correct external route, so the hook now suppresses enforcement instead
+  of emitting a hard directive — closing the last path where a repo task forced a
+  throwaway `llm_query` call. Auto-route hook → v26.
+
+### OKF / Context
+- **OKF on by default (verified-only policy).** The knowledge store now holds only
+  checkable facts — seeded model-capability docs, extracted symbol names, real file
+  paths, and the user's own prompts — and never model free-text prose, the
+  hallucination amplifier that self-poisoned the store and got it disabled. With prose
+  excluded there is nothing to hallucinate, so default-on is safe.
+- **Verified-only session context (`record_session_turn` / `find_relevant_sessions`).**
+  Each routed turn captures the user's real prompt plus extracted file/symbol structure
+  under `sessions/<id>/`. Because relevance search rglobs the whole store, these notes
+  are retrievable from any later session — cross-session memory that feeds the working
+  model, so local routing has context instead of guessing.
+
 ## v0.8.3 — 2026-07-14 — Stop route-blocking non-routable local operations
 
 ### Enforcement — local dev commands are never routable

@@ -142,3 +142,27 @@ def test_self_contained_prompt_has_no_context_directive(tmp_path):
     # A normal route directive — but NOT the context-needed note.
     if out is not None:
         assert "CONTEXT-DEPENDENT PROMPT" not in _context_text(out)
+
+
+# ── Part B: context-dependent prompts write NO pending state (no bounce-back) ──
+def _pending_path(home: Path) -> Path:
+    return home / ".chuzom" / "pending_route_ctx-test.json"
+
+
+def test_context_dependent_prompt_writes_no_pending_state(tmp_path):
+    # The bounce-back fix: a context-dependent prompt must NOT write pending
+    # enforcement state, so enforce-route.py cannot block Bash/Edit/Read and the
+    # throwaway-llm_query dance never triggers. Handled directly in one pass.
+    _run_hook("refactor the parser in src/main.py", tmp_path, direct=False)
+    assert not _pending_path(tmp_path).exists(), (
+        "context-dependent prompt must not write pending route state"
+    )
+
+
+def test_self_contained_routable_prompt_still_writes_pending_state(tmp_path):
+    # Control: a routable, context-FREE prompt still writes pending state, so
+    # routing enforcement stays intact for prompts that genuinely can route.
+    _run_hook("write a haiku about autumn", tmp_path, direct=False)
+    assert _pending_path(tmp_path).exists(), (
+        "context-free routable prompt should still write pending state"
+    )
