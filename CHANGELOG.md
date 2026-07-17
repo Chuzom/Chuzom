@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.8.5 — 2026-07-17 — Self-audit remediation: observability, research-trust, benchmark keystone, subscription-only harness fixes
+
+A remediation release from a full self-audit plus a live-reproduced MCP-generation bug
+report. Fixes one real observability bug and a cancellation-audit gap, hardens
+research-output trust and enforcement precision, adds a quality×cost benchmark with a CI
+freshness/regression guard, and makes the benchmark + Ollama usable on a
+Claude-subscription-only machine (no API keys). Full suite green.
+
+### Observability
+- **OTel span events emit again (G-OBS-1).** `observability.setup()` binds the tracer to
+  its own provider instance rather than the process-global one (robust even if another
+  library set the global first), so inversion / PII span events are exported again.
+- **Cancelled turns keep their audit breadcrumb (G-OBS-2).** The router's
+  `CancelledError` handler now writes the synchronous `"cancelled"` audit row before its
+  async budget/envelope cleanup — under external `task.cancel()` the still-pending cancel
+  re-raised at the first `await` and previously lost the record.
+
+### Routing / Enforcement
+- **Enforcement no longer hard-blocks operational prompts (G-ENF-1).** The
+  context-dependent detector now catches operational commands (`stop`/`kill`/`cancel`/
+  `delete`/…) and definite anaphora (`the rest`/`others`/`remaining`/…), so a prompt
+  mis-classified `query/simple` that acts on local/session state stays advisory instead
+  of blocking tool use.
+
+### Research / Trust
+- **`llm_research` enforces a source-trust contract (G-RESEARCH-NOKEY).** Citations
+  render under **Sources** only when a web-grounded model answered; without a web backend
+  the output leads with an UNVERIFIED banner and quarantines citations, so a non-web
+  fallback can't present fabricated references as authoritative.
+
+### Benchmark (quality×cost)
+- **Corpus grown to 53 prompts across easy/moderate/hard** — the new hard tier makes the
+  cost/quality frontier honest, since cheap models only visibly degrade on hard prompts.
+- **`bench/guard.py` + `make bench` / `make bench-guard`** — a CI gate that fails when
+  routing quality regresses below a floor or the newest results go stale.
+- **Judge degrades gracefully (`CHUZOM_BENCH_JUDGE_FALLBACK`).** With no
+  `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` the judge falls back to a local Ollama model
+  instead of crashing the run, so a subscription-only environment can still produce a
+  frontier.
+
+### Providers
+- **Configurable Ollama context window (`CHUZOM_OLLAMA_NUM_CTX`).** Opt-in; raises the
+  4096 default so page-sized generations stop overflowing and returning empty content.
+
 ## v0.8.4 — 2026-07-15 — LLM-first ensemble routing, verified-only OKF session context
 
 A routing-quality release. The classifier becomes LLM-first with a measured golden-set
