@@ -34,11 +34,88 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 SESSION_SPEND_FILE = Path.home() / ".chuzom" / "session_spend.json"
+
+# Durable, cross-session routing-outcome ledger. session_spend.json is reset each
+# session, so the deduped override/routed counts it holds vanish — leaving the
+# "drift back to base models" signal (routable turns the main model handled
+# ITSELF instead of routing) unobservable over time. This SQLite table keeps one
+# always-current row per session (INSERT OR REPLACE from _persist), so the audit
+# agent can trend base-model drift across sessions/days. (G-METRIC-1.)
+#
+# Derived from SESSION_SPEND_FILE.parent (not a fixed path) so a test that
+# isolates SESSION_SPEND_FILE isolates this DB too — same pattern as usage.db.
+def _routing_outcomes_db() -> Path:
+    return SESSION_SPEND_FILE.parent / "routing_outcomes.db"
+
+
+def _current_session_key() -> str:
+    """Stable per-session key for the durable outcomes row."""
+    import os
+
+    return os.environ.get("CLAUDE_SESSION_ID", "").strip() or "unknown-session"
+
+
+def read_base_drift(period: str = "all", *, db_path: Path | None = None) -> dict:
+    """Aggregate the durable outcomes ledger into a base-model-drift signal.
+
+    This is what makes "drift back to base subscription models" measurable over
+    time (G-METRIC-1): ``base_drift_share`` = the fraction of routed turns the
+    main model handled ITSELF (override) instead of using the cheap routed
+    answer. A rising share across cycles = drift back to base.
+
+    Args:
+        period: "today", "week", "month", or "all".
+        db_path: outcomes DB (overridable for tests).
+
+    Returns dict with: sessions, routed_turns, overridden_turns, base_drift_share,
+    capture_rate, potential_savings_usd, realized_savings_usd. All zeros when the
+    ledger is empty (no data yet — the series accrues from this fix forward).
+    """
+    db_path = db_path or _routing_outcomes_db()
+    cutoff = {
+        "today": time.time() - 86400,
+        "week": time.time() - 7 * 86400,
+        "month": time.time() - 30 * 86400,
+        "all": 0.0,
+    }.get(period, 0.0)
+
+    empty = {
+        "sessions": 0, "routed_turns": 0, "overridden_turns": 0,
+        "base_drift_share": 0.0, "capture_rate": 1.0,
+        "potential_savings_usd": 0.0, "realized_savings_usd": 0.0,
+    }
+    try:
+        if not Path(db_path).exists():
+            return empty
+        with sqlite3.connect(str(db_path), timeout=2.0) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*), COALESCE(SUM(call_count),0), "
+                "COALESCE(SUM(overridden_turns),0), "
+                "COALESCE(SUM(potential_savings_usd),0), "
+                "COALESCE(SUM(realized_savings_usd),0) "
+                "FROM session_outcomes WHERE updated_at >= ?",
+                (cutoff,),
+            ).fetchone()
+    except Exception:
+        return empty
+
+    sessions, routed, overridden, potential, realized = (
+        int(row[0]), int(row[1]), int(row[2]), float(row[3]), float(row[4])
+    )
+    share = round(overridden / routed, 4) if routed > 0 else 0.0
+    return {
+        "sessions": sessions, "routed_turns": routed,
+        "overridden_turns": overridden,
+        "base_drift_share": share, "capture_rate": round(1.0 - share, 4),
+        "potential_savings_usd": round(potential, 6),
+        "realized_savings_usd": round(realized, 6),
+    }
 
 # Default anomaly threshold: $0.50 in one session is unusual for most users.
 # Override via CHUZOM_ANOMALY_THRESHOLD env var.
@@ -302,6 +379,46 @@ class SessionSpend:
             tmp.replace(SESSION_SPEND_FILE)
         except OSError:
             pass  # Never crash the router due to disk issues
+        self._upsert_durable_outcome()
+
+    def _upsert_durable_outcome(self) -> None:
+        """Keep one always-current row per session in the durable outcomes DB.
+
+        Fail-safe: any error here must never disturb spend tracking. Stores the
+        deduped override/routed counts so base-model drift is queryable across
+        sessions (G-METRIC-1) — INSERT OR REPLACE keeps it to one row/session.
+        """
+        try:
+            # A durable per-session drift row is only meaningful with a real
+            # session id (production always sets CLAUDE_SESSION_ID; test
+            # subprocesses running hooks do not). Skipping the unresolvable case
+            # is both semantically correct AND keeps unisolated tests / hook
+            # subprocesses from polluting the real ~/.chuzom ledger.
+            if _current_session_key() == "unknown-session":
+                return
+            db = _routing_outcomes_db()
+            db.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(str(db), timeout=2.0) as conn:
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS session_outcomes ("
+                    "session_key TEXT PRIMARY KEY, updated_at REAL, "
+                    "call_count INTEGER, overridden_turns INTEGER, "
+                    "potential_savings_usd REAL, realized_savings_usd REAL)"
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO session_outcomes "
+                    "(session_key, updated_at, call_count, overridden_turns, "
+                    "potential_savings_usd, realized_savings_usd) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        _current_session_key(), time.time(), self.call_count,
+                        self.overridden_turns, round(self.potential_savings_usd, 6),
+                        self.realized_savings_usd,
+                    ),
+                )
+                conn.commit()
+        except Exception:
+            pass  # Durable-outcome logging is best-effort; never break spend.
 
     def reset(self) -> None:
         """Reset for a new session."""
