@@ -488,6 +488,59 @@ async def llm_query(
     return await _apply_response_router(_format_response(resp, "query"))
 
 
+def _is_web_grounded(model: str | None) -> bool:
+    """True only when a genuinely web-searching model produced the answer.
+
+    Web grounding is what makes research citations trustworthy. Perplexity's
+    sonar models search the live web; anything else (a local Ollama model, o3,
+    Gemini 2.5 Pro used as a no-web fallback) is answering from parametric
+    memory — its 'citations' are model-generated and may be fabricated.
+    """
+    return "perplexity" in (model or "").lower() or "sonar" in (model or "").lower()
+
+
+def _apply_research_trust_contract(
+    body: str,
+    citations,
+    model: str | None,
+    *,
+    no_perplexity: bool,
+) -> str:
+    """Enforce the research-output trust contract.
+
+    When a web-grounded model answered, citations are real → render them under
+    an authoritative **Sources:** header. When NOT web-grounded (no web backend,
+    or a non-web fallback answered), the answer and any 'citations' are
+    UNVERIFIED: lead with a prominent banner and never present the citations as
+    sources — a confidently fabricated reference is worse than none. This closes
+    G-RESEARCH-NOKEY: the local fallback previously emitted a hallucinated arXiv
+    id under **Sources:**.
+    """
+    citations = [c for c in (citations or []) if c]
+
+    if _is_web_grounded(model):
+        if citations:
+            body += "\n\n**Sources:**\n" + "\n".join(f"- {c}" for c in citations)
+        return body
+
+    hint = (
+        " Set PERPLEXITY_API_KEY for live web search." if no_perplexity else ""
+    )
+    banner = (
+        "> ⚠️ **UNVERIFIED — not web-grounded.** This answer came from a "
+        f"non-web model (`{model or 'unknown'}`), which cannot search the web. "
+        "Treat every claim — and any references below — as unverified and "
+        f"possibly fabricated; confirm independently before relying on them.{hint}"
+    )
+    out = banner + "\n\n" + body
+    if citations:
+        out += (
+            "\n\n**Unverified references (model-generated, NOT web-sourced):**\n"
+            + "\n".join(f"- {c}  _(unverified — verify before use)_" for c in citations)
+        )
+    return out
+
+
 async def llm_research(
     prompt: str,
     ctx: Context,
@@ -524,17 +577,12 @@ async def llm_research(
     _cache_result(prompt, resp, "research", "moderate")
     _record_quality(resp, "research", "moderate")
 
-    result = _format_response(resp, "research")
-
-    if resp.citations:
-        result += "\n\n**Sources:**\n" + "\n".join(f"- {c}" for c in resp.citations)
-
-    if no_perplexity and "perplexity" not in resp.model.lower():
-        result += (
-            "\n\n⚠️  No PERPLEXITY_API_KEY — web search unavailable. "
-            "Escalated to PREMIUM non-web model (results may be stale). "
-            "Set PERPLEXITY_API_KEY for live web search."
-        )
+    result = _apply_research_trust_contract(
+        _format_response(resp, "research"),
+        resp.citations,
+        resp.model,
+        no_perplexity=no_perplexity,
+    )
     return await _apply_response_router(result)
 
 

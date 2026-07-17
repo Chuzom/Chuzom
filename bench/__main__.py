@@ -13,7 +13,6 @@ import argparse
 import asyncio
 import sys
 import time
-from pathlib import Path
 
 from bench.reporter import save_report
 from bench.routers import default_routers
@@ -45,6 +44,8 @@ async def amain(args: argparse.Namespace) -> int:
         corpus = load_corpus("easy")
     elif args.moderate_only:
         corpus = load_corpus("moderate")
+    elif args.hard_only:
+        corpus = load_corpus("hard")
     else:
         corpus = load_full_corpus()
 
@@ -84,6 +85,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Chuzom router benchmark")
     parser.add_argument("--easy-only", action="store_true")
     parser.add_argument("--moderate-only", action="store_true")
+    parser.add_argument("--hard-only", action="store_true")
     parser.add_argument("--routers", help="comma-separated router names (default: all)")
     parser.add_argument(
         "--judge-model", default="anthropic/claude-3.5-sonnet",

@@ -11,7 +11,6 @@ force re-runs.
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import time
@@ -65,8 +64,19 @@ def load_corpus(difficulty: str) -> list[dict]:
     return rows
 
 
+DIFFICULTIES = ("easy", "moderate", "hard")
+
+
 def load_full_corpus() -> list[dict]:
-    return load_corpus("easy") + load_corpus("moderate")
+    """Load every difficulty tier that exists. 'hard' is included when present
+    (added in R4 to make the cost/quality frontier honest — cheap models only
+    visibly degrade on hard prompts, so an easy/moderate-only corpus overstates
+    local quality)."""
+    corpus: list[dict] = []
+    for diff in DIFFICULTIES:
+        if (CORPUS_DIR / f"{diff}.jsonl").exists():
+            corpus += load_corpus(diff)
+    return corpus
 
 
 def _cache_path(router_name: str) -> Path:

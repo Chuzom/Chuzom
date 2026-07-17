@@ -55,6 +55,14 @@ CONTEXT_DEPENDENT = [
     "look at src/main.py",              # file path
     "continue where we left off",       # prior-conversation
     "you said earlier to use redis",    # prior-conversation
+    # G-ENF-1 regressions: operational commands on prior/session state that were
+    # mis-classified query/simple and hard-blocked Bash this session.
+    "yes, check the 5 and stop the rest",  # operational verb + anaphora
+    "stop the rest",                       # definite anaphora
+    "kill the other worktrees",            # operational verb
+    "delete the remaining ones",           # operational verb + anaphora
+    "clean up the stray files",            # "clean up" operational verb
+    "cancel the running jobs",             # operational verb
 ]
 
 

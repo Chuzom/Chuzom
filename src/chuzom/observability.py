@@ -134,7 +134,13 @@ def setup(force: bool = False) -> bool:
         provider = TracerProvider(resource=resource)
         provider.add_span_processor(BatchSpanProcessor(span_exporter))
         trace.set_tracer_provider(provider)
-        _tracer = trace.get_tracer(_service_name())
+        # Bind our tracer to this provider instance directly rather than to
+        # the process-global one. OTel allows the global tracer provider to be
+        # set only once per process; if another library set it first, the
+        # set_tracer_provider() above is a silent no-op and trace.get_tracer()
+        # would return a tracer writing to the *other* library's exporter.
+        # provider.get_tracer() guarantees our spans reach our own exporter.
+        _tracer = provider.get_tracer(_service_name())
 
     # Meter setup
     metric_exporter = _make_metric_exporter()
@@ -370,6 +376,35 @@ def _record_to_attributes(record: Any) -> dict:
         "chuzom.session_id": _get("session_id", "") or "",
         "chuzom.framework": _get("framework", "") or "",
     }
+
+
+def install_in_memory_exporter_for_test():
+    """Wire an in-memory span exporter to a fresh provider, for tests.
+
+    Returns the ``InMemorySpanExporter`` so the caller can assert on
+    ``get_finished_spans()``. The tracer is bound to *this* provider instance
+    (via ``provider.get_tracer``), NOT the process-global one — OTel permits
+    ``trace.set_tracer_provider`` only once per process, so tests that each set
+    a fresh global provider would otherwise all read the first test's exporter
+    (empty ``spans`` → ``IndexError``). Uses ``SimpleSpanProcessor`` so spans
+    are exported synchronously and visible immediately after emission.
+    """
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    global _tracer, _initialized
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(
+        resource=Resource.create({"service.name": _service_name()})
+    )
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    _tracer = provider.get_tracer(_service_name())
+    _initialized = True
+    return exporter
 
 
 def reset_for_test() -> None:

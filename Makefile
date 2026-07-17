@@ -1,8 +1,18 @@
-.PHONY: verify lint test release
+.PHONY: verify lint test release bench bench-guard
 
 # Gate every change: lint + tests + version-sync + routing report.
 verify:
 	@bash scripts/verify.sh
+
+# Run the quality×cost benchmark (produces bench/results/<ts>.{json,md}).
+# Needs local Ollama up; judge uses the Claude subscription. See bench/README.md.
+bench:
+	@uv run python -m bench
+
+# CI gate: fail if routing quality regressed below floor OR results went stale.
+# Run weekly in CI right after `make bench` (closes G-BENCH-1's staleness root).
+bench-guard:
+	@uv run python -m bench.guard
 
 # Enforcement lint only — fail on direct provider calls bypassing Chuzom.
 lint:

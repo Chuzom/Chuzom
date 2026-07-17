@@ -3258,9 +3258,16 @@ async def route_and_call(
             # audit. Re-raise so the asyncio cancellation chain
             # remains intact.
             elapsed = _t.monotonic() - _dispatch_started
-            async with _budget_lock():
-                _pending_spend = max(0.0, _pending_spend - _reservation)
-            await release_envelope(_env_key, _reservation)
+            # G-OBS-2: write the cancel breadcrumb FIRST, before any await.
+            # audit_routing_turn is synchronous, so it cannot be skipped by
+            # the still-pending external cancellation. Under task.cancel() the
+            # cancel stays pending after we catch it here, so the very next
+            # await (the budget lock / envelope release below) re-raises
+            # CancelledError and unwinds out of this handler — previously that
+            # happened BEFORE this row was written, silently losing the
+            # "cancelled" audit record. (The internal-raise path leaves no
+            # pending cancel, so its awaits complete — which is why only the
+            # external-cancel test exposed this.)
             try:
                 audit_routing_turn(
                     identity=identity,
@@ -3278,6 +3285,13 @@ async def route_and_call(
                 )
             except Exception as _audit_err:
                 log.warning("audit_cancel_write_failed", error=str(_audit_err))
+            # Best-effort async cleanup: release the budget reservation +
+            # envelope. Under external cancel a re-raised CancelledError here
+            # may skip these — acceptable, since the reservation is bounded and
+            # the (now-guaranteed) audit row above is the load-bearing record.
+            async with _budget_lock():
+                _pending_spend = max(0.0, _pending_spend - _reservation)
+            await release_envelope(_env_key, _reservation)
             raise
         except asyncio.TimeoutError as _to_err:
             elapsed = _t.monotonic() - _dispatch_started
