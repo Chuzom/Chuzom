@@ -584,11 +584,15 @@ async def llm_dashboard(port: int = 7337) -> str:
 async def llm_savings() -> str:
     """Show time-bucketed savings dashboard: today / this week / this month / all-time.
 
-    Displays actual spend vs Sonnet baseline and the efficiency multiplier (Nx)
-    for each period. Use this to understand the real dollar value routing provides.
+    Reports TWO figures per the honest-accounting fix (RETROSPECTIVE B-7):
+      - Avoided (Opus-baseline): what the latest Opus host would have cost for the
+        same tokens minus actual spend. This is a quota/token-smoothing figure.
+      - Real $ avoided: dollars the user would ACTUALLY have paid absent routing —
+        ~$0 on a flat-rate Claude Code subscription, the full baseline in metered
+        API mode (CHUZOM_CLAUDE_SUBSCRIPTION).
 
     Returns:
-        Formatted savings table with efficiency multiplier.
+        Formatted savings table with both figures and the efficiency multiplier.
     """
     from chuzom.cost import get_savings_by_period
 
@@ -614,29 +618,36 @@ async def llm_savings() -> str:
         ("all_time", "All time"),
     ]
 
-    lines.append(section("SAVINGS vs SONNET BASELINE"))
-    lines.append(row(f"  {'Period':<12}  {'Saved':>8}  {'Actual':>8}  {'Baseline':>9}  {'Eff':>5}"))
+    lines.append(section("AVOIDED vs OPUS BASELINE"))
+    lines.append(row(f"  {'Period':<10}  {'Avoided':>8}  {'Real $':>7}  {'Actual':>8}  {'Eff':>5}"))
     lines.append(row("  " + "-" * 52))
 
     best_efficiency = 0.0
     for key, label in period_labels:
         d = data.get(key, {})
-        saved = d.get("saved_usd", 0.0)
+        avoided = d.get("baseline_avoided_usd", d.get("saved_usd", 0.0))
+        real = d.get("real_dollars_avoided_usd", 0.0)
         actual = d.get("actual_usd", 0.0)
-        baseline = d.get("baseline_usd", 0.0)
         eff = d.get("efficiency", 0.0)
         best_efficiency = max(best_efficiency, eff)
         eff_str = f"{eff:.1f}x" if eff >= 1.0 else "—"
         lines.append(row(
-            f"  {label:<12}  ${saved:>7.2f}  ${actual:>7.4f}  ${baseline:>8.2f}  {eff_str:>5}"
+            f"  {label:<10}  ${avoided:>7.2f}  ${real:>6.2f}  ${actual:>7.4f}  {eff_str:>5}"
         ))
 
     lines.append(HR)
 
-    # Highlight the "wow" metric
+    from chuzom.cost import _host_is_metered
+    if _host_is_metered():
+        lines.append(row("  Real $ = billed API rate avoided (metered mode)."))
+    else:
+        lines.append(row("  Real $ ≈ $0: flat-rate subscription — 'Avoided' is a"))
+        lines.append(row("  quota/token figure, not cash. See RETROSPECTIVE B-7."))
+
+    # Highlight the "wow" metric — honestly framed
     if best_efficiency >= 2.0:
-        lines.append(section(f"YOUR AI IS {best_efficiency:.1f}x MORE COST-EFFICIENT"))
-        lines.append(row("  than using Sonnet for every request."))
+        lines.append(section(f"{best_efficiency:.1f}x FEWER TOKENS BILLED AT OPUS RATES"))
+        lines.append(row("  vs sending every request to Opus."))
     elif data.get("all_time", {}).get("calls", 0) == 0:
         lines.append(row("  No routed calls yet. Run a few prompts to see savings."))
 

@@ -1,0 +1,5 @@
+{"turn": 1, "prompt": "Read src/chuzom/router.py and explain the premium gate.", "route": "host", "note": "local file read -> DIRECT SKIP"}
+{"turn": 2, "prompt": "Classify the severity of this diff hunk (paste): ...", "route": "routed_local", "provider": "ollama", "model": "ollama/qwen3-coder:30b", "input_tokens": 1500, "output_tokens": 400, "cost_usd": 0.0, "note": "stateless judgement with context passed in -> routable"}
+{"turn": 3, "prompt": "[subagent] Review the auth module for injection bugs.", "route": "routed_local", "provider": "ollama", "model": "ollama/qwen3-coder:30b", "input_tokens": 2000, "output_tokens": 1200, "cost_usd": 0.0, "host": "claude_code_subagent", "note": "subagent body routed to cheap model"}
+{"turn": 4, "prompt": "[subagent] Summarize the test failures from CI log below.", "route": "routed_paid", "provider": "gemini", "model": "gemini/gemini-2.0-pro", "input_tokens": 3000, "output_tokens": 800, "cost_usd": 0.004, "host": "claude_code_subagent_cli"}
+{"turn": 5, "prompt": "Now apply the fixes to the three files and run the suite.", "route": "host", "note": "local edits + run -> DIRECT SKIP"}

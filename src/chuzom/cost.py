@@ -2584,17 +2584,88 @@ async def get_model_latency_stats(window_days: int = 7) -> dict[str, dict]:
 
 
 # ── Cost baseline models and pricing (used for savings calculations) ────────
-# These constants define the reference models used to calculate cost savings.
-# All savings are calculated relative to these baseline costs.
+# The savings baseline is the HOST model: what the user's Claude Code
+# subscription would have charged for the same tokens if the work had NOT been
+# routed. That host model is the latest Opus. Keep the model id and its price in
+# ONE place (LATEST_OPUS_MODEL + _OPUS_PRICING) so a new Opus release or price
+# change updates a single source of truth instead of drifting a hardcoded
+# literal.
+#
+# History: the previous constants were $15/$75 labelled "Opus 4.6" — wrong on
+# two axes. (1) The version was frozen and silently stale as newer Opus models
+# shipped. (2) The *price* was ~3x too high: $15/$75 was the retired
+# Opus-4.1-and-earlier tier; Opus 4.5 onward (incl. 4.6/4.7/4.8) is $5/$25 per
+# million tokens. Every historical `saved_usd` was therefore ~3x inflated.
 
-BASELINE_MODEL_FOR_SAVINGS = "sonnet"  # Baseline: Sonnet 4.6 ($3/$15 per M tokens)
-"""Reference model for savings calculations. All savings = Opus cost - actual cost.
-Opus is the baseline: it's the host model on Claude Code subscription."""
+LATEST_OPUS_MODEL = "claude-opus-4-8"
+"""The current host/baseline Opus model. Bump when a newer Opus ships."""
 
-_HOST_INPUT_PER_M = 15.0      # $15 per million input tokens (Opus 4.6)
-_HOST_OUTPUT_PER_M = 75.0     # $75 per million output tokens (Opus 4.6)
+# Opus per-million-token pricing (input, output) in USD, from the Claude model
+# catalog. Opus 4.5+ is $5/$25. Extend as new Opus models release; the values
+# can also be refreshed at runtime via refresh_baseline_pricing_from_api().
+_OPUS_PRICING: dict[str, tuple[float, float]] = {
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-6": (5.0, 25.0),
+    "claude-opus-4-5": (5.0, 25.0),
+}
+
+BASELINE_MODEL_FOR_SAVINGS = LATEST_OPUS_MODEL
+"""Reference model for savings. All savings = host Opus cost - actual routed
+cost; the host model is the latest Opus (Claude Code subscription)."""
+
+_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = _OPUS_PRICING[LATEST_OPUS_MODEL]
+"""Baseline per-million-token rates ($/M) for the latest Opus, derived from
+_OPUS_PRICING so there is a single source of truth (was a hardcoded $15/$75)."""
+
 _FREE_PROVIDERS = {"ollama", "codex", "gemini_cli"}
 """Providers that incur zero cost (local or included in subscription)."""
+
+
+def _host_is_metered() -> bool:
+    """True when the host (baseline) model is billed per-token — i.e. the user is
+    on the metered API rather than a flat-rate Claude Code subscription.
+
+    On a subscription the marginal cost of a host Opus call is ~$0 until the quota
+    cap is hit, so the *real dollars* avoided by routing is ~$0 even though the
+    Opus-baseline "avoided" figure is large. This env-driven flag lets the
+    savings surfaces report an honest cash number beside the baseline figure.
+    Defaults to False (subscription) — the common case and the conservative one
+    for a dollar claim (never claim cash we can't prove). Metered is returned
+    ONLY when the subscription flag is explicitly turned off. See RETROSPECTIVE
+    B-7 / M-2.
+    """
+    val = os.environ.get("CHUZOM_CLAUDE_SUBSCRIPTION", "").strip().lower()
+    if val in ("0", "false", "no", "off"):
+        return True   # explicitly metered API mode
+    return False      # subscription (explicit true/on, or absent/unknown)
+
+
+def refresh_baseline_pricing_from_api() -> bool:
+    """Best-effort refresh of the latest-Opus baseline price from the Models API.
+
+    Optional and never called at import — the hardcoded ``_OPUS_PRICING`` map is
+    the offline source of truth. When credentials and network are available this
+    updates ``_HOST_INPUT_PER_M`` / ``_HOST_OUTPUT_PER_M`` for
+    ``LATEST_OPUS_MODEL`` so a mid-cycle price change is picked up without a code
+    edit. Returns True on success, False (leaving the hardcoded values intact) on
+    any failure.
+    """
+    global _HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M
+    try:
+        import anthropic
+
+        model = anthropic.Anthropic().models.retrieve(LATEST_OPUS_MODEL)
+        pricing = getattr(model, "pricing", None) or {}
+        in_pm = pricing.get("input_per_mtok")
+        out_pm = pricing.get("output_per_mtok")
+        if in_pm and out_pm:
+            _HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = float(in_pm), float(out_pm)
+            _OPUS_PRICING[LATEST_OPUS_MODEL] = (_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M)
+            return True
+    except Exception:
+        pass
+    return False
 
 
 async def get_savings_by_period() -> dict[str, dict]:
@@ -2644,7 +2715,8 @@ async def get_savings_by_period() -> dict[str, dict]:
                     continue  # CC subscription rows have no token cost data
                 # Always recalculate from actual in/out counts at Opus rates.
                 # Stored saved_col used a blended $0.045/1K estimate; accurate
-                # pricing requires separate input ($15/M) and output ($75/M) rates.
+                # pricing requires separate input/output rates ($5/M and $25/M
+                # for the latest Opus — see _OPUS_PRICING).
                 host_est = (in_tok * _HOST_INPUT_PER_M + out_tok * _HOST_OUTPUT_PER_M) / 1_000_000
                 baseline += host_est
                 if provider in _FREE_PROVIDERS:
@@ -2654,8 +2726,16 @@ async def get_savings_by_period() -> dict[str, dict]:
                     saved_total += max(0.0, host_est - cost)
 
             efficiency = baseline / actual if actual > 0.001 else 0.0
+            # RETROSPECTIVE B-7: report two figures, never conflated.
+            #  - baseline_avoided_usd: Opus-baseline vs actual (== legacy saved_usd).
+            #  - real_dollars_avoided_usd: dollars the user would ACTUALLY have paid.
+            #    ~$0 on a flat-rate subscription (host call is marginal-$0); equals
+            #    the baseline figure only in metered API mode.
+            real_avoided = saved_total if _host_is_metered() else 0.0
             result[name] = {
-                "saved_usd": round(saved_total, 4),
+                "saved_usd": round(saved_total, 4),  # back-compat alias
+                "baseline_avoided_usd": round(saved_total, 4),
+                "real_dollars_avoided_usd": round(real_avoided, 4),
                 "actual_usd": round(actual, 4),
                 "baseline_usd": round(baseline, 4),
                 "calls": calls,
@@ -2837,10 +2917,14 @@ async def get_team_savings(
 
 
 async def get_routing_savings_vs_sonnet(days: int = 0) -> dict:
-    """Compute savings by comparing actual cost vs Opus 4.6 baseline.
+    """Compute savings by comparing actual cost vs the latest-Opus host baseline.
 
     Uses the routing_decisions table (populated by the router on every call).
-    Savings = what Sonnet would have cost − what we actually paid.
+    Savings = what the host Opus model would have cost − what we actually paid.
+
+    NOTE: the ``_vs_sonnet`` name is historical and misleading — the baseline is
+    the latest Opus (``LATEST_OPUS_MODEL``), never Sonnet. Rename is deferred to
+    avoid breaking callers; see RETROSPECTIVE B-8.
 
     Args:
         days: Look-back window. 0 = all time.

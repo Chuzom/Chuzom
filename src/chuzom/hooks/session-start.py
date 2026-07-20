@@ -44,8 +44,14 @@ SESSION_SPEND_FILE     = os.path.join(STATE_DIR, "session_spend.json")
 DB_PATH                = os.path.join(STATE_DIR, "usage.db")
 WEEKLY_DIGEST_FILE     = os.path.join(STATE_DIR, "last_weekly_digest.txt")
 
-_SONNET_IN_PER_M  = 3.0
-_SONNET_OUT_PER_M = 15.0
+# Savings baseline = the latest-Opus host rate, the SAME source of truth as
+# cost._OPUS_PRICING / receipt_store / savings_logger. This banner previously
+# priced against Sonnet ($3/$15) while every other surface used Opus, so its
+# "saved last 7 days" figure disagreed with the llm_savings weekly bucket
+# (RETROSPECTIVE B-6). Resolved lazily at use-site (see _weekly_digest) to keep
+# this hook import-light; the fallback below is the current Opus rate.
+_HOST_IN_PER_M_FALLBACK  = 5.0
+_HOST_OUT_PER_M_FALLBACK = 25.0
 _FREE_PROVIDERS   = {"ollama", "codex", "gemini_cli"}
 
 # ── .env loader ───────────────────────────────────────────────────────────────
@@ -621,13 +627,25 @@ def _weekly_digest() -> str:
         ).fetchall()
         conn.close()
 
+        # Resolve the Opus host baseline from the single source of truth; fall
+        # back to the current rate if cost isn't importable in this hook context.
+        try:
+            from chuzom.cost import (
+                _HOST_INPUT_PER_M as _host_in,
+                _HOST_OUTPUT_PER_M as _host_out,
+            )
+        except Exception:
+            _host_in, _host_out = _HOST_IN_PER_M_FALLBACK, _HOST_OUT_PER_M_FALLBACK
+
         calls = total_in = total_out = 0
         saved = 0.0
         for provider, cnt, in_tok, out_tok, cost in rows:
             calls     += cnt
             total_in  += in_tok
             total_out += out_tok
-            baseline   = (in_tok * _SONNET_IN_PER_M + out_tok * _SONNET_OUT_PER_M) / 1_000_000
+            # Same free/subscription logic as cost.get_savings_by_period so the
+            # weekly digest and llm_savings agree for the 7-day window.
+            baseline   = (in_tok * _host_in + out_tok * _host_out) / 1_000_000
             if provider in _FREE_PROVIDERS:
                 saved += baseline
             elif provider != "subscription":

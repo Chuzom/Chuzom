@@ -78,8 +78,9 @@ _PRICING_PER_MTOK: dict[tuple[str, str], tuple[float, float]] = {
 # the counterfactual is always claude-opus-4-8 regardless of complexity. The
 # earlier complexity-tiered ("honest") baseline was dropped because routing
 # baseline comparison doesn't reflect how the user actually works. This keeps
-# the inline DIRECT-hook path consistent with receipt_store.compute_receipt,
-# which already prices savings against Opus ($15/$75 per 1M).
+# the inline DIRECT-hook path consistent with receipt_store.compute_receipt and
+# cost._OPUS_PRICING, which price savings against Opus at $5/$25 per 1M (the
+# current rate — the stale $15/$75 tier inflated reported savings ~3x).
 _BASELINE_MODEL_BY_COMPLEXITY: dict[str, str] = {
     "simple":   "claude-opus-4-8",
     "moderate": "claude-opus-4-8",
@@ -106,7 +107,10 @@ def _cost_for(provider: str, model: str, input_tokens: int, output_tokens: int) 
 
 
 def _baseline_cost(complexity: str, input_tokens: int, output_tokens: int) -> float:
-    baseline_model = _BASELINE_MODEL_BY_COMPLEXITY.get(complexity, "claude-sonnet-5")
+    # Fallback default is the latest Opus (the "always Opus-equivalent" decision
+    # above), not Sonnet — an unknown complexity string must not silently switch
+    # the baseline model and understate savings.
+    baseline_model = _BASELINE_MODEL_BY_COMPLEXITY.get(complexity, "claude-opus-4-8")
     return _cost_for("claude", baseline_model, input_tokens, output_tokens)
 
 
