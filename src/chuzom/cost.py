@@ -2655,7 +2655,8 @@ def refresh_baseline_pricing_from_api() -> bool:
     try:
         import anthropic
 
-        model = anthropic.Anthropic().models.retrieve(LATEST_OPUS_MODEL)
+        # Models API metadata/pricing lookup, not a routed LLM completion.
+        model = anthropic.Anthropic().models.retrieve(LATEST_OPUS_MODEL)  # chuzom: direct-ok
         pricing = getattr(model, "pricing", None) or {}
         in_pm = pricing.get("input_per_mtok")
         out_pm = pricing.get("output_per_mtok")
