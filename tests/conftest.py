@@ -449,6 +449,43 @@ def _reset_health_tracker():
 
 
 @pytest.fixture(autouse=True)
+def _reset_ollama_isolation():
+    """Isolate Ollama-reachability state so provider-availability tests are stable.
+
+    Two independent process-lifetime leaks made TestOllamaProviderInclusion /
+    TestAvailableProviders flaky on a box that actually runs Ollama:
+
+    1. ``config._ollama_reachable_cache`` / ``_pxpipe_reachable_cache`` — 60s-TTL
+       module caches monkeypatch can't restore.
+    2. Ambient ``OLLAMA_BASE_URL`` / ``OLLAMA_URL`` in ``os.environ``.
+       ``effective_ollama_base_url`` reads these *directly* (not via the config
+       field), so a value inherited from the developer's shell/.env — or leaked
+       by another test — makes ``RouterConfig(ollama_base_url="")`` still resolve
+       to a live endpoint and pull "ollama" into ``available_providers``.
+
+    Clearing the ambient vars is correct isolation: tests that need Ollama set the
+    URL themselves via monkeypatch inside the test body (which runs after this
+    fixture), so they are unaffected; tests asserting exclusion get a clean slate.
+    Snapshot/restore keeps the real environment intact for the process.
+    """
+    import os
+
+    import chuzom.config as config_module
+
+    saved = {k: os.environ.pop(k, None) for k in ("OLLAMA_BASE_URL", "OLLAMA_URL")}
+    config_module._ollama_reachable_cache = None
+    config_module._pxpipe_reachable_cache = None
+    try:
+        yield
+    finally:
+        config_module._ollama_reachable_cache = None
+        config_module._pxpipe_reachable_cache = None
+        for k, v in saved.items():
+            if v is not None:
+                os.environ[k] = v
+
+
+@pytest.fixture(autouse=True)
 def _reset_quality_store():
     """Reset the module-global quality-feedback store before and after each test.
 

@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased — Savings integrity: correct + unify the savings baseline, add an honest dollar figure
+
+Prompted by the 2026-07-20 routing retrospective. Multiple savings surfaces used
+different windows, labels, baseline **models**, and baseline **prices**, so their
+reported numbers disagreed by an order of magnitude. Full write-up:
+`docs/savings-integrity-corrections.md`.
+
+> ⚠️ **Reported savings numbers change.** The baseline price was ~3× too high, so
+> historical `saved_usd` was ~3× inflated; the corrected figures are lower. This is
+> the fix, not a regression. Free-local savings on a flat-rate subscription now also
+> report `real_dollars_avoided_usd ≈ $0` beside the (unchanged-in-meaning but
+> renamed) baseline-avoided figure.
+
+### Baseline correctness (B-8)
+- **Opus baseline corrected to $5/$25 and de-staled.** `cost.py` priced the host
+  baseline at `$15/$75` labelled "Opus 4.6" — both frozen to a stale version and
+  ~3× above the real Opus price (Opus 4.5+ is $5/$25). Now resolved from a single
+  `LATEST_OPUS_MODEL` + `_OPUS_PRICING` source of truth (optionally refreshable via
+  the Models API), so a future Opus release updates one place. The dead/misleading
+  `BASELINE_MODEL_FOR_SAVINGS = "sonnet"` constant is repointed to the latest Opus.
+
+### Surface reconciliation (B-6)
+- **One baseline everywhere.** The SessionStart weekly digest priced against
+  **Sonnet** (`_SONNET_*_PER_M`) while every other surface used Opus; it now sources
+  the same latest-Opus rate.
+- **Fixed the all-time-as-weekly mislabel.** SessionEnd summed the **all-time**
+  savings row but printed `"saved this week"`; it now reads the weekly bucket.
+- **Truthful window labels.** "Last 7 days" (rolling, banners) and "this week"
+  (calendar, dashboard) are distinct-by-design and each labelled accordingly —
+  forcing byte-identity would break `today ≤ week ≤ month` nesting.
+- **Dashboard relabelled.** `llm_savings` no longer says "vs SONNET BASELINE" /
+  "than using Sonnet" while computing against Opus.
+
+### Honest dollar accounting (B-7)
+- **Two figures, never conflated.** `baseline_avoided_usd` (Opus-baseline vs
+  actual — a quota/token-smoothing story) and `real_dollars_avoided_usd` (dollars
+  the user would actually have paid: ~$0 on a flat-rate subscription, the full
+  baseline only in metered API mode, keyed on `CHUZOM_CLAUDE_SUBSCRIPTION`).
+  Surfaced in `llm_savings`, `SessionSpend.get_summary`, and `get_savings_by_period`.
+
+### Tests & offline experiment suite
+- Red→green characterization tests: `test_baseline_price`,
+  `test_real_dollars_avoided`, `test_savings_surface_reconciliation`,
+  `test_baseline_is_labeled`, `test_subagent_routing_credited`.
+- New deterministic, offline `bench/experiments` harness (`python -m
+  bench.experiments`) replays three realistic session shapes through the real
+  savings code and checks reconciliation, a counterfactual dollar model, and
+  property invariants — the reproducible replacement for the retro's contradictory
+  hand-math. Runs in CI via `test_bench_experiments`.
+
 ## v0.8.5 — 2026-07-17 — Self-audit remediation: observability, research-trust, benchmark keystone, subscription-only harness fixes
 
 A remediation release from a full self-audit plus a live-reproduced MCP-generation bug

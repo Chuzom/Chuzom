@@ -1804,11 +1804,16 @@ def main() -> None:
             gemini_quota_pct = 0.0  # Placeholder for future Gemini integration
             claude_remaining = current.get("session_resets_at", "Unknown") if current else "Unknown"
 
-            # If we have lifetime savings, show estimated quota impact
+            # If the session reset time is unknown, fall back to showing weekly
+            # savings. Pull the "this week" bucket and label it truthfully.
+            # Previously this summed the "all time" row but printed "saved this
+            # week" — the mislabel that made the SessionEnd figure disagree with
+            # the llm_savings weekly bucket by the lifetime/weekly ratio
+            # (RETROSPECTIVE B-6). Value and label must name the same window.
             if not claude_remaining or claude_remaining == "Unknown":
-                lifetime_saved = sum(d[4] for d in cumulative if d[0] == "all time")
-                if lifetime_saved > 0:
-                    claude_remaining = f"~{lifetime_saved:.2f} USD saved this week"
+                weekly_saved = sum(d[4] for d in cumulative if d[0] == "this week")
+                if weekly_saved > 0:
+                    claude_remaining = f"~{weekly_saved:.2f} USD saved this week"
 
             gemini_remaining = "Unknown"
 

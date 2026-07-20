@@ -1,0 +1,5 @@
+{"turn": 1, "prompt": "Audit /Users/dev/git/planning-ai-mono for dead code; write docs/TECH_BACKLOG.md. Start with git log --since=90d.", "route": "host", "note": "context-dependent absolute paths -> DIRECT SKIP, host handles it"}
+{"turn": 2, "prompt": "Run bazel query 'deps(//services/api:server)' and summarize the transitive graph.", "route": "host", "note": "repo-local tool invocation -> DIRECT SKIP"}
+{"turn": 3, "prompt": "grep -rn 'TODO(perf)' src/ and rank the hits by blast radius.", "route": "host", "note": "local grep -> DIRECT SKIP"}
+{"turn": 4, "prompt": "Given the vulture output above, classify each unused symbol as safe-delete / keep / needs-review.", "route": "host", "note": "references prior tool output -> DIRECT SKIP"}
+{"turn": 5, "prompt": "Open the three files with the worst cyclomatic complexity and propose refactors.", "route": "host", "note": "local file edits -> DIRECT SKIP"}

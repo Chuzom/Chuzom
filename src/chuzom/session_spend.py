@@ -285,8 +285,42 @@ class SessionSpend:
 
     @property
     def net_savings_usd(self) -> float:
-        """Real money preserved: what Opus would have cost minus actual spend."""
+        """Opus-baseline avoided: what Opus would have cost minus actual spend.
+
+        NOTE: this is the *baseline-avoided* figure, NOT dollars the user would
+        actually have paid. On a flat-rate Claude Code subscription the marginal
+        cost of the host (Opus) call is ~$0, so this over-states real dollars.
+        Use ``real_dollars_avoided_usd`` for the honest cash figure. Kept under
+        this name for back-compat; ``baseline_avoided_usd`` is the clearer alias.
+        See RETROSPECTIVE B-7.
+        """
         return max(0.0, self.opus_equivalent_usd - self.total_usd)
+
+    @property
+    def baseline_avoided_usd(self) -> float:
+        """Clear alias for ``net_savings_usd`` — the Opus-baseline-avoided figure."""
+        return self.net_savings_usd
+
+    @property
+    def real_dollars_avoided_usd(self) -> float:
+        """Dollars the user would ACTUALLY have paid absent routing.
+
+        ~$0 on a flat-rate subscription (the host call is marginal-$0 until the
+        quota cap); equals the baseline-avoided figure only in metered API mode,
+        where the host Opus call really would have been billed. The
+        subscription-vs-metered distinction comes from ``CHUZOM_CLAUDE_SUBSCRIPTION``
+        (see ``cost._host_is_metered``). This is the honest counterfactual for a
+        subscription user; over-the-cap overage is modelled by the counterfactual
+        simulator (bench/experiments), not attributable per-row here.
+        RETROSPECTIVE B-7 / M-2.
+        """
+        try:
+            from chuzom.cost import _host_is_metered
+
+            metered = _host_is_metered()
+        except Exception:
+            metered = False
+        return self.net_savings_usd if metered else 0.0
 
     @property
     def potential_savings_usd(self) -> float:
@@ -358,6 +392,9 @@ class SessionSpend:
             "tokens_reclaimed": self.tokens_reclaimed,
             "opus_equivalent_usd": round(self.opus_equivalent_usd, 6),
             "net_savings_usd": round(self.net_savings_usd, 6),
+            # RETROSPECTIVE B-7: two clearly-labelled figures, never conflated.
+            "baseline_avoided_usd": round(self.baseline_avoided_usd, 6),
+            "real_dollars_avoided_usd": round(self.real_dollars_avoided_usd, 6),
             "extension_minutes": round(self.extension_minutes, 1),
             "gate_pass_rate": round(self.gate_pass_rate, 1),
             "gates_passed": self.gates_passed,

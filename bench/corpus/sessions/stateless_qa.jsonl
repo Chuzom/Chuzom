@@ -1,0 +1,5 @@
+{"turn": 1, "prompt": "What is the difference between a B-tree and an LSM-tree index?", "route": "routed_local", "provider": "ollama", "model": "ollama/qwen3-coder:30b", "input_tokens": 900, "output_tokens": 1800, "cost_usd": 0.0}
+{"turn": 2, "prompt": "Summarize the CAP theorem in three sentences.", "route": "routed_local", "provider": "ollama", "model": "ollama/qwen3-coder:30b", "input_tokens": 600, "output_tokens": 700, "cost_usd": 0.0}
+{"turn": 3, "prompt": "Write a haiku about idempotency.", "route": "routed_local", "provider": "gemini_cli", "model": "gemini/gemini-2.5-flash", "input_tokens": 200, "output_tokens": 120, "cost_usd": 0.0}
+{"turn": 4, "prompt": "Research current best practices for Postgres connection pooling.", "route": "routed_paid", "provider": "openai", "model": "gpt-4o", "input_tokens": 1200, "output_tokens": 2400, "cost_usd": 0.03}
+{"turn": 5, "prompt": "Explain what an LLM router does in one paragraph.", "route": "routed_local", "provider": "ollama", "model": "ollama/qwen3-coder:30b", "input_tokens": 500, "output_tokens": 900, "cost_usd": 0.0}
