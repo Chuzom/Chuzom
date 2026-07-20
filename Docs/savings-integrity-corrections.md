@@ -32,7 +32,7 @@ baseline **prices**, so they disagreed by an order of magnitude.
 - **"Subagents can't be routed, only gated" is false.** The DIRECT/CLI subagent
   paths route subagent bodies onto cheap models and log savings
   (`hooks/savings_logger.log_direct_savings(..., host="claude_code_subagent")`).
-  The open question is only whether it *fires* and is *credited* — proven by
+  The open question is only whether it *fires* and is *credited* — verified by
   `tests/test_subagent_routing_credited.py` — not whether it is possible.
 - **Persisted `agent_depth` is largely a non-issue.** Depth files are per-session
   (`agent_depth_<session>.json`) and decremented by a PostToolUse release hook, so
@@ -71,7 +71,7 @@ to `read_base_drift` or `tests/test_base_drift.py`.
   `tests/test_bench_experiments.py`.
 
 The experiment scorecard makes the thesis concrete: the local-audit shape saves
-$0 (100% DIRECT-SKIP — correct); the stateless-Q&A shape shows a positive
+$0 (every turn DIRECT-SKIP — correct); the stateless-Q&A shape shows a positive
 baseline-avoided figure but **$0 real dollars on a subscription**, positive only
 in metered mode or over the quota cap.
 
