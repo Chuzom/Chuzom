@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Savings integrity: correct + unify the savings baseline, add an honest dollar figure
+## v0.8.6 — 2026-07-20 — Savings integrity: correct + unify the savings baseline, add an honest dollar figure
 
 Prompted by the 2026-07-20 routing retrospective. Multiple savings surfaces used
 different windows, labels, baseline **models**, and baseline **prices**, so their
