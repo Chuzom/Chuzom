@@ -11,8 +11,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from chuzom.hooks.direct_executor import (
     ModelSpec,
+    available_ollama_models,
     execute_chain,
     quality_ok,
 )
@@ -44,6 +47,16 @@ class TestQualityGate:
 # ── Chain Execution ──────────────────────────────────────────────────────────
 
 class TestExecuteChain:
+    @pytest.fixture(autouse=True)
+    def _stub_ollama_tags(self):
+        """Pin the /api/tags model set so these chain tests never touch a real
+        Ollama on the host (§2.4 added a live tag lookup to execute_chain)."""
+        with patch(
+            "chuzom.hooks.direct_executor.available_ollama_models",
+            return_value={"qwen3.5", "qwen3.5:latest"},
+        ):
+            yield
+
     def test_skips_claude_models(self):
         """Claude models in chain should be skipped (can't call from hook)."""
         chain = [
@@ -114,3 +127,139 @@ class TestExecuteChain:
         chain = [ModelSpec("unknown_provider", "some-model")]
         result = execute_chain("hello", chain, "query")
         assert result is None
+
+
+# ── §2.4: model-availability gating against /api/tags ─────────────────────────
+
+class TestOllamaAvailabilityGate:
+    """Audit §2.4: a model absent from /api/tags must NOT be called.
+
+    Previously execute_chain only checked Ollama *reachability* (ollama_is_alive),
+    so it would POST /api/chat with qwen3.5:latest even when the box only had
+    qwen2.5:7b — Ollama 404s and the turn silently falls through to Claude.
+    """
+
+    def test_uninstalled_model_is_skipped_not_called(self):
+        chain = [ModelSpec("ollama", "qwen3.5:latest")]
+        called = {"ollama": False}
+
+        def _spy_call(*_a, **_k):
+            called["ollama"] = True
+            return ("should not be reached", {})
+
+        with patch(
+            "chuzom.hooks.direct_executor.available_ollama_models",
+            return_value={"qwen2.5:7b", "llama3.2:3b"},  # requested model absent
+        ), patch("chuzom.hooks.direct_executor.call_ollama", side_effect=_spy_call):
+            result = execute_chain("hello", chain, "query")
+
+        assert result is None, "chain must fall through when the model is not pulled"
+        assert called["ollama"] is False, "must not POST /api/chat to a missing model"
+
+    def test_installed_model_is_called(self):
+        chain = [ModelSpec("ollama", "qwen3.5:latest")]
+        with patch(
+            "chuzom.hooks.direct_executor.available_ollama_models",
+            return_value={"qwen3.5:latest"},  # requested model present
+        ), patch(
+            "chuzom.hooks.direct_executor.call_ollama",
+            return_value=("Paris is the capital of France.", {}),
+        ):
+            result = execute_chain("hello", chain, "query")
+        assert result is not None
+        assert result.model.model == "qwen3.5:latest"
+
+    def test_falls_back_to_reachability_when_tags_unavailable(self):
+        """If /api/tags can't be enumerated (None), keep prior behavior: try it."""
+        chain = [ModelSpec("ollama", "qwen3.5")]
+        with patch(
+            "chuzom.hooks.direct_executor.available_ollama_models",
+            return_value=None,  # enumeration failed
+        ), patch(
+            "chuzom.hooks.direct_executor.ollama_is_alive", return_value=True
+        ), patch(
+            "chuzom.hooks.direct_executor.call_ollama",
+            return_value=("Paris is the capital.", {}),
+        ):
+            result = execute_chain("hello", chain, "query")
+        assert result is not None
+
+    def test_available_models_parses_tags_payload(self):
+        """available_ollama_models returns the set of installed names, or None."""
+        import json as _json
+        from unittest.mock import MagicMock
+
+        payload = _json.dumps(
+            {"models": [{"name": "qwen2.5:7b"}, {"name": "llama3.2:3b"}]}
+        ).encode()
+        resp = MagicMock()
+        resp.read.return_value = payload
+        resp.__enter__.return_value = resp
+        with patch("urllib.request.urlopen", return_value=resp):
+            got = available_ollama_models()
+        assert got == {"qwen2.5:7b", "llama3.2:3b"}
+
+    def test_available_models_returns_none_on_error(self):
+        with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+            assert available_ollama_models() is None
+
+    def test_bare_name_resolves_to_latest_tag(self):
+        """A bare request (no :tag) matches an installed :latest tag."""
+        chain = [ModelSpec("ollama", "scenario-model")]  # no explicit tag
+        with patch(
+            "chuzom.hooks.direct_executor.available_ollama_models",
+            return_value={"scenario-model:latest"},  # only :latest pulled
+        ), patch(
+            "chuzom.hooks.direct_executor.call_ollama",
+            return_value=("An answer.", {}),
+        ):
+            result = execute_chain("hi", chain, "query")
+        assert result is not None, "bare name must resolve to the :latest tag"
+
+    def test_explicit_wrong_tag_is_not_available(self):
+        """An explicit :tag that isn't pulled must NOT match a different tag."""
+        from chuzom.hooks.direct_executor import _ollama_model_available
+        assert _ollama_model_available("qwen2.5:latest", {"qwen2.5:7b"}) is False
+        assert _ollama_model_available("qwen2.5:7b", {"qwen2.5:7b"}) is True
+
+
+# ── §2.5: conversation history reaches the routed model ───────────────────────
+
+class TestConversationHistory:
+    """Audit §2.5: routed calls were stateless (n_msgs=2). When history is
+    supplied it must be threaded into the provider payload so bypassed,
+    context-dependent turns aren't answered blind."""
+
+    def test_history_included_in_chat_messages(self):
+        from chuzom.hooks.direct_executor import _chat_messages
+        history = [
+            {"role": "user", "content": "my project is called Zephyr"},
+            {"role": "assistant", "content": "Got it, Zephyr."},
+        ]
+        messages = _chat_messages("current question", history)
+        roles = [m["role"] for m in messages]
+        # system, then the two history turns, then the current user prompt
+        assert roles == ["system", "user", "assistant", "user"]
+        assert messages[1]["content"] == "my project is called Zephyr"
+        assert messages[-1]["content"] == "current question"
+
+    def test_no_history_keeps_two_message_shape(self):
+        from chuzom.hooks.direct_executor import _chat_messages
+        roles = [m["role"] for m in _chat_messages("q", None)]
+        assert roles == ["system", "user"]  # unchanged default (backward compatible)
+
+    def test_execute_chain_forwards_history(self):
+        chain = [ModelSpec("ollama", "qwen2.5:7b")]
+        seen = {}
+
+        def _spy(prompt, model, timeout, history=None):
+            seen["history"] = history
+            return ("Paris is the capital of France.", {})
+
+        with patch(
+            "chuzom.hooks.direct_executor.available_ollama_models",
+            return_value={"qwen2.5:7b"},
+        ), patch("chuzom.hooks.direct_executor.call_ollama", side_effect=_spy):
+            execute_chain("hello", chain, "query",
+                          history=[{"role": "user", "content": "earlier"}])
+        assert seen["history"] == [{"role": "user", "content": "earlier"}]

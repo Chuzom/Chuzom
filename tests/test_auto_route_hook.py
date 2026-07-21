@@ -348,13 +348,16 @@ class TestZeroClaudeMode:
         assert out is not None
         assert out["decision"] == "block"
 
-    def test_whitespace_prompt_is_ignored_in_strict_mode(self):
+    def test_whitespace_prompt_blocks_in_strict_mode(self):
+        # Audit T10 (§2.3/§3.10c): a whitespace-only prompt must NOT slip through
+        # to a native Claude turn under zero-Claude — it fails closed (block).
         out = run_hook(
             "  \n\t  ",
             session_id="zero-whitespace",
             extra_env={"CHUZOM_ZERO_CLAUDE": "true"},
         )
-        assert out is None
+        assert out is not None
+        assert out["decision"] == "block"
 
     def test_routing_yaml_enables_strict_mode(self, tmp_path):
         router_dir = tmp_path / ".chuzom"

@@ -16,6 +16,9 @@ import time
 import urllib.request
 from dataclasses import dataclass
 
+# Sentinel distinguishing "tag list not yet fetched" from None ("fetch failed").
+_UNSET: set = object()  # type: ignore[assignment]
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -75,14 +78,59 @@ def ollama_is_alive(timeout: float = 0.5) -> bool:
         return False
 
 
-def call_ollama(prompt: str, model: str, timeout: int = 4) -> str | None:
+def available_ollama_models(timeout: float = 0.5) -> set[str] | None:
+    """Return the set of model names Ollama serves, via ``GET /api/tags``.
+
+    Returns ``None`` when the tag list cannot be enumerated (Ollama unreachable
+    or a malformed response) — distinct from an empty set (Ollama up, nothing
+    pulled). Callers use this to avoid selecting a model that would 404 and
+    silently fall the turn through to Claude (audit §2.4).
+    """
+    try:
+        ollama_url = _get_ollama_url()
+        req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — localhost only
+            data = json.loads(resp.read())
+        return {m.get("name", "") for m in data.get("models", []) if m.get("name")}
+    except Exception:
+        return None
+
+
+def _ollama_model_available(model: str, installed: set[str]) -> bool:
+    """True if Ollama can serve ``model`` given the installed tag set.
+
+    Mirrors Ollama's own default-tag resolution: a bare name (no ``:tag``)
+    resolves to ``<name>:latest``. An explicit tag must match exactly — e.g.
+    requesting ``qwen2.5:latest`` when only ``qwen2.5:7b`` is pulled still 404s,
+    so we must not treat that as available (audit §2.4).
+    """
+    if model in installed:
+        return True
+    if ":" not in model:
+        return f"{model}:latest" in installed
+    return False
+
+
+def _chat_messages(prompt: str, history: list[dict] | None) -> list[dict]:
+    """Assemble [system, *history, user] for chat-style providers (§2.5).
+
+    ``history`` is prior turns as ``{"role": "user"|"assistant", "content": str}``
+    already trimmed/token-capped by the caller. None → the stateless 2-message
+    shape (backward compatible).
+    """
+    messages = [{"role": "system", "content": DIRECT_SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": prompt})
+    return messages
+
+
+def call_ollama(prompt: str, model: str, timeout: int = 4,
+                history: list[dict] | None = None) -> str | None:
     """Call Ollama's /api/chat endpoint. Returns response text or None."""
     body = json.dumps({
         "model": model,
-        "messages": [
-            {"role": "system", "content": DIRECT_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
+        "messages": _chat_messages(prompt, history),
         "stream": False,
         "think": False,
         "options": {"temperature": 0.3, "num_predict": 2048},
@@ -112,15 +160,22 @@ def call_ollama(prompt: str, model: str, timeout: int = 4) -> str | None:
         return None, {}
 
 
-def call_gemini(prompt: str, model: str = "gemini-2.5-flash", timeout: int = 10) -> tuple[str | None, dict]:
+def call_gemini(prompt: str, model: str = "gemini-2.5-flash", timeout: int = 10,
+                history: list[dict] | None = None) -> tuple[str | None, dict]:
     """Call Gemini API. Returns (response text, usage dict) or (None, {})."""
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         return None, {}
+    # Gemini uses role "model" for assistant turns and nests text under parts.
+    contents = []
+    for turn in history or []:
+        role = "model" if turn.get("role") == "assistant" else "user"
+        contents.append({"role": role, "parts": [{"text": turn.get("content", "")}]})
+    contents.append({"role": "user", "parts": [{"text": prompt}]})
     # Gemini 1.5+ supports system_instruction
     body = json.dumps({
         "system_instruction": {"parts": [{"text": DIRECT_SYSTEM_PROMPT}]},
-        "contents": [{"parts": [{"text": prompt}]}],
+        "contents": contents,
         "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2048},
     }).encode()
     req = urllib.request.Request(
@@ -141,17 +196,15 @@ def call_gemini(prompt: str, model: str = "gemini-2.5-flash", timeout: int = 10)
         return None, {}
 
 
-def call_openai(prompt: str, model: str = "gpt-4o-mini", timeout: int = 10) -> tuple[str | None, dict]:
+def call_openai(prompt: str, model: str = "gpt-4o-mini", timeout: int = 10,
+                history: list[dict] | None = None) -> tuple[str | None, dict]:
     """Call OpenAI chat completions API. Returns (response text, usage dict) or (None, {})."""
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         return None, {}
     body = json.dumps({
         "model": model,
-        "messages": [
-            {"role": "system", "content": DIRECT_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
+        "messages": _chat_messages(prompt, history),
         "temperature": 0.3,
         "max_tokens": 2048,
     }).encode()
@@ -193,9 +246,9 @@ def quality_ok(response: str, task_type: str) -> bool:
 # ── Chain Executor ───────────────────────────────────────────────────────────
 
 _PROVIDER_CALLS = {
-    "ollama": lambda prompt, model, timeout: call_ollama(prompt, model, timeout),
-    "gemini": lambda prompt, model, timeout: call_gemini(prompt, model, timeout),
-    "openai": lambda prompt, model, timeout: call_openai(prompt, model, timeout),
+    "ollama": lambda prompt, model, timeout, history: call_ollama(prompt, model, timeout, history),
+    "gemini": lambda prompt, model, timeout, history: call_gemini(prompt, model, timeout, history),
+    "openai": lambda prompt, model, timeout, history: call_openai(prompt, model, timeout, history),
 }
 
 
@@ -204,6 +257,7 @@ def execute_chain(
     chain: list[ModelSpec],
     task_type: str,
     timeout: int = 4,
+    history: list[dict] | None = None,
 ) -> DirectResult | None:
     """Try each model in the chain until one returns a quality response.
 
@@ -216,18 +270,28 @@ def execute_chain(
     Returns DirectResult on success, None if all models failed or only Claude remains.
     """
     _ollama_alive: bool | None = None  # lazily evaluated once per chain execution
+    _ollama_installed: set[str] | None = _UNSET  # tag set, fetched once per chain
 
     for model in chain:
         if model.provider == "claude":
             continue  # Can't call Claude from the hook — skip
 
-        # Pre-flight: skip Ollama models immediately if Ollama is not reachable
-        # (0.5s check, evaluated once and cached for the rest of this chain).
+        # Pre-flight for Ollama models (evaluated once, cached for the chain):
+        #   1. Enumerate installed models via /api/tags.
+        #   2. If enumerable, skip any model that is NOT pulled — calling it would
+        #      404 and silently fall the turn through to Claude (audit §2.4).
+        #   3. If /api/tags can't be enumerated, fall back to a plain reachability
+        #      probe so a transient tag-list hiccup doesn't disable routing.
         if model.provider == "ollama":
-            if _ollama_alive is None:
-                _ollama_alive = ollama_is_alive(timeout=0.5)
-            if not _ollama_alive:
-                continue
+            if _ollama_installed is _UNSET:
+                _ollama_installed = available_ollama_models(timeout=0.5)
+            if _ollama_installed is None:
+                if _ollama_alive is None:
+                    _ollama_alive = ollama_is_alive(timeout=0.5)
+                if not _ollama_alive:
+                    continue
+            elif not _ollama_model_available(model.model, _ollama_installed):
+                continue  # model not pulled — do not call (§2.4)
 
         call_fn = _PROVIDER_CALLS.get(model.provider)
         if not call_fn:
@@ -235,7 +299,7 @@ def execute_chain(
 
         t0 = time.monotonic()
         try:
-            response, usage = call_fn(prompt, model.model, timeout)
+            response, usage = call_fn(prompt, model.model, timeout, history)
         except Exception:
             continue
 

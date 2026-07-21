@@ -44,6 +44,34 @@ except ImportError:
         """Fallback stub if model_tracking is unavailable."""
         pass
 
+# ── Logging safety (audit §2.1) ───────────────────────────────────────────────
+# Claude Code parses this hook's stdout as JSON. structlog's *default* logger is
+# a PrintLogger that writes to stdout — so any log call (e.g. model_tracking's
+# "Tracked: …" debug line) would corrupt the payload and silently void routing.
+# configure_logging() re-points structlog at stdlib logging, whose handler
+# defaults to stderr, guaranteeing stdout stays JSON-only.
+try:
+    from chuzom.logging import configure_logging as _configure_logging
+except ImportError:
+    def _configure_logging(*args, **kwargs):
+        """Fallback: ensure stdlib logging never targets stdout."""
+        import logging as _logging
+        root = _logging.getLogger()
+        if not root.handlers:
+            root.addHandler(_logging.StreamHandler(sys.stderr))
+
+
+def _init_hook_logging() -> None:
+    """Force all hook logging to stderr so stdout carries only the JSON payload."""
+    try:
+        _configure_logging()  # structlog → stdlib → StreamHandler(stderr)
+    except Exception:
+        # Never let logging setup abort the hook; degrade to a stderr handler.
+        import logging as _logging
+        root = _logging.getLogger()
+        if not root.handlers:
+            root.addHandler(_logging.StreamHandler(sys.stderr))
+
 try:
     from chuzom.profiles import ROUTING_TABLE
     from chuzom.types import RoutingProfile, TaskType
@@ -933,6 +961,14 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"(?:optimize|improve|speed up) (?:the |this )?(?:\w+ ){0,4}(?:code|query|"
             r"performance|function|latency|throughput|speed|render|load time)|"
             r"set up|configure|install|bootstrap|initialize|"
+            # "design a distributed rate limiter" / "design the caching layer" —
+            # architecting a concrete software component is code work, not
+            # research (audit §2.6). Anchored to engineering nouns so it doesn't
+            # catch "design a poster" (that stays image/generate).
+            r"design (?:a |an |the )?(?:distributed |scalable |high[- ]performance |"
+            r"fault[- ]tolerant |real[- ]time )?(?:system|service|api|schema|algorithm|"
+            r"data structure|rate limiter|cache|caching layer|queue|scheduler|parser|"
+            r"load balancer|module|component|microservice|pipeline|protocol|database)|"
             r"create (?:\w+ ){0,5}(?:function|class|module|component|hook|test|script|program|service|tool))\b",
             re.IGNORECASE,
         ),
@@ -950,7 +986,8 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"non[- ]functional|integrity|usability|"
             r"algorithm|data structure|linked list|hash map|binary tree|"
             r"authentication|authorization|jwt|oauth|login|dashboard|"
-            r"cache|queue|worker|cron|webhook|retry|rate limit|429|response(?:s)?|"
+            r"cache|queue|worker|cron|webhook|retry|rate limit(?:er|ing)?|429|response(?:s)?|"
+            r"distributed system|load balancer|circuit breaker|connection pool|message broker|"
             r"dockerfile|ci/cd|pipeline|github actions|"
             r"linter|formatter|type checker|compiler|bundler)\b",
             re.IGNORECASE,
@@ -1011,7 +1048,12 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"review|testimonial|caption|title|headline|tagline|slogan|"
             r"prompt|template|checklist|guide|tutorial)|"
             r"draft (?:a |an |the |me )?|compose|brainstorm|come up with|"
-            r"generate (?:a |some )?(?:text|content|copy|ideas|names|titles)|"
+            r"generate (?:a |an |some )?(?:text|content|copy|ideas|names|titles|"
+            r"haiku|poems?|songs?|lyrics|jokes?|limericks?|sonnets?|verse|riddles?|"
+            r"stor(?:y|ies)|slogans?|taglines?)|"
+            # "write/compose a haiku|poem|song|…" creative-verse forms
+            r"(?:write|compose) (?:me |us )?(?:a |an |the )?(?:haiku|poem|song|lyrics|"
+            r"limerick|sonnet|verse|riddle|joke)|"
             r"rewrite|translate|paraphrase|rephrase|"
             r"edit (?:the |this )?(?:text|copy|content|writing)|"
             r"make (?:it |this )?(?:sound|more|less )|"
@@ -1027,6 +1069,7 @@ SIGNALS: dict[str, dict[str, re.Pattern]] = {
             r"welcome modal|onboarding copy|landing page|website copy|faq answers?|"
             r"pricing page|launch email|"
             r"creative writing|fiction|non-fiction|narrative|"
+            r"haiku|poem|poetry|song|lyrics|sonnet|limerick|verse|"
             r"documentation|readme|changelog|release notes|"
             r"presentation|slide deck|pitch deck|"
             r"contract|agreement|terms of service|privacy policy|"
@@ -1883,6 +1926,80 @@ def _free_tier_draft_chain(chain: list) -> list:
     return [m for m in chain if getattr(m, "provider", None) in _FREE_DRAFT_PROVIDERS]
 
 
+def _extract_turn_text(content) -> str:
+    """Pull plain text out of a Claude Code transcript message ``content``.
+
+    Content is a string (user turns) or a list of blocks (assistant turns);
+    only ``text`` blocks contribute — tool_use/tool_result blocks are dropped.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            b.get("text", "")
+            for b in content
+            if isinstance(b, dict) and b.get("type") == "text"
+        ]
+        return "\n".join(p for p in parts if p)
+    return ""
+
+
+def _load_conversation_history(
+    transcript_path: str,
+    current_prompt: str,
+    max_turns: int = 6,
+    max_chars: int = 16000,  # ~4k tokens at ~4 chars/token
+) -> list[dict]:
+    """Return the last ``max_turns`` user/assistant turns from the CC transcript.
+
+    Audit §2.5: routed models were stateless (system + prompt only), so a
+    bypassed context-dependent turn was answered blind. This reads Claude Code's
+    JSONL transcript, keeps the most recent turns within a token budget, and
+    drops a trailing user turn equal to the current prompt (which is passed
+    separately). Returns ``[]`` on any error — history is best-effort, never
+    allowed to break routing.
+    """
+    if not transcript_path:
+        return []
+    try:
+        turns: list[dict] = []
+        with open(transcript_path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                msg = entry.get("message") or {}
+                role = msg.get("role")
+                if role not in ("user", "assistant"):
+                    continue
+                text = _extract_turn_text(msg.get("content")).strip()
+                if text:
+                    turns.append({"role": role, "content": text})
+
+        # Drop a trailing user turn identical to the current prompt (the hook
+        # passes the prompt separately, so including it here would duplicate it).
+        if turns and turns[-1]["role"] == "user" and turns[-1]["content"] == current_prompt.strip():
+            turns.pop()
+
+        # Keep the most recent turns within the token budget, oldest-first.
+        recent = turns[-max_turns:]
+        budget = max_chars
+        kept: list[dict] = []
+        for turn in reversed(recent):
+            budget -= len(turn["content"])
+            if budget < 0 and kept:
+                break
+            kept.append(turn)
+        kept.reverse()
+        return kept
+    except Exception:
+        return []
+
+
 def _estimate_prompt_tokens(prompt: str) -> int:
     """Rough prompt-token estimate for the SUGGEST indicator (no model has run, so
     only the input exists). ~4 chars/token — good enough for an order-of-magnitude
@@ -2275,6 +2392,10 @@ def _normalize_output_for_platform(output: dict, hook_input: dict) -> dict:
 
 
 def main() -> None:
+    # Must run before ANY logging call so structlog never falls back to its
+    # stdout PrintLogger and corrupt the JSON payload (audit §2.1).
+    _init_hook_logging()
+
     invocation_id = time.time()
     _debug_log(f"[INVOCATION START] ID={invocation_id:.3f}")
 
@@ -2287,6 +2408,12 @@ def main() -> None:
     prompt = hook_input.get("prompt", "")
     _debug_log(f"[INVOCATION {invocation_id:.3f}] prompt_len={len(prompt)} session_id={hook_input.get('session_id', 'unknown')[:8]}")
     if not prompt.strip():
+        # Audit T10 (§2.3): an empty/whitespace prompt must not silently become a
+        # native Claude turn under zero-Claude — that leaks past "strict" mode.
+        # Fail closed instead. Normal mode still no-ops (nothing to route).
+        if _zero_claude_enabled():
+            _debug_log(f"[INVOCATION {invocation_id:.3f}] ZERO_CLAUDE BLOCKED_EMPTY_PROMPT")
+            _block_zero_claude("empty prompt — nothing to route under zero-Claude")
         sys.exit(0)
 
     # Self-reference bypass: skip routing when the user is debugging chuzom
@@ -2575,31 +2702,17 @@ def main() -> None:
     # Get selected model for tracking and indicator enhancement
     selected_model, provider = _get_selected_model(task_type, complexity)
     
-    # Log routing decision for later evaluation
+    # Log routing decision for later evaluation. Logging is already pinned to
+    # stderr by _init_hook_logging() (audit §2.1), so no stdout guard is needed.
     try:
-        # Suppress all output during tracking (handlers may output to stdout)
-        import io
-        import logging
-        _old_stdout = sys.stdout
-        _old_stderr = sys.stderr
-        sys.stdout = io.StringIO()
-        sys.stderr = io.StringIO()
-        _old_level = logging.getLogger("chuzom.model_tracking").level
-        logging.getLogger("chuzom.model_tracking").setLevel(logging.CRITICAL)
-        
-        try:
-            log_routing_decision(
-                task_type=task_type,
-                complexity=complexity,
-                classification_method=method,
-                selected_model=selected_model,
-                provider=provider,
-                notes=f"routed via {tool}" if tool != TOOL_MAP.get(task_type) else None,
-            )
-        finally:
-            sys.stdout = _old_stdout
-            sys.stderr = _old_stderr
-            logging.getLogger("chuzom.model_tracking").setLevel(_old_level)
+        log_routing_decision(
+            task_type=task_type,
+            complexity=complexity,
+            classification_method=method,
+            selected_model=selected_model,
+            provider=provider,
+            notes=f"routed via {tool}" if tool != TOOL_MAP.get(task_type) else None,
+        )
     except Exception:
         pass  # Silently fail if tracking is unavailable
 
@@ -2720,8 +2833,17 @@ def main() -> None:
                 if _direct_result:
                     _debug_log(f"[INVOCATION {invocation_id:.3f}] AGENT LOOP SUCCESS")
             else:
-                # Q&A task — simple text-in/text-out call
-                _direct_result = _execute_chain(prompt, _direct_chain, task_type, timeout=OLLAMA_TIMEOUT)
+                # Q&A task — simple text-in/text-out call. Feed recent
+                # conversation history so a bypassed context-dependent turn is
+                # answered with context, not blind (audit §2.5). Best-effort:
+                # an unreadable transcript yields [] and the stateless path.
+                _history = _load_conversation_history(
+                    hook_input.get("transcript_path", ""), prompt
+                )
+                _direct_result = _execute_chain(
+                    prompt, _direct_chain, task_type,
+                    timeout=OLLAMA_TIMEOUT, history=_history,
+                )
 
             if _direct_result:
                 _debug_log(
@@ -2789,7 +2911,11 @@ def main() -> None:
                     build_block_output as _build_block,
                 )
                 _violation_notice = _prior_violation_notice(previous_unrouted)
-                if _render_mode == "echo":
+                # Audit §2.3: under zero-Claude a SUCCESSFUL route must bypass
+                # Claude (block), never fall to the advisory echo path — otherwise
+                # "strict" leaks on success. Echo remains the default only for
+                # non-zero-Claude turns.
+                if _render_mode == "echo" and not zero_claude:
                     _output = _build_echo(_direct_result, task_type, complexity)
                     # Include violation notice in contextForAgent for echo mode
                     if _violation_notice:
