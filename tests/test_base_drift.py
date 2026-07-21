@@ -84,3 +84,67 @@ def test_persist_never_raises_on_durable_error(monkeypatch):
     s = ss.SessionSpend()
     s.call_count = 1
     s.mark_overridden(1)  # must not raise
+
+
+# ── Version-scoped drift (routing-audit-agent alert uses only the last version) ──
+
+def test_version_filter_scopes_to_matching_version(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch, "sess-old")
+    monkeypatch.setattr(ss, "_current_chuzom_version", lambda: "0.8.5")
+    a = ss.SessionSpend()
+    a.call_count = 10
+    a.mark_overridden(1)  # 1/10 drift, recorded as 0.8.5
+
+    monkeypatch.setenv("CLAUDE_SESSION_ID", "sess-new")
+    monkeypatch.setattr(ss, "_current_chuzom_version", lambda: "0.8.6")
+    b = ss.SessionSpend()
+    b.call_count = 10
+    b.mark_overridden(1)
+    b.mark_overridden(2)
+    b.mark_overridden(3)  # 3/10 drift, recorded as 0.8.6
+
+    # Unversioned read aggregates both releases (back-compat).
+    allv = ss.read_base_drift("all")
+    assert allv["sessions"] == 2
+    assert allv["overridden_turns"] == 4
+    assert allv["version"] is None
+
+    # Scoped to the latest version only.
+    v86 = ss.read_base_drift("all", version="0.8.6")
+    assert v86["sessions"] == 1
+    assert v86["routed_turns"] == 10
+    assert v86["overridden_turns"] == 3
+    assert v86["base_drift_share"] == 0.3
+    assert v86["capture_rate"] == 0.7
+    assert v86["version"] == "0.8.6"
+
+    # The prior version's rows are excluded from that scope.
+    v85 = ss.read_base_drift("all", version="0.8.5")
+    assert v85["sessions"] == 1
+    assert v85["overridden_turns"] == 1
+    assert v85["base_drift_share"] == 0.1
+
+
+def test_version_current_resolves_running_version(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch, "sess-cur")
+    monkeypatch.setattr(ss, "_current_chuzom_version", lambda: "9.9.9")
+    s = ss.SessionSpend()
+    s.call_count = 4
+    s.mark_overridden(1)
+
+    d = ss.read_base_drift("all", version="current")
+    assert d["version"] == "9.9.9"
+    assert d["sessions"] == 1
+    assert d["overridden_turns"] == 1
+
+    # A different running version sees none of the older-version rows.
+    monkeypatch.setattr(ss, "_current_chuzom_version", lambda: "0.0.1")
+    other = ss.read_base_drift("all", version="current")
+    assert other["sessions"] == 0
+    assert other["version"] == "0.0.1"
+
+
+def test_empty_ledger_reports_version_in_payload(tmp_path):
+    d = ss.read_base_drift("all", version="current", db_path=tmp_path / "absent.db")
+    assert d["sessions"] == 0
+    assert "version" in d

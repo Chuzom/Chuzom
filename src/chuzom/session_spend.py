@@ -61,7 +61,19 @@ def _current_session_key() -> str:
     return os.environ.get("CLAUDE_SESSION_ID", "").strip() or "unknown-session"
 
 
-def read_base_drift(period: str = "all", *, db_path: Path | None = None) -> dict:
+def _current_chuzom_version() -> str:
+    """The running chuzom-router version, used to version-scope the drift ledger."""
+    try:
+        from chuzom import __version__
+
+        return str(__version__)
+    except Exception:
+        return "0.0.0+unknown"
+
+
+def read_base_drift(
+    period: str = "all", *, version: str | None = None, db_path: Path | None = None
+) -> dict:
     """Aggregate the durable outcomes ledger into a base-model-drift signal.
 
     This is what makes "drift back to base subscription models" measurable over
@@ -71,13 +83,23 @@ def read_base_drift(period: str = "all", *, db_path: Path | None = None) -> dict
 
     Args:
         period: "today", "week", "month", or "all".
+        version: when set, count only sessions recorded by that chuzom-router
+            version. Pass ``"current"`` to resolve to the running version. This
+            scopes the drift signal to a single release so behaviour carried over
+            from older versions doesn't contaminate the trend (the durable series
+            spans upgrades). ``None`` (default) aggregates across every version.
+            Rows written before this column existed carry a NULL version and are
+            therefore excluded from any version-filtered read.
         db_path: outcomes DB (overridable for tests).
 
     Returns dict with: sessions, routed_turns, overridden_turns, base_drift_share,
-    capture_rate, potential_savings_usd, realized_savings_usd. All zeros when the
-    ledger is empty (no data yet — the series accrues from this fix forward).
+    capture_rate, potential_savings_usd, realized_savings_usd, version. All zeros
+    when the ledger is empty (no data yet — the series accrues from this fix
+    forward), or when no session matches the requested version.
     """
     db_path = db_path or _routing_outcomes_db()
+    if version == "current":
+        version = _current_chuzom_version()
     cutoff = {
         "today": time.time() - 86400,
         "week": time.time() - 7 * 86400,
@@ -89,18 +111,24 @@ def read_base_drift(period: str = "all", *, db_path: Path | None = None) -> dict
         "sessions": 0, "routed_turns": 0, "overridden_turns": 0,
         "base_drift_share": 0.0, "capture_rate": 1.0,
         "potential_savings_usd": 0.0, "realized_savings_usd": 0.0,
+        "version": version,
     }
     try:
         if not Path(db_path).exists():
             return empty
+        where = "updated_at >= ?"
+        params: list = [cutoff]
+        if version is not None:
+            where += " AND chuzom_version = ?"
+            params.append(version)
         with sqlite3.connect(str(db_path), timeout=2.0) as conn:
             row = conn.execute(
                 "SELECT COUNT(*), COALESCE(SUM(call_count),0), "
                 "COALESCE(SUM(overridden_turns),0), "
                 "COALESCE(SUM(potential_savings_usd),0), "
                 "COALESCE(SUM(realized_savings_usd),0) "
-                "FROM session_outcomes WHERE updated_at >= ?",
-                (cutoff,),
+                f"FROM session_outcomes WHERE {where}",
+                params,
             ).fetchone()
     except Exception:
         return empty
@@ -115,6 +143,7 @@ def read_base_drift(period: str = "all", *, db_path: Path | None = None) -> dict
         "base_drift_share": share, "capture_rate": round(1.0 - share, 4),
         "potential_savings_usd": round(potential, 6),
         "realized_savings_usd": round(realized, 6),
+        "version": version,
     }
 
 # Default anomaly threshold: $0.50 in one session is unusual for most users.
@@ -440,17 +469,27 @@ class SessionSpend:
                     "CREATE TABLE IF NOT EXISTS session_outcomes ("
                     "session_key TEXT PRIMARY KEY, updated_at REAL, "
                     "call_count INTEGER, overridden_turns INTEGER, "
-                    "potential_savings_usd REAL, realized_savings_usd REAL)"
+                    "potential_savings_usd REAL, realized_savings_usd REAL, "
+                    "chuzom_version TEXT)"
                 )
+                # Migrate pre-versioned ledgers (G-METRIC-1 shipped without the
+                # column). Existing rows keep chuzom_version NULL, so a
+                # current-version query simply excludes them from the trend.
+                try:
+                    conn.execute(
+                        "ALTER TABLE session_outcomes ADD COLUMN chuzom_version TEXT"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # column already present
                 conn.execute(
                     "INSERT OR REPLACE INTO session_outcomes "
                     "(session_key, updated_at, call_count, overridden_turns, "
-                    "potential_savings_usd, realized_savings_usd) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    "potential_savings_usd, realized_savings_usd, chuzom_version) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         _current_session_key(), time.time(), self.call_count,
                         self.overridden_turns, round(self.potential_savings_usd, 6),
-                        self.realized_savings_usd,
+                        self.realized_savings_usd, _current_chuzom_version(),
                     ),
                 )
                 conn.commit()
