@@ -202,7 +202,7 @@ def test_two_same_turn_blocks_trigger_autopivot(tmp_path):
     # override, no soft method).
     payload = {
         "session_id": session_id, "tool_name": "Bash",
-        "tool_input": {"command": "echo dangerous"},
+        "tool_input": {"command": "rm -rf /tmp/chuzom-trap"},
     }
     r1 = _run_hook(payload, home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"})
     assert json.loads(r1.stdout)["decision"] == "block"
@@ -225,7 +225,7 @@ def test_counter_resets_on_new_turn(tmp_path):
     _write_pending(tmp_path, session_id, method="heuristic", turn_id=111)
     payload = {
         "session_id": session_id, "tool_name": "Bash",
-        "tool_input": {"command": "echo dangerous"},
+        "tool_input": {"command": "rm -rf /tmp/chuzom-trap"},
     }
     r1 = _run_hook(payload, home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"})
     assert json.loads(r1.stdout)["decision"] == "block"
@@ -246,7 +246,7 @@ def test_different_tool_does_not_inherit_count(tmp_path):
 
     r1 = _run_hook(
         {"session_id": session_id, "tool_name": "Bash",
-         "tool_input": {"command": "echo dangerous"}},
+         "tool_input": {"command": "rm -rf /tmp/chuzom-trap"}},
         home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
     )
     assert json.loads(r1.stdout)["decision"] == "block"
@@ -272,7 +272,7 @@ def test_strict_mode_disables_trap_autopivot(tmp_path):
     _write_pending(tmp_path, session_id, method="heuristic", turn_id=12345)
     payload = {
         "session_id": session_id, "tool_name": "Bash",
-        "tool_input": {"command": "echo dangerous"},
+        "tool_input": {"command": "rm -rf /tmp/chuzom-trap"},
     }
     r1 = _run_hook(payload, home=tmp_path, extra_env={"CHUZOM_ENFORCE": "strict"})
     assert json.loads(r1.stdout)["decision"] == "block"

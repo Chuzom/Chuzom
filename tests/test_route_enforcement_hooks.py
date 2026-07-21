@@ -151,8 +151,10 @@ def test_enforce_route_allows_file_tools_to_prevent_stuck_patterns(tmp_path):
 
 
 def test_enforce_route_blocks_file_tools_in_hard_mode_for_code_tasks(tmp_path):
-    """v13: In hard mode, Read/Glob/Grep/LS are blocked even for code tasks until routing satisfied."""
-    for tool_name in ("Read", "Glob", "Grep", "LS"):
+    """v13: In hard mode, content readers Read/Glob/Grep block even for code
+    tasks until routing is satisfied. LS (a directory listing) is now treated as
+    non-generative and exempt — see test_enforce_nongenerative (audit §2.8.1)."""
+    for tool_name in ("Read", "Glob", "Grep"):
         session_id = f"sess-code-hard-{tool_name.lower()}"
         _write_pending(tmp_path, session_id, task_type="code", expected_tool="llm_code")
 
