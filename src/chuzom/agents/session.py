@@ -281,65 +281,105 @@ class SessionStore:
         if max_recursion_depth is not None and max_recursion_depth <= 0:
             raise ValueError("max_recursion_depth must be positive when set")
 
-        # T3-M3: walk the parent chain and refuse if any ancestor has a
-        # max_recursion_depth that this child would breach. Depth is
-        # measured against the deepest cap in the chain so a child of a
-        # tightly-capped parent inherits the cap.
-        if parent_session_id is not None:
-            self._enforce_recursion_depth(parent_session_id)
-
         if max_tool_calls is not None and max_tool_calls <= 0:
             raise ValueError("max_tool_calls must be positive when set")
         if max_children_concurrent is not None and max_children_concurrent <= 0:
             raise ValueError("max_children_concurrent must be positive when set")
 
-        session_id = str(uuid.uuid4())
-        now = time.time()
-        session = AgentSession(
-            session_id=session_id,
-            agent_id=agent_id,
-            started_at=now,
-            completed_at=None,
-            parent_session_id=parent_session_id,
-            budget_cap_usd=budget_usd,
-            consumed_usd=0.0,
-            step_count=0,
-            state=SessionState.ACTIVE,
-            framework=framework,
-            max_iterations=max_iterations,
-            max_recursion_depth=max_recursion_depth,
-            routing_policy=routing_policy,
-            tool_call_count=0,
-            max_tool_calls=max_tool_calls,
-            max_children_concurrent=max_children_concurrent,
-            # Seed activity to creation time so a just-created session is
-            # never immediately flagged "stuck".
-            last_activity_at=now,
-        )
-        self._conn.execute(
-            _INSERT,
-            (
-                session.session_id,
-                session.agent_id,
-                session.started_at,
-                None,
-                session.parent_session_id,
-                session.budget_cap_usd,
-                session.consumed_usd,
-                session.step_count,
-                session.state.value,
-                session.framework,
-                session.max_iterations,
-                session.max_recursion_depth,
-                _policy_to_json(session.routing_policy),
-                session.tool_call_count,
-                session.max_tool_calls,
-                session.max_children_concurrent,
-                session.last_activity_at,
-            ),
-        )
-        self._conn.commit()
-        return session
+        # CHZ-AUD-011: hold the same lock as cancel() so a child insert can't
+        # interleave with an in-flight cascade cancel. This makes the
+        # create-vs-cancel ordering atomic on a shared store: the insert either
+        # lands before cancel() takes the lock (and gets swept by its BFS) or
+        # after cancel() commits (and is born CANCELLED via the ancestor check
+        # below). Without this, a child created inside cancel()'s
+        # snapshot-to-commit window escaped as 'active'.
+        with self._lock:
+            # T3-M3: walk the parent chain and refuse if any ancestor has a
+            # max_recursion_depth that this child would breach. Depth is
+            # measured against the deepest cap in the chain so a child of a
+            # tightly-capped parent inherits the cap.
+            if parent_session_id is not None:
+                self._enforce_recursion_depth(parent_session_id)
+
+            # CHZ-AUD-011: if any ancestor is already CANCELLED, the emergency
+            # stop has fired for this subtree — the child is born CANCELLED so
+            # it can never spend, rather than escaping as a fresh 'active' row.
+            born_cancelled = (
+                parent_session_id is not None
+                and self._has_cancelled_ancestor(parent_session_id)
+            )
+            initial_state = (
+                SessionState.CANCELLED if born_cancelled else SessionState.ACTIVE
+            )
+
+            session_id = str(uuid.uuid4())
+            now = time.time()
+            session = AgentSession(
+                session_id=session_id,
+                agent_id=agent_id,
+                started_at=now,
+                completed_at=now if born_cancelled else None,
+                parent_session_id=parent_session_id,
+                budget_cap_usd=budget_usd,
+                consumed_usd=0.0,
+                step_count=0,
+                state=initial_state,
+                framework=framework,
+                max_iterations=max_iterations,
+                max_recursion_depth=max_recursion_depth,
+                routing_policy=routing_policy,
+                tool_call_count=0,
+                max_tool_calls=max_tool_calls,
+                max_children_concurrent=max_children_concurrent,
+                # Seed activity to creation time so a just-created session is
+                # never immediately flagged "stuck".
+                last_activity_at=now,
+            )
+            self._conn.execute(
+                _INSERT,
+                (
+                    session.session_id,
+                    session.agent_id,
+                    session.started_at,
+                    session.completed_at,
+                    session.parent_session_id,
+                    session.budget_cap_usd,
+                    session.consumed_usd,
+                    session.step_count,
+                    session.state.value,
+                    session.framework,
+                    session.max_iterations,
+                    session.max_recursion_depth,
+                    _policy_to_json(session.routing_policy),
+                    session.tool_call_count,
+                    session.max_tool_calls,
+                    session.max_children_concurrent,
+                    session.last_activity_at,
+                ),
+            )
+            self._conn.commit()
+            return session
+
+    def _has_cancelled_ancestor(self, parent_session_id: str) -> bool:
+        """True if the parent chain contains a CANCELLED session.
+
+        Walks ``parent_session_id`` upward (cycle-guarded at 1024 hops,
+        parity with ``_enforce_recursion_depth``). A CANCELLED ancestor
+        means an emergency stop has cascaded to this subtree, so a
+        newly-created child must be born terminal rather than active.
+        """
+        current_id: str | None = parent_session_id
+        for _ in range(1024):
+            if current_id is None:
+                return False
+            try:
+                ancestor = self.get(current_id)
+            except SessionNotFound:
+                return False
+            if ancestor.state == SessionState.CANCELLED:
+                return True
+            current_id = ancestor.parent_session_id
+        return False
 
     def get(self, session_id: str) -> AgentSession:
         cursor = self._conn.execute(
@@ -600,9 +640,22 @@ class SessionStore:
 
             now = time.time()
             if cascade:
+                # Mark the parent CANCELLED FIRST, inside the same lock+txn as
+                # the descendant sweep. Combined with create() taking self._lock
+                # and checking _has_cancelled_ancestor, this closes the
+                # CHZ-AUD-011 race: any child whose insert lands after this
+                # point sees a CANCELLED ancestor and is born terminal; any
+                # child that landed before is caught by the BFS below.
+                self._conn.execute(
+                    _UPDATE_CANCEL,
+                    (SessionState.CANCELLED.value, now, now, session_id),
+                )
                 # BFS over descendants; a visited set guards against cyclic
                 # parent links in corrupt data (parity with the 1024-hop guard
-                # used elsewhere, but exact rather than bounded).
+                # used elsewhere, but exact rather than bounded). Re-scanning
+                # children() each level (rather than a one-shot snapshot) also
+                # picks up any child that committed just before we took the
+                # lock.
                 visited: set[str] = {session_id}
                 frontier = self.children(session_id)
                 while frontier:
@@ -619,11 +672,12 @@ class SessionStore:
                             )
                         next_frontier.extend(self.children(child.session_id))
                     frontier = next_frontier
+            else:
+                self._conn.execute(
+                    _UPDATE_CANCEL,
+                    (SessionState.CANCELLED.value, now, now, session_id),
+                )
 
-            self._conn.execute(
-                _UPDATE_CANCEL,
-                (SessionState.CANCELLED.value, now, now, session_id),
-            )
             self._conn.commit()
             return self.get(session_id)
 
