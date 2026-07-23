@@ -65,7 +65,14 @@ _ENV_PATHS = [
 ]
 
 
-def _load_dotenv() -> None:
+def _load_dotenv(load_into: "dict[str, str] | None" = None) -> None:
+    """Load .env files into `load_into` (default: os.environ).
+
+    Passing an explicit dict lets tests exec/import this module's loader
+    without mutating global process env (audit P5: env-leakage class).
+    Existing keys in the target mapping are never overwritten.
+    """
+    target = os.environ if load_into is None else load_into
     for env_path in _ENV_PATHS:
         if not os.path.exists(env_path):
             continue
@@ -78,8 +85,8 @@ def _load_dotenv() -> None:
                     key, _, value = line.partition("=")
                     key = key.strip()
                     value = value.strip().strip("\"'")
-                    if key and key not in os.environ:
-                        os.environ[key] = value
+                    if key and key not in target:
+                        target[key] = value
         except OSError:
             pass
 

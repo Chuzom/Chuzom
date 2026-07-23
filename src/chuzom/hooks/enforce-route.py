@@ -17,7 +17,10 @@ This hook fires before every tool call and:
   5. Detect coding sessions early: Mark as "coding" on first Read/Glob/Grep/LS/Edit/Write
      → Downgrade enforcement to soft for rest of session (allows legitimate investigation).
   6. Track violations and auto-pivot: Counter increments on each blocked tool call.
-     After 2 violations → auto-downgrade to soft enforcement to prevent stuck patterns.
+     Session counter: escalation warning at 3 violations; at 4 → auto-downgrade to
+     soft enforcement for the rest of the session (disabled under strict).
+     Separately, a per-turn trap fires faster: 2 blocks of the SAME tool within a
+     single user turn → immediate auto-pivot (see _record_turn_block).
   7. If the tool IS in the task-specific blocklist → enforce based on CHUZOM_ENFORCE:
        smart (default)  — hard for Q&A tasks (query/research/generate/analyze),
                           soft for code tasks (file editing allowed).
@@ -1113,7 +1116,8 @@ def main() -> None:
         f"{action}\n\n"
         f"Escape valves (if the routed model truly can't help):\n"
         f"  • Call ANY llm_* tool (even a trivial llm_query) — clears the lock for this turn\n"
-        f"  • Loop detection: retry the same tool 3 times → auto-pivot\n"
+        f"  • Trap detection: 2 same-tool blocks in one turn → auto-pivot\n"
+        f"  • Loop detection: same tool blocked 3+ times in 2 minutes → auto-pivot\n"
         f"  • Or hit violation 4 → auto-pivot\n\n"
         f"Debug options:\n"
         f"  • View compliance log: {_LOG_PATH}\n"

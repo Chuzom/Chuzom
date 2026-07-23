@@ -111,12 +111,28 @@ def test_zero_claude_blocks_on_success(tmp_path, stub_ollama):
     assert "Paris" in json.dumps(out)
 
 
-def test_default_mode_still_approves(tmp_path, stub_ollama):
-    """Default (echo) mode is unchanged — advisory draft, Claude still runs."""
+def test_default_mode_blocks_self_contained(tmp_path, stub_ollama):
+    """P1 (truthful routing): default RENDER_MODE=auto must BLOCK a
+    self-contained prompt with a successful draft — that is the only way the
+    "routes instead of Claude" claim is true out of the box. The routed answer
+    must still reach the user via the block reason."""
     out = _run("What is the capital of France?", tmp_path, stub_ollama)
     assert out is not None
+    assert out.get("decision") == "block", (
+        f"auto default should block self-contained drafts, got {out.get('decision')!r}"
+    )
+    assert "Paris" in json.dumps(out)
+
+
+def test_explicit_echo_mode_stays_advisory(tmp_path, stub_ollama):
+    """Opting into RENDER_MODE=echo keeps the old advisory behavior."""
+    out = _run(
+        "What is the capital of France?", tmp_path, stub_ollama,
+        extra_env={"CHUZOM_RENDER_MODE": "echo"},
+    )
+    assert out is not None
     assert out.get("decision") == "approve", (
-        f"default mode should stay advisory (approve), got {out.get('decision')!r}"
+        f"explicit echo mode should stay advisory (approve), got {out.get('decision')!r}"
     )
 
 

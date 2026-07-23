@@ -15,8 +15,27 @@ import os
 
 from chuzom.hooks.direct_executor import DirectResult
 
-# Render mode: "block" (free, warning-styled) or "echo" (1 turn, normal text)
-RENDER_MODE = os.environ.get("CHUZOM_RENDER_MODE", "echo").lower()
+# Render mode: "block" (free, warning-styled), "echo" (1 turn, normal text),
+# or "auto" (P1 truthful-routing default: block when the draft answers a
+# self-contained prompt — the only case that actually saves a Claude turn —
+# and fall back to advisory echo otherwise). Resolution of "auto" happens at
+# the call site in auto-route.py, which has the prompt + classifier in scope.
+RENDER_MODE = os.environ.get("CHUZOM_RENDER_MODE", "auto").lower()
+
+
+def _format_latency(latency_ms: int) -> str:
+    """Honest latency display.
+
+    A measured sub-millisecond call (e.g. a localhost stub) must be
+    distinguishable from a fabricated zero, so 0 renders as "<1ms" rather
+    than "0ms" (audit P4: never display a value indistinguishable from
+    the old hardcoded-zero bug).
+    """
+    if latency_ms < 1:
+        return "<1ms"
+    if latency_ms < 1000:
+        return f"{latency_ms}ms"
+    return f"{latency_ms / 1000:.1f}s"
 
 
 def format_direct_response(result: DirectResult, task_type: str, complexity: str) -> str:
@@ -26,14 +45,25 @@ def format_direct_response(result: DirectResult, task_type: str, complexity: str
     """
     model_label = f"{result.model.provider}/{result.model.model}"
     tier = _tier_label(result.model.provider)
-    latency = f"{result.latency_ms}ms" if result.latency_ms < 1000 else f"{result.latency_ms / 1000:.1f}s"
+    latency = _format_latency(result.latency_ms)
 
     tokens = f"{result.input_tokens + result.output_tokens} tokens" if result.input_tokens + result.output_tokens > 0 else "0 tokens used"
     metadata = f"[{model_label}] {tier} | {task_type}/{complexity} | {latency} | {tokens}"
 
+    # §2.5 honesty: only claim "context-free" when the call really was.
+    if getattr(result, "history_turns", 0) > 0:
+        ctx_note = (
+            f"⚠ Unverified draft from a routed model (saw the last "
+            f"{result.history_turns} conversation turn(s), but NO access to your "
+            "files/tools) — verify before trusting:\n\n"
+        )
+    else:
+        ctx_note = (
+            "⚠ Unverified draft from a context-free model (no access to your "
+            "files/history) — verify before trusting:\n\n"
+        )
     return (
-        "⚠ Unverified draft from a context-free model (no access to your files/history) "
-        "— verify before trusting:\n\n"
+        f"{ctx_note}"
         f"{result.text}\n\n"
         f"{metadata}"
     )
@@ -51,7 +81,7 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
     """
     model_label = f"{result.model.provider}/{result.model.model}"
     tier = _tier_label(result.model.provider)
-    latency = f"{result.latency_ms}ms" if result.latency_ms < 1000 else f"{result.latency_ms / 1000:.1f}s"
+    latency = _format_latency(result.latency_ms)
     tokens = f"{result.input_tokens + result.output_tokens} tokens" if result.input_tokens + result.output_tokens > 0 else "0 tokens used"
     metadata = f"[{model_label}] {tier} | {task_type}/{complexity} | {latency} | {tokens}"
 
@@ -83,9 +113,15 @@ def format_echo_context(result: DirectResult, task_type: str, complexity: str) -
         f"ROUTING NOTICE — this prompt was classified as {task_type}/{complexity}. A cheap "
         f"model ({model_label}, {tier}, {latency}, {tokens}) drafted a candidate answer to "
         f"conserve your Claude subscription quota.\n\n"
-        "IMPORTANT — this draft was produced WITHOUT access to your files, codebase, tools, "
-        "shell, or this conversation's history. Treat it as an UNVERIFIED hint, never as "
-        "fact. Decide:\n"
+        + (
+            f"IMPORTANT — this draft was produced with the last {result.history_turns} "
+            "conversation turn(s) as context, but WITHOUT access to your files, codebase, "
+            "tools, or shell. Treat it as an UNVERIFIED hint, never as fact. Decide:\n"
+            if getattr(result, "history_turns", 0) > 0 else
+            "IMPORTANT — this draft was produced WITHOUT access to your files, codebase, tools, "
+            "shell, or this conversation's history. Treat it as an UNVERIFIED hint, never as "
+            "fact. Decide:\n"
+        ) +
         "  - If the question is fully self-contained (general knowledge, no reference to the "
         "user's code/files/project/data or earlier turns) AND you can confirm the draft is "
         "correct: deliver it (lightly corrected), and begin your reply with this exact line "

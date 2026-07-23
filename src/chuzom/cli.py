@@ -44,6 +44,7 @@ Usage:
     chuzom retrospect [--weekly] — IAF-style session debrief with routing directives
     chuzom stats [--period recent] — show combined download stats (llm-routing + claude-code-chuzom)
     chuzom verify                — end-to-end health check (30 seconds)
+    chuzom gc [--ttl-days N] [--apply] — sweep stale session shards from ~/.chuzom (dry-run by default)
 """
 
 from __future__ import annotations
@@ -934,6 +935,9 @@ def main() -> None:
     elif args and args[0] == "last":
         from chuzom.commands.last import main as _last_main
         _last_main(args[1:])
+    elif args and args[0] == "gc":
+        from chuzom.commands.gc import main as _gc_main
+        sys.exit(_gc_main(args[1:]))
     elif args and args[0] == "retrospect":
         from chuzom.commands.retrospect import main as _retrospect_main
         _retrospect_main(args[1:])

@@ -83,6 +83,7 @@ class TaskType(str, Enum):
     ANALYZE = "analyze"       # Deep analysis, comparison, evaluation
     CODE = "code"             # Code generation, refactoring, debugging
     INTROSPECT = "introspect"  # Local-state queries — no LLM call, native tools only
+    COORDINATE = "coordinate"  # Multi-agent orchestration — advisory-only, never direct
     IMAGE = "image"           # Image generation (DALL-E, Flux, Imagen, etc.)
     VIDEO = "video"           # Video generation (Runway, Kling, Veo, etc.)
     AUDIO = "audio"           # Audio/TTS generation (ElevenLabs, OpenAI TTS)
