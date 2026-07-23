@@ -236,8 +236,11 @@ def _get_active_policy():
         from chuzom.policy import get_active_policy as get_policy
         _ACTIVE_POLICY = get_policy()
         return _ACTIVE_POLICY
-    except Exception:
-        # Fallback if policy system unavailable
+    except Exception as exc:
+        # Fail-open when the policy system is unavailable, but surface why so a
+        # misconfigured/broken policy is not indistinguishable from "no policy"
+        # (CHZ-AUD-029).
+        _debug_log(f"[_get_active_policy] policy load failed, defaulting to none: {exc!r}")
         return None
 
 
@@ -1321,7 +1324,11 @@ def classify_with_ollama(text: str) -> str | None:
                 category = _extract_category(content)
                 if category:
                     return category
-        except Exception:
+        except Exception as exc:
+            # Fail-open to the next model / caller (classification is optional),
+            # but stop hiding the failure — record why this model was skipped so
+            # "worked" vs "silently failed" is diagnosable (CHZ-AUD-029).
+            _debug_log(f"[classify_with_ollama] model={model} failed: {exc!r}")
             continue
     return None
 
@@ -2838,8 +2845,11 @@ def main() -> None:
             provider=provider,
             notes=f"routed via {tool}" if tool != TOOL_MAP.get(task_type) else None,
         )
-    except Exception:
-        pass  # Silently fail if tracking is unavailable
+    except Exception as exc:
+        # Tracking is best-effort and must never abort routing, but a swallowed
+        # failure here means the dashboard silently loses this decision — record
+        # it so the gap is diagnosable (CHZ-AUD-029).
+        _debug_log(f"[log_routing_decision] tracking failed: {exc!r}")
 
     # ── Log quota snapshot for per-prompt audit trail ──────────────────────────
     # Increment prompt_sequence counter and log quota state at routing time

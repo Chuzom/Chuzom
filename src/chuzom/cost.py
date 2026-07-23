@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 
 import aiosqlite
@@ -503,6 +504,32 @@ async def _safe_migrate(db: aiosqlite.Connection, stmt: str) -> None:
         pass  # last-resort fallback for non-standard ALTER forms
 
 
+def _mark_worker_daemon(conn: "aiosqlite.Connection") -> None:
+    """Best-effort mark the aiosqlite worker thread as a daemon.
+
+    aiosqlite's ``_connection_worker_thread`` is non-daemon by default. If a
+    task holding a connection is dropped at event-loop shutdown (its
+    ``finally: await db.close()`` never runs), a non-daemon worker keeps the
+    interpreter alive forever — the CHZ-AUD-026 hang-at-exit bug.
+
+    aiosqlite >=0.22 keeps the worker in a private ``_thread``; on older
+    releases the Connection itself was a ``threading.Thread``. We only touch
+    an object that is genuinely a Thread, so an unexpected layout fails
+    loudly (via the caller) rather than silently stamping a junk ``daemon``
+    attribute on the Connection and leaving the real worker non-daemon.
+    Setting ``daemon`` on an already-started thread raises RuntimeError; that
+    is fine — a started worker was already daemon-marked pre-await.
+    """
+    worker = getattr(conn, "_thread", conn)
+    if not isinstance(worker, threading.Thread):
+        return
+    try:
+        worker.daemon = True
+    except RuntimeError:
+        # Thread already started — it was daemon-marked before it started.
+        pass
+
+
 async def _get_db() -> aiosqlite.Connection:
     """Open (or create) the SQLite database and apply all migrations.
 
@@ -526,15 +553,14 @@ async def _get_db() -> aiosqlite.Connection:
     # threads cannot block exit; WAL journaling keeps the DB file safe even
     # if such a leaked thread is killed mid-write.
     _conn = aiosqlite.connect(str(config.chuzom_db_path))
-    # aiosqlite >=0.22 keeps the worker in a private ``_thread`` (created in
-    # __init__, started on first await); pre-0.22 Connection *was* a Thread.
-    # Handle both, best-effort: RuntimeError means it already started.
-    _worker = getattr(_conn, "_thread", _conn)
-    try:
-        _worker.daemon = True
-    except (AttributeError, RuntimeError):
-        pass
+    # Mark the worker daemon *before* awaiting (the thread hasn't started yet).
+    _mark_worker_daemon(_conn)
     db = await _conn
+    # Defensive second pass: on some aiosqlite versions the worker Thread is
+    # only reachable after the connection is awaited. Re-mark it daemon so a
+    # leaked worker can never keep the interpreter alive at exit (the
+    # hang-at-exit bug). is_alive() daemon-setting is a no-op if already set.
+    _mark_worker_daemon(db)
     # WAL mode allows concurrent readers while a writer is active
     await db.execute("PRAGMA journal_mode=WAL")
     await db.execute(CREATE_TABLE)
