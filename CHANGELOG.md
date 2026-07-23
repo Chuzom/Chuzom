@@ -1,5 +1,99 @@
 # Changelog
 
+## v0.8.7 — 2026-07-23 — Audit remediation (P1–P5) + durable session context + version-scoped drift
+
+Combines three tracks: truth-in-advertising fixes from the post-v0.8.6 audit
+(`~/audits/chuzom-audit/`, findings P1–P5), a durable session-context accumulator so
+routed models keep answering with real context, and a version-scoped base-model-drift
+signal for the routing-audit-agent.
+
+### Audit remediation (P1–P5)
+
+- **P1 — Truthful routing claim in default mode.** `CHUZOM_RENDER_MODE=auto` is now
+  the default: self-contained prompts with a successful free/local draft render
+  `block` (Claude skipped, zero subscription tokens consumed); context-dependent
+  prompts still render advisory `echo` (Claude runs the turn as before). Previously
+  the default (`echo`) silently consumed a Claude turn on every prompt regardless of
+  routing claims. README/banner copy corrected to match (no more unconditional
+  "Claude never sees them" claims).
+- **P2 — Conversation context for routed models.** Direct-execution calls now carry
+  recent conversation history (`_load_conversation_history`, token-budgeted at
+  `max_turns=6` / `max_chars=16000`) so a routed model isn't answering
+  context-dependent follow-ups blind. Persisted via a per-session transcript shard
+  (`~/.chuzom/transcript_<sid>.jsonl`) merged with the CLI transcript when present.
+  Zero-claude mode fails closed (`{"decision": "block"}`) rather than routing a
+  fabricated answer when context is missing or over budget. Gated by
+  `CHUZOM_HISTORY_RELAY` (default: on) — **note:** the audit's fix plan refers to
+  this as `CHUZOM_CONTEXT_RELAY`; the shipped flag name is `CHUZOM_HISTORY_RELAY`.
+  Banners now report actual context inclusion instead of a fixed claim.
+- **P3 — Enforcement mode correctness.** Tool-call classification (not
+  session-level) drives hard-mode blocking; read-only `Bash` and non-generative
+  `Write` calls are no longer caught by a stale `code/moderate` lock. Block text is
+  now advisory framing instead of imperative "NEXT STEP (required)" prose. Default
+  enforcement stays `soft` (nothing blocked, violations logged); hard mode's
+  trap/loop escape valves (2-same-tool same-turn trap, 3-in-2-min loop detector) are
+  now documented accurately in both the README and the module docstring (previously
+  said "after 2 violations" for a mechanism that actually pivots at 4).
+- **P4 — Honest metrics.** Banner latency and token counts are now measured
+  wall-clock / provider-reported, replacing the previous fixed "0ms · 15 tokens"
+  placeholder that fed directly into `savings_log.jsonl` and the dashboard.
+- **P5 — Hygiene follow-ups.** Python 3.14 confirmed across classifiers and CI;
+  `requires_codex` pytest mark registered; new `TaskType.COORDINATE` fast-path
+  (advisory-only, never direct-executed); `chuzom gc [--ttl-days N] [--apply]` sweeps
+  stale `~/.chuzom` shards (dry-run by default, protected files never touched);
+  fixed a test-order env-leakage bug where `session-start.py`'s `_load_dotenv()`
+  mutated real `os.environ` during test collection.
+
+### Session-context accumulator
+
+Routed models (local Ollama/Codex, Claude subscription, and external OpenAI/Gemini
+APIs) previously answered stateless — a cheap drafted answer could not see the
+session's files, decisions, or prior turns. Session events are now accumulated into
+a durable per-session store and injected as a token-budgeted context block into
+**every** provider path, so routing can keep happening all the time without
+sacrificing answer quality.
+
+- **New `session_store.py`**: records prompts, tool results, and decisions to
+  `~/.chuzom/session_context_<sid>.jsonl`; `build_session_context()` returns a
+  sentinel-wrapped, token-budgeted block (dedup + newest-first selection,
+  re-ordered chronologically).
+- **New `hooks/context-capture.py`**: UserPromptSubmit/PostToolUse capture hook
+  (installed via `chuzom-install-hooks`).
+- **All-provider injection**: wired into the MCP path (`context.py`) and all 5
+  CLI-dispatch call sites in `router.py` (codex×2, gemini_cli×2, anthropic×1) via
+  `_cli_prompt_with_context`.
+- **Privacy modes** via `CHUZOM_SESSION_CONTEXT`: `all` (default) / `local` (context
+  stripped from external openai/gemini targets only) / `off` — enforced inside
+  `session_store` itself.
+- **Fail-open guarantee**: any store/config failure falls back to routing without
+  context; the accumulator can never block or skip routing. Empty context leaves
+  prompts byte-identical (no empty sentinel blocks).
+- **Lifecycle**: session-end deletes the store; session-start prunes stores older
+  than 7 days in a detached subprocess.
+- **Note:** this ships alongside the P2 history-relay mechanism (`CHUZOM_HISTORY_RELAY`)
+  as a separate, coexisting mechanism this release — they are not yet unified.
+  History relay carries recent *conversation turns* into direct-execution Q&A calls;
+  the session-context accumulator carries a broader *session event* summary
+  (prompts, tool results, decisions) into every provider path including CLI
+  dispatch. Both are fail-open and additive today; unifying them into one context
+  pipeline is a candidate for a future release.
+
+### Base-model-drift versioning (G-METRIC-1 follow-up)
+
+The routing-audit-agent's base-model-drift alert now reflects only the current
+chuzom release instead of being contaminated by behavior carried over from older
+versions in the durable `routing_outcomes` ledger:
+
+- `chuzom_version` recorded on each `session_outcomes` upsert (+ migration for
+  pre-versioned ledgers; older rows keep a `NULL` version and are excluded from any
+  version-filtered read).
+- `read_base_drift(period, version=...)`: filter to a given version;
+  `version="current"` resolves to the running `chuzom.__version__`; `version=None`
+  keeps the existing cross-version aggregate (back-compat).
+- The routing-audit-agent spec now calls `read_base_drift(version="current")` and
+  makes `base_drift_share` the primary base-model-drift alert, demoting the old
+  subscription-escalation proxy to a secondary cross-check.
+
 ## v0.8.6 — 2026-07-20 — Savings integrity: correct + unify the savings baseline, add an honest dollar figure
 
 Prompted by the 2026-07-20 routing retrospective. Multiple savings surfaces used

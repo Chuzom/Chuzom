@@ -1276,6 +1276,32 @@ export CHUZOM_DIRECT_EXECUTION=false
 
 **When to set `false`:** If you're on a subscription plan without API keys and want the model to handle all responses (pure pull routing via MCP tools), set `CHUZOM_DIRECT_EXECUTION=false`. This uses more Claude turns but keeps all responses through the standard conversational flow.
 
+### Session-context accumulator (`CHUZOM_SESSION_CONTEXT`)
+
+Routed models (local Ollama/Codex, Claude subscription, and external OpenAI/Gemini
+APIs) answer stateless by default — a cheap drafted answer can't see the session's
+files, decisions, or prior turns. Chuzom accumulates session events (prompts, tool
+results, decisions) into a durable per-session store at
+`~/.chuzom/session_context_<sid>.jsonl` and injects a token-budgeted context block
+into every provider path so routed calls get real context without spending extra
+Claude turns.
+
+```bash
+# Default — full session context sent to every provider, including external APIs
+export CHUZOM_SESSION_CONTEXT=all
+
+# Context still built and sent to local/subscription providers, but stripped
+# before prompts go to external openai/gemini targets
+export CHUZOM_SESSION_CONTEXT=local
+
+# Disable the accumulator entirely — routed calls stay stateless
+export CHUZOM_SESSION_CONTEXT=off
+```
+
+**Fail-open:** any store or config failure falls back to routing without context —
+the accumulator never blocks or skips a routed call. Session stores are deleted at
+session end and pruned after 7 days.
+
 ### Subscription mode (`CHUZOM_CLAUDE_SUBSCRIPTION`)
 
 When you have **Claude Pro or Max** (a subscription, not API keys), set:
@@ -1325,6 +1351,7 @@ export CHUZOM_CLASSIFY_LOCAL_ONLY=false
 | `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |
 | `CHUZOM_ROUTE_BANNER` | `on` | Show `🎯 Chuzom routed →` banner in terminal (`off` to hide) |
 | `CHUZOM_ZERO_CLAUDE` | `false` | Zero-Claude mode: block native Claude turns; external route or block |
+| `CHUZOM_SESSION_CONTEXT` | `all` | Session-context accumulator: `all` (send everywhere), `local` (strip from external APIs), `off` |
 | `PERPLEXITY_API_KEY` | _(unset)_ | API key for research routing via Perplexity |
 | `GEMINI_API_KEY` | _(unset)_ | API key for Gemini Flash / Pro |
 | `OPENAI_API_KEY` | _(unset)_ | API key for GPT-4o / o3 |
