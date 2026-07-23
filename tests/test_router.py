@@ -8,8 +8,92 @@ from chuzom.router import route_and_call
 from chuzom.types import BudgetState, LLMResponse, RoutingProfile, TaskType
 
 
+# ── CHZ-AUD-013: Per-provider canary tests ───────────────────────────────────
+# These tests assert that the *correct provider* produced the response, not just
+# that some mock returned "Mock response". Each provider gets a unique canary
+# string injected as the fake response content, so any wiring bug that sends
+# traffic to the wrong provider is detected immediately.
+
 @pytest.mark.asyncio
-@pytest.mark.requires_api_keys
+async def test_provider_canary_openai(temp_db, mock_env, monkeypatch):
+    """Routing to openai/ must produce the openai-specific canary — not a fixed
+    'Mock response' constant. Validates that call_llm was actually invoked with
+    the openai model and that its return value flows through to the caller.
+    """
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+
+    canary = "PROVIDER_OPENAI_CANARY_DEADBEEF"
+
+    async def _fake_call_llm(model: str, messages, **kwargs):
+        return LLMResponse(
+            content=canary if model.startswith("openai/") else "WRONG_PROVIDER",
+            model=model,
+            input_tokens=5,
+            output_tokens=5,
+            cost_usd=0.0001,
+            latency_ms=50.0,
+            provider="openai",
+        )
+
+    mock_tracker = MagicMock()
+    mock_tracker.is_healthy.return_value = True
+
+    with patch("chuzom.providers.call_llm", side_effect=_fake_call_llm):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.router.get_tracker", return_value=mock_tracker):
+                with patch("chuzom.router._build_and_filter_chain",
+                           new_callable=lambda: AsyncMock(return_value=["openai/gpt-4o-mini"])):
+                    resp = await route_and_call(TaskType.QUERY, "Hello")
+
+    assert resp.content == canary, (
+        f"Expected openai canary '{canary}', got '{resp.content}'. "
+        "Provider execution is not reaching call_llm correctly."
+    )
+    assert resp.model.startswith("openai/"), (
+        f"Expected openai/ model, got {resp.model!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_provider_canary_gemini(temp_db, mock_env, monkeypatch):
+    """Routing to gemini/ must produce the gemini-specific canary — verifying
+    the provider dispatch path reaches call_llm with the correct model.
+    """
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+
+    canary = "PROVIDER_GEMINI_CANARY_CAFEBABE"
+
+    async def _fake_call_llm(model: str, messages, **kwargs):
+        return LLMResponse(
+            content=canary if model.startswith("gemini/") else "WRONG_PROVIDER",
+            model=model,
+            input_tokens=5,
+            output_tokens=5,
+            cost_usd=0.0,
+            latency_ms=60.0,
+            provider="gemini",
+        )
+
+    mock_tracker = MagicMock()
+    mock_tracker.is_healthy.return_value = True
+
+    with patch("chuzom.providers.call_llm", side_effect=_fake_call_llm):
+        with patch("chuzom.codex_agent.is_codex_available", return_value=False):
+            with patch("chuzom.router.get_tracker", return_value=mock_tracker):
+                with patch("chuzom.router._build_and_filter_chain",
+                           new_callable=lambda: AsyncMock(return_value=["gemini/gemini-2.5-flash"])):
+                    resp = await route_and_call(TaskType.QUERY, "Hello")
+
+    assert resp.content == canary, (
+        f"Expected gemini canary '{canary}', got '{resp.content}'. "
+        "Provider execution is not reaching call_llm correctly."
+    )
+    assert resp.model.startswith("gemini/"), (
+        f"Expected gemini/ model, got {resp.model!r}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_routes_to_first_available_model(temp_db, mock_env, mock_acompletion, monkeypatch):
     # Disable Ollama to test pure API chain
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
@@ -23,7 +107,6 @@ async def test_routes_to_first_available_model(temp_db, mock_env, mock_acompleti
 
 
 @pytest.mark.asyncio
-@pytest.mark.requires_api_keys
 async def test_logs_structured_routing_decision(temp_db, mock_env, mock_acompletion):
     route_log = MagicMock()
     fake_uuid = MagicMock(hex="deadbeefcafebabe")
@@ -61,7 +144,6 @@ async def test_model_override_bypasses_routing(temp_db, mock_env, mock_acompleti
 
 
 @pytest.mark.asyncio
-@pytest.mark.requires_api_keys
 async def test_system_prompt_included(temp_db, mock_env, mock_acompletion):
     await route_and_call(
         TaskType.GENERATE, "Write a poem",
@@ -74,7 +156,6 @@ async def test_system_prompt_included(temp_db, mock_env, mock_acompletion):
 
 
 @pytest.mark.asyncio
-@pytest.mark.requires_api_keys
 async def test_falls_back_on_failure(temp_db, mock_env, mock_litellm_response):
     from chuzom.types import LLMResponse
 
@@ -112,7 +193,6 @@ async def test_falls_back_on_failure(temp_db, mock_env, mock_litellm_response):
 
 
 @pytest.mark.asyncio
-@pytest.mark.requires_api_keys
 async def test_raises_when_all_fail(temp_db, mock_env):
     with patch("litellm.acompletion", side_effect=Exception("All down")):
         with pytest.raises(RuntimeError, match="All models failed"):
@@ -160,7 +240,6 @@ async def test_research_adds_search_params_for_perplexity(temp_db, mock_env, moc
 
 
 @pytest.mark.asyncio
-@pytest.mark.requires_api_keys
 async def test_content_filter_error_is_silent_fallback(temp_db, mock_env, mock_litellm_response):
     """Content filter errors should silently skip to next model without warning."""
     from chuzom.types import LLMResponse

@@ -53,6 +53,14 @@ from chuzom.profile import is_enterprise
 
 log = get_logger("chuzom.budget_backend")
 
+# Absolute tolerance for the hard-cap comparison. Budgets and costs are
+# stored as SQLite REAL (IEEE 754 double), so accumulating many small
+# reservations drifts: 50 × 0.001 lands at 0.05000000000000004 > 0.05 and
+# wrongly rejects the last valid slot (CHZ-AUD-009). 1e-9 is far below any
+# realistic USD granularity (a nano-dollar) yet larger than the double
+# rounding error at these magnitudes.
+_CAP_EPSILON = 1e-9
+
 
 # ── Protocol ───────────────────────────────────────────────────────────────
 
@@ -407,7 +415,7 @@ class SqliteBudgetBackend:
                 return True
             for _, row in chain:
                 projected = row.consumed_usd + row.pending_usd + cost_usd
-                if projected > row.cap_usd:
+                if projected > row.cap_usd + _CAP_EPSILON:
                     self._conn.execute("COMMIT")
                     return False
             # T2-L2 forecast gate. Applied AFTER the hard-cap check so the
@@ -421,6 +429,14 @@ class SqliteBudgetBackend:
                 forecast_breach = self._check_forecast_inside_tx(
                     chain, cost_usd
                 )
+            # CHZ-AUD-010: in strict mode a forecast breach must reject the
+            # reservation WITHOUT leaving pending behind. Roll back before the
+            # pending UPDATE so no orphaned reservation is committed, then
+            # raise. (Previously the UPDATE + COMMIT ran first and the raise
+            # landed after commit, permanently accumulating pending_usd.)
+            if forecast_breach is not None and forecast_mode == "strict":
+                self._conn.execute("ROLLBACK")
+                raise forecast_breach
             for env_key, _ in chain:
                 self._conn.execute(
                     "UPDATE envelopes SET pending_usd = pending_usd + ? "
@@ -433,12 +449,12 @@ class SqliteBudgetBackend:
             # the commit is durable.
             for env_key, _ in chain:
                 self._maybe_flip_soft_state(env_key)
-            # Forecast handling AFTER commit: in strict mode, raise; in
-            # warn mode, log + proceed. The pending reservation stands
-            # in warn mode so callers see consistent accounting.
+            # Forecast handling AFTER commit: warn mode logs and proceeds
+            # with the reservation committed above so callers see consistent
+            # accounting. Strict mode already rolled back and raised before
+            # the pending UPDATE (see CHZ-AUD-010 above), so only warn
+            # reaches here.
             if forecast_breach is not None:
-                if forecast_mode == "strict":
-                    raise forecast_breach
                 log.warning(
                     "budget_forecast_warn",
                     key=str(forecast_breach.key),
@@ -451,7 +467,9 @@ class SqliteBudgetBackend:
             try:
                 self._conn.execute("ROLLBACK")
             except sqlite3.OperationalError:
-                # Already committed (forecast strict raise after COMMIT).
+                # No active transaction: either the error surfaced after
+                # COMMIT, or the strict-forecast path already rolled back
+                # before raising (CHZ-AUD-010). Nothing left to undo.
                 pass
             raise
 

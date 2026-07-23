@@ -12,8 +12,12 @@ from typing import Any
 # Common secret patterns to detect and redact
 SECRET_PATTERNS = {
     # API keys (various formats) - must be before more general patterns
-    "anthropic_api_key": re.compile(r"sk-ant-[a-zA-Z0-9]{20,}"),
-    "openai_api_key": re.compile(r"sk-(?:proj-)?[a-zA-Z0-9]{20,}"),
+    # Real Anthropic keys are sk-ant-api03-<base64url>, whose credential
+    # portion contains hyphens and underscores, so those must be allowed
+    # in the character class or the key passes through unscrubbed.
+    "anthropic_api_key": re.compile(r"sk-ant-[a-zA-Z0-9_-]{20,}"),
+    # OpenAI project keys (sk-proj-...) likewise use base64url with _ and -.
+    "openai_api_key": re.compile(r"sk-(?:proj-)?[a-zA-Z0-9_-]{20,}"),
     "google_api_key": re.compile(r"AIza[a-zA-Z0-9\-_]{35,}"),
     "gemini_api_key": re.compile(r"GOOG[a-zA-Z0-9]{10,}"),
     # AWS credentials

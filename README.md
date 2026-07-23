@@ -954,16 +954,22 @@ export CHUZOM_ENFORCE=hard
 
 ## Benchmarks
 
-Reproducible measurements on a fixed corpus of 8,400 real-world prompts:
+Directional measurements on the built-in smoke corpus of 53 prompts
+(easy.jsonl × 20, hard.jsonl × 16, moderate.jsonl × 17).  These numbers are
+illustrative — not statistically significant at this corpus size.
 
 ```
 Model Selection Strategy          Accuracy    Cost/1K    Quality
 ─────────────────────────────────────────────────────────────
-Always Haiku (cheapest)           68%         $0.44      🔴
-Always Opus (premium)             99%         $44.00     🟢
-Random selection                  74%         $18.20     🟡
-Chuzom (smart routing)            96%         $8.50      🟢
+Always Haiku (cheapest)           directional  directional  🔴
+Always Opus (premium)             directional  directional  🟢
+Random selection                  directional  directional  🟡
+Chuzom (smart routing)            directional  directional  🟢
 ```
+
+> **Note:** A production-scale corpus (thousands of prompts) has not been
+> published yet.  The table above will be updated with real numbers once that
+> evaluation is complete.
 
 Run your own: `python -m chuzom benchmark`
 
@@ -1000,7 +1006,7 @@ A: Chuzom uses 5-level dynamic discovery to find your installed models. Run `chu
 A: Yes. v0.4.0 streams Codex JSONL events in real time. You'll see `thread.started`, `item.completed`, and `turn.completed` events as they arrive, plus heartbeat alerts if Codex is overloaded.
 
 **Q: What's the difference between push and pull routing?**  
-A: Push routing (Claude Code, Codex) fires a hook before the LLM sees your prompt — routing is automatic and guaranteed. Pull routing (Cursor, Windsurf, Copilot) relies on the model reading instructions and choosing to call Chuzom tools — it fires ~90% of turns in agent mode but is not a hard guarantee.
+A: Push routing (Claude Code, Codex) fires a `UserPromptSubmit` hook before the LLM sees your prompt. For **self-contained prompts** (no reference to your files or prior turns), the hook answers directly and Claude is never invoked — savings are real and guaranteed. For **context-dependent prompts**, the hook emits an advisory hint only; Claude still runs the turn (though it may follow the hint and call an `llm_*` tool). Pull routing (Cursor, Windsurf, Copilot) relies on the model reading instructions and choosing to call Chuzom tools — it fires ~90% of turns in agent mode but is not a hard guarantee. See [Direct execution mode](#direct-execution-mode-chuzom_direct_execution) for the full breakdown.
 
 **Q: Does Chuzom work without Ollama?**  
 A: Yes. Ollama is optional. Without it, prompts route to Codex CLI, Gemini CLI, or API providers (Gemini, OpenAI, Perplexity). Install Ollama to enable free local routing with zero API cost.
@@ -1226,8 +1232,8 @@ Chuzom's enforcement hook (`enforce-route.py`) fires before every tool call when
 Set via environment variable or `~/.chuzom/routing.yaml`:
 
 ```bash
-# Environment variable (takes precedence)
-export CHUZOM_ENFORCE=smart
+# Environment variable (takes precedence) — default is 'soft'
+export CHUZOM_ENFORCE=smart   # upgrade to smart for stronger savings
 
 # Or in ~/.chuzom/routing.yaml
 enforce: hard
@@ -1235,8 +1241,8 @@ enforce: hard
 
 | Mode | Behavior | Best for |
 |---|---|---|
-| `smart` (default) | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze). Allows file tools for code tasks. Auto-downgrades after 2 violations to prevent stuck sessions. | Most users — balances savings and productivity |
-| `soft` | Logs violations but never blocks. Route hints appear in context; model can follow voluntarily. | Low-friction onboarding; teams new to routing |
+| `soft` (default) | Logs routing misses but **never blocks** any tool call. Route hints appear in context; the model can follow them voluntarily. Zero risk of stuck sessions. | Fresh installs; teams new to routing |
+| `smart` | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze). Allows file tools for code tasks. Auto-downgrades after 2 violations to prevent stuck sessions. | Users who want stronger savings enforcement |
 | `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want guaranteed savings |
 | `strict` | Like `hard` with all escape valves disabled (no auto-pivot, no read-only Bash exception). Sessions can deadlock. | Compliance environments |
 | `advise` | Routes prompts to cheap models, but the enforcement hook **never blocks any tool**. Zero friction. | Testing / evaluation |
@@ -1262,7 +1268,7 @@ claude: explain this function to me
 By default (`CHUZOM_DIRECT_EXECUTION=true`), the `UserPromptSubmit` hook executes simple prompts directly from the hook process. What happens next depends on `CHUZOM_RENDER_MODE` (default `auto`):
 
 - **Self-contained prompts** (no reference to your files, code, or earlier turns) are rendered in `block` mode — the turn is answered entirely from the hook, Claude is never invoked, and zero subscription tokens are consumed.
-- **Context-dependent prompts** are rendered in `echo` mode — the hook's result is passed to Claude as an unverified draft, and Claude still runs the turn (a normal Claude turn is consumed). Only `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` guarantees no Claude turn.
+- **Context-dependent prompts** are rendered in `echo` mode — the hook's result is passed to Claude as an unverified draft, and Claude still runs the turn (a normal Claude turn is consumed). Only `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` prevents a Claude turn entirely. <!-- claim-ok: block / zero-Claude preventing a Claude turn is verified by tests/test_zero_claude_bypass.py + test_zero_claude_sidecar_bypass.py (CHZ-AUD-005) -->
 
 If direct execution fails (Ollama unreachable, all providers fail), the hook falls through and injects a `⚡ MANDATORY ROUTE:` directive instead, so an MCP tool handles it.
 
@@ -1346,7 +1352,7 @@ export CHUZOM_CLASSIFY_LOCAL_ONLY=false
 | `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
 | `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription quota tracking mode |
 | `CHUZOM_DIRECT_EXECUTION` | `true` | Answer prompts directly from hook; Claude is skipped only when the render mode resolves to `block` |
-| `CHUZOM_ENFORCE` | `smart` | Enforcement mode: `smart`, `soft`, `hard`, `strict`, `advise`, `off` |
+| `CHUZOM_ENFORCE` | `soft` | Enforcement mode: `soft`, `smart`, `hard`, `strict`, `advise`, `off` |
 | `CHUZOM_CLASSIFY_LOCAL_ONLY` | auto | Restrict classification to local models only (privacy) |
 | `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |
 | `CHUZOM_ROUTE_BANNER` | `on` | Show `🎯 Chuzom routed →` banner in terminal (`off` to hide) |

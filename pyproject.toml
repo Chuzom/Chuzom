@@ -223,6 +223,10 @@ exclude = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# CHZ-AUD-002: import chuzom from src/ regardless of which interpreter/venv
+# runs pytest, so a bare `uv run pytest` that resolves a Python without chuzom
+# installed no longer ERRORs 67 enforcement tests into a false-green pass.
+pythonpath = ["src"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 timeout = 30

@@ -76,9 +76,15 @@ class TestResearchHookOutput:
     """B2: Verify the full hook pipeline produces ⚡ MANDATORY ROUTE → llm_research
     for time-sensitive research prompts, not a cached Ollama block.
 
-    The auto-route hook is a standalone script loaded via importlib; if it
-    can't be imported as a module (missing transitive deps), tests skip.
+    The auto-route hook is loaded from the *repo source* (not the user's installed
+    copy) via importlib so tests are independent of the install state. ``None``
+    returned by classify_prompt is treated as a FAILURE — it means the heuristic
+    gave up and the prompt would fall through to Claude directly, bypassing the
+    research fast-path safety guarantee.
     """
+
+    # CHZ-AUD-016 fix: load from repo source, not installed hook.
+    _SRC_HOOK = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"
 
     TEMPORAL_PROMPTS = [
         "what is the latest news on AI regulation in the EU in 2026",
@@ -90,17 +96,23 @@ class TestResearchHookOutput:
 
     @pytest.fixture(autouse=True)
     def _load_classify(self):
-        """Load classify_prompt from the installed hook script via importlib."""
+        """Load classify_prompt from the *repo source* hook script via importlib.
+
+        CHZ-AUD-016: Previously loaded from the user's installed
+        ~/.claude/hooks/chuzom-auto-route.py. Now loads from the repo source
+        so tests run identically in CI (no installation required) and pass even
+        in a fresh checkout with HOME pointing to a tmpdir.
+        """
         import importlib.util
-        hook_path = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
+        hook_path = self._SRC_HOOK
         if not hook_path.exists():
-            pytest.skip(f"Hook not installed at {hook_path}")
-        spec = importlib.util.spec_from_file_location("chuzom_auto_route", hook_path)
+            pytest.skip(f"Repo source hook not found at {hook_path}")
+        spec = importlib.util.spec_from_file_location("chuzom_auto_route_src", hook_path)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         try:
             spec.loader.exec_module(mod)  # type: ignore[union-attr]
         except SystemExit:
-            pass  # hook exits when run without stdin — that's expected
+            pass  # hook calls sys.exit() without stdin — expected
         except Exception as exc:
             pytest.skip(f"Could not load hook module: {exc}")
         if not hasattr(mod, "classify_prompt"):
@@ -109,10 +121,20 @@ class TestResearchHookOutput:
 
     @pytest.mark.parametrize("prompt", TEMPORAL_PROMPTS)
     def test_temporal_research_prompts_classify_as_research(self, prompt):
-        """These prompts must classify as research/* — never query or generate."""
+        """These prompts must classify as research/* — never query or generate.
+
+        CHZ-AUD-016 fix: ``None`` is now a FAILURE, not a skip. A ``None``
+        result means the classifier gave up and the prompt falls through to
+        Claude with no routing — violating the research-bypass safety guarantee
+        (temporal prompts must always go to llm_research, never Ollama direct).
+        """
         result = self.classify_prompt(prompt)
-        if result is None:
-            pytest.skip(f"classify_prompt returned None for {prompt!r} — heuristic inconclusive")
+        assert result is not None, (
+            f"classify_prompt returned None for {prompt!r}. "
+            "None means the heuristic gave up — research prompts must always classify "
+            "as research/* (not fall through to direct Claude). "
+            "Fix the research-detection heuristic in auto-route.py."
+        )
         assert result["task_type"] == "research", (
             f"Prompt {prompt!r} classified as {result['task_type']!r}, expected 'research'. "
             "Temporal research prompts must go to llm_research, not Ollama."

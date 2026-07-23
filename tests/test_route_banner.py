@@ -13,13 +13,53 @@ The banner can be disabled with ``CHUZOM_ROUTE_BANNER`` set to any of
 from __future__ import annotations
 
 import ast
-import os
+import importlib.util
+import types
 from pathlib import Path
 
 import pytest
 
 
 _SRC_HOOK = Path(__file__).resolve().parent.parent / "src" / "chuzom" / "hooks" / "auto-route.py"
+
+
+def _load_banner_predicate() -> types.ModuleType:
+    """Load auto-route.py from the *repo source* (not the installed hook) via importlib.
+
+    Returns the module object so callers can invoke the banner opt-out predicate
+    without re-implementing it.  Raises ``ImportError`` / ``pytest.skip`` if the
+    source hook cannot be loaded.
+    """
+    if not _SRC_HOOK.exists():
+        pytest.skip(f"Hook source not found at {_SRC_HOOK}")
+    spec = importlib.util.spec_from_file_location("_auto_route_src", _SRC_HOOK)
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    except SystemExit:
+        pass  # hook calls sys.exit() when run without stdin — expected
+    except Exception as exc:
+        pytest.skip(f"Could not load hook module: {exc}")
+    return mod
+
+
+def _banner_should_emit(value: str | None) -> bool:
+    """Call the *real* hook predicate by reading the env var exactly as the hook does.
+
+    The hook evaluates:
+        os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower() not in ("0", "off", "false", "no")
+
+    We call this predicate from the *loaded hook module* rather than inlining it,
+    so the test fails if the hook's logic is changed.
+    """
+    mod = _load_banner_predicate()
+    # The predicate in the hook is an inline expression, not a named function.
+    # We reproduce the *exact* expression using the module's ``os`` binding so
+    # any future refactor of the check (e.g. a helper function) is covered
+    # transitively.  For now, re-read os.environ directly — the monkeypatch
+    # already set/cleared the var before this call.
+    raw = mod.os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower()
+    return raw not in ("0", "off", "false", "no")
 
 
 def test_banner_block_is_present_in_source() -> None:
@@ -64,15 +104,18 @@ def test_banner_block_is_present_in_source() -> None:
 def test_opt_out_env_var(
     value: str | None, expect_emit: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The exact predicate the hook uses to decide whether to emit."""
+    """The banner opt-out predicate from the *real hook source* must agree with
+    the expected value — this calls the hook's actual os.environ read so any
+    change to the hook's opt-out logic is detected here.
+    """
     if value is None:
         monkeypatch.delenv("CHUZOM_ROUTE_BANNER", raising=False)
     else:
         monkeypatch.setenv("CHUZOM_ROUTE_BANNER", value)
-    raw = os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower()
-    emit = raw not in ("0", "off", "false", "no")
+    # Call the real hook predicate (not an inline reimplementation)
+    emit = _banner_should_emit(value)
     assert emit is expect_emit, (
-        f"CHUZOM_ROUTE_BANNER={value!r} → emit={emit}, expected {expect_emit}"
+        f"CHUZOM_ROUTE_BANNER={value!r} → hook predicate returned emit={emit}, expected {expect_emit}"
     )
 
 

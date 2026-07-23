@@ -15,11 +15,20 @@ v8.8.0: Contract-as-Infrastructure.
 from __future__ import annotations
 
 import ast
+import logging
 import os
 import re
 from dataclasses import dataclass
 
 from chuzom.contract import GateType, RoutingContract
+from chuzom.types import Complexity
+
+log = logging.getLogger(__name__)
+
+# Complexity tiers whose length-gate failure forces a downshift to a cheaper
+# (potentially budget/Ollama) model. When these trip, the downgrade must be
+# observable rather than silent (CHZ-AUD-014).
+_PREMIUM_COMPLEXITY = (Complexity.COMPLEX, Complexity.DEEP_REASONING)
 
 
 @dataclass(frozen=True)
@@ -103,6 +112,21 @@ def _check_length(contract: RoutingContract, text: str) -> GateResult:
     actual = len(text.strip())
 
     if actual < min_len:
+        # CHZ-AUD-014: A length-gate failure on a complex/premium task is what
+        # forces the router to abandon the premium chain and (potentially)
+        # emergency-fallback to a budget Ollama model. Make that downshift
+        # observable — a brief but valid premium answer must not silently
+        # downgrade quality without a trace.
+        if contract.complexity in _PREMIUM_COMPLEXITY:
+            log.warning(
+                "Length gate failed on premium task (%s/%s): %d < %d chars — "
+                "premium response rejected, router will downshift to a cheaper "
+                "model. A brief valid answer may be forcing this downgrade.",
+                contract.task_type.value,
+                contract.complexity.value,
+                actual,
+                min_len,
+            )
         return GateResult(
             gate=GateType.LENGTH,
             passed=False,
