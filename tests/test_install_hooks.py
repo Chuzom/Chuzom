@@ -328,3 +328,37 @@ class TestInstallSidecarScripts:
         second_actions = ih.install()
         assert not any("Copied start-pxpipe.sh" in a for a in second_actions)
         assert not any("Copied start-ollama.sh" in a for a in second_actions)
+
+
+class TestContextCaptureHookRegistration:
+    """Session Context Accumulator: context-capture.py must be registered as
+    a PostToolUse hook in both the Claude-Code-native (_HOOK_DEFS) and the
+    ~/.claude.json-based (_CLAW_CODE_HOOK_DEFS) hook definition tables, so
+    tool-call events actually reach the durable session store regardless of
+    which installer path a given machine uses.
+    """
+
+    def test_registered_in_hook_defs(self):
+        from chuzom.install_hooks import _HOOK_DEFS
+
+        matches = [d for d in _HOOK_DEFS if d[0] == "context-capture.py"]
+        assert len(matches) == 1
+        src_name, dst_name, event, matcher = matches[0]
+        assert dst_name == "chuzom-context-capture.py"
+        assert event == "PostToolUse"
+        assert matcher == ""
+
+    def test_registered_in_claw_code_hook_defs(self):
+        from chuzom.install_hooks import _CLAW_CODE_HOOK_DEFS
+
+        matches = [d for d in _CLAW_CODE_HOOK_DEFS if d[0] == "context-capture.py"]
+        assert len(matches) == 1
+        src_name, dst_name, event, matcher = matches[0]
+        assert dst_name == "chuzom-context-capture.py"
+        assert event == "PostToolUse"
+        assert matcher == ""
+
+    def test_source_file_exists(self):
+        from chuzom.install_hooks import _HOOKS_SRC
+
+        assert (_HOOKS_SRC / "context-capture.py").is_file()

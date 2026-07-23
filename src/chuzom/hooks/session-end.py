@@ -1684,8 +1684,22 @@ def _build_and_save_learned_profile() -> None:
 
 def main() -> None:
     try:
-        json.load(sys.stdin)
+        _hook_input = json.load(sys.stdin)
     except (json.JSONDecodeError, EOFError):
+        _hook_input = {}
+
+    # Session Context Accumulator: archive (delete) this session's durable
+    # JSONL event store now that the session is ending. Fail-open, single
+    # best-effort delete — never blocks the summary below. Resolution order:
+    # the real session_id from this hook's stdin payload, else env vars,
+    # else the pointer file written by session-start.py.
+    try:
+        from chuzom import session_store as _session_store
+        _explicit_sid = _hook_input.get("session_id") if isinstance(_hook_input, dict) else None
+        _sid = _session_store.resolve_session_id(_explicit_sid)
+        if _sid:
+            _session_store.archive_session(_sid)
+    except Exception:
         pass
 
     session_start               = _read_session_start()

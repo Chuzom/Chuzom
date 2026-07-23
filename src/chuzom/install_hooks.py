@@ -203,6 +203,7 @@ _HOOK_DEFS = [
     ("cc-usage-track.py", "chuzom-cc-usage-track.py", "PostToolUse", "Agent"),
     ("playwright-compress.py", "chuzom-playwright-compress.py", "PostToolUse", ""),
     ("bash-compress.py", "chuzom-bash-compress.py", "PostToolUse", ""),
+    ("context-capture.py", "chuzom-context-capture.py", "PostToolUse", ""),
     ("session-end.py", "chuzom-session-end.py", "Stop", ""),
 ]
 
@@ -226,6 +227,7 @@ _CLAW_CODE_HOOK_DEFS = [
     ("usage-refresh.py",            "chuzom-usage-refresh.py",      "PostToolUse",  "llm_|mcp__chuzom__llm"),
     ("playwright-compress.py",      "chuzom-playwright-compress.py", "PostToolUse",  ""),
     ("bash-compress.py",            "chuzom-bash-compress.py",       "PostToolUse",  ""),
+    ("context-capture.py",          "chuzom-context-capture.py",     "PostToolUse",  ""),
     ("session-end-clawcode.py",     "chuzom-session-end.py",         "Stop",         ""),
 ]
 

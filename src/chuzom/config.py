@@ -336,6 +336,17 @@ class RouterConfig(BaseSettings):
     context_max_previous_sessions: int = 3  # max past session summaries to include
     context_max_tokens: int = 1500        # token budget for all injected context
 
+    # ── Session Context Accumulator settings ──
+    # Durable, cross-process JSONL log of session events (user prompts, routed
+    # Q&A, tool calls) re-injected as extra context on subsequent routed calls
+    # and direct-execution draft calls. See CHUZOM_SESSION_CONTEXT for the
+    # single ergonomic on/off/local/all override (checked first by
+    # session_store.get_mode(), which falls back to these two booleans).
+    session_context_enabled: bool = True          # SESSION_CONTEXT_ENABLED
+    session_context_share_external: bool = True   # SESSION_CONTEXT_SHARE_EXTERNAL — allow durable events into non-local (paid API) routed calls; default "all" per approved decision
+    session_context_max_tokens_mcp: int = 1500    # SESSION_CONTEXT_MAX_TOKENS_MCP — budget for MCP-routed call injection
+    session_context_max_tokens_draft: int = 800   # SESSION_CONTEXT_MAX_TOKENS_DRAFT — budget for hook-level direct/draft call injection
+
     # ── Compaction settings ──
     compaction_mode: str = "structural"  # off | structural | full
     compaction_threshold: int = 4000     # token threshold to trigger compaction

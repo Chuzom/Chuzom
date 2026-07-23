@@ -987,8 +987,21 @@ def _maybe_update_pull_routing_rules() -> None:
 
 def main() -> None:
     try:
-        json.load(sys.stdin)  # consume input (may be empty)
+        _hook_input = json.load(sys.stdin)
     except (json.JSONDecodeError, EOFError):
+        _hook_input = {}
+
+    # Session Context Accumulator: record Claude Code's real session_id (distinct
+    # from SESSION_ID_FILE's fresh-per-session UUID above, which four other
+    # consumers depend on and must not be disturbed) so later hooks can resolve
+    # it without needing the env var. Fail-open — never blocks session start.
+    try:
+        from chuzom import session_store as _session_store
+        _real_session_id = _hook_input.get("session_id") if isinstance(_hook_input, dict) else None
+        if _real_session_id:
+            _session_store.write_pointer(_real_session_id)
+        _session_store.cleanup_old_sessions()
+    except Exception:
         pass
 
     _reset_session_stats()

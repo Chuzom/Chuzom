@@ -541,6 +541,40 @@ def _hermetic_host_state(monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _isolate_session_context_accumulator(monkeypatch):
+    """Prevent the Session Context Accumulator from touching the real
+    ``~/.chuzom`` during tests.
+
+    router.py's ``route_and_call`` and context.py's ``build_context_messages``
+    both now call into ``chuzom.session_store`` (``record_event`` /
+    ``resolve_session_id`` / ``build_session_context``). ``resolve_session_id``
+    falls back to the ``CLAUDE_SESSION_ID`` / ``CLAUDE_CODE_SESSION_ID``
+    environment variables when no explicit id is given — and this suite runs
+    inside a real Claude Code session that sets ``CLAUDE_CODE_SESSION_ID``.
+    Without this fixture, any test that exercises those (unmocked) code paths
+    would resolve a real session id and read/write a real
+    ``~/.chuzom/session_context_*.jsonl`` file, violating test hermeticity and
+    leaking state across the whole run (all such tests would share one file).
+
+    Clearing just these two env vars (not redirecting ``HOME`` wholesale, which
+    would also affect unrelated pre-existing subsystems like session_spend /
+    receipts / savings_logger that aren't part of this feature) makes
+    ``resolve_session_id()`` return ``None`` by default, so layer 2b /
+    ``record_event`` become no-ops for every test that doesn't explicitly opt
+    in. ``tests/test_session_store.py`` exercises the real functions directly
+    and defines its own local (file-scoped) ``_isolated_home`` fixture that
+    also monkeypatches ``HOME`` to a tmp dir — that fixture, not this one,
+    governs isolation there. Any other test that wants real accumulator
+    behavior can set ``CLAUDE_SESSION_ID``/monkeypatch ``session_store``
+    itself; a test-level ``monkeypatch`` call always wins over this autouse
+    default.
+    """
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    yield
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _close_db_connections():
     """Force close all aiosqlite connections at end of test session.
