@@ -728,33 +728,11 @@ def main() -> None:
                 except OSError:
                     pass
 
-    # Context-dependent exemption (parity with the advisory): reuse the SAME
-    # signal the UserPromptSubmit advisory uses (chuzom.context_signal) so
-    # enforcement can never hard-block a prompt the advisory already flagged as
-    # context-dependent. Belt-and-suspenders — such prompts normally arrive with
-    # no pending directive (auto-route suppresses it), but if one slips through a
-    # different path, downgrade to soft rather than trap the user behind a route
-    # a stateless model can't satisfy.
-    if pending is not None and enforce in ("hard", "smart"):
-        _cd_prompt = pending.get("original_prompt", "")
-        if _cd_prompt:
-            try:
-                from chuzom.context_signal import is_context_dependent
-                _ctx_dep = is_context_dependent(_cd_prompt)
-            except Exception:
-                _ctx_dep = False
-            if _ctx_dep:
-                enforce = "soft"
-                try:
-                    _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
-                    ts = time.strftime("%Y-%m-%d %H:%M:%S")
-                    with _LOG_PATH.open("a", encoding="utf-8") as f:
-                        f.write(
-                            f"[{ts}] CTX_DEP_EXEMPT session={session_id[:12]} "
-                            f"task={pending.get('task_type', '')} reason=context_dependent\n"
-                        )
-                except OSError:
-                    pass
+    # NOTE: context-dependent prompts are already handled upstream — auto-route.py
+    # sets write_pending=False for them (they never reach enforcement with a
+    # pending). A redundant is_context_dependent() re-check here was REMOVED: it
+    # over-fired on incidental deictics ("Generate a regex THAT validates emails")
+    # and wrongly exempted genuinely-routable prompts from hard enforcement.
 
     # Local-tool Bash exemption (v0.8.3): a Bash command that runs an inherently
     # local dev operation (git/gh, package managers, build/test, filesystem,
