@@ -33,10 +33,6 @@ def _store(tmp_path):
     return SessionStore(db_path=tmp_path / "sessions.db", check_same_thread=False)
 
 
-@pytest.mark.xfail(
-    reason="CHZ-AUD-003: record_step TOCTOU loses concurrent updates (not yet fixed)",
-    strict=False,
-)
 def test_record_step_no_lost_updates_under_concurrency(tmp_path):
     store = _store(tmp_path)
     sess = store.create(agent_id="race-agent", budget_usd=100.0)
@@ -69,10 +65,6 @@ def test_record_step_no_lost_updates_under_concurrency(tmp_path):
     )
 
 
-@pytest.mark.xfail(
-    reason="CHZ-AUD-004: record_step clobbers concurrent cancel() (not yet fixed)",
-    strict=False,
-)
 def test_cancel_is_not_overwritten_by_concurrent_record_step(tmp_path):
     store = _store(tmp_path)
     sess = store.create(agent_id="cancel-agent", budget_usd=100.0)

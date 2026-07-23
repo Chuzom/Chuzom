@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -96,9 +97,13 @@ INSERT INTO sessions (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
+# CHZ-AUD-004: the WHERE guard makes the step write conditional on the row
+# still being ACTIVE. If a concurrent cancel()/complete()/error() transitioned
+# the session to a terminal state between our read and this write, rowcount==0
+# and record_step refuses rather than resurrecting the row to 'active'.
 _UPDATE_STEP = """
 UPDATE sessions SET consumed_usd = ?, step_count = ?, state = ?,
-    last_activity_at = ? WHERE session_id = ?
+    last_activity_at = ? WHERE session_id = ? AND state = 'active'
 """
 
 # Terminal transition that also stamps activity (cancel / cascade).
@@ -214,6 +219,12 @@ class SessionStore:
         self._conn = sqlite3.connect(
             str(self.db_path), check_same_thread=check_same_thread,
         )
+        # CHZ-AUD-003: serialize the read-modify-write in record_step (and other
+        # mutators) so concurrent callers on a shared store don't lose updates.
+        # In-process guard; WAL + busy_timeout below cover the cross-process case.
+        self._lock = threading.RLock()
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(_SCHEMA)
         # T3-M3: idempotent ALTER TABLE migration for pre-T3-M3 DBs.
         # Introspect existing columns; add only the missing ones.
@@ -442,56 +453,70 @@ class SessionStore:
         Calls on terminal-state sessions raise
         ``TerminalStateViolation`` unchanged.
         """
-        s = self.get(session_id)
-        if s.state.is_terminal:
-            raise TerminalStateViolation(
-                f"session {session_id} is {s.state.value}; cannot record_step"
-            )
+        # CHZ-AUD-003/004: the whole read-modify-write must be atomic. The
+        # lock serializes concurrent record_step/cancel on a shared store (no
+        # lost updates); the WHERE state='active' guard + rowcount check below
+        # reject a step that races a concurrent terminal transition.
+        with self._lock:
+            s = self.get(session_id)
+            if s.state.is_terminal:
+                raise TerminalStateViolation(
+                    f"session {session_id} is {s.state.value}; cannot record_step"
+                )
 
-        # T3-M3: iterations cap. Checked before budget so a runaway
-        # loop halts at the cheapest possible point (no cost charged).
-        if (
-            s.max_iterations is not None
-            and s.step_count + 1 > s.max_iterations
-        ):
-            # Persist the terminal state before raising so subsequent
-            # callers see the transition (parity with budget-breach).
-            self._conn.execute(
-                _UPDATE_TERMINAL,
-                (SessionState.BUDGET_EXCEEDED.value, time.time(), session_id),
+            # T3-M3: iterations cap. Checked before budget so a runaway
+            # loop halts at the cheapest possible point (no cost charged).
+            if (
+                s.max_iterations is not None
+                and s.step_count + 1 > s.max_iterations
+            ):
+                # Persist the terminal state before raising so subsequent
+                # callers see the transition (parity with budget-breach).
+                self._conn.execute(
+                    _UPDATE_TERMINAL,
+                    (SessionState.BUDGET_EXCEEDED.value, time.time(), session_id),
+                )
+                self._conn.commit()
+                raise IterationsExceeded(
+                    session_id=session_id,
+                    max_iterations=s.max_iterations,
+                    current_step_count=s.step_count,
+                )
+
+            env = BudgetEnvelope(cap_usd=s.budget_cap_usd, consumed_usd=s.consumed_usd)
+            breached = env.would_exceed(cost_usd)
+            new_consumed = s.consumed_usd + cost_usd
+            new_step = s.step_count + 1
+            new_state = SessionState.BUDGET_EXCEEDED if breached else SessionState.ACTIVE
+            now_activity = time.time()
+            completed_at = now_activity if breached else None
+            cur = self._conn.execute(
+                _UPDATE_STEP,
+                (new_consumed, new_step, new_state.value, now_activity, session_id),
             )
+            if cur.rowcount != 1:
+                # A concurrent cancel()/complete()/error() moved the row to a
+                # terminal state after our read — do not resurrect it.
+                self._conn.rollback()
+                fresh = self.get(session_id)
+                raise TerminalStateViolation(
+                    f"session {session_id} became {fresh.state.value} concurrently; "
+                    "record_step rejected"
+                )
+            if breached:
+                self._conn.execute(
+                    _UPDATE_TERMINAL,
+                    (new_state.value, completed_at, session_id),
+                )
             self._conn.commit()
-            raise IterationsExceeded(
-                session_id=session_id,
-                max_iterations=s.max_iterations,
-                current_step_count=s.step_count,
-            )
-
-        env = BudgetEnvelope(cap_usd=s.budget_cap_usd, consumed_usd=s.consumed_usd)
-        breached = env.would_exceed(cost_usd)
-        new_consumed = s.consumed_usd + cost_usd
-        new_step = s.step_count + 1
-        new_state = SessionState.BUDGET_EXCEEDED if breached else SessionState.ACTIVE
-        now_activity = time.time()
-        completed_at = now_activity if breached else None
-        self._conn.execute(
-            _UPDATE_STEP,
-            (new_consumed, new_step, new_state.value, now_activity, session_id),
-        )
-        if breached:
-            self._conn.execute(
-                _UPDATE_TERMINAL,
-                (new_state.value, completed_at, session_id),
-            )
-        self._conn.commit()
-        if breached:
-            raise BudgetExceeded(
-                session_id=session_id,
-                cap_usd=s.budget_cap_usd,
-                consumed_usd=s.consumed_usd,
-                proposed_usd=cost_usd,
-            )
-        return self.get(session_id)
+            if breached:
+                raise BudgetExceeded(
+                    session_id=session_id,
+                    cap_usd=s.budget_cap_usd,
+                    consumed_usd=s.consumed_usd,
+                    proposed_usd=cost_usd,
+                )
+            return self.get(session_id)
 
     def complete(self, session_id: str) -> AgentSession:
         """Mark the session COMPLETED. Idempotent — re-completing a
@@ -565,38 +590,42 @@ class SessionStore:
         (which records it in the admin-action audit); there is no reason
         column on the session row itself.
         """
-        s = self.get(session_id)  # raises SessionNotFound on unknown id
-        if s.state.is_terminal:
-            return s  # idempotent no-op — never rewrite a terminal outcome
+        # CHZ-AUD-004: hold the same lock as record_step so a concurrent step
+        # can't interleave (and so record_step's rollback on the shared
+        # connection can't discard an in-flight cancel).
+        with self._lock:
+            s = self.get(session_id)  # raises SessionNotFound on unknown id
+            if s.state.is_terminal:
+                return s  # idempotent no-op — never rewrite a terminal outcome
 
-        now = time.time()
-        if cascade:
-            # BFS over descendants; a visited set guards against cyclic
-            # parent links in corrupt data (parity with the 1024-hop guard
-            # used elsewhere, but exact rather than bounded).
-            visited: set[str] = {session_id}
-            frontier = self.children(session_id)
-            while frontier:
-                next_frontier: list[AgentSession] = []
-                for child in frontier:
-                    if child.session_id in visited:
-                        continue
-                    visited.add(child.session_id)
-                    if not child.state.is_terminal:
-                        self._conn.execute(
-                            _UPDATE_CANCEL,
-                            (SessionState.CANCELLED.value, now, now,
-                             child.session_id),
-                        )
-                    next_frontier.extend(self.children(child.session_id))
-                frontier = next_frontier
+            now = time.time()
+            if cascade:
+                # BFS over descendants; a visited set guards against cyclic
+                # parent links in corrupt data (parity with the 1024-hop guard
+                # used elsewhere, but exact rather than bounded).
+                visited: set[str] = {session_id}
+                frontier = self.children(session_id)
+                while frontier:
+                    next_frontier: list[AgentSession] = []
+                    for child in frontier:
+                        if child.session_id in visited:
+                            continue
+                        visited.add(child.session_id)
+                        if not child.state.is_terminal:
+                            self._conn.execute(
+                                _UPDATE_CANCEL,
+                                (SessionState.CANCELLED.value, now, now,
+                                 child.session_id),
+                            )
+                        next_frontier.extend(self.children(child.session_id))
+                    frontier = next_frontier
 
-        self._conn.execute(
-            _UPDATE_CANCEL,
-            (SessionState.CANCELLED.value, now, now, session_id),
-        )
-        self._conn.commit()
-        return self.get(session_id)
+            self._conn.execute(
+                _UPDATE_CANCEL,
+                (SessionState.CANCELLED.value, now, now, session_id),
+            )
+            self._conn.commit()
+            return self.get(session_id)
 
     # ── Queries ───────────────────────────────────────────────────────────
 
