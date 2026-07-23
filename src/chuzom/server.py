@@ -32,7 +32,7 @@ from chuzom.config import get_config
 from chuzom.health import get_tracker
 from chuzom.logging import configure_logging, get_logger
 from chuzom.state import _check_tier, get_active_profile  # noqa: F401  (backward compat)
-from chuzom.tools import admin, agents, agoragentic, codex, dashboard, fs, gemini_cli, media, pipeline, routing, setup, subscription, text
+from chuzom.tools import admin, agentic, agents, agoragentic, codex, dashboard, fs, gemini_cli, media, pipeline, routing, setup, subscription, text
 from chuzom.tools.admin import llm_health, llm_set_profile, llm_usage  # noqa: F401
 from chuzom.tools.pipeline import llm_orchestrate  # noqa: F401
 from chuzom.tools.routing import llm_route  # noqa: F401
@@ -124,6 +124,7 @@ dashboard.register(mcp, _gate)
 fs.register(mcp, _gate)
 agoragentic.register(mcp)
 agents.register(mcp)  # v0.0.2 — 6 agent-session MCP tools
+agentic.register(mcp)  # agentic router — llm_delegate (milestone-gated delegation)
 
 # ── Resources ────────────────────────────────────────────────────────────────
 

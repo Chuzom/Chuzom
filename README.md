@@ -427,6 +427,28 @@ Every prompt flows through a **smart classification pipeline**:
 
 ---
 
+## Agentic Router (experimental)
+
+> Status: experimental, opt-in. Design + phased plan in [`Docs/agentic-router.md`](Docs/agentic-router.md).
+
+Beyond routing a single completion, Chuzom can delegate a whole task to the cheapest **capable, tool-using agent** and verify the result — via the `llm_delegate` MCP tool.
+
+How it works (Milestone-Gated Escalating Execution):
+
+1. **Plan** — a task is decomposed into milestones, each with an **objective, executable acceptance check** (`cmd` / `lint` / `diff` / `canary`). A milestone is "done" only when that check passes — not on the model's self-report.
+2. **Delegate** — each milestone runs on the cheapest capable tier (local agent → Codex → premium).
+3. **Escalate without rework** — if a milestone's check fails, it escalates to a stronger tier, carrying the already-passed milestones forward as frozen context (the stronger model resumes at the frontier, it doesn't redo finished work).
+4. **Flow, not stall** — escalation is bounded and one-directional over a finite tier ladder; a milestone that can't be met is *surfaced* with the exact failing criterion (and irreversible steps run in an isolated git worktree, merged only after they verify). It reports progress as a live event stream, and records the honest saving (including any escalation churn) into the usage ledger.
+
+```bash
+# via MCP
+llm_delegate(task="…")   # → JSON: outcome, per-milestone status, events, savings
+```
+
+This is additive — the per-completion routing below is unchanged.
+
+---
+
 ## Routing Chains
 
 The model tried depends on task complexity. Chuzom tries each tier in order, falling back on failure or timeout:
