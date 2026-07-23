@@ -43,12 +43,21 @@ class Agent(Protocol):
         ...
 
 
+EVENT_KINDS = frozenset(
+    {"plan", "execute", "pass", "fail", "retry", "escalate", "replan", "surface", "complete"}
+)
+
+
 @dataclass
 class Event:
-    kind: str          # plan|execute|pass|fail|retry|escalate|replan|surface|complete
+    kind: str          # one of EVENT_KINDS
     milestone_id: str = ""
     tier: int = -1
     reason: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"kind": self.kind, "milestone_id": self.milestone_id,
+                "tier": self.tier, "reason": self.reason}
 
     def render(self) -> str:
         icon = {"plan": "🗺", "execute": "⚙", "pass": "✓", "fail": "✗",
@@ -60,6 +69,21 @@ class Event:
         if self.reason:
             bits.append(f"— {self.reason}")
         return " ".join(str(b) for b in bits if b != "")
+
+
+def validate_event_stream(events: list[Event]) -> tuple[bool, str]:
+    """A well-formed transparency stream: non-empty, opens with ``plan``, every
+    kind is known, and it closes on a terminal ``complete`` or ``surface``."""
+    if not events:
+        return False, "empty stream"
+    if events[0].kind != "plan":
+        return False, f"stream must open with 'plan', got {events[0].kind!r}"
+    for e in events:
+        if e.kind not in EVENT_KINDS:
+            return False, f"unknown event kind {e.kind!r}"
+    if events[-1].kind not in ("complete", "surface"):
+        return False, f"stream must close on complete|surface, got {events[-1].kind!r}"
+    return True, ""
 
 
 @dataclass
@@ -146,6 +170,7 @@ class MGEEEngine:
             self._emit("complete")
             return TaskResult(Outcome.COMPLETE, ledger, list(self.events))
         reason = "; ".join(blocked) or "unresolved milestones (unreachable dependencies)"
+        self._emit("surface", reason=reason)  # terminal event → stream closes on 'surface'
         return TaskResult(Outcome.SURFACED, ledger, list(self.events), reason)
 
     def _work_milestone(
