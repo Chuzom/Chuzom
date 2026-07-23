@@ -6,6 +6,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+# ── Config-singleton isolation (CHZ-AUD-001) ────────────────────────────────
+@pytest.fixture(autouse=True)
+def _restore_config_singleton():
+    """Snapshot and restore ``chuzom.config._config`` around every test.
+
+    The ``temp_db`` fixture isolates the DB by resetting the config singleton,
+    but some suites (e.g. test_ensemble) set ``chuzom.config._config = None``
+    directly. Left uncleaned, a later test that forgets ``temp_db`` calls
+    ``get_config()``, which re-reads the real ``~/.chuzom`` and can pollute the
+    production ``usage.db``. Restoring the singleton after each test makes that
+    ordering-dependent leak impossible.
+    """
+    import chuzom.config as _cfg
+
+    saved = getattr(_cfg, "_config", None)
+    try:
+        yield
+    finally:
+        _cfg._config = saved
+
+
 # ── Collection Excludes ────────────────────────────────────────────────────
 # TST-001 (audit 2026-06): nine test suites were previously skipped at
 # COLLECTION time with `collect_ignore`. The original justification — that
@@ -182,10 +203,21 @@ def temp_db(tmp_path, monkeypatch):
     # Reset singleton so config reads the new env vars
     import chuzom.config as config_module
     config_module._config = None
-    
+
     # Verify isolation: make sure we're NOT using production path
     from chuzom.config import get_config
     config = get_config()
+    # CHZ-AUD-001: pydantic-settings' env->field binding for chuzom_db_path is
+    # ordering-fragile — a prior test can leave state that makes a fresh
+    # RouterConfig ignore CHUZOM_DB_PATH and fall back to the ~/.chuzom default.
+    # Force the isolated path deterministically so the fixture can NEVER resolve
+    # to the production DB (writers that read the env var are already isolated
+    # via the monkeypatch above; this covers readers that use config directly).
+    if str(config.chuzom_db_path) != str(db_path):
+        try:
+            object.__setattr__(config, "chuzom_db_path", db_path)
+        except Exception:
+            config.chuzom_db_path = db_path
     assert str(config.chuzom_db_path) != str(Path.home() / ".chuzom" / "usage.db"), \
         f"CRITICAL: Fixture failed to isolate database. Using production path: {config.chuzom_db_path}"
     assert "test" in str(db_path).lower(), \
