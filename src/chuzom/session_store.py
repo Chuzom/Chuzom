@@ -1,0 +1,471 @@
+"""Session Context Accumulator — durable, cross-process session event store.
+
+Chuzom builds up session context (user prompts, tool calls, routed Q&A) in a
+durable per-session JSONL log so that cheap routed models can answer with
+real context instead of fabricating it. Events are written by hooks
+(``session-start.py``, ``auto-route.py``, ``context-capture.py``,
+``session-end.py``) and by the router (``router.py``) as routed calls
+complete, then re-assembled into a compact context block that gets injected
+into every routed model call — both the MCP server path
+(``context.build_context_messages``) and the hook draft path
+(``hooks/direct_executor.execute_chain``/``execute_agent``).
+
+Storage: one JSONL file per session at
+``~/.chuzom/session_context_{sanitized_session_id}.jsonl``. Appends are plain
+``open(path, "a")`` writes (POSIX near-atomic for small writes); readers
+tolerate a torn/unparseable trailing line. Compaction and the current-session
+pointer file use an atomic same-directory-temp-file + ``os.replace()`` write
+(the ``_write_json_atomic`` pattern already used by ``enforce-route.py`` and
+``auto-route.py``).
+
+Every public function in this module is fail-open: any error is caught and
+the function degrades to a no-op / empty result rather than raising, so a
+storage problem here can never block routing, hooks, or Claude Code itself.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import tempfile
+import time
+from pathlib import Path
+from typing import Any
+
+from chuzom.compaction import collapse_whitespace, dedup_sections
+from chuzom.token_budget import truncate_to_budget
+
+# ── Self-injection guard ─────────────────────────────────────────────────────
+# Context blocks we inject are wrapped in this sentinel. When recording new
+# events (e.g. a routed model's own reply, or a tool result that happens to
+# echo back a prior context block) we strip anything sentinel-wrapped first,
+# so injected context never gets re-captured and re-injected into itself.
+SENTINEL_OPEN = "[chuzom-session-context]"
+SENTINEL_CLOSE = "[/chuzom-session-context]"
+_INJECTED_CTX_RE = re.compile(
+    re.escape(SENTINEL_OPEN) + r".*?" + re.escape(SENTINEL_CLOSE),
+    re.DOTALL,
+)
+
+# ── Tunables ──────────────────────────────────────────────────────────────
+_MAX_RECORD_CHARS = 2000       # per-event content cap before writing
+_MAX_FILE_BYTES = 256 * 1024   # compact once the JSONL file exceeds this
+_MAX_RECORDS = 300             # ...or once it holds more than this many lines
+_COMPACT_TO = 150              # ...keep only the newest N records
+_TTL_DAYS = 7                  # cleanup_old_sessions() default max age
+_POINTER_MAX_AGE_SECONDS = 6 * 3600  # ignore current_session.json if stale
+
+_STOPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "to", "of",
+    "in", "on", "for", "and", "or", "with", "this", "that", "it", "as", "at",
+    "by", "from", "i", "you", "my", "me", "do", "does", "did", "can", "will",
+    "would", "should", "what", "how", "why", "not", "if", "then", "so",
+    "just", "have", "has", "had",
+}
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+# ── Paths ─────────────────────────────────────────────────────────────────
+
+def _state_dir() -> Path:
+    """Resolve ``~/.chuzom`` at call time (so monkeypatched HOME works)."""
+    return Path(os.path.expanduser("~")) / ".chuzom"
+
+
+def _sanitize(session_id: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]", "_", session_id) or "unknown"
+
+
+def _session_path(session_id: str) -> Path:
+    return _state_dir() / f"session_context_{_sanitize(session_id)}.jsonl"
+
+
+def _pointer_path() -> Path:
+    return _state_dir() / "current_session.json"
+
+
+# ── Atomic JSON write (same pattern as enforce-route.py / auto-route.py) ───
+
+def _write_json_atomic(path: Path, data: dict) -> None:
+    """Write JSON to *path* via a same-directory temp file + atomic rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+        os.replace(tmp_path, path)
+        os.chmod(path, 0o600)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+# ── Session id resolution ───────────────────────────────────────────────────
+
+def resolve_session_id(explicit: str | None = None) -> str | None:
+    """Resolve the current Claude Code session id.
+
+    Precedence: explicit param → ``$CLAUDE_SESSION_ID`` env →
+    ``$CLAUDE_CODE_SESSION_ID`` env → pointer file
+    ``~/.chuzom/current_session.json`` (ignored if written more than 6h ago)
+    → ``None``.
+    """
+    try:
+        if explicit:
+            return explicit
+        env = os.environ.get("CLAUDE_SESSION_ID", "").strip()
+        if env:
+            return env
+        env2 = os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip()
+        if env2:
+            return env2
+        ptr = _pointer_path()
+        if ptr.exists():
+            data = json.loads(ptr.read_text(encoding="utf-8"))
+            sid = data.get("session_id")
+            ts = data.get("ts")
+            if sid and isinstance(ts, (int, float)):
+                if time.time() - ts <= _POINTER_MAX_AGE_SECONDS:
+                    return sid
+    except Exception:
+        pass
+    return None
+
+
+def write_pointer(session_id: str | None) -> None:
+    """Write the ``current_session.json`` pointer file (best-effort).
+
+    A defensive fallback only — distinct from and independent of Chuzom's
+    legacy ``session_id.txt`` quota-bookkeeping marker, which this module
+    never touches.
+    """
+    try:
+        if not session_id:
+            return
+        _write_json_atomic(
+            _pointer_path(), {"session_id": session_id, "ts": time.time()},
+        )
+    except Exception:
+        pass
+
+
+# ── Privacy mode ────────────────────────────────────────────────────────────
+
+def get_mode() -> str:
+    """Resolve the session-context privacy mode: 'all' | 'local' | 'off'.
+
+    ``CHUZOM_SESSION_CONTEXT`` env var wins if set (``on``/``all`` → all,
+    ``local`` → local, ``off`` → off). Otherwise falls back to
+    ``RouterConfig.session_context_enabled`` /
+    ``session_context_share_external``. Fails open to ``"all"``.
+    """
+    try:
+        env = os.environ.get("CHUZOM_SESSION_CONTEXT", "").strip().lower()
+        if env in ("on", "all"):
+            return "all"
+        if env == "local":
+            return "local"
+        if env == "off":
+            return "off"
+    except Exception:
+        pass
+    try:
+        from chuzom.config import get_config
+        config = get_config()
+        if not getattr(config, "session_context_enabled", True):
+            return "off"
+        share_external = getattr(config, "session_context_share_external", True)
+        return "all" if share_external else "local"
+    except Exception:
+        return "all"
+
+
+# ── Recording ────────────────────────────────────────────────────────────────
+
+def _content_hash(content: str) -> str:
+    return hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()[:12]
+
+
+def _last_record(path: Path) -> dict[str, Any] | None:
+    """Best-effort read of the last well-formed JSON line in *path*."""
+    try:
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            if size == 0:
+                return None
+            back = min(size, 8192)
+            fh.seek(-back, os.SEEK_END)
+            chunk = fh.read()
+        for line in reversed(chunk.split(b"\n")):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                return json.loads(line)
+            except Exception:
+                continue
+        return None
+    except Exception:
+        return None
+
+
+def record_event(
+    session_id: str | None,
+    kind: str,
+    content: str,
+    *,
+    role: str = "user",
+    task_type: str = "",
+    tool: str | None = None,
+    model: str | None = None,
+    max_chars: int = _MAX_RECORD_CHARS,
+) -> None:
+    """Append one event to the session's durable JSONL log.
+
+    ``kind`` is a free-form label (``user_prompt``, ``tool_call``,
+    ``routed_qa``, ``assistant``, ...) used later to format/filter events.
+    Fails open: any error (bad session_id, unwritable disk, etc.) is a no-op.
+    """
+    try:
+        if not session_id or not content:
+            return
+        text = _INJECTED_CTX_RE.sub("", content).strip()
+        if not text:
+            return
+        text = collapse_whitespace(text)
+        if len(text) > max_chars:
+            text = text[:max_chars]
+        text = text.strip()
+        if not text:
+            return
+
+        content_hash = _content_hash(text)
+        path = _session_path(session_id)
+
+        prev = _last_record(path)
+        if prev and prev.get("h") == content_hash:
+            return  # consecutive-duplicate dedupe
+
+        record = {
+            "ts": time.time(),
+            "kind": kind,
+            "role": role,
+            "task_type": task_type or "",
+            "tool": tool,
+            "model": model,
+            "content": text,
+            "h": content_hash,
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+
+        _maybe_compact(path)
+    except Exception:
+        pass
+
+
+def _maybe_compact(path: Path) -> None:
+    """Rewrite *path* to keep only its newest ``_COMPACT_TO`` records once it
+    exceeds ``_MAX_FILE_BYTES`` or ``_MAX_RECORDS`` lines."""
+    try:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return
+
+        need_compact = size > _MAX_FILE_BYTES
+        if not need_compact:
+            with path.open("r", encoding="utf-8", errors="ignore") as fh:
+                count = sum(1 for _ in fh)
+            need_compact = count > _MAX_RECORDS
+        if not need_compact:
+            return
+
+        records: list[str] = []
+        with path.open("r", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    json.loads(line)  # validate; keep raw line to avoid re-encoding cost
+                except Exception:
+                    continue
+                records.append(line)
+
+        newest = records[-_COMPACT_TO:]
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                for line in newest:
+                    handle.write(line + "\n")
+            os.replace(tmp_path, path)
+            os.chmod(path, 0o600)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
+# ── Reading ──────────────────────────────────────────────────────────────────
+
+def load_events(session_id: str | None, *, limit: int = 200) -> list[dict[str, Any]]:
+    """Load up to ``limit`` newest events for *session_id*, oldest first.
+
+    Tolerates torn/unparseable trailing lines. Fails open to ``[]``.
+    """
+    try:
+        if not session_id:
+            return []
+        path = _session_path(session_id)
+        if not path.exists():
+            return []
+        records: list[dict[str, Any]] = []
+        with path.open("r", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except Exception:
+                    continue
+        if limit and len(records) > limit:
+            records = records[-limit:]
+        return records
+    except Exception:
+        return []
+
+
+def _format_record(rec: dict[str, Any]) -> str:
+    kind = rec.get("kind", "")
+    content = rec.get("content", "")
+    if kind == "user_prompt":
+        return f"USER: {content}"
+    if kind == "tool_call":
+        tool = rec.get("tool") or "tool"
+        return f"TOOL({tool}): {content}"
+    if kind == "routed_qa":
+        model = rec.get("model") or "model"
+        return f"ROUTED({model}): {content}"
+    if kind == "assistant":
+        return f"ASSISTANT: {content}"
+    return str(content)
+
+
+def _keywords(text: str) -> set[str]:
+    return {
+        w for w in _WORD_RE.findall(text.lower())
+        if w not in _STOPWORDS and len(w) > 2
+    }
+
+
+def build_session_context(
+    session_id: str | None,
+    *,
+    max_tokens: int = 1500,
+    task_type: str | None = None,
+    query: str | None = None,
+    target_provider: str | None = None,
+) -> str:
+    """Assemble a compact, sentinel-wrapped context block for *session_id*.
+
+    Applies the privacy mode from :func:`get_mode` (returns ``""`` for
+    ``off``, and for ``local`` when *target_provider* is an external paid
+    API such as ``openai``/``gemini``). Keeps the 3 newest events
+    unconditionally plus any older event matching *task_type* or sharing a
+    keyword with *query*, formats them, dedupes repeated blocks, and
+    truncates to *max_tokens*. Fails open to ``""``.
+    """
+    try:
+        mode = get_mode()
+        if mode == "off":
+            return ""
+        if mode == "local" and target_provider in ("openai", "gemini"):
+            return ""
+
+        records = load_events(session_id, limit=200)
+        if not records:
+            return ""
+
+        query_words = _keywords(query) if query else set()
+
+        keep_ids: set[int] = set()
+        newest_first = list(reversed(records))
+        for idx, rec in enumerate(newest_first):
+            if idx < 3:
+                keep_ids.add(id(rec))
+                continue
+            if task_type and rec.get("task_type", "") == task_type:
+                keep_ids.add(id(rec))
+                continue
+            if query_words:
+                if query_words & _keywords(rec.get("content", "")):
+                    keep_ids.add(id(rec))
+
+        ordered = [rec for rec in records if id(rec) in keep_ids]
+        lines = [_format_record(rec) for rec in ordered]
+        text = "\n".join(ln for ln in lines if ln.strip())
+        if not text:
+            return ""
+
+        text = dedup_sections(text)
+        text = truncate_to_budget(text, max_tokens)
+        if not text.strip():
+            return ""
+
+        return f"{SENTINEL_OPEN}\n{text}\n{SENTINEL_CLOSE}"
+    except Exception:
+        return ""
+
+
+# ── Lifecycle ────────────────────────────────────────────────────────────────
+
+def cleanup_old_sessions(max_age_days: int = _TTL_DAYS) -> None:
+    """Delete session_context_*.jsonl files not modified in *max_age_days*."""
+    try:
+        state_dir = _state_dir()
+        if not state_dir.exists():
+            return
+        cutoff = time.time() - max_age_days * 86400
+        for p in state_dir.glob("session_context_*.jsonl"):
+            try:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink()
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
+def archive_session(session_id: str | None) -> None:
+    """Remove *session_id*'s durable log at session end (best-effort)."""
+    try:
+        if not session_id:
+            return
+        path = _session_path(session_id)
+        if path.exists():
+            path.unlink()
+    except Exception:
+        pass

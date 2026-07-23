@@ -56,6 +56,13 @@ def _strip_injected_context(text: str) -> str:
         return text
     text = _KNOWLEDGE_CTX_RE.sub("", text)
     text = _SELF_INJECTED_RE.sub("", text)
+    # Also strip an echoed Session Context Accumulator block (session_store.py's
+    # own sentinel wrapper) — same class of self-poisoning bug, different source.
+    try:
+        from chuzom.session_store import _INJECTED_CTX_RE as _sca_re
+        text = _sca_re.sub("", text)
+    except Exception:
+        pass
     return text.strip()
 
 # Module-level storage for last optimization result (for footer display)
@@ -387,12 +394,15 @@ async def build_context_messages(
     max_previous_sessions: int = 3,
     max_context_tokens: int = 1500,
     is_free_model: bool = False,
+    session_id: str | None = None,
+    target_provider: str | None = None,
 ) -> list[dict[str, str]]:
     """Assemble context messages for injection into LLM calls.
 
     Builds an ordered list of context messages:
       1. Previous session summaries (persistent, oldest→newest)
       2. Current session messages (ephemeral, last N)
+      2b. Durable session context (Session Context Accumulator, cross-process)
       3. Caller-supplied context (if any)
 
     Context is optimized via the context_optimizer pipeline (v8.3.0),
@@ -404,6 +414,15 @@ async def build_context_messages(
         max_previous_sessions: How many past session summaries to load.
         max_context_tokens: Token budget for all context combined.
         is_free_model: If True, skip context optimization (no cost benefit).
+        session_id: Optional explicit session id for the Session Context
+            Accumulator (falls back to env/pointer-file resolution when
+            omitted). When ``None`` and no session can be resolved, layer 2b
+            contributes nothing — behavior is unchanged from before this
+            layer existed.
+        target_provider: Optional provider name (e.g. "openai", "gemini",
+            "ollama") the assembled context is destined for. Used only to
+            enforce the accumulator's privacy mode (``local`` blocks paid
+            external APIs); has no effect otherwise.
 
     Returns:
         List of message dicts (role: "system") to insert between the
@@ -423,6 +442,34 @@ async def build_context_messages(
     current_context = buf.format_for_injection(n=max_session_messages)
     if current_context:
         parts.append(current_context)
+
+    # Layer 2b: Durable session context (Session Context Accumulator) — user
+    # prompts, tool calls, and routed Q&A recorded to a per-session JSONL
+    # store outside this in-process buffer, so cheap routed models get real
+    # context instead of fabricating. Downstream dedup_sections/optimize_context
+    # collapse near-duplicates against layer 2's in-process buffer content, and
+    # the existing token-budget compaction below still applies to the combined
+    # total, so no additional cross-layer hash-dedupe is performed here.
+    try:
+        from chuzom import session_store
+        from chuzom.config import get_config
+
+        resolved_sid = session_store.resolve_session_id(session_id)
+        if resolved_sid:
+            try:
+                mcp_budget = get_config().session_context_max_tokens_mcp
+            except Exception:
+                mcp_budget = 1500
+            durable_context = session_store.build_session_context(
+                resolved_sid,
+                max_tokens=mcp_budget,
+                query=caller_context,
+                target_provider=target_provider,
+            )
+            if durable_context:
+                parts.append(durable_context)
+    except Exception as e:
+        log.debug("Session context accumulator unavailable (non-fatal): %s", e)
 
     # Layer 3: Caller-supplied context
     if caller_context:

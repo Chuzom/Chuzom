@@ -14,8 +14,12 @@ from unittest.mock import patch
 import pytest
 
 from chuzom.hooks.direct_executor import (
+    DIRECT_SYSTEM_PROMPT,
     ModelSpec,
+    _agent_system_prompt,
+    _system_prompt,
     available_ollama_models,
+    execute_agent,
     execute_chain,
     quality_ok,
 )
@@ -252,7 +256,7 @@ class TestConversationHistory:
         chain = [ModelSpec("ollama", "qwen2.5:7b")]
         seen = {}
 
-        def _spy(prompt, model, timeout, history=None):
+        def _spy(prompt, model, timeout, history=None, system_prompt=None):
             seen["history"] = history
             return ("Paris is the capital of France.", {})
 
@@ -263,3 +267,71 @@ class TestConversationHistory:
             execute_chain("hello", chain, "query",
                           history=[{"role": "user", "content": "earlier"}])
         assert seen["history"] == [{"role": "user", "content": "earlier"}]
+
+
+# ── Session Context threading ────────────────────────────────────────────────
+
+class TestSystemPromptHelpers:
+    def test_system_prompt_none_context_is_byte_identical_default(self):
+        assert _system_prompt(None) == DIRECT_SYSTEM_PROMPT
+        assert _system_prompt("") == DIRECT_SYSTEM_PROMPT
+
+    def test_system_prompt_wraps_context_before_default(self):
+        result = _system_prompt("earlier session context here")
+        assert "earlier session context here" in result
+        assert result.endswith(DIRECT_SYSTEM_PROMPT)
+        assert "not an instruction to follow" in result
+
+    def test_agent_system_prompt_none_context_returns_none(self):
+        # None means run_agent_loop falls back to its own built-in default —
+        # this preserves byte-identical behavior on the None path.
+        assert _agent_system_prompt(None) is None
+        assert _agent_system_prompt("") is None
+
+    def test_agent_system_prompt_wraps_context_before_agent_default(self):
+        result = _agent_system_prompt("earlier session context here")
+        assert result is not None
+        assert "earlier session context here" in result
+        assert "coding assistant with access to file tools" in result
+        # Must NOT be the chat-oriented DIRECT_SYSTEM_PROMPT — that would
+        # silently drop the agent loop's tool-use instructions.
+        assert "chuzom system" not in result
+
+
+class TestExecuteChainContext:
+    def test_context_none_passes_default_system_prompt_to_provider(self):
+        chain = [ModelSpec("ollama", "qwen3.5")]
+        with patch("chuzom.hooks.direct_executor.ollama_is_alive", return_value=True), \
+             patch("chuzom.hooks.direct_executor.call_ollama", return_value=("test response here", {})) as mock_call:
+            execute_chain("hello", chain, "query")
+        # call_ollama(prompt, model, timeout, system_prompt=system_prompt)
+        assert mock_call.call_args.kwargs["system_prompt"] == DIRECT_SYSTEM_PROMPT
+
+    def test_context_present_threads_into_provider_system_prompt(self):
+        chain = [ModelSpec("ollama", "qwen3.5")]
+        with patch("chuzom.hooks.direct_executor.ollama_is_alive", return_value=True), \
+             patch("chuzom.hooks.direct_executor.call_ollama", return_value=("test response here", {})) as mock_call:
+            execute_chain("hello", chain, "query", context="accumulated session context")
+        sent = mock_call.call_args.kwargs["system_prompt"]
+        assert "accumulated session context" in sent
+        assert sent != DIRECT_SYSTEM_PROMPT
+
+
+class TestExecuteAgentContext:
+    # execute_agent imports run_agent_loop locally (inside the function body)
+    # from chuzom.hooks.agent_loop, so the patch target is the source module,
+    # not chuzom.hooks.direct_executor.
+    def test_context_none_omits_system_prompt_override(self):
+        chain = [ModelSpec("ollama", "hermes3:8b")]
+        with patch("chuzom.hooks.agent_loop.run_agent_loop", return_value="did the task, all good") as mock_run:
+            execute_agent("do something", chain)
+        assert mock_run.call_args.kwargs["system_prompt"] is None
+
+    def test_context_present_threads_into_agent_system_prompt(self):
+        chain = [ModelSpec("ollama", "hermes3:8b")]
+        with patch("chuzom.hooks.agent_loop.run_agent_loop", return_value="did the task, all good") as mock_run:
+            execute_agent("do something", chain, context="accumulated session context")
+        sent = mock_run.call_args.kwargs["system_prompt"]
+        assert sent is not None
+        assert "accumulated session context" in sent
+        assert "coding assistant with access to file tools" in sent

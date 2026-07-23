@@ -2885,6 +2885,23 @@ def main() -> None:
         except Exception:
             pass  # Silent failure — quota snapshot is optional enhancement
 
+    # ── Session Context Accumulator: record this prompt ────────────────────────
+    # Fail-open everywhere: any failure recording/reading session context must
+    # never block or alter the routing decision. task_type is fully resolved by
+    # this point (see the classification if/elif chain above).
+    if session_id:
+        try:
+            from chuzom import session_store as _session_store
+            _session_store.record_event(
+                session_id,
+                "user_prompt",
+                prompt,
+                role="user",
+                task_type=task_type,
+            )
+        except Exception:
+            pass
+
     # ── Phase 1: Direct Execution (0 subscription tokens) ──────────────────────
     # Try to handle the prompt directly from the hook by calling models via HTTP.
     # If successful, return {"decision": "block"} so Claude never sees the prompt.
@@ -2948,6 +2965,24 @@ def main() -> None:
                 f"chain={[f'{m.provider}/{m.model}' for m in _direct_chain]}"
             )
 
+            # Session Context Accumulator: build durable context for the draft
+            # model. target_provider="local" — the draft chain here is always
+            # free-tier (Ollama/Codex/free Gemini CLI), never a paid API, per
+            # the free-tier-drafts filter above. Fail-open to no context.
+            _session_ctx: str | None = None
+            if session_id:
+                try:
+                    from chuzom import session_store as _session_store
+                    _session_ctx = _session_store.build_session_context(
+                        session_id,
+                        max_tokens=800,
+                        task_type=task_type,
+                        query=prompt,
+                        target_provider="local",
+                    )
+                except Exception:
+                    _session_ctx = None
+
             _direct_result = None
 
             if not _direct_chain:
@@ -2957,7 +2992,7 @@ def main() -> None:
             elif _needs_claude_tools(prompt, task_type):
                 # File-op task — use agent loop (Ollama with tool calling)
                 from chuzom.hooks.direct_executor import execute_agent as _execute_agent
-                _direct_result = _execute_agent(prompt, _direct_chain, timeout=60)
+                _direct_result = _execute_agent(prompt, _direct_chain, timeout=60, context=_session_ctx)
                 if _direct_result:
                     _debug_log(f"[INVOCATION {invocation_id:.3f}] AGENT LOOP SUCCESS")
             else:
@@ -2982,7 +3017,7 @@ def main() -> None:
                     )
                 _direct_result = _execute_chain(
                     prompt, _direct_chain, task_type,
-                    timeout=OLLAMA_TIMEOUT, history=_history,
+                    timeout=OLLAMA_TIMEOUT, history=_history, context=_session_ctx,
                 )
 
             if _direct_result:
@@ -3069,6 +3104,27 @@ def main() -> None:
                             complexity=complexity,
                             classifier_type=method,
                             session_id=session_id,
+                        )
+                    except Exception:
+                        pass
+                # Session Context Accumulator: record this routed Q&A so later
+                # turns (in this session or a future one) have real prior
+                # answers to draw on instead of fabricating. Unconditional on
+                # render mode (unlike log_direct_to_db above) — the routed
+                # model really did produce this answer regardless of whether
+                # it's shown via block or echo, and future context should
+                # reflect that. Fire-and-forget.
+                if session_id:
+                    try:
+                        from chuzom import session_store as _session_store
+                        _session_store.record_event(
+                            session_id,
+                            "routed_qa",
+                            _direct_result.text,
+                            role="assistant",
+                            task_type=task_type,
+                            tool=tool,
+                            model=f"{_direct_result.model.provider}/{_direct_result.model.model}",
                         )
                     except Exception:
                         pass

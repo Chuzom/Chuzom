@@ -243,6 +243,291 @@ class TestBuildContextMessages:
             assert len(msgs[0]["content"]) <= 500
 
 
+class TestBuildContextMessagesLayer2b:
+    """Layer 2b: the Session Context Accumulator's durable, cross-process
+    JSONL event store folded into build_context_messages()'s MCP path.
+
+    All tests here monkeypatch chuzom.session_store's functions directly
+    (never touching a real ~/.chuzom) — the store's own behavior (privacy
+    mode gating, dedup, truncation) is covered independently in
+    tests/test_session_store.py. This class only verifies build_context_messages
+    correctly wires session_id/target_provider through to session_store, folds
+    the result into the assembled context in the documented position (after
+    layer 2's in-process buffer, before layer 3's caller-supplied context),
+    and fails open at every step (import, resolve_session_id, get_config,
+    build_session_context all independently raising).
+    """
+
+    @pytest.fixture
+    def reset_session_buffer(self):
+        import chuzom.context as context_module
+        context_module._session_buffer = None
+        yield
+        context_module._session_buffer = None
+
+    @pytest.mark.asyncio
+    async def test_no_resolved_session_id_contributes_nothing(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.session_store as real_session_store
+
+        resolve_calls = []
+        monkeypatch.setattr(
+            real_session_store,
+            "resolve_session_id",
+            lambda explicit=None: resolve_calls.append(explicit) or None,
+        )
+        build_calls = []
+        monkeypatch.setattr(
+            real_session_store,
+            "build_session_context",
+            lambda *a, **kw: build_calls.append((a, kw)) or "SHOULD NOT APPEAR",
+        )
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            msgs = await build_context_messages(session_id="explicit-sid")
+
+        # Behavior unchanged from before layer 2b existed: no other context ->
+        # empty list, and build_session_context must never be called since
+        # resolve_session_id returned falsy.
+        assert msgs == []
+        assert resolve_calls == ["explicit-sid"]
+        assert build_calls == []
+
+    @pytest.mark.asyncio
+    async def test_resolved_session_id_pulls_in_durable_context(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.session_store as real_session_store
+
+        monkeypatch.setattr(
+            real_session_store, "resolve_session_id", lambda explicit=None: "sess-durable"
+        )
+        monkeypatch.setattr(
+            real_session_store,
+            "build_session_context",
+            lambda *a, **kw: "durable event from a prior tool call",
+        )
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            msgs = await build_context_messages()
+
+        assert len(msgs) == 1
+        assert "durable event from a prior tool call" in msgs[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_session_id_and_target_provider_forwarded_to_session_store(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.session_store as real_session_store
+
+        resolve_calls = []
+        monkeypatch.setattr(
+            real_session_store,
+            "resolve_session_id",
+            lambda explicit=None: resolve_calls.append(explicit) or "sess-1",
+        )
+        build_calls = []
+
+        def _fake_build_session_context(sid, **kw):
+            build_calls.append((sid, kw))
+            return "durable content"
+
+        monkeypatch.setattr(
+            real_session_store, "build_session_context", _fake_build_session_context
+        )
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            await build_context_messages(
+                session_id="explicit-sid",
+                caller_context="looking for docs on FastAPI",
+                target_provider="openai",
+            )
+
+        assert resolve_calls == ["explicit-sid"]
+        assert len(build_calls) == 1
+        sid_arg, kwargs = build_calls[0]
+        assert sid_arg == "sess-1"  # the *resolved* id, not the raw explicit param
+        assert kwargs["query"] == "looking for docs on FastAPI"
+        assert kwargs["target_provider"] == "openai"
+        assert kwargs["max_tokens"] == 1500  # RouterConfig default
+
+    @pytest.mark.asyncio
+    async def test_mcp_budget_from_config_is_forwarded_as_max_tokens(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.config as real_config
+        import chuzom.session_store as real_session_store
+        from types import SimpleNamespace
+
+        monkeypatch.setattr(
+            real_session_store, "resolve_session_id", lambda explicit=None: "sess-1"
+        )
+        build_calls = []
+
+        def _fake_build_session_context(sid, **kw):
+            build_calls.append(kw)
+            return "durable content"
+
+        monkeypatch.setattr(
+            real_session_store, "build_session_context", _fake_build_session_context
+        )
+        monkeypatch.setattr(
+            real_config, "get_config", lambda: SimpleNamespace(session_context_max_tokens_mcp=42)
+        )
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            await build_context_messages()
+
+        assert build_calls[0]["max_tokens"] == 42
+
+    @pytest.mark.asyncio
+    async def test_get_config_raising_falls_back_to_default_budget(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.config as real_config
+        import chuzom.session_store as real_session_store
+
+        monkeypatch.setattr(
+            real_session_store, "resolve_session_id", lambda explicit=None: "sess-1"
+        )
+        build_calls = []
+
+        def _fake_build_session_context(sid, **kw):
+            build_calls.append(kw)
+            return "durable content"
+
+        monkeypatch.setattr(
+            real_session_store, "build_session_context", _fake_build_session_context
+        )
+
+        def _raise():
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(real_config, "get_config", _raise)
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            msgs = await build_context_messages()
+
+        # get_config() raising is caught by its own inner try/except, falling
+        # back to the documented default of 1500 — layer 2b must still work.
+        assert build_calls[0]["max_tokens"] == 1500
+        assert len(msgs) == 1
+        assert "durable content" in msgs[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_empty_durable_context_contributes_nothing(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.session_store as real_session_store
+
+        monkeypatch.setattr(
+            real_session_store, "resolve_session_id", lambda explicit=None: "sess-1"
+        )
+        monkeypatch.setattr(
+            real_session_store, "build_session_context", lambda *a, **kw: ""
+        )
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            msgs = await build_context_messages()
+
+        assert msgs == []
+
+    @pytest.mark.asyncio
+    async def test_ordering_layer2b_before_layer3_caller_context(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.session_store as real_session_store
+
+        monkeypatch.setattr(
+            real_session_store, "resolve_session_id", lambda explicit=None: "sess-1"
+        )
+        monkeypatch.setattr(
+            real_session_store,
+            "build_session_context",
+            lambda *a, **kw: "DURABLE_MARKER content",
+        )
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            msgs = await build_context_messages(caller_context="CALLER_MARKER info")
+
+        assert len(msgs) == 1
+        content = msgs[0]["content"]
+        assert content.index("DURABLE_MARKER") < content.index("CALLER_MARKER")
+
+    # ── fail-open ─────────────────────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_resolve_session_id_raising_is_fail_open(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.session_store as real_session_store
+
+        def _raise(explicit=None):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(real_session_store, "resolve_session_id", _raise)
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            # Other layers (none active here) still resolve fine; the whole
+            # call must not raise despite layer 2b's resolve_session_id
+            # blowing up.
+            msgs = await build_context_messages(caller_context="still works")
+
+        assert len(msgs) == 1
+        assert "still works" in msgs[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_build_session_context_raising_is_fail_open(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        import chuzom.session_store as real_session_store
+
+        monkeypatch.setattr(
+            real_session_store, "resolve_session_id", lambda explicit=None: "sess-1"
+        )
+
+        def _raise(*a, **kw):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(real_session_store, "build_session_context", _raise)
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            msgs = await build_context_messages(caller_context="still works")
+
+        assert len(msgs) == 1
+        assert "still works" in msgs[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_session_store_import_failure_is_fail_open(
+        self, tmp_path, reset_session_buffer, monkeypatch
+    ):
+        """Simulate the `from chuzom import session_store` import line itself
+        failing (e.g. a packaging/circular-import problem) by making the
+        already-imported module object unavailable under its expected name.
+        The surrounding bare `except Exception` must still make layer 2b a
+        harmless no-op rather than breaking the whole function."""
+        import sys
+
+        monkeypatch.setitem(sys.modules, "chuzom.session_store", None)
+
+        db_path = tmp_path / "empty.db"
+        with patch("chuzom.context._get_db_path", return_value=db_path):
+            msgs = await build_context_messages(caller_context="still works")
+
+        assert len(msgs) == 1
+        assert "still works" in msgs[0]["content"]
+
+
 class TestAutoSummarize:
     @pytest.fixture
     def db_path(self, tmp_path):
