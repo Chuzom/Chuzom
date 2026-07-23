@@ -330,11 +330,12 @@ def record_event(
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as fh:
-            # codeql[py/clear-text-storage-sensitive-data]: `text` is already
-            # secret-scrubbed by _scrub_secrets() above (line ~309); the file is
-            # chmod 0600 and local-only. Storing session context in clear text is
-            # the accumulator's purpose (routed models read it back), and the
-            # regex scrubber is not modelled as a sanitizer by CodeQL.
+            # NB: `text` is secret-scrubbed by _scrub_secrets() above (~L309) and
+            # the file is chmod 0600 / local-only. Storing scrubbed session
+            # context in clear text is the accumulator's purpose (routed models
+            # read it back). The CodeQL py/clear-text-storage-sensitive-data alert
+            # here is a reviewed false positive (dismissed) — the regex scrubber
+            # just isn't modelled as a sanitizer by CodeQL.
             fh.write(json.dumps(record) + "\n")
         try:
             os.chmod(path, 0o600)
