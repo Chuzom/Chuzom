@@ -245,10 +245,10 @@ def get_mode() -> str:
 # ── Recording ────────────────────────────────────────────────────────────────
 
 def _content_hash(content: str) -> str:
-    # Change-detection/dedup key, not a security hash (bandit B324).
-    return hashlib.sha1(
-        content.encode("utf-8", errors="ignore"), usedforsecurity=False
-    ).hexdigest()[:12]
+    # Change-detection/dedup key over already-secret-scrubbed text. SHA-256 (not
+    # SHA-1) so CodeQL py/weak-sensitive-data-hashing stays clean even though the
+    # input is sanitised upstream by _scrub_secrets().
+    return hashlib.sha256(content.encode("utf-8", errors="ignore")).hexdigest()[:12]
 
 
 def _last_record(path: Path) -> dict[str, Any] | None:
