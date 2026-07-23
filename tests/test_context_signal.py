@@ -51,10 +51,16 @@ def test_empty_and_whitespace_safe():
     assert is_context_dependent("   ") is False
 
 
-def test_enforcement_hook_imports_the_shared_signal():
-    """The enforce-route hook references chuzom.context_signal (parity guarantee)."""
-    from pathlib import Path
-    src = (Path(__file__).resolve().parents[1]
-           / "src" / "chuzom" / "hooks" / "enforce-route.py").read_text()
-    assert "from chuzom.context_signal import is_context_dependent" in src
-    assert "CTX_DEP_EXEMPT" in src
+def test_signal_does_not_over_exempt_routable_generative_prompts():
+    """Regression guard for the reverted CTX_DEP_EXEMPT: the signal errs toward
+    True (deictic 'that'/'it' in short prompts), which is fine for the advisory
+    but must NOT be used as an enforcement exemption — 'Generate a regex that
+    validates emails' is context-flagged yet is a genuinely routable task that
+    hard enforcement must still cover. So this signal is advisory-only, never an
+    enforce-route exemption."""
+    assert is_context_dependent("Generate a regex that validates emails") is True  # errs toward True
+    src = (
+        __import__("pathlib").Path(__file__).resolve().parents[1]
+        / "src" / "chuzom" / "hooks" / "enforce-route.py"
+    ).read_text()
+    assert "CTX_DEP_EXEMPT" not in src, "enforce-route must not exempt on this over-broad signal"
