@@ -2601,7 +2601,13 @@ def main() -> None:
     # to the normal classifier chain.
     try:
         from chuzom import sidecar as _sidecar
-        if _sidecar.is_enabled():
+        # CHZ-AUD-005: the sidecar fast-path injects pre-executed data into
+        # Claude's context (contextForAgent) — that IS invoking Claude, which
+        # strict zero-Claude mode forbids. This block exits before the
+        # downstream zero-Claude guard, so gate it here: under zero-Claude,
+        # skip the sidecar and let the prompt fall through to the
+        # zero-Claude routing/block path.
+        if not zero_claude and _sidecar.is_enabled():
             _handler = _sidecar.classify(prompt)
             if _handler is not None:
                 _pre = _sidecar.execute(_handler, prompt)
