@@ -57,6 +57,9 @@ async def llm_delegate(
         baseline_cost_per_milestone=baseline_cost_per_milestone,
         budget_cap_usd=budget_usd,
     )
+    # Record the honest saving into chuzom's ledger (fail-open — never breaks the call).
+    from chuzom.agentic.telemetry import record_delegation_savings
+    await record_delegation_savings(result)
     return json.dumps(result)
 
 
