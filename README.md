@@ -173,16 +173,17 @@ The session summary (shown when you close Claude Code) displays the exact per-mo
 Chuzom integrates with every major AI-assisted IDE. There are two fundamentally
 different integration modes — **push** and **pull** — with different guarantees:
 
-### Push routing — automatic, every prompt (Claude Code)
+### Push routing — automatic, self-contained prompts (Claude Code)
 
 Claude Code's `UserPromptSubmit` hook fires **before** the LLM sees your prompt.
-Chuzom intercepts it, routes to the cheapest capable model, and returns the result.
-Zero extra effort. Works on every single turn.
+When a prompt is **self-contained** (no need for your files, repo, or conversation
+history), Chuzom routes it to the cheapest capable model and answers directly —
+Claude never runs for that turn. Context-dependent turns stay with Claude, with
+Chuzom's routing advice attached (no blind drafts, no fabricated context).
 
 ```
-You type  →  hook fires  →  Chuzom routes  →  cheap model responds
-                ↑
-         LLM never sees the raw prompt
+Self-contained turn  →  hook fires  →  Chuzom routes  →  cheap model answers
+Context-dependent    →  hook fires  →  advisory only  →  Claude handles it
 ```
 
 ### Pull routing — model decides (Copilot, Cursor, Windsurf)
@@ -1241,7 +1242,11 @@ enforce: hard
 | `advise` | Routes prompts to cheap models, but the enforcement hook **never blocks any tool**. Zero friction. | Testing / evaluation |
 | `off` | Enforcement completely disabled. Routing directives still appear in context. | Debugging routing |
 
-**Auto-pivot:** In `smart` and `hard` modes, after 2 consecutive tool-call violations in a session, enforcement auto-downgrades to `soft` for the rest of that session. This prevents stuck patterns where Claude can't complete a legitimate task.
+**Auto-pivot:** In `smart` and `hard` modes, two mechanisms prevent stuck sessions:
+- **Per-turn trap** — 2 blocks of the *same tool* within a single user turn trigger an immediate auto-pivot for that turn.
+- **Session counter** — each blocked tool call increments a session-wide counter; at 3 violations you get an escalation warning, and at 4 enforcement auto-downgrades to `soft` for the rest of the session.
+
+Both escape valves are disabled under `strict`. An investigation-loop detector (same tool blocked 3+ times in 2 minutes) also releases the lock in non-strict modes.
 
 **Escape valve:** Prefix any prompt with `claude:` to bypass routing entirely for that turn:
 ```
@@ -1254,12 +1259,15 @@ claude: explain this function to me
 
 ### Direct execution mode (`CHUZOM_DIRECT_EXECUTION`)
 
-By default (`CHUZOM_DIRECT_EXECUTION=true`), the `UserPromptSubmit` hook answers simple prompts directly from the hook process — Claude never sees them and zero subscription tokens are consumed. The result is injected into the conversation as a cached answer.
+By default (`CHUZOM_DIRECT_EXECUTION=true`), the `UserPromptSubmit` hook executes simple prompts directly from the hook process. What happens next depends on `CHUZOM_RENDER_MODE` (default `auto`):
+
+- **Self-contained prompts** (no reference to your files, code, or earlier turns) are rendered in `block` mode — the turn is answered entirely from the hook, Claude is never invoked, and zero subscription tokens are consumed.
+- **Context-dependent prompts** are rendered in `echo` mode — the hook's result is passed to Claude as an unverified draft, and Claude still runs the turn (a normal Claude turn is consumed). Only `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` guarantees no Claude turn.
 
 If direct execution fails (Ollama unreachable, all providers fail), the hook falls through and injects a `⚡ MANDATORY ROUTE:` directive instead, so an MCP tool handles it.
 
 ```bash
-# Default — answer directly from hook, Claude never invoked
+# Default — answer directly from hook (Claude skipped only for self-contained prompts in auto mode)
 export CHUZOM_DIRECT_EXECUTION=true
 
 # MCP-tool mode — hook injects a routing directive, Claude calls the MCP tool
@@ -1311,7 +1319,7 @@ export CHUZOM_CLASSIFY_LOCAL_ONLY=false
 | `CHUZOM_CODEX_MODELS` | `gpt-5.5,gpt-5.4` | Codex model fallback chain |
 | `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
 | `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription quota tracking mode |
-| `CHUZOM_DIRECT_EXECUTION` | `true` | Answer prompts directly from hook (Claude never invoked) |
+| `CHUZOM_DIRECT_EXECUTION` | `true` | Answer prompts directly from hook; Claude is skipped only when the render mode resolves to `block` |
 | `CHUZOM_ENFORCE` | `smart` | Enforcement mode: `smart`, `soft`, `hard`, `strict`, `advise`, `off` |
 | `CHUZOM_CLASSIFY_LOCAL_ONLY` | auto | Restrict classification to local models only (privacy) |
 | `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |

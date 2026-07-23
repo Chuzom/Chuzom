@@ -36,6 +36,11 @@ class DirectResult:
     latency_ms: int
     input_tokens: int = 0
     output_tokens: int = 0
+    # Number of prior conversation turns (user/assistant messages from the
+    # Claude Code transcript) that were actually sent to the routed model.
+    # 0 = the call was context-free; >0 = history was included (§2.5), and
+    # display banners must not claim "no access to history".
+    history_turns: int = 0
 
 
 # ── System Prompts ────────────────────────────────────────────────────────────
@@ -311,6 +316,7 @@ def execute_chain(
                 latency_ms=latency_ms,
                 input_tokens=usage.get("input_tokens", 0),
                 output_tokens=usage.get("output_tokens", 0),
+                history_turns=len(history or []),
             )
 
     return None  # All non-Claude models failed; the caller selects failover policy.

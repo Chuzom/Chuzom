@@ -694,6 +694,46 @@ def _is_introspection_task(prompt: str) -> bool:
     return (has_verb and has_target) or (has_possessive and has_target)
 
 
+# ── Coordination detection (multi-agent orchestration) ────────────────────────
+#
+# Prompts that ask Chuzom to conduct OTHER agents ("coordinate three agents
+# to build, test, and deploy") are plans, not payloads — routing the raw
+# prompt to a single model produces a monolithic answer instead of an
+# orchestration. These are advisory-only: the route indicator surfaces the
+# classification, but direct execution NEVER fires for them (the direct
+# path cannot spawn subagents, so a direct answer would be a fabricated
+# claim of parallel work).
+#
+# Two-signal requirement mirrors ``_is_introspection_task``: an
+# orchestration verb alone ("spawn a process") or an agent noun alone
+# ("what is an agent?") must NOT trigger — only the pairing does.
+
+_COORDINATE_VERBS = re.compile(
+    r"\b(coordinate|orchestrate|delegate(?:\s+to)?|dispatch|spawn|"
+    r"fan[\s-]?out|parallel(?:ize|ise)|split\s+(?:the\s+)?work|"
+    r"divide\s+(?:the\s+)?(?:work|tasks?))\b",
+    re.IGNORECASE,
+)
+_COORDINATE_TARGETS = re.compile(
+    r"\b(agents?|sub[\s-]?agents?|workers?|swarm|teammates?|"
+    r"specialists?|assistants?)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_coordination_task(prompt: str) -> bool:
+    """Return True when the prompt asks for multi-agent orchestration.
+
+    Requires an orchestration verb AND an agent-like target so that
+    "spawn a background process" (code) and "what's a subagent?" (query)
+    still route normally.
+    """
+    return bool(
+        _COORDINATE_VERBS.search(prompt)
+        and _COORDINATE_TARGETS.search(prompt)
+    )
+
+
 # ── Benchmark prompt fast-paths (Plan 07 Phase 3 C) ───────────────────────────
 #
 # Templated benchmark prompts (RouterArena, MMLU, HELM, etc.) have stable
@@ -1380,6 +1420,23 @@ def classify_prompt(text: str) -> dict | None:
     if SKIP_PATTERNS.search(stripped):
         return None
 
+    # Coordination fast-path: multi-agent orchestration prompts are plans,
+    # not payloads. Checked BEFORE the build/content fast-paths because
+    # "coordinate three agents to build X" contains build vocabulary but
+    # is orchestration, not a direct code task — the two-signal detector
+    # (verb + agent target) is higher precision than the single-signal
+    # build/generate detectors. The classification is ADVISORY-ONLY —
+    # direct execution must never fire for ``task_type == coordinate``
+    # (the direct path has no subagents; a direct answer would fabricate
+    # parallel work). The route indicator still surfaces the bucket and
+    # it is logged for telemetry like every other classification.
+    if _is_coordination_task(stripped):
+        return {
+            "task_type": "coordinate",
+            "complexity": classify_complexity(text, "analyze"),
+            "method": "coordination-fast-path",
+        }
+
     # Build task fast-path: deterministic llm_code routing for obvious coding work.
     if _is_build_task(stripped):
         return {
@@ -1743,6 +1800,26 @@ def _last_route_path(session_id: str) -> Path:
     return _ROUTER_DIR / f"last_route_{session_id}.json"
 
 
+def _transcript_shard_path(session_id: str) -> Path:
+    return _ROUTER_DIR / f"transcript_{session_id}.jsonl"
+
+
+def _append_transcript_shard(session_id: str, prompt: str, draft: str) -> None:
+    """Audit §2.5/P2: chuzom-answered turns never enter Claude Code's transcript
+    (the prompt was blocked), so later routed turns cannot see them. Keep a
+    rolling per-session shard (swept by ``chuzom gc`` via SHARD_PREFIXES) of
+    the prompt + delivered draft. Best-effort: never breaks routing."""
+    if not session_id or not (prompt or "").strip() or not (draft or "").strip():
+        return
+    try:
+        _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
+        with open(_transcript_shard_path(session_id), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"role": "user", "content": prompt.strip()}) + "\n")
+            fh.write(json.dumps({"role": "assistant", "content": draft.strip()}) + "\n")
+    except Exception:
+        pass
+
+
 def _save_last_route(session_id: str, task_type: str, complexity: str, tool: str) -> None:
     if not session_id:
         return
@@ -1949,6 +2026,7 @@ def _load_conversation_history(
     current_prompt: str,
     max_turns: int = 6,
     max_chars: int = 16000,  # ~4k tokens at ~4 chars/token
+    session_id: str = "",
 ) -> list[dict]:
     """Return the last ``max_turns`` user/assistant turns from the CC transcript.
 
@@ -1959,31 +2037,72 @@ def _load_conversation_history(
     separately). Returns ``[]`` on any error — history is best-effort, never
     allowed to break routing.
     """
-    if not transcript_path:
+    if not transcript_path and not session_id:
         return []
     try:
         turns: list[dict] = []
-        with open(transcript_path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                msg = entry.get("message") or {}
-                role = msg.get("role")
-                if role not in ("user", "assistant"):
-                    continue
-                text = _extract_turn_text(msg.get("content")).strip()
-                if text:
-                    turns.append({"role": role, "content": text})
+        # A missing/absent CC transcript must NOT short-circuit the shard merge
+        # below: sessions whose prompts were all blocked (zero-claude) have no
+        # CC transcript at all — the shard is their only history source.
+        _cc_lines: list[str] = []
+        if transcript_path:
+            try:
+                with open(transcript_path, encoding="utf-8") as fh:
+                    _cc_lines = fh.readlines()
+            except OSError:
+                _cc_lines = []
+        for line in _cc_lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            msg = entry.get("message") or {}
+            role = msg.get("role")
+            if role not in ("user", "assistant"):
+                continue
+            text = _extract_turn_text(msg.get("content")).strip()
+            if text:
+                turns.append({"role": role, "content": text})
 
         # Drop a trailing user turn identical to the current prompt (the hook
         # passes the prompt separately, so including it here would duplicate it).
         if turns and turns[-1]["role"] == "user" and turns[-1]["content"] == current_prompt.strip():
             turns.pop()
+
+        # Merge the per-session shard of chuzom-answered turns (audit §2.5/P2:
+        # those prompts were blocked, so they are absent from the CC transcript).
+        # Best-effort append with exact-content dedupe; ordering across the two
+        # sources is approximate, recency is enforced by the budget trim below.
+        if session_id:
+            try:
+                seen = {(t["role"], t["content"]) for t in turns}
+                cur = current_prompt.strip()
+                with open(_transcript_shard_path(session_id), encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entry = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        role = entry.get("role")
+                        text = (entry.get("content") or "").strip()
+                        if role not in ("user", "assistant") or not text:
+                            continue
+                        if role == "user" and text == cur:
+                            continue
+                        if (role, text) in seen:
+                            continue
+                        seen.add((role, text))
+                        turns.append({"role": role, "content": text})
+            except FileNotFoundError:
+                pass
+            except Exception:
+                pass
 
         # Keep the most recent turns within the token budget, oldest-first.
         recent = turns[-max_turns:]
@@ -2787,6 +2906,15 @@ def main() -> None:
         _direct_enabled = False
         _debug_log(f"[INVOCATION {invocation_id:.3f}] DIRECT SKIP: context-dependent prompt")
 
+    # Coordination prompts are advisory-only in ALL modes (including
+    # zero-Claude): the direct path has no subagents, so a pre-generated
+    # answer to "coordinate three agents to X" would fabricate parallel
+    # work that never happened. Claude (or the user) must do the actual
+    # orchestration; we only surface the classification.
+    if _direct_enabled and task_type == "coordinate":
+        _direct_enabled = False
+        _debug_log(f"[INVOCATION {invocation_id:.3f}] DIRECT SKIP: coordination task (advisory-only)")
+
     if _direct_enabled and _enforce_mode not in ("shadow", "off"):
         try:
             from chuzom.hooks.chain_builder import (
@@ -2837,9 +2965,21 @@ def main() -> None:
                 # conversation history so a bypassed context-dependent turn is
                 # answered with context, not blind (audit §2.5). Best-effort:
                 # an unreadable transcript yields [] and the stateless path.
-                _history = _load_conversation_history(
-                    hook_input.get("transcript_path", ""), prompt
-                )
+                # Privacy gate (audit P2): CHUZOM_HISTORY_RELAY=off keeps direct
+                # execution but never sends transcript turns to external models.
+                _relay_off = os.environ.get(
+                    "CHUZOM_HISTORY_RELAY", "on"
+                ).strip().lower() in ("0", "off", "false", "no")
+                if _relay_off:
+                    _history = []
+                    _debug_log(
+                        f"[INVOCATION {invocation_id:.3f}] HISTORY RELAY OFF (privacy gate)"
+                    )
+                else:
+                    _history = _load_conversation_history(
+                        hook_input.get("transcript_path", ""), prompt,
+                        session_id=session_id,
+                    )
                 _direct_result = _execute_chain(
                     prompt, _direct_chain, task_type,
                     timeout=OLLAMA_TIMEOUT, history=_history,
@@ -2851,6 +2991,9 @@ def main() -> None:
                     f"model={_direct_result.model.provider}/{_direct_result.model.model} "
                     f"latency={_direct_result.latency_ms}ms"
                 )
+                # Rolling per-session transcript shard (audit §2.5/P2): record
+                # this chuzom-answered turn so later routed turns can see it.
+                _append_transcript_shard(session_id, prompt, _direct_result.text)
                 # Visible UI signal — Claude Code surfaces stderr from
                 # UserPromptSubmit hooks under "UserPromptSubmit:hook success:",
                 # giving the user a real-time view of which model handled each
@@ -2859,11 +3002,12 @@ def main() -> None:
                 # Opt-out: CHUZOM_ROUTE_BANNER=off (env var).
                 if os.environ.get("CHUZOM_ROUTE_BANNER", "on").strip().lower() not in ("0", "off", "false", "no"):
                     try:
-                        _latency_s = _direct_result.latency_ms / 1000.0
+                        from chuzom.hooks.response_formatter import _format_latency
+                        _lat = _format_latency(_direct_result.latency_ms)
                         _toks = (_direct_result.input_tokens or 0) + (_direct_result.output_tokens or 0)
                         print(
                             f"🎯 Chuzom routed → {_direct_result.model.provider}/{_direct_result.model.model} "
-                            f"· {task_type}/{complexity} · {_latency_s:.1f}s · {_toks} tokens",
+                            f"· {task_type}/{complexity} · {_lat} · {_toks} tokens",
                             file=sys.stderr,
                         )
                     except Exception:
@@ -2891,31 +3035,49 @@ def main() -> None:
                 # historically did not, leaving both tables frozen whenever the
                 # hook answered prompts inline. Fire-and-forget — swallows all
                 # errors so it can never block the routing decision.
-                try:
-                    from chuzom.hooks.savings_logger import log_direct_to_db
-                    log_direct_to_db(
-                        result=_direct_result,
-                        prompt=prompt,
-                        task_type=task_type,
-                        complexity=complexity,
-                        classifier_type=method,
-                        session_id=session_id,
-                    )
-                except Exception:
-                    pass
                 # Choose render mode: "echo" passes through Claude for natural display,
-                # "block" uses zero-cost warning-styled display
+                # "block" uses zero-cost warning-styled display. "auto" (the
+                # P1 truthful-routing default) resolves to "block" for drafts
+                # answering self-contained prompts — outside zero-claude that is
+                # the only way a draft reaches this point, given the
+                # context-dependent gate above — and defensively falls back to
+                # advisory "echo" if that invariant is ever violated.
                 from chuzom.hooks.response_formatter import (
                     RENDER_MODE as _render_mode,
                     build_echo_output as _build_echo,
                     build_block_output as _build_block,
                 )
+                if _render_mode == "auto":
+                    _render_mode = (
+                        "echo"
+                        if (not zero_claude and _is_context_dependent(prompt))
+                        else "block"
+                    )
+                _turn_blocked = not (_render_mode == "echo" and not zero_claude)
+                # Persist into usage + routing_decisions ONLY for turns that
+                # actually bypass Claude (audit P1): an echo turn still consumes
+                # a full Claude turn, so counting it as a "saving" inflates the
+                # dashboard. Fire-and-forget — swallows all errors so it can
+                # never block the routing decision.
+                if _turn_blocked:
+                    try:
+                        from chuzom.hooks.savings_logger import log_direct_to_db
+                        log_direct_to_db(
+                            result=_direct_result,
+                            prompt=prompt,
+                            task_type=task_type,
+                            complexity=complexity,
+                            classifier_type=method,
+                            session_id=session_id,
+                        )
+                    except Exception:
+                        pass
                 _violation_notice = _prior_violation_notice(previous_unrouted)
                 # Audit §2.3: under zero-Claude a SUCCESSFUL route must bypass
                 # Claude (block), never fall to the advisory echo path — otherwise
-                # "strict" leaks on success. Echo remains the default only for
+                # "strict" leaks on success. Echo remains advisory-only for
                 # non-zero-Claude turns.
-                if _render_mode == "echo" and not zero_claude:
+                if not _turn_blocked:
                     _output = _build_echo(_direct_result, task_type, complexity)
                     # Include violation notice in contextForAgent for echo mode
                     if _violation_notice:
