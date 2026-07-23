@@ -1,0 +1,98 @@
+"""P2 — objective acceptance-check runners (docs/agentic-router.md §4.2)."""
+from __future__ import annotations
+
+import sys
+
+from chuzom.agentic.acceptance import (
+    canary_check,
+    cmd_check,
+    diff_check,
+    lint_check,
+    reproducible,
+    validator_check,
+)
+
+
+def test_canary_pass_and_fail():
+    chk = canary_check("PROVIDER_OK")
+    assert chk({"output": "...PROVIDER_OK..."}).ok
+    r = chk({"output": "nope"})
+    assert not r.ok and "not found" in r.reason
+
+
+def test_validator_pass_fail_and_error():
+    assert validator_check(lambda a: a["n"] == 5)({"n": 5}).ok
+    assert not validator_check(lambda a: a["n"] == 5)({"n": 4}).ok
+    # a broken validator fails closed, never raises
+    r = validator_check(lambda a: a["missing"])({})
+    assert not r.ok and "error" in r.reason
+
+
+def test_diff_check_files_and_symbols():
+    chk = diff_check(files=["a.py"], symbols=["def foo"])
+    assert chk({"files": ["a.py", "b.py"], "diff": "def foo(): ..."}).ok
+    miss = chk({"files": ["b.py"], "diff": "def bar(): ..."})
+    assert not miss.ok
+    assert "missing files" in miss.reason and "missing symbols" in miss.reason
+
+
+def test_cmd_check_pass_fail_notfound_timeout():
+    assert cmd_check([sys.executable, "-c", "import sys; sys.exit(0)"])({}).ok
+    fail = cmd_check([sys.executable, "-c", "import sys; sys.exit(3)"])({})
+    assert not fail.ok and "exit 3" in fail.reason
+    nf = cmd_check(["definitely-not-a-real-binary-xyz"])({})
+    assert not nf.ok and "not found" in nf.reason and nf.deterministic
+    to = cmd_check([sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.2)({})
+    assert not to.ok and "timed out" in to.reason and to.deterministic
+
+
+def test_lint_check_missing_linter_is_nondeterministic():
+    chk = lint_check(["x.py"], linter="no-such-linter-binary")
+    r = chk({})
+    assert not r.ok and not r.deterministic  # unknown, not a hard fail → engine re-runs
+
+
+def test_reproducible_detects_flaky_and_passes_stable():
+    # stable check → verdict passes through unchanged
+    assert reproducible(canary_check("OK"))({"output": "OK"}).ok
+
+    # a flapping check (verdict flips each call) → flagged non-deterministic
+    state = {"i": 0}
+
+    def flapping(_artifacts):
+        state["i"] += 1
+        from chuzom.agentic.ledger import AcceptanceResult
+        return AcceptanceResult(state["i"] % 2 == 1)
+
+    r = reproducible(flapping)({})
+    assert not r.ok and not r.deterministic
+
+
+def test_reproducible_composes_with_engine_flaky_rerun():
+    """A reproducible() wrapper that reports non-deterministic must make the
+    engine re-run once (not escalate) — end-to-end with the real engine."""
+    from chuzom.agentic.engine import MGEEEngine, Outcome
+    from chuzom.agentic.ledger import AcceptanceResult, Milestone, TaskLedger
+
+    calls = {"n": 0}
+
+    def eventually_ok(_artifacts):
+        # non-reproducible on the 1st verify, deterministically ok afterward
+        calls["n"] += 1
+        if calls["n"] <= 1:
+            return AcceptanceResult(False, "flaky", deterministic=False)
+        return AcceptanceResult(True)
+
+    class OneTier:
+        tier = 0
+
+        def run(self, milestone, frozen_context, budget_left):
+            from chuzom.agentic.engine import AgentRunResult
+            return AgentRunResult({"ok": True}, 0.01)
+
+    ms = [Milestone("M1", "", eventually_ok)]
+    res = MGEEEngine({0: OneTier(), 1: OneTier()}).run(
+        TaskLedger(goal="t", milestones=ms, budget_cap_usd=10.0)
+    )
+    assert res.outcome is Outcome.COMPLETE
+    assert ms[0].achieved_by == 0  # re-ran on tier 0, never escalated on the flake
