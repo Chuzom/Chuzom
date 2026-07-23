@@ -237,14 +237,41 @@ def _write_agent_depth(session_id: str, depth: int) -> None:
 
 # ── Agent call tracking (for error recovery) ────────────────────────────────
 
+# Inline secret patterns (this file is loaded standalone by Claude Code as a
+# hook, so we can't rely on the chuzom package being importable). Mirrors
+# chuzom.library.store.scrub_secrets — inline substitution preserves the
+# surrounding prompt for error-recovery context while stripping credentials.
+# 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
+_AGENT_SECRET_PATTERNS = [
+    re.compile(r"\b[A-Z][A-Z0-9_]*_(?:API_)?KEY\s*[=:]\s*\S+"),
+    re.compile(r"\b(?:sk|pk|rk)-[A-Za-z0-9_\-]{16,}"),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(
+        r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"
+    ),
+]
+
+
+def _scrub_agent_prompt(text: str) -> str:
+    """Redact common credential patterns from a prompt before persisting."""
+    for pat in _AGENT_SECRET_PATTERNS:
+        text = pat.sub("[REDACTED]", text)
+    return text
+
+
 def _log_agent_call(subagent_type: str, prompt: str, decision: str) -> None:
     """Log agent call for error recovery tracking.
-    
+
     Persists to ~/.chuzom/agent_calls.json with a rolling history of last 50 calls.
     Used by PostToolUse[Agent] hook to suggest fallbacks when agents fail.
+
+    Secrets in the prompt are scrubbed before storage and the file is written
+    owner-only (0o600) so pasted credentials can't leak to other local users.
     """
     calls_file = Path.home() / ".chuzom" / "agent_calls.json"
-    
+
     # Read existing history
     history = []
     try:
@@ -252,24 +279,30 @@ def _log_agent_call(subagent_type: str, prompt: str, decision: str) -> None:
         history = data.get("calls", [])
     except (FileNotFoundError, json.JSONDecodeError):
         pass
-    
-    # Append new call
+
+    # Append new call (scrub secrets before truncating/storing)
     history.append({
         "timestamp": time.time(),
         "subagent_type": subagent_type,
-        "prompt": prompt[:500],  # Truncate long prompts
+        "prompt": _scrub_agent_prompt(prompt[:500]),  # scrub + truncate
         "decision": decision,
         "session_id": _get_session_id(),
     })
-    
+
     # Keep last 50 calls only
     history = history[-50:]
-    
-    # Write back
+
+    # Write back owner-only.
+    # 🥷 Backslash-Security: using vibe-coding rules for File Upload Security
+    calls_file.parent.mkdir(parents=True, exist_ok=True)
     calls_file.write_text(json.dumps({
         "calls": history,
         "version": 1,
     }))
+    try:
+        os.chmod(calls_file, 0o600)
+    except OSError:
+        pass
 
 
 # ── Agent cost estimation ───────────────────────────────────────────────────

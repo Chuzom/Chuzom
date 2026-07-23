@@ -431,17 +431,37 @@ async def build_context_messages(
     global _last_optimization
     parts: list[str] = []
 
-    # Layer 1: Previous session summaries
-    summaries = await get_recent_session_summaries(limit=max_previous_sessions)
-    session_context = format_session_summaries(summaries)
-    if session_context:
-        parts.append(session_context)
+    # Resolve the session-context privacy mode once, up front, so EVERY context
+    # layer (not just the Session Context Accumulator in layer 2b) honors it.
+    # 'off' blocks all cross-session/session context; 'local' additionally
+    # blocks external paid providers (openai/gemini). Fails open to 'all'.
+    # 🥷 Backslash-security: Enforce privacy gate to prevent unauthorized data egress.
+    try:
+        from chuzom import session_store
+        privacy_mode = session_store.get_mode()
+    except Exception:
+        privacy_mode = "all"
+    _blocks_external = privacy_mode == "local" and target_provider in ("openai", "gemini")
+    _context_suppressed = privacy_mode == "off" or _blocks_external
 
-    # Layer 2: Current session messages
-    buf = get_session_buffer()
-    current_context = buf.format_for_injection(n=max_session_messages)
-    if current_context:
-        parts.append(current_context)
+    # Layer 1: Previous session summaries. These are LLM-generated summaries of
+    # prior sessions — under 'local' they must not reach external paid APIs, and
+    # under 'off' they are disabled entirely. Previously this layer bypassed the
+    # gate that build_session_context (layer 2b) already enforced (CHZ-AUD-023).
+    if not _context_suppressed:
+        summaries = await get_recent_session_summaries(limit=max_previous_sessions)
+        session_context = format_session_summaries(summaries)
+        if session_context:
+            parts.append(session_context)
+
+    # Layer 2: Current session messages. Same privacy gate as layer 1 — the
+    # in-process buffer is verbatim session content and must not leak to
+    # external paid APIs under 'local', nor be sent at all under 'off'.
+    if not _context_suppressed:
+        buf = get_session_buffer()
+        current_context = buf.format_for_injection(n=max_session_messages)
+        if current_context:
+            parts.append(current_context)
 
     # Layer 2b: Durable session context (Session Context Accumulator) — user
     # prompts, tool calls, and routed Q&A recorded to a per-session JSONL

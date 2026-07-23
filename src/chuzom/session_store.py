@@ -67,6 +67,28 @@ _STOPWORDS = {
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
+# Credential patterns scrubbed from event content before it is persisted or
+# later injected into routed (incl. external) model calls. Inline substitution
+# preserves the surrounding prompt/response for context while stripping
+# secrets. Mirrors chuzom.library.store.scrub_secrets.
+_SECRET_PATTERNS = [
+    re.compile(r"\b[A-Z][A-Z0-9_]*_(?:API_)?KEY\s*[=:]\s*\S+"),
+    re.compile(r"\b(?:sk|pk|rk)-[A-Za-z0-9_\-]{16,}"),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(
+        r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"
+    ),
+]
+
+
+def _scrub_secrets(text: str) -> str:
+    """Redact credential patterns from event content before persistence."""
+    for pat in _SECRET_PATTERNS:
+        text = pat.sub("[REDACTED]", text)
+    return text
+
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 
@@ -75,16 +97,46 @@ def _state_dir() -> Path:
     return Path(os.path.expanduser("~")) / ".chuzom"
 
 
+def _project_id() -> str:
+    """Stable identifier for the current project scope.
+
+    Precedence: ``$CHUZOM_PROJECT_ID`` (explicit override) → a short hash of
+    the current working directory. Cross-project isolation depends on this:
+    session-context files for one project live under a different subdirectory
+    than another's, so Project B cannot enumerate or load Project A's context
+    without knowing the exact session id *and* sharing its project scope.
+    """
+    try:
+        explicit = os.environ.get("CHUZOM_PROJECT_ID", "").strip()
+        if explicit:
+            return re.sub(r"[^A-Za-z0-9._-]", "_", explicit)[:64] or "default"
+    except Exception:
+        pass
+    try:
+        cwd = os.getcwd()
+    except Exception:
+        cwd = os.path.expanduser("~")
+    # Namespacing key, not a security hash (usedforsecurity=False → bandit B324).
+    return hashlib.sha1(
+        cwd.encode("utf-8", errors="ignore"), usedforsecurity=False
+    ).hexdigest()[:16]
+
+
+def _project_dir() -> Path:
+    """Project-scoped state dir: ``~/.chuzom/projects/<project_id>``."""
+    return _state_dir() / "projects" / _project_id()
+
+
 def _sanitize(session_id: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", session_id) or "unknown"
 
 
 def _session_path(session_id: str) -> Path:
-    return _state_dir() / f"session_context_{_sanitize(session_id)}.jsonl"
+    return _project_dir() / f"session_context_{_sanitize(session_id)}.jsonl"
 
 
 def _pointer_path() -> Path:
-    return _state_dir() / "current_session.json"
+    return _project_dir() / "current_session.json"
 
 
 # ── Atomic JSON write (same pattern as enforce-route.py / auto-route.py) ───
@@ -193,7 +245,10 @@ def get_mode() -> str:
 # ── Recording ────────────────────────────────────────────────────────────────
 
 def _content_hash(content: str) -> str:
-    return hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    # Change-detection/dedup key, not a security hash (bandit B324).
+    return hashlib.sha1(
+        content.encode("utf-8", errors="ignore"), usedforsecurity=False
+    ).hexdigest()[:12]
 
 
 def _last_record(path: Path) -> dict[str, Any] | None:
@@ -240,12 +295,18 @@ def record_event(
     try:
         if not session_id or not content:
             return
+        # Privacy kill-switch: with CHUZOM_SESSION_CONTEXT=off (or config
+        # session_context_enabled=false) nothing is persisted to disk.
+        if get_mode() == "off":
+            return
         text = _INJECTED_CTX_RE.sub("", content).strip()
         if not text:
             return
         text = collapse_whitespace(text)
         if len(text) > max_chars:
             text = text[:max_chars]
+        # Strip credentials before they hit disk / later external injection.
+        text = _scrub_secrets(text)
         text = text.strip()
         if not text:
             return
@@ -449,7 +510,11 @@ def cleanup_old_sessions(max_age_days: int = _TTL_DAYS) -> None:
         if not state_dir.exists():
             return
         cutoff = time.time() - max_age_days * 86400
-        for p in state_dir.glob("session_context_*.jsonl"):
+        # Match both legacy flat files and project-scoped subdirs.
+        stale = list(state_dir.glob("session_context_*.jsonl")) + list(
+            state_dir.glob("projects/*/session_context_*.jsonl")
+        )
+        for p in stale:
             try:
                 if p.stat().st_mtime < cutoff:
                     p.unlink()
