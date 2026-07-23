@@ -20,8 +20,6 @@ import os
 import sys
 from pathlib import Path
 
-import pytest
-
 HOOK = Path(__file__).resolve().parents[1] / "src" / "chuzom" / "hooks" / "auto-route.py"
 
 SIDECAR_CANARY = "SIDECAR_CANARY_DATA_ZC"
