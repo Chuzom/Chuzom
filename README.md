@@ -1268,7 +1268,7 @@ claude: explain this function to me
 By default (`CHUZOM_DIRECT_EXECUTION=true`), the `UserPromptSubmit` hook executes simple prompts directly from the hook process. What happens next depends on `CHUZOM_RENDER_MODE` (default `auto`):
 
 - **Self-contained prompts** (no reference to your files, code, or earlier turns) are rendered in `block` mode — the turn is answered entirely from the hook, Claude is never invoked, and zero subscription tokens are consumed.
-- **Context-dependent prompts** are rendered in `echo` mode — the hook's result is passed to Claude as an unverified draft, and Claude still runs the turn (a normal Claude turn is consumed). Only `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` guarantees no Claude turn.
+- **Context-dependent prompts** are rendered in `echo` mode — the hook's result is passed to Claude as an unverified draft, and Claude still runs the turn (a normal Claude turn is consumed). Only `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` prevents a Claude turn entirely.
 
 If direct execution fails (Ollama unreachable, all providers fail), the hook falls through and injects a `⚡ MANDATORY ROUTE:` directive instead, so an MCP tool handles it.
 
