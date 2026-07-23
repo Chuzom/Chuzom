@@ -75,7 +75,7 @@ Milestone = {
   "status": "pending|in_progress|done|blocked",
   "deps": [milestone_id],            # DAG edges (default: linear chain)
   "artifacts": [ ... ],              # diffs, files, command outputs produced
-  "achieved_by": tier | None,        # provenance
+  "achieved_by": tier | None,        # which tier cleared it
   "attempts": [ {tier, ok, reason, cost} ],
 }
 
@@ -126,7 +126,7 @@ Actions are classified by reversibility. A milestone whose acceptance requires a
 it runs edits in a **git worktree**, the diff/action is verified, and the irreversible step
 is either main-loop-executed or human-confirmed before the milestone is marked done.
 
-## 5. Anti-stuck invariants (the "flow, never blocked" guarantees)
+## 5. Anti-stuck invariants (the "flow, never blocked" properties)
 
 | Invariant | Mechanism |
 |---|---|
@@ -164,7 +164,7 @@ Each line states **which milestone · which model · pass/fail · why on escalat
 
 ## 8. Scenario & edge-case test matrix (the loop's target)
 
-The **P1 deterministic core is proven with FAKE agents** (stubs whose pass/fail/behaviour is
+The **P1 deterministic core is verified with FAKE agents** (stubs whose pass/fail/behaviour is
 scripted), so the *flow* is verified before any real model is involved.
 
 | # | Scenario | Assert |
