@@ -63,9 +63,10 @@ class TestToolTiers:
     def test_tier_summary_returns_string(self):
         from chuzom.tool_tiers import tier_summary
 
-        assert "41" in tier_summary("off") or "43" in tier_summary("off")
+        assert "all" in tier_summary("off").lower()   # off = all tools (count is dynamic)
         assert "routing" in tier_summary("routing")
         assert "core" in tier_summary("core")
+        assert "consolidated" in tier_summary("consolidated")
 
 
 # ── Session spend ─────────────────────────────────────────────────────────────
