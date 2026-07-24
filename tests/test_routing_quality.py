@@ -52,3 +52,27 @@ def test_record_is_fail_open_on_bad_path(tmp_path):
 
 def test_summarize_missing_ledger_is_empty(tmp_path):
     assert summarize(path=str(tmp_path / "nope.jsonl")) == {"routes": 0}
+
+
+def test_weak_pass_flagged_when_only_local_tier_clears(tmp_path):
+    """P3: a delegation completed entirely on tier 0 (local best-effort) is a
+    lower-confidence 'weak pass' — flagged for review, NOT auto-escalated."""
+    from chuzom.routing_quality import record_delegation, summarize
+    ledger = tmp_path / "rq.jsonl"
+    result = {"outcome": "complete",
+              "milestones": [{"achieved_by": 0}, {"achieved_by": 0}],
+              "savings": {"actual_usd": 0.0, "baseline_usd": 0.4, "saved_usd": 0.4}}
+    assert record_delegation(result, path=str(ledger)) is True
+    s = summarize(path=str(ledger))
+    assert s["weak_pass_rate"] == 1.0 and s["escalation_rate"] == 0.0
+
+
+def test_escalated_completion_is_not_a_weak_pass(tmp_path):
+    from chuzom.routing_quality import record_delegation, summarize
+    ledger = tmp_path / "rq.jsonl"
+    result = {"outcome": "complete",
+              "milestones": [{"achieved_by": 0}, {"achieved_by": 1}],  # escalated to tier 1
+              "savings": {"saved_usd": 0.2}}
+    record_delegation(result, path=str(ledger))
+    s = summarize(path=str(ledger))
+    assert s["weak_pass_rate"] == 0.0 and s["escalation_rate"] == 1.0
