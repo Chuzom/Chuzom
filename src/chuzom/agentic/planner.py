@@ -9,6 +9,7 @@ so unit tests drive it with a fake — no live model.
 """
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -23,8 +24,9 @@ from chuzom.agentic.ledger import AcceptanceCheck, Milestone
 # Only these acceptance types may be emitted by a planner — all objective/executable.
 ALLOWED_CHECK_TYPES = frozenset({"cmd", "lint", "diff", "canary"})
 
-# planner_model(goal) -> raw plan: list of milestone dicts.
-PlannerModel = Callable[[str], list[dict[str, Any]]]
+# planner_model(goal) -> raw plan (list of milestone dicts), sync OR async.
+# The live default planner is async (it calls chuzom routing); test fakes are sync.
+PlannerModel = Callable[[str], Any]
 
 
 class PlanRejected(ValueError):
@@ -74,9 +76,16 @@ def plan_to_milestones(plan: list[dict[str, Any]]) -> list[Milestone]:
     return milestones
 
 
-def hybrid_plan(goal: str, planner_model: PlannerModel) -> list[Milestone]:
-    """Ask the (injected) planner model for a breakdown, then constrain + build it."""
+async def hybrid_plan(goal: str, planner_model: PlannerModel) -> list[Milestone]:
+    """Ask the (injected) planner model for a breakdown, then constrain + build it.
+
+    Async so the live default planner can call chuzom routing. Tolerates a sync
+    planner (test fakes) — if the result is awaitable it's awaited, otherwise used
+    directly.
+    """
     raw = planner_model(goal)
+    if inspect.isawaitable(raw):
+        raw = await raw
     if not isinstance(raw, list):
         raise PlanRejected(f"planner must return a list of milestones, got {type(raw).__name__}")
     return plan_to_milestones(raw)
