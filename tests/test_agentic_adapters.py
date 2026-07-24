@@ -47,6 +47,9 @@ def test_codex_adapter_captures_runner_output():
     argv = calls[0][0]
     assert argv[:2] == ["codex-x", "exec"]
     assert "--json" in argv and "--skip-git-repo-check" in argv
+    # workspace-write sandbox is REQUIRED — without it codex runs read-only and
+    # every patch is rejected (Phase B: "writing is blocked by read-only sandbox").
+    assert "--sandbox" in argv and "workspace-write" in argv
     assert argv[-1].startswith("TASK: do it")
 
 

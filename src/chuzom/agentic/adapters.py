@@ -72,6 +72,11 @@ class CodexAdapter:
     model: str | None = None        # e.g. 'gpt-5.5'; omitted → Codex CLI default
     cwd: str | None = None          # working dir codex edits in (also where diff is captured)
     capture_diff: bool = True       # capture `git diff` after the run as the produced artifact
+    # Codex defaults to a READ-ONLY sandbox in exec mode, which rejects every
+    # patch ("writing is blocked by read-only sandbox") — a delegated agent that
+    # cannot write is useless. workspace-write confines edits to the workspace
+    # (cwd) without granting full-disk/network access. Overridable per adapter.
+    sandbox_mode: str = "workspace-write"
     cost_per_call_usd: float = 0.0
 
     def __post_init__(self) -> None:
@@ -89,6 +94,8 @@ class CodexAdapter:
 
     def _codex_argv(self, binary: str, prompt: str) -> list[str]:
         argv = [binary, "exec", "--json", "--color", "never", "--skip-git-repo-check"]
+        if self.sandbox_mode:
+            argv += ["--sandbox", self.sandbox_mode]
         if self.model:
             argv += ["-m", self.model, "-c", "model_provider=openai"]
         if self.cwd:
