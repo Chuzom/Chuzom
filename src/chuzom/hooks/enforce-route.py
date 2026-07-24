@@ -207,9 +207,12 @@ def _is_operational_prompt(prompt: str) -> bool:
 
 
 def _delegate_route_enabled() -> bool:
-    """The enforced operational→delegate redirect is on by default; a
-    ``CHUZOM_DELEGATE=off`` kill switch disables it without touching enforcement."""
-    return os.environ.get("CHUZOM_DELEGATE", "").strip().lower() not in ("off", "0", "false", "no")
+    """The enforced operational→delegate redirect is OFF by default until the
+    agentic executor is sandboxed (North Star P1). Fable 5 audit R1: routing an
+    operational prompt to llm_delegate hands a cheap model UNRESTRICTED bash/write
+    in the user's repo (no command allowlist inside the MGEE loop). Opt in with
+    CHUZOM_DELEGATE=on/1/true/yes once P1 lands the bash allowlist + path guards."""
+    return os.environ.get("CHUZOM_DELEGATE", "").strip().lower() in ("on", "1", "true", "yes")
 
 
 def _is_readonly_bash(command: str) -> bool:
