@@ -427,16 +427,16 @@ Every prompt flows through a **smart classification pipeline**:
 
 ---
 
-## Agentic Router (experimental)
+## Agentic Router (v0.9.0)
 
-> Status: experimental, opt-in. Design + phased plan in [`Docs/agentic-router.md`](Docs/agentic-router.md).
+> Status: real but maturing. Design + phased plan in [`Docs/agentic-router.md`](Docs/agentic-router.md).
 
 Beyond routing a single completion, Chuzom can delegate a whole task to the cheapest **capable, tool-using agent** and verify the result — via the `llm_delegate` MCP tool.
 
 How it works (Milestone-Gated Escalating Execution):
 
 1. **Plan** — a task is decomposed into milestones, each with an **objective, executable acceptance check** (`cmd` / `lint` / `diff` / `canary`). A milestone is "done" only when that check passes — not on the model's self-report.
-2. **Delegate** — each milestone runs on the cheapest capable tier (local agent → Codex → premium).
+2. **Delegate** — each milestone runs on the cheapest capable tier (local ReAct/Ollama agent → Codex → premium).
 3. **Escalate without rework** — if a milestone's check fails, it escalates to a stronger tier, carrying the already-passed milestones forward as frozen context (the stronger model resumes at the frontier, it doesn't redo finished work).
 4. **Flow, not stall** — escalation is bounded and one-directional over a finite tier ladder; a milestone that can't be met is *surfaced* with the exact failing criterion (and irreversible steps run in an isolated git worktree, merged only after they verify). It reports progress as a live event stream, and records the honest saving (including any escalation churn) into the usage ledger.
 
@@ -444,6 +444,18 @@ How it works (Milestone-Gated Escalating Execution):
 # via MCP
 llm_delegate(task="…")   # → JSON: outcome, per-milestone status, events, savings
 ```
+
+**Classifier-selectable (new in v0.9.0).** You don't have to call `llm_delegate` by hand.
+Prompts with a code-mutating verb **and** an objective-verification demand (e.g. *"fix the
+failing test and make it pass"*) are automatically routed to delegation — a stateless
+completion model can't *do* that work, but the delegated tool loop can. It's high-precision
+by design; disable with `CHUZOM_DELEGATE=off` (and `CHUZOM_ENFORCE=soft/off` still relaxes
+enforcement). Any `llm_*` call clears the route, so you're never trapped.
+
+**Known limitations (honest scoping).** Delegated agents get the task's own milestone
+context but **not** the broader Claude Code session conversation yet. The local tier-0 agent
+is best-effort — Codex is the dependable tier and escalation covers tier-0 gaps. Delegation
+needs a healthy analyze/query route to produce the plan.
 
 This is additive — the per-completion routing below is unchanged.
 
