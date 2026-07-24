@@ -120,7 +120,7 @@ def test_enforce_route_soft_mode_still_logs_but_allows(tmp_path):
     assert result.stdout.strip() == ""
     log_text = (tmp_path / ".chuzom" / "enforcement.log").read_text(encoding="utf-8")
     assert "VIOLATION" in log_text
-    assert "expected=llm_query" in log_text
+    assert "expected=llm" in log_text          # consolidated default → door name in the log
 
 
 def test_enforce_route_allows_file_tools_to_prevent_stuck_patterns(tmp_path):

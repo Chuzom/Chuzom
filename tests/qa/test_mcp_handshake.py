@@ -104,47 +104,44 @@ def test_mcp_tools_list_returns_tool_set():
 
 
 @requires_mcp_client
-def test_mcp_tools_include_text_tools():
-    """The canonical llm_query / llm_research / llm_analyze / llm_code /
-    llm_generate set must be registered."""
+def test_mcp_tools_include_completion_doors():
+    """0.10.0 default (consolidated): the completion door `llm` and the agentic
+    door `llm_act` must be registered — the collapsed text/execution surface."""
     tools = asyncio.run(asyncio.wait_for(_list_tools_via_stdio(), timeout=30))
-    expected = {
-        "llm_query", "llm_research", "llm_analyze",
-        "llm_code", "llm_generate",
-    }
+    expected = {"llm", "llm_act"}
     missing = expected - set(tools)
     assert not missing, (
-        f"Chuzom MCP server is missing text tools: {missing}. "
-        f"Got: {sorted(t for t in tools if t.startswith('llm_'))[:10]}..."
+        f"Chuzom MCP server is missing completion doors: {missing}. "
+        f"Got: {sorted(t for t in tools if t.startswith('llm') or t.startswith('chuzom'))[:10]}..."
     )
 
 
 @requires_mcp_client
-def test_mcp_tools_include_routing_tools():
-    """llm_classify / llm_route must be exposed."""
+def test_mcp_tools_include_routing_door():
+    """llm_route (the auto-routing decision) stays a first-class door under the
+    consolidated default."""
     tools = asyncio.run(asyncio.wait_for(_list_tools_via_stdio(), timeout=30))
-    expected = {"llm_classify", "llm_route"}
+    expected = {"llm_route"}
     missing = expected - set(tools)
-    assert not missing, f"Missing routing tools: {missing}"
+    assert not missing, f"Missing routing door: {missing}"
 
 
 @requires_mcp_client
 def test_mcp_tools_include_agent_tools():
-    """v0.0.2 agent tools must be exposed. If this fails, agents.register()
-    wasn't called in server.py (a real gap I closed during this work)."""
+    """Agent-session surface must be exposed. Under the 0.10.0 consolidated default
+    that is the chuzom_session door plus the two rich agent tools; the four simple
+    lifecycle actions (list/check_budget/complete/lineage) collapse into
+    chuzom_session (use CHUZOM_SLIM=off to get them as standalone tools)."""
     tools = asyncio.run(asyncio.wait_for(_list_tools_via_stdio(), timeout=30))
     expected = {
-        "chuzom_agent_list",
+        "chuzom_session",
         "chuzom_agent_start_session",
-        "chuzom_agent_check_budget",
         "chuzom_agent_route",
-        "chuzom_agent_complete_session",
-        "chuzom_agent_lineage",
     }
     missing = expected - set(tools)
     assert not missing, (
-        f"v0.0.2 agent MCP tools missing: {missing}. "
-        f"Did agents.register(mcp) get called in server.py?"
+        f"agent-session MCP surface missing: {missing}. "
+        f"Did agents.register(mcp, _gate) / consolidated.register run in server.py?"
     )
 
 

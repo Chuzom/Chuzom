@@ -44,6 +44,25 @@ ROUTING_TOOLS: frozenset[str] = CORE_TOOLS | frozenset({
 })
 """12-tool tier — routing + core admin tools. Recommended for most users (~5,000 tokens saved)."""
 
+# North Star 1.0 cutover (staged): the CONSOLIDATED front-door surface. Opt into it
+# with CHUZOM_SLIM=consolidated to *run* the collapsed ~11-tool surface today (old
+# tools hidden, not removed). This validates the doors cover every capability before
+# the breaking 1.0 step that actually removes the 73 old tools.
+CONSOLIDATED_TOOLS: frozenset[str] = frozenset({
+    "llm",             # unified completion door (query/analyze/code/research/generate)
+    "llm_act",         # agentic execution door (delegation)
+    "chuzom_status",   # observability door (savings/usage/health/…)
+    "chuzom_admin",    # config door (set_profile/clear_cache/…)
+    "chuzom_session",  # agent-lifecycle door (list/check_budget/complete/lineage)
+    "llm_route",       # auto-routing decision (no door alias yet)
+    "llm_image",       # media (future: llm_media)
+    "llm_audio",       # media (future: llm_media)
+    "llm_edit",        # file ops (future: llm_fs)
+    "chuzom_agent_start_session",  # rich session action (kept until chuzom_session covers it)
+    "chuzom_agent_route",          # rich session action
+})
+"""~11-tool CONSOLIDATED front-door tier (North Star 1.0 direction)."""
+
 
 def make_should_register(slim: str) -> Callable[[str], bool]:
     """Return a predicate that controls which tools are registered at startup.
@@ -61,6 +80,8 @@ def make_should_register(slim: str) -> Callable[[str], bool]:
         return lambda name: name in CORE_TOOLS
     if slim == "routing":
         return lambda name: name in ROUTING_TOOLS
+    if slim == "consolidated":
+        return lambda name: name in CONSOLIDATED_TOOLS
     # "off" or any unknown value — register everything
     return lambda name: True
 
@@ -72,4 +93,6 @@ def tier_summary(slim: str) -> str:
         return f"core ({len(CORE_TOOLS)} tools — maximum token savings)"
     if slim == "routing":
         return f"routing ({len(ROUTING_TOOLS)} tools — recommended)"
-    return "off (all 43 tools — maximum compatibility)"
+    if slim == "consolidated":
+        return f"consolidated ({len(CONSOLIDATED_TOOLS)} front-door tools — North Star 1.0 surface)"
+    return "off (all tools — maximum compatibility)"

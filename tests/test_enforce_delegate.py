@@ -56,21 +56,21 @@ def test_operational_prompt_redirects_to_delegate(tmp_path):
         home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
     )
     assert json.loads(result.stdout)["decision"] == "block"
-    assert "llm_delegate" in result.stdout
+    assert "llm_act" in result.stdout          # consolidated default → door name
 
 
-def test_delegate_route_off_by_default(tmp_path):
-    """Default (no CHUZOM_DELEGATE): the operational→delegate redirect does NOT
-    fire — it stays OFF until the agentic executor is sandboxed (P1 / audit R1).
-    The prompt keeps its baseline route (llm_code), no llm_delegate."""
-    sid = "sess-op-default-off"
-    _write_pending(tmp_path, sid, original_prompt=_OP_PROMPT)
+def test_delegate_route_on_by_default(tmp_path):
+    """Default (no CHUZOM_DELEGATE): the operational→delegate redirect now fires —
+    it's ON by default since the agentic executor is sandboxed (P1). A moderate+
+    operational prompt is redirected to llm_delegate. (CHUZOM_DELEGATE=off opts out.)"""
+    sid = "sess-op-default-on"
+    _write_pending(tmp_path, sid, original_prompt=_OP_PROMPT)  # complexity defaults to moderate
     result = _run_hook(
         {"session_id": sid, "tool_name": "Bash",
          "tool_input": {"command": "python -m pytest -q"}},
-        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},  # no CHUZOM_DELEGATE
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},  # no CHUZOM_DELEGATE → default ON
     )
-    assert "llm_delegate" not in result.stdout
+    assert "llm_act" in result.stdout          # consolidated default → door name
 
 
 def test_llm_delegate_call_clears_the_lock(tmp_path):
@@ -146,4 +146,4 @@ def test_moderate_operational_delegates_above_floor(tmp_path):
          "tool_input": {"command": "python -m pytest -q"}},
         home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
     )
-    assert "llm_delegate" in result.stdout
+    assert "llm_act" in result.stdout          # consolidated default → door name

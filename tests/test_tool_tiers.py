@@ -63,9 +63,10 @@ class TestToolTiers:
     def test_tier_summary_returns_string(self):
         from chuzom.tool_tiers import tier_summary
 
-        assert "41" in tier_summary("off") or "43" in tier_summary("off")
+        assert "all" in tier_summary("off").lower()   # off = all tools (count is dynamic)
         assert "routing" in tier_summary("routing")
         assert "core" in tier_summary("core")
+        assert "consolidated" in tier_summary("consolidated")
 
 
 # ── Session spend ─────────────────────────────────────────────────────────────
@@ -369,11 +370,12 @@ class TestDoctorHost:
 
 
 class TestV4Config:
-    def test_slim_field_defaults_to_routing(self):
+    def test_slim_field_defaults_to_consolidated(self):
+        # 0.10.0 cutover: the 11-door consolidated surface is the default tier.
         from chuzom.config import RouterConfig
 
         cfg = RouterConfig()
-        assert cfg.chuzom_slim == "routing"
+        assert cfg.chuzom_slim == "consolidated"
 
     def test_escalate_above_defaults_to_zero(self):
         from chuzom.config import RouterConfig

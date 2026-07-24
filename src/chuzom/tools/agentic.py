@@ -121,6 +121,9 @@ async def llm_delegate(
     return json.dumps(result)
 
 
-def register(mcp) -> None:
-    """Register the llm_delegate tool with the FastMCP server."""
-    mcp.tool()(llm_delegate)
+def register(mcp, should_register=None) -> None:
+    """Register the llm_delegate tool with the FastMCP server, honouring the slim
+    gate. Under the consolidated default it is hidden behind the llm_act door
+    (the function stays importable; llm_act dispatches to it)."""
+    if should_register is None or should_register("llm_delegate"):
+        mcp.tool()(llm_delegate)

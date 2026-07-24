@@ -207,12 +207,33 @@ def _is_operational_prompt(prompt: str) -> bool:
 
 
 def _delegate_route_enabled() -> bool:
-    """The enforced operational→delegate redirect is OFF by default until the
-    agentic executor is sandboxed (North Star P1). Fable 5 audit R1: routing an
-    operational prompt to llm_delegate hands a cheap model UNRESTRICTED bash/write
-    in the user's repo (no command allowlist inside the MGEE loop). Opt in with
-    CHUZOM_DELEGATE=on/1/true/yes once P1 lands the bash allowlist + path guards."""
-    return os.environ.get("CHUZOM_DELEGATE", "").strip().lower() in ("on", "1", "true", "yes")
+    """The enforced operational→delegate redirect is ON by default now that the
+    agentic executor is sandboxed (North Star P1: the bash allowlist + path guards
+    + network block in react.py default_tool_executor closed audit R1). Disable
+    per-shell or globally with CHUZOM_DELEGATE=off. NOTE the sandbox is
+    defense-in-depth, NOT a full OS sandbox — run irreversible delegated work
+    behind the MGEE worktree gate."""
+    return os.environ.get("CHUZOM_DELEGATE", "").strip().lower() not in ("off", "0", "false", "no")
+
+
+# 1.0 cutover step 2: map a legacy tool name to its consolidated front door.
+_OLD_TOOL_TO_DOOR = {
+    "llm_query": "llm", "llm_analyze": "llm", "llm_code": "llm",
+    "llm_research": "llm", "llm_generate": "llm",
+    "llm_delegate": "llm_act",
+}
+
+
+def _door_for(expected_tool: str) -> str:
+    """Under the consolidated tool tier the legacy tools aren't registered, so the
+    enforced directive must name the front door that IS (llm_query…→llm,
+    llm_delegate→llm_act). Consolidated is the DEFAULT since 0.10.0, so this applies
+    whenever CHUZOM_SLIM is unset; it's a no-op only when an explicit legacy tier
+    (off/routing/core) is selected. Any llm_* call still clears the lock regardless."""
+    slim = os.environ.get("CHUZOM_SLIM", "").strip().lower()
+    if slim and slim != "consolidated":
+        return expected_tool
+    return _OLD_TOOL_TO_DOOR.get(expected_tool, expected_tool)
 
 
 def _is_readonly_bash(command: str) -> bool:
@@ -915,6 +936,10 @@ def main() -> None:
                 )
         except OSError:
             pass
+
+    # 1.0 cutover step 2: under the consolidated tier, name the front door that is
+    # actually registered (llm/llm_act) in the directive + clear-check.
+    expected_tool = _door_for(expected_tool)
 
     # ── Routing satisfied checks ──────────────────────────────────────────────
 
