@@ -216,6 +216,24 @@ def _delegate_route_enabled() -> bool:
     return os.environ.get("CHUZOM_DELEGATE", "").strip().lower() not in ("off", "0", "false", "no")
 
 
+# 1.0 cutover step 2: map a legacy tool name to its consolidated front door.
+_OLD_TOOL_TO_DOOR = {
+    "llm_query": "llm", "llm_analyze": "llm", "llm_code": "llm",
+    "llm_research": "llm", "llm_generate": "llm",
+    "llm_delegate": "llm_act",
+}
+
+
+def _door_for(expected_tool: str) -> str:
+    """Under the consolidated tool tier (CHUZOM_SLIM=consolidated) the legacy tools
+    aren't registered, so the enforced directive must name the front door that IS
+    (llm_query…→llm, llm_delegate→llm_act). No-op in every other tier — auto-route.py
+    stays untouched, and any llm_* call still clears the lock regardless."""
+    if os.environ.get("CHUZOM_SLIM", "").strip().lower() != "consolidated":
+        return expected_tool
+    return _OLD_TOOL_TO_DOOR.get(expected_tool, expected_tool)
+
+
 def _is_readonly_bash(command: str) -> bool:
     """Return True if a Bash command is conservatively read-only.
 
@@ -916,6 +934,10 @@ def main() -> None:
                 )
         except OSError:
             pass
+
+    # 1.0 cutover step 2: under the consolidated tier, name the front door that is
+    # actually registered (llm/llm_act) in the directive + clear-check.
+    expected_tool = _door_for(expected_tool)
 
     # ── Routing satisfied checks ──────────────────────────────────────────────
 
