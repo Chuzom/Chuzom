@@ -17,7 +17,7 @@ from chuzom.agentic.planner import (
 
 
 def test_build_acceptance_objective_types():
-    assert build_acceptance({"type": "canary", "marker": "OK"})({"output": "OK"}).ok
+    assert build_acceptance({"type": "canary", "marker": "OBJ_CANARY"})({"output": "OBJ_CANARY"}).ok
     assert build_acceptance({"type": "diff", "files": ["a.py"]})({"files": ["a.py"]}).ok
     ok = build_acceptance({"type": "cmd", "command": [sys.executable, "-c", "pass"]})
     assert ok({}).ok
@@ -34,7 +34,7 @@ def test_plan_to_milestones_builds_and_validates():
         {"id": "M1", "description": "scaffold",
          "acceptance": {"type": "diff", "files": ["m.py"]}},
         {"id": "M2", "description": "impl", "deps": ["M1"],
-         "acceptance": {"type": "canary", "marker": "DONE"}},
+         "acceptance": {"type": "canary", "marker": "M2_CANARY"}},
     ]
     ms = plan_to_milestones(plan)
     assert [m.id for m in ms] == ["M1", "M2"]
@@ -80,7 +80,7 @@ async def test_hybrid_plan_rejects_non_list_and_empty():
 
 async def test_hybrid_plan_awaits_async_planner():
     async def async_planner(goal):
-        return [{"id": "M1", "description": "x", "acceptance": {"type": "canary", "marker": "OK"}}]
+        return [{"id": "M1", "description": "x", "acceptance": {"type": "canary", "marker": "ASYNC_CANARY"}}]
 
     ms = await hybrid_plan("g", async_planner)
     assert ms[0].id == "M1"
