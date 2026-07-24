@@ -23,7 +23,7 @@ import yaml
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 VALID_PROFILES  = {"budget", "balanced", "premium"}
-VALID_ENFORCE   = {"shadow", "suggest", "enforce", "hard", "soft", "off"}
+VALID_ENFORCE   = {"shadow", "suggest", "advise", "smart", "enforce", "hard", "soft", "off"}
 VALID_TASK_TYPES = {"query", "code", "analyze", "generate", "research", "image", "video", "audio"}
 
 
@@ -70,13 +70,19 @@ class RepoConfig:
         return self.daily_caps.get("_total") or None
 
     def effective_enforce(self) -> str:
-        """Return enforce mode: env var wins, then repo config, then 'hard'."""
+        """Return enforce mode: env var wins, then repo config, then the shared
+        built-in default ('smart') — aligned with enforce_config.DEFAULT_ENFORCE
+        so every module agrees on the out-of-box default (F01)."""
         env = os.environ.get("CHUZOM_ENFORCE", "").lower()
         if env in VALID_ENFORCE:
             return env
         if self.enforce and self.enforce in VALID_ENFORCE:
             return self.enforce
-        return "hard"
+        try:
+            from chuzom.enforce_config import DEFAULT_ENFORCE
+            return DEFAULT_ENFORCE
+        except Exception:
+            return "smart"
 
     def effective_profile(self) -> str | None:
         """Return profile: env var wins, then repo config."""
