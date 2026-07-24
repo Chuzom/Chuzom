@@ -108,6 +108,10 @@ async def llm_delegate(
     # Record the honest saving into chuzom's ledger (fail-open — never breaks the call).
     from chuzom.agentic.telemetry import record_delegation_savings
     await record_delegation_savings(result)
+    # North Star measurement: record routing quality — escalation/mis-route/completion/
+    # savings — so "route cheap, escalate on failure" is measured, not assumed. Fail-open.
+    from chuzom.routing_quality import record_delegation
+    record_delegation(result)
     return json.dumps(result)
 
 
