@@ -87,13 +87,18 @@ def _default_adapters() -> dict[int, Any]:
 
 
 async def llm_delegate(
-    task: str, budget_usd: float = 1.0, baseline_cost_per_milestone: float = 0.20
+    task: str, budget_usd: float = 1.0, baseline_cost_per_milestone: float = 0.20,
+    context: str = "",
 ) -> str:
     """Agentic delegation: decompose *task* into milestones, run them on the
     cheapest capable tier with objective acceptance checks, escalate on failure
     without redoing achieved milestones, and return a JSON result with the
     outcome, transparency events, and honest savings. Never gets stuck — an
-    unmeetable milestone is surfaced, not looped."""
+    unmeetable milestone is surfaced, not looped.
+
+    *context* is optional conversation context from the calling session; it's
+    handed to every delegated agent (bounded) so a routed model isn't blind to
+    what was discussed — not just its own milestones (North Star P1-S2)."""
     planner = (planner_factory or _default_planner)()
     adapters = (adapters_factory or _default_adapters)()
     try:
@@ -104,6 +109,7 @@ async def llm_delegate(
         task, milestones, adapters,
         baseline_cost_per_milestone=baseline_cost_per_milestone,
         budget_cap_usd=budget_usd,
+        session_context=(context or "")[:2000],  # bound: don't blow the agent's prompt
     )
     # Record the honest saving into chuzom's ledger (fail-open — never breaks the call).
     from chuzom.agentic.telemetry import record_delegation_savings

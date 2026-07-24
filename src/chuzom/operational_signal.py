@@ -50,7 +50,11 @@ _VERIFY_CUE_RE = re.compile(
 _CONTENT_OBJECT_RE = re.compile(
     r"\b(blog\s+post|article|essay|poem|summary|explanation|paragraph|sentence|"
     r"story|report|guide|advice|email|caption|rubric|itinerary|checklist|"
-    r"tutorial|readme\s+section|documentation\s+for)\b",
+    r"tutorial|readme\s+section|documentation\s+for|"
+    # Educational / prose deliverables that happen to contain software-verification
+    # words (audit-found false positives — these are content, not code work):
+    r"test\s+plan|quiz|exam|worksheet|curriculum|lesson(\s+plan)?|exercise|"
+    r"course|presentation|slide\s+deck|memo|newsletter|scenario)\b",
     re.IGNORECASE,
 )
 

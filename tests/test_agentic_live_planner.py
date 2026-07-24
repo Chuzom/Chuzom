@@ -37,14 +37,14 @@ async def _install_fake_route(monkeypatch, content):
 async def test_default_planner_parses_routed_plan(monkeypatch):
     await _install_fake_route(
         monkeypatch,
-        '[{"id":"M1","description":"do it","acceptance":{"type":"canary","marker":"OK"}}]',
+        '[{"id":"M1","description":"do it","acceptance":{"type":"canary","marker":"LIVE_CANARY"}}]',
     )
     plan = await tool._default_planner()("build a thing")
     assert plan[0]["id"] == "M1"
     # and it feeds hybrid_plan → real Milestones with objective checks
     ms = await hybrid_plan("build a thing", tool._default_planner())
     assert ms[0].id == "M1"
-    assert ms[0].acceptance({"output": "OK"}).ok
+    assert ms[0].acceptance({"output": "LIVE_CANARY"}).ok
 
 
 async def test_default_planner_fails_closed_on_unparseable(monkeypatch):

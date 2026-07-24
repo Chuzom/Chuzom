@@ -61,9 +61,11 @@ def delegate(
     replan_fn: ReplanFn | None = None,
     gate: Gate | None = None,
     event_sink: Callable[[Event], None] | None = None,
+    session_context: str = "",
 ) -> DelegationResult:
     """Run one milestone-gated escalating delegation and return a result bundle."""
-    ledger = TaskLedger(goal=goal, milestones=milestones, budget_cap_usd=budget_cap_usd)
+    ledger = TaskLedger(goal=goal, milestones=milestones, budget_cap_usd=budget_cap_usd,
+                        session_context=session_context)
     engine = MGEEEngine(
         adapters_by_tier,
         max_attempts_per_tier=max_attempts_per_tier,

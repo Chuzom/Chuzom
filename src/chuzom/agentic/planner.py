@@ -33,14 +33,41 @@ class PlanRejected(ValueError):
     """A proposed plan/milestone lacks a valid objective acceptance check."""
 
 
+# R3 (verification gaming): a cheap planner can emit a check that passes without
+# any real work. Reject the trivial classes so a milestone can't freeze DONE for free.
+_TRIVIAL_CMD_HEADS = frozenset({"echo", "true", ":", "printf", "exit", "test-true"})
+_GENERIC_MARKERS = frozenset({
+    "ok", "done", "pass", "passed", "yes", "true", "success",
+    "complete", "completed", "finished", "good", "fine", "valid",
+})
+
+
+def _reject_if_trivial(t: str, spec: dict[str, Any]) -> None:
+    """Raise PlanRejected if the acceptance check would pass without real work."""
+    if t == "cmd":
+        cmd = spec.get("command") or []
+        head = str(cmd[0]).rsplit("/", 1)[-1].lower() if cmd else ""
+        if not cmd or head in _TRIVIAL_CMD_HEADS:
+            raise PlanRejected(f"trivial cmd check (no real verification): {cmd!r}")
+    elif t == "canary":
+        marker = str(spec.get("marker", "")).strip()
+        if len(marker) < 4 or marker.lower() in _GENERIC_MARKERS:
+            raise PlanRejected(f"trivial/generic canary marker: {marker!r}")
+    elif t == "diff":
+        if not spec.get("files") and not spec.get("symbols"):
+            raise PlanRejected("trivial diff check (asserts no files or symbols)")
+
+
 def build_acceptance(spec: dict[str, Any]) -> AcceptanceCheck:
     """Map an objective check spec → an AcceptanceCheck. Rejects anything not in
-    the whitelist (e.g. a model trying to sneak in a subjective 'looks_good')."""
+    the whitelist (e.g. a model trying to sneak in a subjective 'looks_good') and
+    any TRIVIAL check that would pass without real work (R3)."""
     if not isinstance(spec, dict):
         raise PlanRejected(f"acceptance must be a spec dict, got {type(spec).__name__}")
     t = spec.get("type")
     if t not in ALLOWED_CHECK_TYPES:
         raise PlanRejected(f"non-objective / unknown acceptance type: {t!r}")
+    _reject_if_trivial(t, spec)
     if t == "cmd":
         return cmd_check(spec["command"], cwd=spec.get("cwd"), timeout=spec.get("timeout", 60.0))
     if t == "lint":

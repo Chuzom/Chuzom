@@ -121,3 +121,29 @@ def test_delegate_route_is_logged_as_security_event(tmp_path):
     )
     log = (tmp_path / ".chuzom" / "enforcement.log")
     assert log.exists() and "DELEGATE_ROUTE" in log.read_text(encoding="utf-8")
+
+
+def test_simple_operational_does_not_delegate_r2_floor(tmp_path):
+    """R2 cost floor (P2-core): a SIMPLE operational task keeps its completion route
+    even with CHUZOM_DELEGATE=on — a one-line fix isn't worth a multi-step agentic
+    loop (which costs more than a single completion)."""
+    sid = "sess-op-simple"
+    _write_pending(tmp_path, sid, original_prompt=_OP_PROMPT, complexity="simple")
+    result = _run_hook(
+        {"session_id": sid, "tool_name": "Bash",
+         "tool_input": {"command": "python -m pytest -q"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
+    )
+    assert "llm_delegate" not in result.stdout          # below the floor → not delegated
+
+
+def test_moderate_operational_delegates_above_floor(tmp_path):
+    """Above the R2 floor: moderate operational + delegate on → redirects to llm_delegate."""
+    sid = "sess-op-moderate"
+    _write_pending(tmp_path, sid, original_prompt=_OP_PROMPT, complexity="moderate")
+    result = _run_hook(
+        {"session_id": sid, "tool_name": "Bash",
+         "tool_input": {"command": "python -m pytest -q"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
+    )
+    assert "llm_delegate" in result.stdout

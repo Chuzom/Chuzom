@@ -894,7 +894,12 @@ def main() -> None:
     # llm_* call still clears the lock (never a trap), and CHUZOM_ENFORCE=soft/off
     # or CHUZOM_DELEGATE=off disables the redirect.
     # 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
-    _op_sig = _detect_operational(pending.get("original_prompt", "")) if _delegate_route_enabled() else None
+    # P2-core (audit R2 cost/latency floor): only route to the heavy multi-step
+    # agentic loop when the task is substantial. A SIMPLE operational task (a
+    # one-line fix) costs more via an MGEE plan+run+verify loop than a single
+    # completion, so it keeps its completion route. Only moderate+ delegates.
+    _delegate_ok = _delegate_route_enabled() and complexity in ("moderate", "complex")
+    _op_sig = _detect_operational(pending.get("original_prompt", "")) if _delegate_ok else None
     if _op_sig is not None and _op_sig.fires:
         expected_tool = "llm_delegate"
         task_type = "delegate"

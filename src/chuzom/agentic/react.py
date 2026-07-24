@@ -14,6 +14,7 @@ Local-model reliability is best-effort by nature; confidence is reported low.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -70,6 +71,44 @@ DEFAULT_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+# P1-S1 (audit R1): bash sandbox for the delegated agentic executor. Routing an
+# *execution* to a cheap model means it runs bash in the user's repo, so refuse the
+# obviously-dangerous classes. Defense-in-depth (a denylist + the path containment
+# below), NOT a complete OS sandbox — an obfuscated command can still slip a
+# denylist, so irreversible delegated work belongs behind the MGEE worktree gate.
+# 🥷 Backslash-Security: using vibe-coding rules for Command Injection Prevention
+_BASH_DESTRUCTIVE_RE = re.compile(
+    r"(?xi)"
+    r"\brm\s+-\w*[rf]\w*\s |"                         # rm -rf / -fr / -r -f
+    r"\b(mkfs|shred|fdisk)\b | \bdd\s+if= |"
+    r"\b(shutdown|reboot|halt|poweroff)\b |"
+    r"\bchmod\s+-R\b | \bchown\s+-R\b |"
+    r"\bsudo\b | \bsu\s+- | \bdoas\b |"
+    r":\s*\(\s*\)\s*\{"                               # fork bomb
+)
+_BASH_SENSITIVE_RE = re.compile(
+    r"(?xi)"
+    r"\.ssh(?:/|\b) | \.aws(?:/|\b) | \.gnupg(?:/|\b) |"
+    r"id_rsa | id_ed25519 | id_dsa |"
+    r"/etc/(?:shadow|sudoers) |"
+    r"\bcredentials\b | \.netrc\b | \.pypirc\b | \.npmrc\b | \.env\b"
+)
+_BASH_NET_TOOL_RE = re.compile(r"(?i)\b(curl|wget|httpie|http|nc|ncat|telnet|ssh|scp|sftp|rsync)\b")
+_BASH_LOCALHOST_RE = re.compile(r"(?i)(localhost|127\.0\.0\.1|::1|0\.0\.0\.0)")
+
+
+def _bash_block_reason(command: str) -> str | None:
+    """Return a reason if the shell command is disallowed by the sandbox, else None."""
+    c = command or ""
+    if _BASH_DESTRUCTIVE_RE.search(c):
+        return "destructive or privilege-escalating command"
+    if _BASH_SENSITIVE_RE.search(c):
+        return "access to a sensitive credential path"
+    if _BASH_NET_TOOL_RE.search(c) and not _BASH_LOCALHOST_RE.search(c):
+        return "external network egress"
+    return None
+
+
 def default_tool_executor(cwd: str | None = None, timeout: float = 30.0) -> ToolExecutor:
     """A bounded shell/file executor. Not a security sandbox — it caps time and
     output; run delegated irreversible work behind the MGEE worktree gate."""
@@ -89,8 +128,12 @@ def default_tool_executor(cwd: str | None = None, timeout: float = 30.0) -> Tool
     def execute(name: str, args: dict[str, Any]) -> str:
         try:
             if name == "bash":
+                command = str(args.get("command", ""))
+                reason = _bash_block_reason(command)
+                if reason is not None:
+                    return f"tool error: blocked ({reason}) — refusing: {command[:120]}"
                 proc = subprocess.run(
-                    ["/bin/sh", "-c", str(args.get("command", ""))], cwd=str(base),
+                    ["/bin/sh", "-c", command], cwd=str(base),
                     capture_output=True, text=True, timeout=timeout, check=False,
                 )
                 out = (proc.stdout or "") + (proc.stderr or "")

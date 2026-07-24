@@ -30,6 +30,10 @@ class RouteRecord:
     baseline_cost: float = 0.0
     saved: float = 0.0
     mis_route: bool = False         # initial routing decision was wrong (needed escalation)
+    # P3 (measure quality, don't auto-escalate verified work): a milestone that
+    # passed its objective check but was cleared only by the WEAKEST (local) tier
+    # is a lower-confidence "pass" — surfaced for review/tuning, not re-run.
+    weak_pass: bool = False
     ts: float = 0.0                 # unix time; stamped on write if 0
 
 
@@ -72,6 +76,7 @@ def summarize(path: str | None = None) -> dict[str, Any]:
         "tool_success_rate": _rate("tool_success"),
         "escalation_rate": _rate("needed_escalation"),
         "mis_route_rate": _rate("mis_route"),
+        "weak_pass_rate": _rate("weak_pass"),
         "total_saved": round(sum(float(r.get("saved", 0.0)) for r in rows), 4),
     }
 
@@ -87,17 +92,21 @@ def record_delegation(result: dict[str, Any], path: str | None = None) -> bool:
                  if m.get("achieved_by") is not None]
         cheapest = min(tiers) if tiers else 0
         escalated = any(t > cheapest for t in tiers)
+        completed = result.get("outcome") == "complete"
+        # weak pass: verified DONE but entirely on the weakest (tier-0/local) agent
+        weak_pass = completed and bool(tiers) and max(tiers) == 0
         savings = result.get("savings") or {}
         rec = RouteRecord(
             task_type="delegate",
             chosen_tier=cheapest,
             needed_escalation=escalated,
-            completion=(result.get("outcome") == "complete"),
+            completion=completed,
             tool_success=(result.get("outcome") in ("complete", "surfaced")),
             actual_cost=float(savings.get("actual_usd", 0.0) or 0.0),
             baseline_cost=float(savings.get("baseline_usd", 0.0) or 0.0),
             saved=float(savings.get("saved_usd", 0.0) or 0.0),
             mis_route=escalated,
+            weak_pass=weak_pass,
         )
         return record(rec, path=path)
     except Exception:  # noqa: BLE001 — never break the delegation path
