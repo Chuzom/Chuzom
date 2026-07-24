@@ -113,7 +113,12 @@ class CodexAdapter:
 
         diff, files = "", []
         if self.capture_diff and self.cwd:
-            d = self.runner(["git", "-C", self.cwd, "diff"], "")
+            # `git diff HEAD` captures staged + unstaged work. Codex often COMMITS
+            # its changes, in which case that's empty — fall back to the last
+            # commit's diff so produced files are still captured.
+            d = self.runner(["git", "-C", self.cwd, "diff", "HEAD"], "")
+            if d.returncode == 0 and not d.stdout.strip():
+                d = self.runner(["git", "-C", self.cwd, "diff", "HEAD~1", "HEAD"], "")
             if d.returncode == 0 and d.stdout:
                 diff = d.stdout
                 files = [

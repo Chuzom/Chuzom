@@ -185,18 +185,25 @@ def _looks_like_edit_task(prompt: str) -> bool:
     return bool(_EDIT_SHAPE_RE.search(prompt) or _EDIT_PATH_LED_RE.search(prompt))
 
 
+def _detect_operational(prompt: str):
+    """Return the OperationalSignal for *prompt* (with matched verb/cue for audit
+    logging), or None on any failure. Lazy import keeps the hook resilient if the
+    module is absent: a None result means the redirect never fires (fail-open)."""
+    if not prompt:
+        return None
+    try:
+        from chuzom.operational_signal import detect_operational
+        return detect_operational(prompt)
+    except Exception:
+        return None
+
+
 def _is_operational_prompt(prompt: str) -> bool:
     """True when the prompt needs agentic tool-execution + objective verification
     (change verb + verification demand) — the class that hard-routes to
-    ``llm_delegate``. Lazy import keeps the hook resilient if the module is
-    absent: on any failure it returns False (fail-open, never blocks spuriously)."""
-    if not prompt:
-        return False
-    try:
-        from chuzom.operational_signal import is_operational
-        return is_operational(prompt)
-    except Exception:
-        return False
+    ``llm_delegate``. Fail-open (False) so a missing module never blocks."""
+    sig = _detect_operational(prompt)
+    return bool(sig and sig.fires)
 
 
 def _delegate_route_enabled() -> bool:
@@ -809,7 +816,13 @@ def main() -> None:
     if (pending is not None and enforce in ("hard", "smart") and not _strict
             and tool_name in _NATIVE_LOCAL_TOOLS):
         _em_task = pending.get("task_type", "")
-        if _em_task not in _QA_TASK_TYPES and _em_task != "code":
+        # Operational prompts are the delegate class — don't soft-exempt their
+        # native tools here, or the operational->delegate redirect below is
+        # silently defeated (the redirect must reach a still-enforcing state).
+        _em_operational = _delegate_route_enabled() and _is_operational_prompt(
+            pending.get("original_prompt", "")
+        )
+        if _em_task not in _QA_TASK_TYPES and _em_task != "code" and not _em_operational:
             enforce = "soft"
             try:
                 _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
@@ -878,17 +891,19 @@ def main() -> None:
     # llm_* call still clears the lock (never a trap), and CHUZOM_ENFORCE=soft/off
     # or CHUZOM_DELEGATE=off disables the redirect.
     # 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
-    if (_delegate_route_enabled()
-            and _is_operational_prompt(pending.get("original_prompt", ""))):
+    _op_sig = _detect_operational(pending.get("original_prompt", "")) if _delegate_route_enabled() else None
+    if _op_sig is not None and _op_sig.fires:
         expected_tool = "llm_delegate"
         task_type = "delegate"
         try:
             _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
             with _LOG_PATH.open("a", encoding="utf-8") as f:
+                # Record WHY it fired (verb + cue) for post-incident audit.
                 f.write(
                     f"[{ts}] DELEGATE_ROUTE session={session_id[:12]} "
-                    f"reason=operational_intent tool={tool_name}\n"
+                    f"reason=operational_intent verb={_op_sig.verb!r} cue={_op_sig.cue!r} "
+                    f"tool={tool_name}\n"
                 )
         except OSError:
             pass

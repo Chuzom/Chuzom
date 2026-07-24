@@ -32,6 +32,15 @@ _NON_OPERATIONAL = [
     "Should I use pytest or unittest?",
     "Describe the migration strategy.",
     "How do I run the tests?",                        # interrogative
+    # False positives the audit found with the old bare-word cues — must stay dead:
+    "Please write a concise explanation and ensure it has examples.",  # ensure/explanation
+    "Generate a personality test for onboarding.",                     # 'test' = HR quiz
+    "Make the button green and add a short label.",                    # 'green' = CSS
+    "Create a summary of the insurance coverage options.",             # coverage = insurance
+    "Write a short example showing how to pass a value by reference.",  # 'pass' = arg passing
+    "Write a rubric for a passing grade in this course.",              # passing = grade
+    "Generate a checklist for replacing a lost boarding pass.",        # pass = travel
+    "Write an explanation of what this unit test is checking.",        # content-object short-circuit
 ]
 
 

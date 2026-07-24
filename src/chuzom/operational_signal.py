@@ -27,10 +27,30 @@ _CHANGE_VERB_RE = re.compile(
 
 # An objective-verification demand — the discriminator between a one-shot
 # completion (llm_code) and work that must be RUN and checked (llm_delegate).
+# DELIBERATELY TIGHT: bare words like "pass"/"test"/"ensure"/"green"/"coverage"
+# are far too common in ordinary prose (mountain pass, personality test, ensure
+# examples, button green, insurance coverage) and would hijack normal prompts
+# into an enforced delegation. Only unambiguous software-verification phrases fire.
 _VERIFY_CUE_RE = re.compile(
-    r"\b(tests?|passes|passing|pass|verify|verif\w*|ensure|assert\w*|ci|lint|"
-    r"green|coverage|checks?\s+(?:that|it|the)|make\s+it\s+pass|so\s+it\s+passes|"
-    r"returns?\s+\d)\b",
+    r"\b(?:"
+    r"make\s+it\s+pass|so\s+(?:it|the\s+tests?)\s+passes?|"
+    r"tests?\s+(?:still\s+|all\s+)?pass(?:es|ing)?|passing\s+tests?|"
+    r"unit\s+test|integration\s+test|regression\s+test|test\s+suite|"
+    r"test\s+that\s+(?:checks?|asserts?|verifies)|suite\s+(?:still\s+)?pass(?:es)?|"
+    r"ci\s+(?:is\s+)?green|build\s+(?:is\s+)?green|"
+    r"lint(?:er)?\s+(?:pass(?:es)?|clean|is\s+clean)|type[-\s]?check(?:s|ing)?|"
+    r"code\s+coverage|test\s+coverage|exit\s+0|returns?\s+0|"
+    r"assertion\s+(?:pass|hold)|verify\s+(?:it|that|the\s+\w+)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Prose/content deliverables: even with a change verb + a stray cue, a request to
+# produce writing is not an operational task. Short-circuits to non-operational.
+_CONTENT_OBJECT_RE = re.compile(
+    r"\b(blog\s+post|article|essay|poem|summary|explanation|paragraph|sentence|"
+    r"story|report|guide|advice|email|caption|rubric|itinerary|checklist|"
+    r"tutorial|readme\s+section|documentation\s+for)\b",
     re.IGNORECASE,
 )
 
@@ -60,6 +80,8 @@ def detect_operational(prompt: str) -> OperationalSignal:
     p = prompt or ""
     if _EXPLANATORY_LEAD_RE.search(p):
         return OperationalSignal(False, reason="explanatory/interrogative lead")
+    if _CONTENT_OBJECT_RE.search(p):
+        return OperationalSignal(False, reason="prose/content deliverable, not operational")
     verb_m = _CHANGE_VERB_RE.search(p)
     cue_m = _VERIFY_CUE_RE.search(p)
     if verb_m and cue_m:

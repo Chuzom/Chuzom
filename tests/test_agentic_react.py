@@ -83,3 +83,18 @@ def test_default_executor_runs_and_files_no_model(tmp_path):
     assert (tmp_path / "x.txt").read_text() == "hello"
     assert "hello" in ex("read_file", {"path": str(tmp_path / "x.txt")})
     assert "tool error" in ex("read_file", {"path": str(tmp_path / "missing")})
+
+
+def test_default_executor_relative_path_lands_in_cwd(tmp_path):
+    # A bare "marker.txt" must write INTO cwd, not the process dir (the tier-0 bug
+    # live testing surfaced: 6 write_file calls, file never landed).
+    ex = default_tool_executor(cwd=str(tmp_path))
+    ex("write_file", {"path": "marker.txt", "content": "PHASE_B_OK"})
+    assert (tmp_path / "marker.txt").read_text() == "PHASE_B_OK"
+
+
+def test_default_executor_rejects_path_traversal(tmp_path):
+    ex = default_tool_executor(cwd=str(tmp_path))
+    out = ex("write_file", {"path": "../../escape.txt", "content": "x"})
+    assert "tool error" in out and "escapes working directory" in out
+    assert not (tmp_path.parent.parent / "escape.txt").exists()

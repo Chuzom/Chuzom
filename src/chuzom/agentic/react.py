@@ -25,17 +25,22 @@ from chuzom.agentic.engine import AgentRunResult
 from chuzom.agentic.ledger import Milestone
 
 
-@dataclass(frozen=True)
+@dataclass
 class ToolCall:
+    # NOT frozen: ``args`` is a dict, so a frozen dataclass would generate an
+    # unhashable __hash__ that raises only when hashed — a latent footgun.
     name: str
     args: dict[str, Any]
 
 
 @dataclass
 class ChatTurn:
-    """One model turn: either a final ``content`` answer or ``tool_calls``."""
+    """One model turn: a final ``content`` answer, ``tool_calls``, or an
+    ``error`` (client-level failure — kept DISTINCT from a legitimate empty
+    answer so the engine can surface an honest reason instead of a blank)."""
     content: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
+    error: str = ""
 
 
 # client(messages, tools) -> ChatTurn ; executor(name, args) -> result string.
@@ -68,19 +73,32 @@ DEFAULT_TOOLS: list[dict[str, Any]] = [
 def default_tool_executor(cwd: str | None = None, timeout: float = 30.0) -> ToolExecutor:
     """A bounded shell/file executor. Not a security sandbox — it caps time and
     output; run delegated irreversible work behind the MGEE worktree gate."""
+    base = Path(cwd).resolve() if cwd else Path.cwd()
+
+    def _resolve(path_arg: str) -> Path:
+        # 🥷 Backslash-Security: using vibe-coding rules for Path Traversal & Directory Access
+        # Relative paths resolve UNDER the working dir (a relative "marker.txt"
+        # must land in cwd, not the process dir), and the result must stay within
+        # base — a model-supplied "../../etc/passwd" is rejected, not followed.
+        p = Path(path_arg)
+        resolved = (p if p.is_absolute() else base / p).resolve()
+        if base not in resolved.parents and resolved != base:
+            raise ValueError(f"path escapes working directory: {path_arg}")
+        return resolved
+
     def execute(name: str, args: dict[str, Any]) -> str:
         try:
             if name == "bash":
                 proc = subprocess.run(
-                    ["/bin/sh", "-c", str(args.get("command", ""))], cwd=cwd,
+                    ["/bin/sh", "-c", str(args.get("command", ""))], cwd=str(base),
                     capture_output=True, text=True, timeout=timeout, check=False,
                 )
                 out = (proc.stdout or "") + (proc.stderr or "")
                 return f"[exit {proc.returncode}]\n{out[:4000]}"
             if name == "read_file":
-                return Path(args["path"]).read_text(encoding="utf-8", errors="ignore")[:4000]
+                return _resolve(args["path"]).read_text(encoding="utf-8", errors="ignore")[:4000]
             if name == "write_file":
-                p = Path(args["path"])
+                p = _resolve(args["path"])
                 p.parent.mkdir(parents=True, exist_ok=True)
                 p.write_text(str(args.get("content", "")), encoding="utf-8")
                 return f"wrote {p}"
@@ -97,12 +115,17 @@ class ReActAgent:
     tier: int = 0
     client: OllamaClient | None = None
     executor: ToolExecutor | None = None
-    model: str = "qwen2.5-coder:7b"
+    # Default to a model that is actually installed AND supports Ollama native
+    # tool-calling. qwen2.5-coder:7b is frequently absent -> 404 -> silent empty
+    # runs; qwen2.5:7b is the warm local default.
+    model: str = "qwen2.5:7b"
     max_steps: int = 8
     cwd: str | None = None
     cost_per_call_usd: float = 0.0
 
     def __post_init__(self) -> None:
+        if self.max_steps < 1:
+            raise ValueError("max_steps must be >= 1")
         if self.executor is None:
             self.executor = default_tool_executor(cwd=self.cwd)
         if self.client is None:
@@ -118,9 +141,15 @@ class ReActAgent:
         ]
         actions: list[dict[str, Any]] = []
         final = ""
+        error = ""
         steps = 0
         for steps in range(1, self.max_steps + 1):
             turn = self.client(messages, DEFAULT_TOOLS)
+            if turn.error:
+                # Client-level failure (model missing, unreachable, bad JSON) —
+                # record it and stop; do NOT treat it as an empty final answer.
+                error = turn.error
+                break
             if not turn.tool_calls:
                 final = turn.content
                 break
@@ -138,8 +167,10 @@ class ReActAgent:
             "actions": actions,
             "steps": steps,
             "hit_step_cap": (steps >= self.max_steps and not final),
+            "error": error,
         }
-        # local models are best-effort; confidence stays low even on a clean finish
+        # local models are best-effort; confidence stays low even on a clean
+        # finish, and lowest when the run errored out with nothing.
         confidence = 0.6 if final else 0.2
         return AgentRunResult(artifacts, cost_usd=self.cost_per_call_usd, confidence=confidence)
 
@@ -160,8 +191,8 @@ def _default_ollama_client(model: str, base_url: str | None = None) -> OllamaCli
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
                 data = json.loads(resp.read())
-        except Exception:  # noqa: BLE001 — a dead/erroring model yields an empty turn (loop ends)
-            return ChatTurn()
+        except Exception as exc:  # noqa: BLE001 — surface the failure, don't fake an empty answer
+            return ChatTurn(error=f"ollama call failed ({model}): {exc}")
         msg = data.get("message", {}) or {}
         calls = [
             ToolCall(tc["function"]["name"], tc["function"].get("arguments", {}) or {})

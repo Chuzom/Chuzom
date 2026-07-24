@@ -65,8 +65,11 @@ def _default_planner() -> PlannerModel:
         try:
             from chuzom.router import route_and_call
             from chuzom.types import TaskType
+            # QUERY (not ANALYZE): the planner must return BARE JSON, but ANALYZE
+            # carries a STRUCTURE gate that requires >=2 markdown markers and so
+            # rejects every valid plan ("0 markers"). QUERY has only a LENGTH gate.
             resp = await route_and_call(
-                TaskType.ANALYZE, _planner_prompt(goal), system_prompt=_PLANNER_SYSTEM,
+                TaskType.QUERY, _planner_prompt(goal), system_prompt=_PLANNER_SYSTEM,
             )
         except Exception as exc:  # noqa: BLE001 — any routing failure fails closed
             raise PlanRejected(f"planner routing failed: {exc}") from exc
