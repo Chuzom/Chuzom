@@ -6,8 +6,22 @@ docs/CHUZOM_ROUTERARENA_COMMIT_CHRONICLE.md	proven	PR **#160** was the clean reb
 Docs/CHUZOM_ROUTERARENA_COMMIT_CHRONICLE.md	proven	PR **#160** was the clean rebuild: `chuzom-clean`, a confidence-gated cascade calibrated only on self-generated data, with a provenance manifest and contamination audit. It scored:
 docs/CHUZOM_ROUTERARENA_COMMIT_CHRONICLE.md	proven	The issue was provenance. In this branch, the classifier was part of the same RA-optimized loop. If the BGE centroids, labels, or MLP targets were derived from RA per-dataset accuracy, RA prompt clusters, or RA score feedback, then the embedding layer only disguised the same contamination. It made the rule less obvious, not more legitimate.
 Docs/CHUZOM_ROUTERARENA_COMMIT_CHRONICLE.md	proven	The issue was provenance. In this branch, the classifier was part of the same RA-optimized loop. If the BGE centroids, labels, or MLP targets were derived from RA per-dataset accuracy, RA prompt clusters, or RA score feedback, then the embedding layer only disguised the same contamination. It made the rule less obvious, not more legitimate.
+docs/END_TO_END_ROUTING_PLAN.md	guarantee	guarantee in module docstring). Add an integration test that validates the
+Docs/END_TO_END_ROUTING_PLAN.md	guarantee	guarantee in module docstring). Add an integration test that validates the
+docs/END_TO_END_ROUTING_PLAN.md	prevents	prevents the dead-end (completion tool on a task that needs bash). `context_scope`
+Docs/END_TO_END_ROUTING_PLAN.md	prevents	prevents the dead-end (completion tool on a task that needs bash). `context_scope`
+docs/END_TO_END_ROUTING_PLAN.md	prevents	prevents under-provisioning (routed model gets the context it needs to succeed
+Docs/END_TO_END_ROUTING_PLAN.md	prevents	prevents under-provisioning (routed model gets the context it needs to succeed
+docs/END_TO_END_ROUTING_RISKS.md	guarantee	Concrete scenarios where the guarantee is at risk:
+Docs/END_TO_END_ROUTING_RISKS.md	guarantee	Concrete scenarios where the guarantee is at risk:
+docs/END_TO_END_ROUTING_RISKS.md	guarantee	surfaced failure — never an infinite loop". This guarantee relies on:
+Docs/END_TO_END_ROUTING_RISKS.md	guarantee	surfaced failure — never an infinite loop". This guarantee relies on:
+docs/END_TO_END_ROUTING_RISKS.md	prevents	`src/chuzom/secret_scrubber.py` (already exists). This prevents env-var leakage
+Docs/END_TO_END_ROUTING_RISKS.md	prevents	`src/chuzom/secret_scrubber.py` (already exists). This prevents env-var leakage
 docs/LLM_ROUTER_PORT_PLAN.md	prevents	## PHASE 5 — Guardrails (permanent, prevents re-drift)
 Docs/LLM_ROUTER_PORT_PLAN.md	prevents	## PHASE 5 — Guardrails (permanent, prevents re-drift)
+docs/PLAN_0_9_1.md	prevents	| 2 | **F1** — expand `_CONTENT_OBJECT_RE` + software-context signal | Hard-route precision; prevents false delegation of non-code prompts |
+Docs/PLAN_0_9_1.md	prevents	| 2 | **F1** — expand `_CONTENT_OBJECT_RE` + software-context signal | Hard-route precision; prevents false delegation of non-code prompts |
 docs/ROUTERARENA_CLEAN_075_PLAN.md	guarantee	2. **Academic-benchmark train / validation splits** (MMLU, ARC, GSM8K, MATH, SQuAD, HumanEval/MBPP, …) — **permitted iff** the SHA-256 prompt-hash audit (§5) proves **0 overlap** with RA's eval set. *The audit, not a split theory, is the guarantee:* if no training prompt hash-matches an RA eval prompt, there is no leakage regardless of which split RA sampled. This is the same data-legitimacy standard SR uses; the accepted-#1 precedent is the argument to make in the PR.
 Docs/ROUTERARENA_CLEAN_075_PLAN.md	guarantee	2. **Academic-benchmark train / validation splits** (MMLU, ARC, GSM8K, MATH, SQuAD, HumanEval/MBPP, …) — **permitted iff** the SHA-256 prompt-hash audit (§5) proves **0 overlap** with RA's eval set. *The audit, not a split theory, is the guarantee:* if no training prompt hash-matches an RA eval prompt, there is no leakage regardless of which split RA sampled. This is the same data-legitimacy standard SR uses; the accepted-#1 precedent is the argument to make in the PR.
 docs/ROUTERARENA_CLEAN_075_PLAN.md	guarantee	2. **SHA-256 contamination audit** (Nadir #159's accepted pattern): normalize (NFC→strip→collapse-ws→casefold) and hash **every prompt that touches a router parameter** — self-generated calibration prompts **and** any academic-benchmark train/validation prompt admitted under §2.2 — then verify **0 overlap** with RA's 8,400 full + 420 robustness prompts. This audit is what upgrades §2.2 benchmark data from "banned" to "allowed": it is the load-bearing guarantee, run in CI, and its report (`ROUTERARENA_CONTAMINATION_AUDIT.json`, counts + zero-overlap assertion) ships in the PR. *Reading RA prompt hashes solely to prove non-use is the accepted transparency mechanism — it is an audit, not training.* For any purely self-generated component, also note in the PR that overlap is 0 by construction.
@@ -29,5 +43,4 @@ Docs/subagent-routing.md	never spends	never spends subscription tokens.
 README.md	guarantee	different integration modes — **push** and **pull** — with different guarantees:
 README.md	guaranteed	> **Recommendation:** Use Claude Code for guaranteed cost savings on every turn.
 README.md	guaranteed	| `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want guaranteed savings |
-README.md	prevents	**Auto-pivot:** In `smart` and `hard` modes, after 2 consecutive tool-call violations in a session, enforcement auto-downgrades to `soft` for the rest of that session. This prevents stuck patterns where Claude can't complete a legitimate task.
 README.md	proven	✅ **35–80% cost savings** — proven on real-world workloads
