@@ -72,3 +72,36 @@ async def test_llm_dispatches_by_task(monkeypatch):
     assert calls["code"]["complexity"] == "moderate"                                # balanced tier
     assert calls["generate"]["complexity"] == "complex"                             # best tier
     assert "complexity" not in calls["research"]                                    # research has none
+
+
+def test_chuzom_status_registered():
+    m = _FakeMcp()
+    consolidated.register(m, should_register=lambda _n: True)
+    assert "chuzom_status" in m.registered
+
+
+async def test_chuzom_status_dispatches_by_view(monkeypatch):
+    hits = {}
+
+    def _mk(name, wants_period=False):
+        if wants_period:
+            async def f(period="today"):
+                hits[name] = period
+                return f"[{name}:{period}]"
+        else:
+            async def f():
+                hits[name] = True
+                return f"[{name}]"
+        return f
+
+    for n in ("llm_savings", "llm_session_savings", "llm_session_spend",
+              "llm_health", "llm_providers"):
+        monkeypatch.setattr(f"chuzom.tools.consolidated.{n}", _mk(n))
+    monkeypatch.setattr("chuzom.tools.consolidated.llm_usage", _mk("llm_usage", wants_period=True))
+    monkeypatch.setattr("chuzom.tools.consolidated.llm_gain", _mk("llm_gain", wants_period=True))
+
+    assert await consolidated.chuzom_status("health") == "[llm_health]"
+    assert await consolidated.chuzom_status("spend") == "[llm_session_spend]"
+    assert await consolidated.chuzom_status("usage", period="week") == "[llm_usage:week]"
+    assert await consolidated.chuzom_status() == "[llm_savings]"          # default -> summary/savings
+    assert hits["llm_gain"] if await consolidated.chuzom_status("gain") else True

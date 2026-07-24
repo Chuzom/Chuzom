@@ -11,6 +11,15 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import Context
 
+from chuzom.tools.admin import (
+    llm_gain,
+    llm_health,
+    llm_providers,
+    llm_savings,
+    llm_session_savings,
+    llm_session_spend,
+    llm_usage,
+)
 from chuzom.tools.agentic import llm_delegate
 from chuzom.tools.text import (
     llm_analyze,
@@ -66,9 +75,33 @@ async def llm(
                            system_prompt=system_prompt, context=context)
 
 
+async def chuzom_status(view: str = "summary", period: str = "today") -> str:
+    """Read-only status/observability door — collapses the many llm_* reporting
+    tools into one *view* selector: summary/savings · session_savings · spend ·
+    usage · health · providers · gain. The old tools remain as aliases underneath."""
+    v = (view or "summary").lower()
+    if v in ("savings", "summary"):
+        return await llm_savings()
+    if v in ("session_savings", "session-savings"):
+        return await llm_session_savings()
+    if v in ("spend", "session_spend"):
+        return await llm_session_spend()
+    if v == "usage":
+        return await llm_usage(period=period)
+    if v == "health":
+        return await llm_health()
+    if v == "providers":
+        return await llm_providers()
+    if v == "gain":
+        return await llm_gain(period=period)
+    return await llm_savings()
+
+
 def register(mcp, should_register=None) -> None:
     """Register the consolidated front-door tools (aliases; old tools stay)."""
     if should_register is None or should_register("llm_act"):
         mcp.tool()(llm_act)
     if should_register is None or should_register("llm"):
         mcp.tool()(llm)
+    if should_register is None or should_register("chuzom_status"):
+        mcp.tool()(chuzom_status)
