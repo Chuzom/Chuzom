@@ -68,20 +68,51 @@ class CodexAdapter:
 
     tier: int
     runner: Runner | None = None
-    binary: str = "codex"
-    argv_extra: tuple[str, ...] = ("exec",)
+    binary: str | None = None       # None → resolve via find_codex_binary() (fallback 'codex')
+    model: str | None = None        # e.g. 'gpt-5.5'; omitted → Codex CLI default
+    cwd: str | None = None          # working dir codex edits in (also where diff is captured)
+    capture_diff: bool = True       # capture `git diff` after the run as the produced artifact
     cost_per_call_usd: float = 0.0
 
     def __post_init__(self) -> None:
         if self.runner is None:
             self.runner = subprocess_runner
 
+    def _resolve_binary(self) -> str:
+        if self.binary:
+            return self.binary
+        try:
+            from chuzom.codex_agent import find_codex_binary
+            return find_codex_binary() or "codex"
+        except Exception:  # noqa: BLE001 — resolver failure falls back to PATH lookup
+            return "codex"
+
+    def _codex_argv(self, binary: str, prompt: str) -> list[str]:
+        argv = [binary, "exec", "--json", "--color", "never", "--skip-git-repo-check"]
+        if self.model:
+            argv += ["-m", self.model, "-c", "model_provider=openai"]
+        if self.cwd:
+            argv += ["-C", self.cwd]
+        argv.append(prompt)
+        return argv
+
     def run(
         self, milestone: Milestone, frozen_context: list[dict[str, Any]], budget_left: float
     ) -> AgentRunResult:
         prompt = pack_prompt(milestone, frozen_context)
         assert self.runner is not None  # set in __post_init__
-        proc = self.runner([self.binary, *self.argv_extra], prompt)
+        binary = self._resolve_binary()
+        proc = self.runner(self._codex_argv(binary, prompt), "")
+
+        diff, files = "", []
+        if self.capture_diff and self.cwd:
+            d = self.runner(["git", "-C", self.cwd, "diff"], "")
+            if d.returncode == 0 and d.stdout:
+                diff = d.stdout
+                files = [
+                    ln[6:].strip() for ln in diff.splitlines() if ln.startswith("+++ b/")
+                ]
+
         artifacts: dict[str, Any] = {
             "provider": "codex",
             "tier": self.tier,
@@ -89,6 +120,8 @@ class CodexAdapter:
             "returncode": proc.returncode,
             "output": proc.stdout,
             "stderr": proc.stderr,
+            "diff": diff,
+            "files": files,
             "prompt_sent": prompt,
         }
         confidence = 1.0 if proc.returncode == 0 else 0.3
