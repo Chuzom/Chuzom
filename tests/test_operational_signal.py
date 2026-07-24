@@ -41,6 +41,13 @@ _NON_OPERATIONAL = [
     "Write a rubric for a passing grade in this course.",              # passing = grade
     "Generate a checklist for replacing a lost boarding pass.",        # pass = travel
     "Write an explanation of what this unit test is checking.",        # content-object short-circuit
+    # P2-S1 residual false positives the audit found — content deliverables that
+    # happen to contain software-verification words. Must stay dead.
+    "Generate a regression test plan.",                                # 'test plan' deliverable
+    "Build a training exercise so the assertions pass in this lesson.",  # exercise / lesson
+    "Generate a quiz that tests CI concepts.",                         # quiz
+    "Create a worksheet with exam questions on unit testing.",         # worksheet / exam
+    "Write a curriculum about test coverage.",                         # curriculum
 ]
 
 
