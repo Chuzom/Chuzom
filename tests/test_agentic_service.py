@@ -35,12 +35,12 @@ def test_run_delegation_returns_json_serializable_bundle():
 # ── the MCP tool ────────────────────────────────────────────────────────────
 def _fake_planner_factory():
     def pm(_goal):
-        return [{"id": "M1", "description": "do", "acceptance": {"type": "canary", "marker": "OK"}}]
+        return [{"id": "M1", "description": "do", "acceptance": {"type": "canary", "marker": "SVC_CANARY"}}]
     return pm
 
 
 def _fake_adapters_factory():
-    return {1: _Agent(1)}
+    return {1: _Agent(1, out="SVC_CANARY")}  # output must contain the (non-trivial) canary marker
 
 
 async def test_llm_delegate_tool_with_injected_backends(monkeypatch):
