@@ -12,13 +12,24 @@ from __future__ import annotations
 from mcp.server.fastmcp import Context
 
 from chuzom.tools.admin import (
+    llm_budget,
+    llm_cache_clear,
     llm_gain,
     llm_health,
+    llm_import_profile,
+    llm_policy,
     llm_providers,
     llm_savings,
     llm_session_savings,
     llm_session_spend,
+    llm_set_profile,
     llm_usage,
+)
+from chuzom.tools.agents import (
+    chuzom_agent_check_budget,
+    chuzom_agent_complete_session,
+    chuzom_agent_lineage,
+    chuzom_agent_list,
 )
 from chuzom.tools.agentic import llm_delegate
 from chuzom.tools.text import (
@@ -97,6 +108,42 @@ async def chuzom_status(view: str = "summary", period: str = "today") -> str:
     return await llm_savings()
 
 
+async def chuzom_admin(action: str, value: str = "") -> str:
+    """Config/admin door — collapses the mutating/config llm_* tools into one
+    *action* selector: set_profile (value=profile) · import_profile (value=url) ·
+    clear_cache · policy · budget. Old tools stay as aliases underneath."""
+    a = (action or "").lower()
+    if a == "set_profile":
+        return await llm_set_profile(value)
+    if a == "import_profile":
+        return await llm_import_profile(url=value)
+    if a == "clear_cache":
+        return await llm_cache_clear()
+    if a == "policy":
+        return await llm_policy()
+    if a == "budget":
+        return await llm_budget()
+    return f"unknown admin action: {action!r} (try set_profile/import_profile/clear_cache/policy/budget)"
+
+
+async def chuzom_session(action: str, session_id: str = "", limit: int = 200) -> dict:
+    """Agent-session door — collapses the simple chuzom_agent_* lifecycle tools
+    into one *action* selector: list · check_budget · complete · lineage (all take
+    a session_id, or none). start/route carry richer params — call those tools
+    directly. Old tools stay registered underneath."""
+    a = (action or "").lower()
+    if a == "list":
+        return await chuzom_agent_list()
+    if a == "check_budget":
+        return await chuzom_agent_check_budget(session_id)
+    if a == "complete":
+        return await chuzom_agent_complete_session(session_id)
+    if a == "lineage":
+        return await chuzom_agent_lineage(session_id, limit=limit)
+    return {"error": f"unknown/rich session action: {action!r}; "
+                     "use list/check_budget/complete/lineage, or start/route directly"}
+
+
 def register(mcp, should_register=None) -> None:
     """Register the consolidated front-door tools (aliases; old tools stay)."""
     if should_register is None or should_register("llm_act"):
@@ -105,3 +152,7 @@ def register(mcp, should_register=None) -> None:
         mcp.tool()(llm)
     if should_register is None or should_register("chuzom_status"):
         mcp.tool()(chuzom_status)
+    if should_register is None or should_register("chuzom_admin"):
+        mcp.tool()(chuzom_admin)
+    if should_register is None or should_register("chuzom_session"):
+        mcp.tool()(chuzom_session)

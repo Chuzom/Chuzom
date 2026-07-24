@@ -105,3 +105,53 @@ async def test_chuzom_status_dispatches_by_view(monkeypatch):
     assert await consolidated.chuzom_status("usage", period="week") == "[llm_usage:week]"
     assert await consolidated.chuzom_status() == "[llm_savings]"          # default -> summary/savings
     assert hits["llm_gain"] if await consolidated.chuzom_status("gain") else True
+
+
+def test_admin_and_session_registered():
+    m = _FakeMcp()
+    consolidated.register(m, should_register=lambda _n: True)
+    assert {"chuzom_admin", "chuzom_session"} <= set(m.registered)
+
+
+async def test_chuzom_admin_dispatches_by_action(monkeypatch):
+    seen = {}
+
+    async def _set(profile):
+        seen["set"] = profile
+        return "ok-set"
+
+    async def _clear():
+        seen["clear"] = True
+        return "ok-clear"
+
+    monkeypatch.setattr("chuzom.tools.consolidated.llm_set_profile", _set)
+    monkeypatch.setattr("chuzom.tools.consolidated.llm_cache_clear", _clear)
+    assert await consolidated.chuzom_admin("set_profile", "budget") == "ok-set"
+    assert seen["set"] == "budget"
+    assert await consolidated.chuzom_admin("clear_cache") == "ok-clear"
+    assert "unknown admin action" in await consolidated.chuzom_admin("bogus")
+
+
+async def test_chuzom_session_dispatches_by_action(monkeypatch):
+    seen = {}
+
+    async def _list():
+        return {"agents": []}
+
+    async def _budget(session_id):
+        seen["budget"] = session_id
+        return {"ok": True}
+
+    async def _lineage(session_id, limit=200):
+        seen["lineage"] = (session_id, limit)
+        return {"ok": True}
+
+    monkeypatch.setattr("chuzom.tools.consolidated.chuzom_agent_list", _list)
+    monkeypatch.setattr("chuzom.tools.consolidated.chuzom_agent_check_budget", _budget)
+    monkeypatch.setattr("chuzom.tools.consolidated.chuzom_agent_lineage", _lineage)
+    assert await consolidated.chuzom_session("list") == {"agents": []}
+    await consolidated.chuzom_session("check_budget", session_id="s1")
+    assert seen["budget"] == "s1"
+    await consolidated.chuzom_session("lineage", session_id="s2", limit=5)
+    assert seen["lineage"] == ("s2", 5)
+    assert "error" in await consolidated.chuzom_session("start")   # rich action → use direct tool
