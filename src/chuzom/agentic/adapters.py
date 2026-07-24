@@ -50,9 +50,14 @@ def pack_prompt(milestone: Milestone, frozen_context: list[dict[str, Any]]) -> s
     """Build the delegated prompt: the current milestone + the frozen done-work
     so the agent resumes at the frontier instead of redoing completed milestones."""
     lines = [f"TASK: {milestone.description or milestone.id}"]
-    if frozen_context:
+    context = [c for c in frozen_context if c.get("id") == "SESSION_CONTEXT"]
+    completed = [c for c in frozen_context if c.get("id") != "SESSION_CONTEXT"]
+    if context:
+        lines += ["", "CONVERSATION CONTEXT (from the calling session — use it, don't echo it back):"]
+        lines += [f"  {c.get('description')}" for c in context]
+    if completed:
         lines += ["", "ALREADY COMPLETED — build on these, do NOT redo:"]
-        for c in frozen_context:
+        for c in completed:
             lines.append(f"  - [{c.get('id')}] {c.get('description') or c.get('id')}")
     lines += ["", "An objective check will verify your work — make real, correct changes."]
     return "\n".join(lines)

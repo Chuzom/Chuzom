@@ -67,6 +67,10 @@ class TaskLedger:
     budget_cap_usd: float = 1.0
     spent_usd: float = 0.0
     replanned: bool = False
+    # P1-S2 (Known Limit A): conversation context from the calling session, handed
+    # to every delegated agent via frozen_context() so a routed model isn't blind
+    # to what was discussed (not just its own milestones).
+    session_context: str = ""
 
     # ── frontier ────────────────────────────────────────────────────────────
     @property
@@ -97,12 +101,18 @@ class TaskLedger:
     def frozen_context(self) -> list[dict[str, Any]]:
         """Read-only view of achieved milestones handed to an escalated tier so
         it resumes at the frontier instead of redoing completed work."""
-        return [
+        frozen = [
             {"id": m.id, "description": m.description,
              "achieved_by": m.achieved_by, "artifacts": m.artifacts}
             for m in self.milestones
             if m.status is MilestoneStatus.DONE
         ]
+        if self.session_context:
+            # Prepended, distinct id — pack_prompt renders it as conversation
+            # context, NOT as a completed milestone.
+            frozen.insert(0, {"id": "SESSION_CONTEXT", "description": self.session_context,
+                              "achieved_by": None, "artifacts": {}})
+        return frozen
 
     def remaining(self) -> list[Milestone]:
         return [m for m in self.milestones if m.status is not MilestoneStatus.DONE]
