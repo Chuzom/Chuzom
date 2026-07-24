@@ -43,6 +43,34 @@ from chuzom.tools.text import (
 # tier → the completion tools' complexity vocabulary
 _TIER_TO_COMPLEXITY = {"fast": "simple", "balanced": "moderate", "best": "complex"}
 
+# 1.0 cutover step 3: the legacy-tool → front-door migration map. Single source of
+# truth — drives deprecation notices now and the breaking removal (step 4) later.
+DEPRECATED_TOOLS: dict[str, str] = {
+    # completion → llm
+    "llm_query": "llm", "llm_analyze": "llm", "llm_code": "llm",
+    "llm_research": "llm", "llm_generate": "llm",
+    # agentic → llm_act
+    "llm_delegate": "llm_act",
+    # observability → chuzom_status
+    "llm_savings": "chuzom_status", "llm_session_savings": "chuzom_status",
+    "llm_session_spend": "chuzom_status", "llm_usage": "chuzom_status",
+    "llm_health": "chuzom_status", "llm_providers": "chuzom_status",
+    "llm_gain": "chuzom_status", "llm_dashboard": "chuzom_status",
+    # config → chuzom_admin
+    "llm_set_profile": "chuzom_admin", "llm_import_profile": "chuzom_admin",
+    "llm_cache_clear": "chuzom_admin", "llm_policy": "chuzom_admin",
+    "llm_budget": "chuzom_admin",
+    # agent lifecycle → chuzom_session
+    "chuzom_agent_list": "chuzom_session", "chuzom_agent_check_budget": "chuzom_session",
+    "chuzom_agent_complete_session": "chuzom_session", "chuzom_agent_lineage": "chuzom_session",
+}
+
+
+def door_for_tool(name: str) -> str:
+    """Return the consolidated front door for a legacy tool, or the name unchanged
+    if it has no door (e.g. it's already a door, or stays as-is toward 1.0)."""
+    return DEPRECATED_TOOLS.get(name, name)
+
 
 async def llm_act(task: str, budget_usd: float = 1.0, context: str = "") -> str:
     """Agentic execution — do a real task end-to-end: decompose into milestones,

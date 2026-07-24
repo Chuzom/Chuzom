@@ -155,3 +155,18 @@ async def test_chuzom_session_dispatches_by_action(monkeypatch):
     await consolidated.chuzom_session("lineage", session_id="s2", limit=5)
     assert seen["lineage"] == ("s2", 5)
     assert "error" in await consolidated.chuzom_session("start")   # rich action → use direct tool
+
+
+def test_deprecated_tools_registry_maps_to_real_doors():
+    from chuzom.tools.consolidated import DEPRECATED_TOOLS, door_for_tool
+    doors = {"llm", "llm_act", "chuzom_status", "chuzom_admin", "chuzom_session"}
+    assert set(DEPRECATED_TOOLS.values()) <= doors, "every mapping must point to a real door"
+    # representative mappings
+    assert door_for_tool("llm_query") == "llm"
+    assert door_for_tool("llm_delegate") == "llm_act"
+    assert door_for_tool("llm_savings") == "chuzom_status"
+    assert door_for_tool("llm_set_profile") == "chuzom_admin"
+    assert door_for_tool("chuzom_agent_list") == "chuzom_session"
+    # a door / unmapped name is returned unchanged
+    assert door_for_tool("llm") == "llm"
+    assert door_for_tool("llm_route") == "llm_route"
