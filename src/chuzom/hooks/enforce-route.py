@@ -185,6 +185,26 @@ def _looks_like_edit_task(prompt: str) -> bool:
     return bool(_EDIT_SHAPE_RE.search(prompt) or _EDIT_PATH_LED_RE.search(prompt))
 
 
+def _is_operational_prompt(prompt: str) -> bool:
+    """True when the prompt needs agentic tool-execution + objective verification
+    (change verb + verification demand) — the class that hard-routes to
+    ``llm_delegate``. Lazy import keeps the hook resilient if the module is
+    absent: on any failure it returns False (fail-open, never blocks spuriously)."""
+    if not prompt:
+        return False
+    try:
+        from chuzom.operational_signal import is_operational
+        return is_operational(prompt)
+    except Exception:
+        return False
+
+
+def _delegate_route_enabled() -> bool:
+    """The enforced operational→delegate redirect is on by default; a
+    ``CHUZOM_DELEGATE=off`` kill switch disables it without touching enforcement."""
+    return os.environ.get("CHUZOM_DELEGATE", "").strip().lower() not in ("off", "0", "false", "no")
+
+
 def _is_readonly_bash(command: str) -> bool:
     """Return True if a Bash command is conservatively read-only.
 
@@ -685,7 +705,11 @@ def main() -> None:
     # the pending directive at write-time (auto-route.py:1980).
     if pending is not None and enforce in ("hard", "smart"):
         _original_prompt = pending.get("original_prompt", "")
-        if _original_prompt and _looks_like_edit_task(_original_prompt):
+        # Operational prompts ("fix X and make it pass") are the delegate class —
+        # they must NOT be soft-exempted here, or the operational→delegate redirect
+        # below never gets to enforce. Let them fall through to that redirect.
+        if (_original_prompt and _looks_like_edit_task(_original_prompt)
+                and not (_delegate_route_enabled() and _is_operational_prompt(_original_prompt))):
             enforce = "soft"
             try:
                 _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
@@ -715,7 +739,12 @@ def main() -> None:
                 _needs_local_tools = needs_claude_tools(_fs_prompt, _fs_task)
             except Exception:
                 _needs_local_tools = False
-            if _needs_local_tools:
+            # Operational prompts are exempt from the FS exemption: llm_delegate
+            # CAN act on local files (it runs a tool loop), so we redirect to it
+            # rather than soft-allowing native tools to bypass routing entirely.
+            if _needs_local_tools and not (
+                _delegate_route_enabled() and _is_operational_prompt(_fs_prompt)
+            ):
                 enforce = "soft"
                 try:
                     _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
@@ -841,6 +870,28 @@ def main() -> None:
     expected_server = pending.get("expected_server", "")  # for MCP server routing
     task_type = pending.get("task_type", "?")
     complexity = pending.get("complexity", "?")
+
+    # B2: operational prompts hard-route to AGENTIC DELEGATION. A stateless
+    # completion model cannot DO an operational task (edit files, run tests); the
+    # classifier picks a completion tool, so we redirect the enforced tool to
+    # llm_delegate, which runs a real tool loop with objective acceptance. Any
+    # llm_* call still clears the lock (never a trap), and CHUZOM_ENFORCE=soft/off
+    # or CHUZOM_DELEGATE=off disables the redirect.
+    # 🥷 Backslash-Security: using vibe-coding rules for Logging & Error Handling
+    if (_delegate_route_enabled()
+            and _is_operational_prompt(pending.get("original_prompt", ""))):
+        expected_tool = "llm_delegate"
+        task_type = "delegate"
+        try:
+            _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
+            ts = time.strftime("%Y-%m-%d %H:%M:%S")
+            with _LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"[{ts}] DELEGATE_ROUTE session={session_id[:12]} "
+                    f"reason=operational_intent tool={tool_name}\n"
+                )
+        except OSError:
+            pass
 
     # ── Routing satisfied checks ──────────────────────────────────────────────
 
