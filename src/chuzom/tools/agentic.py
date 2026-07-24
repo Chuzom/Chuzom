@@ -78,8 +78,9 @@ def _default_planner() -> PlannerModel:
 
 
 def _default_adapters() -> dict[int, Any]:
-    # tier 1 = Codex-as-agent (subscription, $0 metered). Local tier-0 lands with P3b.
-    return {1: CodexAdapter(tier=1)}
+    # tier 0 = local ReAct/Ollama agent (cheapest, best-effort); tier 1 = Codex.
+    from chuzom.agentic.react import ReActAgent
+    return {0: ReActAgent(tier=0), 1: CodexAdapter(tier=1)}
 
 
 async def llm_delegate(
