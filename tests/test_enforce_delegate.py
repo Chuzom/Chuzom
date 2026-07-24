@@ -46,17 +46,31 @@ def _write_pending(home: Path, session_id: str, **overrides) -> None:
 
 
 def test_operational_prompt_redirects_to_delegate(tmp_path):
-    """Operational prompt + hard mode + a write Bash → blocked, demanding
-    llm_delegate (and NOT soft-exempted despite the file reference)."""
+    """With CHUZOM_DELEGATE=on: operational prompt + hard mode + a write Bash →
+    blocked, demanding llm_delegate (and NOT soft-exempted despite the file ref)."""
     sid = "sess-op-1"
     _write_pending(tmp_path, sid, original_prompt=_OP_PROMPT)
     result = _run_hook(
         {"session_id": sid, "tool_name": "Bash",
          "tool_input": {"command": "python -m pytest -q"}},
-        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
     )
     assert json.loads(result.stdout)["decision"] == "block"
     assert "llm_delegate" in result.stdout
+
+
+def test_delegate_route_off_by_default(tmp_path):
+    """Default (no CHUZOM_DELEGATE): the operational→delegate redirect does NOT
+    fire — it stays OFF until the agentic executor is sandboxed (P1 / audit R1).
+    The prompt keeps its baseline route (llm_code), no llm_delegate."""
+    sid = "sess-op-default-off"
+    _write_pending(tmp_path, sid, original_prompt=_OP_PROMPT)
+    result = _run_hook(
+        {"session_id": sid, "tool_name": "Bash",
+         "tool_input": {"command": "python -m pytest -q"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},  # no CHUZOM_DELEGATE
+    )
+    assert "llm_delegate" not in result.stdout
 
 
 def test_llm_delegate_call_clears_the_lock(tmp_path):
@@ -103,7 +117,7 @@ def test_delegate_route_is_logged_as_security_event(tmp_path):
     _run_hook(
         {"session_id": sid, "tool_name": "Bash",
          "tool_input": {"command": "python -m pytest -q"}},
-        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
     )
     log = (tmp_path / ".chuzom" / "enforcement.log")
     assert log.exists() and "DELEGATE_ROUTE" in log.read_text(encoding="utf-8")

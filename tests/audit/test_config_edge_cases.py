@@ -60,7 +60,8 @@ def test_no_user_config_and_no_repo_config_returns_sane_defaults(tmp_path, monke
     assert merged.daily_caps == {}
     # Accessor methods must degrade gracefully, not raise.
     assert merged.effective_profile() is None
-    assert merged.effective_enforce() == "hard"
+    # F01/North Star: the built-in default is now 'smart' (enforce routing out of the box).
+    assert merged.effective_enforce() == "smart"
     assert merged.model_override("code") is None
     assert merged.provider_override("code") is None
     assert merged.daily_cap_for("code") is None

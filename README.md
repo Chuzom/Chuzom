@@ -1266,8 +1266,8 @@ Chuzom's enforcement hook (`enforce-route.py`) fires before every tool call when
 Set via environment variable or `~/.chuzom/routing.yaml`:
 
 ```bash
-# Environment variable (takes precedence) — default is 'soft'
-export CHUZOM_ENFORCE=smart   # upgrade to smart for stronger savings
+# Environment variable (takes precedence) — default is 'smart'
+export CHUZOM_ENFORCE=soft    # relax to advisory-only (logs, never blocks)
 
 # Or in ~/.chuzom/routing.yaml
 enforce: hard
@@ -1275,8 +1275,8 @@ enforce: hard
 
 | Mode | Behavior | Best for |
 |---|---|---|
-| `soft` (default) | Logs routing misses but **never blocks** any tool call. Route hints appear in context; the model can follow them voluntarily. Zero risk of stuck sessions. | Fresh installs; teams new to routing |
-| `smart` | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze). Allows file tools for code tasks. Auto-downgrades after 2 violations to prevent stuck sessions. | Users who want stronger savings enforcement |
+| `smart` (default) | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze) until routed, so offloadable work goes to cheaper models. Allows file tools for code tasks. Auto-downgrades after 2 violations to prevent stuck sessions. | The default — enforce routing out of the box |
+| `soft` | Logs routing misses but **never blocks** any tool call. Route hints appear in context; the model can follow them voluntarily. Zero risk of stuck sessions, but **saves nothing unless the model volunteers**. | Teams that want advisory-only routing |
 | `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want guaranteed savings |
 | `strict` | Like `hard` with all escape valves disabled (no auto-pivot, no read-only Bash exception). Sessions can deadlock. | Compliance environments |
 | `advise` | Routes prompts to cheap models, but the enforcement hook **never blocks any tool**. Zero friction. | Testing / evaluation |
@@ -1386,7 +1386,7 @@ export CHUZOM_CLASSIFY_LOCAL_ONLY=false
 | `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
 | `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription quota tracking mode |
 | `CHUZOM_DIRECT_EXECUTION` | `true` | Answer prompts directly from hook; Claude is skipped only when the render mode resolves to `block` |
-| `CHUZOM_ENFORCE` | `soft` | Enforcement mode: `soft`, `smart`, `hard`, `strict`, `advise`, `off` |
+| `CHUZOM_ENFORCE` | `smart` | Enforcement mode: `smart`, `soft`, `hard`, `strict`, `advise`, `off` |
 | `CHUZOM_CLASSIFY_LOCAL_ONLY` | auto | Restrict classification to local models only (privacy) |
 | `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |
 | `CHUZOM_ROUTE_BANNER` | `on` | Show `🎯 Chuzom routed →` banner in terminal (`off` to hide) |

@@ -462,7 +462,7 @@ def _check_savings_posture() -> list[str]:
         from chuzom.enforce_config import resolve_enforce_mode
         enforce = resolve_enforce_mode()
     except Exception:
-        enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower() or "soft"
+        enforce = os.environ.get("CHUZOM_ENFORCE", "").strip().lower() or "smart"
     if enforce in {"advise", "advisory"}:
         lines.append(_ok(
             f"CHUZOM_ENFORCE={enforce} — route everywhere, NEVER block a tool. "
@@ -483,8 +483,8 @@ def _check_savings_posture() -> list[str]:
             "bypasses are blocked"
         ))
     else:
-        # smart (opt-in; default is now "soft").
-        lines.append(_ok("CHUZOM_ENFORCE=smart — blocks Q&A, allows code (default is soft)"))
+        # smart is the built-in default (F01/North Star): enforce routing out of the box.
+        lines.append(_ok("CHUZOM_ENFORCE=smart (default) — blocks Q&A until routed, allows code work"))
 
     # 5b. Loophole → Chuzom routing (P5). Loophole only hits the FULL router
     #     (policy + metering) when CHUZOM_URL points at a live gateway; without

@@ -9,7 +9,7 @@ Resolution priority (highest first):
   1. ``CHUZOM_ENFORCE`` env var                 — ad-hoc, per-shell override
   2. ``./.chuzom.yml`` (cwd/ancestors) ``enforce:`` — per-repo policy
   3. ``~/.chuzom/routing.yaml`` ``enforce:``       — durable, cross-session default
-  4. ``"soft"``                                 — built-in default (log-only, never blocks)
+  4. ``"smart"``                                — built-in default (block Q&A until routed, allow code/local work)
 
 File config (2, 3) is what survives across sessions and launch methods; env
 vars do NOT propagate to GUI/desktop/other-host sessions, which is why relying
@@ -29,11 +29,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Built-in default. "soft" = log routing misses but NEVER block a tool, so
-# legitimate Bash/Read/Write/loophole work is never sabotaged. Routing still
-# happens (advise hints + gateway); enforcement is observability, not a gate.
-# Override per-repo via .chuzom.yml or globally via ~/.chuzom/routing.yaml.
-DEFAULT_ENFORCE = "soft"
+# Built-in default. "smart" = block Q&A/reasoning tools until the prompt is
+# routed, while letting code/local-file work through — so offloadable work
+# actually goes to cheaper models (the North Star) instead of Claude answering
+# for free. "soft" (log-only, never blocks) saved nothing out of the box.
+# Override per-repo via .chuzom.yml or globally via ~/.chuzom/routing.yaml;
+# set CHUZOM_ENFORCE=soft/off to relax.
+DEFAULT_ENFORCE = "smart"
 
 
 def _yaml_enforce(path: Path) -> str:

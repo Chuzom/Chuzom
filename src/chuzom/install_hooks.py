@@ -201,6 +201,10 @@ _HOOK_DEFS = [
     ("subagent-start.py", "chuzom-subagent-start.py", "SubagentStart", ""),
     ("usage-refresh.py", "chuzom-usage-refresh.py", "PostToolUse", "llm_|mcp__chuzom__llm"),
     ("cc-usage-track.py", "chuzom-cc-usage-track.py", "PostToolUse", "Agent"),
+    # F5: releases the agent-depth slot agent-route.py's PreToolUse[Agent] took,
+    # so depth is a LIVE nesting count. Without it, 3 lifetime spawns block all
+    # further agents for the session.
+    ("agent-depth-release.py", "chuzom-agent-depth-release.py", "PostToolUse", "Agent"),
     ("playwright-compress.py", "chuzom-playwright-compress.py", "PostToolUse", ""),
     ("bash-compress.py", "chuzom-bash-compress.py", "PostToolUse", ""),
     ("context-capture.py", "chuzom-context-capture.py", "PostToolUse", ""),
@@ -225,6 +229,8 @@ _CLAW_CODE_HOOK_DEFS = [
     ("agent-route.py",              "chuzom-agent-route.py",    "PreToolUse",       "Agent"),
     ("subagent-start.py",           "chuzom-subagent-start.py", "SubagentStart",    ""),
     ("usage-refresh.py",            "chuzom-usage-refresh.py",      "PostToolUse",  "llm_|mcp__chuzom__llm"),
+    # F5: release the agent-depth slot (claw-code also uses the agent-route.py incrementer).
+    ("agent-depth-release.py",      "chuzom-agent-depth-release.py", "PostToolUse",  "Agent"),
     ("playwright-compress.py",      "chuzom-playwright-compress.py", "PostToolUse",  ""),
     ("bash-compress.py",            "chuzom-bash-compress.py",       "PostToolUse",  ""),
     ("context-capture.py",          "chuzom-context-capture.py",     "PostToolUse",  ""),
