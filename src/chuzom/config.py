@@ -258,11 +258,12 @@ class RouterConfig(BaseSettings):
     # Falls back to chuzom_team_endpoint if not set.
     chuzom_webhook_url: str = ""     # CHUZOM_WEBHOOK_URL
 
-    # ── Tool slim mode (v4.0) ──
+    # ── Tool slim mode (v4.0; consolidated default since 0.10.0) ──
     # Reduce the number of registered MCP tools to save context tokens.
-    # Values: "off" (all 41 tools), "routing" (12 tools), "core" (4 tools).
-    # Set CHUZOM_SLIM=routing in the MCP server env to activate.
-    chuzom_slim: str = "routing"     # CHUZOM_SLIM (routing=12 core, off=all)
+    # Values: "consolidated" (11 front doors — 1.0 surface, DEFAULT),
+    # "off" (all legacy tools), "routing" (12 tools), "core" (4 tools).
+    # Set CHUZOM_SLIM=off to restore the full legacy surface (escape hatch).
+    chuzom_slim: str = "consolidated"   # CHUZOM_SLIM (consolidated=11 doors, off=all)
 
     # ── Cost-threshold escalation (v4.0) ──
     # Block any single call estimated above this cost until approved via

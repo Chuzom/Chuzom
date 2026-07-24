@@ -160,10 +160,15 @@ class TestImportWiringInAdminTools:
 
 
 class TestLlmAutoRegistered:
-    def test_llm_auto_in_server_tools(self):
+    def test_auto_routing_door_in_server_tools(self):
+        # 0.10.0 cutover: the consolidated default exposes auto-routing via the
+        # `llm_route` door (and llm(task="auto")); the legacy `llm_auto` stays
+        # importable behind the door but is no longer a registered tool by default.
         from chuzom.server import mcp
+        from chuzom.tools.routing import llm_auto  # still importable (function intact)
         names = {t.name for t in mcp._tool_manager.list_tools()}
-        assert "llm_auto" in names
+        assert "llm_route" in names
+        assert callable(llm_auto)
 
 
 class TestLlmAutoSavingsEnvelope:

@@ -59,7 +59,7 @@ def test_agent_step_gets_same_delegate_redirect_as_user_step(tmp_path):
                        "subagent_type": "code-reviewer", "parent_session": "sess-user"},
                       home=tmp_path, extra_env=_ENV)
 
-    assert "llm_delegate" in user.stdout, "user step must redirect to delegate"
-    assert "llm_delegate" in agent.stdout, "agent step must get the SAME redirect (parity)"
+    assert "llm_act" in user.stdout, "user step must redirect to the agentic door"
+    assert "llm_act" in agent.stdout, "agent step must get the SAME redirect (parity)"
     assert (json.loads(user.stdout)["decision"]
             == json.loads(agent.stdout)["decision"] == "block")

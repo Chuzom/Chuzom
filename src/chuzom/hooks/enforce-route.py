@@ -225,11 +225,13 @@ _OLD_TOOL_TO_DOOR = {
 
 
 def _door_for(expected_tool: str) -> str:
-    """Under the consolidated tool tier (CHUZOM_SLIM=consolidated) the legacy tools
-    aren't registered, so the enforced directive must name the front door that IS
-    (llm_query…→llm, llm_delegate→llm_act). No-op in every other tier — auto-route.py
-    stays untouched, and any llm_* call still clears the lock regardless."""
-    if os.environ.get("CHUZOM_SLIM", "").strip().lower() != "consolidated":
+    """Under the consolidated tool tier the legacy tools aren't registered, so the
+    enforced directive must name the front door that IS (llm_query…→llm,
+    llm_delegate→llm_act). Consolidated is the DEFAULT since 0.10.0, so this applies
+    whenever CHUZOM_SLIM is unset; it's a no-op only when an explicit legacy tier
+    (off/routing/core) is selected. Any llm_* call still clears the lock regardless."""
+    slim = os.environ.get("CHUZOM_SLIM", "").strip().lower()
+    if slim and slim != "consolidated":
         return expected_tool
     return _OLD_TOOL_TO_DOOR.get(expected_tool, expected_tool)
 

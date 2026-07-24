@@ -123,8 +123,8 @@ setup.register(mcp, _gate)
 dashboard.register(mcp, _gate)
 fs.register(mcp, _gate)
 agoragentic.register(mcp)
-agents.register(mcp)  # v0.0.2 — 6 agent-session MCP tools
-agentic.register(mcp)  # agentic router — llm_delegate (milestone-gated delegation)
+agents.register(mcp, _gate)  # v0.0.2 — agent-session tools (gated; consolidated keeps the rich two)
+agentic.register(mcp, _gate)  # agentic router — llm_delegate (gated; consolidated hides it behind llm_act)
 consolidated.register(mcp, _gate)  # North Star P4 — 1.0 front-door aliases (llm_act; non-breaking)
 
 # ── Resources ────────────────────────────────────────────────────────────────

@@ -54,6 +54,8 @@ def test_all_tools_registered():
         "chuzom_agent_list", "chuzom_agent_start_session",
         "chuzom_agent_check_budget", "chuzom_agent_route",
         "chuzom_agent_complete_session", "chuzom_agent_lineage",
+        # 0.10.0 consolidated front doors — registered by tools/consolidated.py
+        "llm", "llm_act", "chuzom_status", "chuzom_admin", "chuzom_session",
     }
     
     # SEC-002 + SEC-003: tools gated behind env opt-ins must be excluded
@@ -71,8 +73,8 @@ def test_all_tools_registered():
             "agoragentic_task", "agoragentic_browse", "agoragentic_wallet", "agoragentic_status",
         }
 
-    # With slim=routing (default), only routing-tier tools are registered.
-    # Check that registered tools are a known subset, not that ALL tools are present.
+    # With slim=consolidated (default since 0.10.0), only the 11 front doors are
+    # registered. Check that registered tools are a known subset, not that ALL are present.
     from chuzom.config import get_config
     slim = get_config().chuzom_slim
     if slim == "off":
@@ -81,9 +83,12 @@ def test_all_tools_registered():
         # In slim mode, registered tools should be a subset of known tools
         assert registered_names.issubset(known_tools | expected_names), \
             f"Unexpected tools: {registered_names - (known_tools | expected_names)}"
-        # At minimum, core routing tools must be present
-        core_tools = {"llm_query", "llm_code", "llm_research", "llm_usage"}
-        assert core_tools.issubset(registered_names), f"Missing core tools: {core_tools - registered_names}"
+        # At minimum, the tier's essential entry points must be present.
+        if slim == "consolidated":
+            min_tools = {"llm", "llm_act", "chuzom_status"}
+        else:
+            min_tools = {"llm_query", "llm_code", "llm_research", "llm_usage"}
+        assert min_tools.issubset(registered_names), f"Missing min tools: {min_tools - registered_names}"
 
 
 def test_resource_registered():

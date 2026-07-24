@@ -202,6 +202,24 @@ The `.cursor/rules/use-chuzom.mdc` rule that Chuzom installs nudges Cursor's
 agent to call Chuzom tools first. In practice this fires ~90% of turns in agent
 mode, but it is not a hard guarantee like the Claude Code hook.
 
+#### Tool surface (0.10.0) — 11 front doors
+
+Since 0.10.0 the default MCP surface is **11 consolidated front doors** instead of
+~73 tools (fewer schema tokens → better routing in long sessions):
+
+| Door | What it does |
+|---|---|
+| `llm` | text in → out; pick specialization with `task=` (query/analyze/code/research/generate) and cost with `tier=` (fast/balanced/best) |
+| `llm_act` | agentic execution — decompose, run on the cheapest capable tier *with tools*, verify, escalate on failure |
+| `chuzom_status` | savings / usage / spend / health / providers (`view=`) |
+| `chuzom_admin` | profile / cache / policy / budget (`action=`) |
+| `chuzom_session` | agent-session lifecycle (`action=`) |
+| `llm_route`, `llm_image`, `llm_audio`, `llm_edit`, `chuzom_agent_start_session`, `chuzom_agent_route` | first-class doors |
+
+**Prefer the old surface?** Set `CHUZOM_SLIM=off` in the MCP server env to expose all
+legacy tools (`routing` / `core` tiers also remain). No behaviour is removed — the doors
+dispatch to the same underlying functions.
+
 ### IDE support matrix
 
 | Tool | Routing | Status | Setup |

@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.10.0 — 2026-07-25 — Consolidated tool surface (1.0 cutover) — **BREAKING**
+
+The MCP tool surface collapses from ~73 tools to **11 front doors**, and the
+consolidated surface becomes the **default** (`CHUZOM_SLIM=consolidated`). This is the
+1.0-direction cutover: one obvious door per capability, and ~8,000 fewer schema tokens
+injected per session (better routing accuracy in long sessions).
+
+### The 11 doors
+
+| Door | Replaces |
+|---|---|
+| `llm` | `llm_query` / `llm_analyze` / `llm_code` / `llm_research` / `llm_generate` (select via `task=`, `tier=`) |
+| `llm_act` | `llm_delegate` (agentic execution) |
+| `chuzom_status` | `llm_savings` / `session_savings` / `session_spend` / `usage` / `health` / `providers` / `gain` (select via `view=`) |
+| `chuzom_admin` | `llm_set_profile` / `import_profile` / `cache_clear` / `policy` / `budget` (select via `action=`) |
+| `chuzom_session` | `chuzom_agent_list` / `check_budget` / `complete_session` / `lineage` (select via `action=`) |
+| `llm_route`, `llm_image`, `llm_audio`, `llm_edit`, `chuzom_agent_start_session`, `chuzom_agent_route` | unchanged (first-class doors) |
+
+### What changed
+
+- **Default tier** flipped `routing` → `consolidated`. The 11 doors are what a fresh
+  install exposes.
+- **Enforcement** names the door by default: an operational block now says "call `llm`"
+  / "call `llm_act`" rather than a legacy tool name.
+- **Nothing was deleted.** Every legacy tool remains an importable Python function that
+  its door dispatches to (`DEPRECATED_TOOLS` in `tools/consolidated.py` is the map). Only
+  their MCP *registration* is gated off by default.
+
+### Escape hatch / migration
+
+- Set **`CHUZOM_SLIM=off`** to restore the full legacy tool surface for all of 0.10 (also
+  `routing` / `core` tiers remain available). Users whose MCP config pins `CHUZOM_SLIM=routing`
+  should drop it (or set `consolidated`) to get the new surface.
+- Breaking for anyone that invokes legacy tool *names* directly via MCP; use the door
+  (or the escape hatch) — see the mapping table above.
+
 ## v0.9.0 — 2026-07-24 — Agentic router (MGEE) + classifier-selectable delegation
 
 Adds an **agentic delegation** path so a routed task can be *done* (tools + verification),

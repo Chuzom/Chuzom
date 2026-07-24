@@ -297,15 +297,25 @@ async def chuzom_agent_lineage(session_id: str, limit: int = 200) -> dict:
 
 # ── MCP registration ─────────────────────────────────────────────────────
 
-def register(mcp) -> None:
-    """Register all 6 agent tools with the MCP server.
+def register(mcp, should_register=None) -> None:
+    """Register the agent tools with the MCP server, honouring the slim gate.
 
     mcp is the FastMCP instance from chuzom.server. Each tool is exposed
     under the canonical name; descriptions are pulled from the docstrings.
+    Under the consolidated default only the rich session tools
+    (chuzom_agent_start_session / chuzom_agent_route) register — the simple
+    lifecycle actions collapse into the chuzom_session door.
     """
-    mcp.tool()(chuzom_agent_list)
-    mcp.tool()(chuzom_agent_start_session)
-    mcp.tool()(chuzom_agent_check_budget)
-    mcp.tool()(chuzom_agent_route)
-    mcp.tool()(chuzom_agent_complete_session)
-    mcp.tool()(chuzom_agent_lineage)
+    def _ok(name: str) -> bool:
+        return should_register is None or should_register(name)
+
+    for _name, _fn in (
+        ("chuzom_agent_list", chuzom_agent_list),
+        ("chuzom_agent_start_session", chuzom_agent_start_session),
+        ("chuzom_agent_check_budget", chuzom_agent_check_budget),
+        ("chuzom_agent_route", chuzom_agent_route),
+        ("chuzom_agent_complete_session", chuzom_agent_complete_session),
+        ("chuzom_agent_lineage", chuzom_agent_lineage),
+    ):
+        if _ok(_name):
+            mcp.tool()(_fn)

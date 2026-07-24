@@ -56,7 +56,7 @@ def test_operational_prompt_redirects_to_delegate(tmp_path):
         home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
     )
     assert json.loads(result.stdout)["decision"] == "block"
-    assert "llm_delegate" in result.stdout
+    assert "llm_act" in result.stdout          # consolidated default → door name
 
 
 def test_delegate_route_on_by_default(tmp_path):
@@ -70,7 +70,7 @@ def test_delegate_route_on_by_default(tmp_path):
          "tool_input": {"command": "python -m pytest -q"}},
         home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},  # no CHUZOM_DELEGATE → default ON
     )
-    assert "llm_delegate" in result.stdout
+    assert "llm_act" in result.stdout          # consolidated default → door name
 
 
 def test_llm_delegate_call_clears_the_lock(tmp_path):
@@ -146,4 +146,4 @@ def test_moderate_operational_delegates_above_floor(tmp_path):
          "tool_input": {"command": "python -m pytest -q"}},
         home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard", "CHUZOM_DELEGATE": "on"},
     )
-    assert "llm_delegate" in result.stdout
+    assert "llm_act" in result.stdout          # consolidated default → door name
