@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.9.0 — 2026-07-24 — Agentic router (MGEE) + classifier-selectable delegation
+
+Adds an **agentic delegation** path so a routed task can be *done* (tools + verification),
+not just answered. A new `llm_delegate` tool decomposes a task into milestones with
+OBJECTIVE acceptance checks and runs them on the cheapest capable tier, escalating on
+failure without redoing completed work (Milestone-Gated Escalating Execution). The
+router can now *select* delegation automatically for operational prompts.
+
+### Agentic delegation (`llm_delegate`)
+
+- **MGEE engine** — decompose → run cheapest tier → objective acceptance (cmd/lint/diff/
+  canary/validator; **never** the model's self-report) → escalate carrying the frozen
+  done-frontier forward. Bounded and monotonic: an unmeetable milestone is *surfaced*,
+  never looped. Fully transparent event stream + honest savings ledger.
+- **Backends** — live planner (routes a model to emit an objective-check milestone plan,
+  fails closed on error); **Codex tier** (`codex exec` with `workspace-write`, captures
+  the produced diff) — verified live end-to-end; **local ReAct/Ollama tier-0** (bounded
+  tool loop over Ollama native tool-calling, sandboxed executor with path-traversal
+  containment) — best-effort, escalation-covered.
+
+### Classifier-selectable delegation (enforced)
+
+- Operational prompts (a code-mutating verb **and** an objective-verification demand) are
+  hard-routed to `llm_delegate` via a new high-precision `operational_signal`. Rails: any
+  `llm_*` call still clears the lock (never a trap), `CHUZOM_DELEGATE=off` and
+  `CHUZOM_ENFORCE=soft/off` disable it, fail-open if the signal module is absent, and every
+  redirect logs a `DELEGATE_ROUTE` security event with the matched verb/cue.
+
+### Known limitations (honest scoping)
+
+- The delegated agents receive the task's own milestone context but **not** the broader
+  Claude Code session conversation yet.
+- Local tier-0 reliability is best-effort; Codex is the dependable tier and escalation
+  covers tier-0 gaps.
+- `llm_delegate` requires a healthy analyze/query route for planning.
+
 ## v0.8.7 — 2026-07-23 — Audit remediation (P1–P5) + durable session context + version-scoped drift
 
 Combines three tracks: truth-in-advertising fixes from the post-v0.8.6 audit

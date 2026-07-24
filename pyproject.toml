@@ -1,6 +1,6 @@
 [project]
 name = "chuzom-router"
-version = "0.8.7"
+version = "0.9.0"
 description = "Smart LLM router for Claude Code, Cursor & Copilot — 3× longer sessions, 60–90% token savings. Auto-routes to Ollama, Codex CLI, and Gemini CLI before burning Claude quota."
 readme = "README.md"
 license = "MIT"
@@ -178,7 +178,9 @@ exclude = [
     "CHUZOM_AUDIT_REPORT.md",
     "STUCK_PATTERNS_ANALYSIS.md",
     "CHUZOM_ROADMAP.md",
+    "PLAN.md",
     ".audit/",
+    "audit_deliverables/",
     # Infrastructure (deployment-only, not needed for pip install)
     "Dockerfile",
     "docker-compose.yml",
@@ -194,6 +196,7 @@ exclude = [
     "deprecation/",
     "bench/",
     "routerarena_submission/",
+    "routerarena_clean/",
     # Local venvs — they contain absolute symlinks and break the build.
     ".venv/",
     ".venv-*/",

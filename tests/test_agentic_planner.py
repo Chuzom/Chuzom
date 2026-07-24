@@ -52,13 +52,13 @@ def test_plan_rejected_when_milestone_has_no_objective_check():
         plan_to_milestones([{"id": "M1", "description": "x"}])
 
 
-def test_hybrid_plan_with_fake_model_feeds_delegate():
+async def test_hybrid_plan_with_fake_model_feeds_delegate():
     def fake_planner(goal):
         assert "build widget" in goal
         return [{"id": "M1", "description": "make it",
                  "acceptance": {"type": "canary", "marker": "WIDGET_OK"}}]
 
-    ms = hybrid_plan("build widget", fake_planner)
+    ms = await hybrid_plan("build widget", fake_planner)
     assert isinstance(ms[0], Milestone)
 
     class Agent0:
@@ -71,8 +71,16 @@ def test_hybrid_plan_with_fake_model_feeds_delegate():
     assert res.outcome is Outcome.COMPLETE
 
 
-def test_hybrid_plan_rejects_non_list_and_empty():
+async def test_hybrid_plan_rejects_non_list_and_empty():
     with pytest.raises(PlanRejected):
-        hybrid_plan("g", lambda _g: {"not": "a list"})
+        await hybrid_plan("g", lambda _g: {"not": "a list"})
     with pytest.raises(PlanRejected):
-        hybrid_plan("g", lambda _g: [])
+        await hybrid_plan("g", lambda _g: [])
+
+
+async def test_hybrid_plan_awaits_async_planner():
+    async def async_planner(goal):
+        return [{"id": "M1", "description": "x", "acceptance": {"type": "canary", "marker": "OK"}}]
+
+    ms = await hybrid_plan("g", async_planner)
+    assert ms[0].id == "M1"

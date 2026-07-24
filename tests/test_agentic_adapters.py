@@ -43,9 +43,42 @@ def test_codex_adapter_captures_runner_output():
     assert res.artifacts["provider"] == "codex"
     assert "PROVIDER_CODEX_CANARY" in res.artifacts["output"]
     assert res.confidence == 1.0
-    # invoked the CLI with the configured binary + subcommand, task in the prompt
-    assert calls[0][0] == ["codex-x", "exec"]
-    assert "do it" in calls[0][1]
+    # correct `codex exec` invocation; prompt is the last argv element (not stdin)
+    argv = calls[0][0]
+    assert argv[:2] == ["codex-x", "exec"]
+    assert "--json" in argv and "--skip-git-repo-check" in argv
+    # workspace-write sandbox is REQUIRED — without it codex runs read-only and
+    # every patch is rejected (Phase B: "writing is blocked by read-only sandbox").
+    assert "--sandbox" in argv and "workspace-write" in argv
+    assert argv[-1].startswith("TASK: do it")
+
+
+def test_codex_adapter_argv_includes_model_and_cwd_when_set():
+    calls = []
+
+    def fake(argv, input_text):
+        calls.append(argv)
+        return ProcResult(0, "ok", "") if "diff" not in argv else ProcResult(0, "", "")
+
+    CodexAdapter(tier=1, runner=fake, binary="cx", model="gpt-5.5", cwd="/repo").run(
+        Milestone("M1", "x", lambda _a: AcceptanceResult(True)), [], 5.0
+    )
+    argv = calls[0]
+    assert "-m" in argv and "gpt-5.5" in argv
+    assert "-C" in argv and "/repo" in argv
+
+
+def test_codex_adapter_captures_git_diff_as_artifact():
+    def fake(argv, input_text):
+        if argv[:1] == ["git"]:  # the git diff call
+            return ProcResult(0, "diff --git a/m.py b/m.py\n+++ b/m.py\n+def foo(): ...\n", "")
+        return ProcResult(0, "done", "")
+
+    res = CodexAdapter(tier=1, runner=fake, binary="cx", cwd="/repo").run(
+        Milestone("M1", "impl foo", lambda _a: AcceptanceResult(True)), [], 5.0
+    )
+    assert "def foo" in res.artifacts["diff"]
+    assert res.artifacts["files"] == ["m.py"]  # parsed from +++ b/ lines
 
 
 def test_codex_adapter_failure_lowers_confidence():
@@ -82,7 +115,7 @@ def test_escalation_to_codex_carries_frozen_context_into_prompt():
     seen_prompts = []
 
     def codex(argv, input_text):
-        seen_prompts.append(input_text)
+        seen_prompts.append(argv[-1])  # prompt is the last argv element now
         return ProcResult(0, "PROVIDER_CODEX_CANARY", "")
 
     ms = [

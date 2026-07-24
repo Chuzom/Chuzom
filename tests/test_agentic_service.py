@@ -51,9 +51,16 @@ async def test_llm_delegate_tool_with_injected_backends(monkeypatch):
     assert out["outcome"] == "complete" and out["ok"] is True
 
 
-async def test_llm_delegate_default_planner_fails_closed():
-    """No injected planner → fail closed with an honest 'planning failed', never fabricate."""
+async def test_llm_delegate_default_planner_fails_closed(monkeypatch):
+    """When the live planner's routing fails, the tool fails closed with an honest
+    'planning failed' — never fabricates a plan. (routing mocked to fail; no live call)"""
+    import chuzom.router as router
     import chuzom.tools.agentic as tool
+
+    async def boom(*a, **k):
+        raise RuntimeError("router unavailable")
+
+    monkeypatch.setattr(router, "route_and_call", boom)
     out = json.loads(await tool.llm_delegate("x"))
     assert out["ok"] is False and "planning failed" in out["reason"]
 
