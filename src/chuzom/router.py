@@ -1405,13 +1405,6 @@ def _baseline_cost(
         return 0.0
 
 
-def _sum_failed_attempt_costs(chain_errors: list[tuple[str, str]]) -> float:
-    """Cost of failed fallback attempts. The dispatch loop does not meter per-attempt
-    cost separately (failures mostly error before billable completion), so this is 0.0
-    today — a placeholder that keeps the field honest rather than fabricating a number."""
-    return 0.0
-
-
 async def _cli_prompt_with_context(
     prompt: str,
     provider: str,
@@ -1533,6 +1526,12 @@ async def _dispatch_model_loop(
     last_error: Exception | None = None
     chain_errors: list[tuple[str, str]] = []  # (model, error_summary) for diagnostics
     chain_attempts: list[str] = []  # models tried, for explainability
+    # CF-1 G2: real failed-attempt cost. Accumulates the billable cost of any attempt
+    # that produced a response but was then REJECTED (gate/quality) before the chain
+    # advanced. Pre-dispatch skips (health/budget/cost cap/policy) never bill, so they
+    # never touch this. The final SUCCESS cost is accounted separately, so no attempt
+    # is double-counted (a rejected attempt continues; its response is never final).
+    _failed_attempt_cost: float = 0.0
 
     # ── P2: quality-gated escalation state ───────────────────────────────────
     # Try cheap first, escalate to the next model ONLY when the cheap answer is
@@ -2018,6 +2017,7 @@ async def _dispatch_model_loop(
                         gates_failed=_fail_summary,
                     )
                     chain_errors.append((model, f"gate_failed: {_fail_summary}"))
+                    _failed_attempt_cost += float(response.cost_usd or 0.0)  # billable, rejected
                     continue
             else:
                 _gate_results = []
@@ -2069,6 +2069,7 @@ async def _dispatch_model_loop(
                             reasons=list(_qs.reasons),
                         )
                         chain_errors.append((model, f"low_quality:{_qs.score:.2f}"))
+                        _failed_attempt_cost += float(response.cost_usd or 0.0)  # billable, rejected
                         await _notify(
                             ctx, "info",
                             f"↑ escalating: {model_name} answer scored "
@@ -2163,7 +2164,9 @@ async def _dispatch_model_loop(
                     _in_tok = getattr(response, "input_tokens", 0)
                     _out_tok = getattr(response, "output_tokens", 0)
                     _base = _baseline_cost(task_type, profile, _in_tok, _out_tok)
-                    _actual = float(getattr(response, "cost_usd", 0.0) or 0.0)
+                    # §4.3: actual cost = final success cost + billable failed attempts.
+                    _final_cost = float(getattr(response, "cost_usd", 0.0) or 0.0)
+                    _actual = _final_cost + _failed_attempt_cost
                     record_route(RouteLedgerRecord(
                         route_kind="completion",
                         task_type=task_type.value,
@@ -2187,7 +2190,7 @@ async def _dispatch_model_loop(
                         actual_cost_usd=_actual,
                         baseline_cost_usd=_base,
                         saved_usd=max(0.0, _base - _actual),
-                        failed_attempt_cost_usd=_sum_failed_attempt_costs(chain_errors),
+                        failed_attempt_cost_usd=_failed_attempt_cost,
                         prompt_tokens=_in_tok,
                         completion_tokens=_out_tok,
                         chain_attempts=list(chain_attempts),

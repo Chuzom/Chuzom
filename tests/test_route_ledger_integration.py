@@ -98,6 +98,9 @@ async def test_route_and_call_emits_one_completion_row(temp_db, tmp_path, monkey
     assert r["verification_attempted"] is False and r["verification_passed"] is None
     assert r["final_model"] == "openai/gpt-4o"
     assert r["final_tier"] == 2  # mid external
+    # G2: a clean single-attempt route has NO failed-attempt cost; actual == final cost
+    assert r["failed_attempt_cost_usd"] == 0.0
+    assert abs(r["actual_cost_usd"] - 0.001) < 1e-9
 
 
 @pytest.mark.asyncio
@@ -106,3 +109,67 @@ async def test_suppress_ledger_emits_no_row(temp_db, tmp_path, monkeypatch):
     await _run("internal planner call", ledger, monkeypatch, suppress=True)
     rows = [r for r in load_records(str(ledger)) if not r.get("_invalid")]
     assert rows == [], "suppress_ledger=True must not emit a top-level row"
+
+
+@pytest.mark.asyncio
+async def test_failed_attempt_cost_folded_on_quality_escalation(temp_db, tmp_path, monkeypatch):
+    """G2: a billable attempt rejected for low quality contributes its cost to
+    failed_attempt_cost_usd, and actual_cost_usd = final cost + failed-attempt cost.
+    The rejected response is NEVER double-counted as the final cost."""
+    from collections import namedtuple
+
+    ledger = tmp_path / "rq.jsonl"
+    monkeypatch.setenv("CHUZOM_ROUTING_LEDGER", str(ledger))
+    monkeypatch.setenv("CHUZOM_BANDIT", "off")
+    monkeypatch.setenv("CHUZOM_ESCALATE_ON_QUALITY", "1")
+
+    _COST = {"openai/gpt-4o": 0.002, "openai/gpt-4o-mini": 0.001}
+
+    async def call(model, messages, **kwargs):
+        return LLMResponse(content="answer " * 20, model=model, input_tokens=100,
+                           output_tokens=50, cost_usd=_COST[model], latency_ms=10.0,
+                           provider="openai")
+
+    _QS = namedtuple("QS", "score reasons")
+    # first model scores LOW (forces one quality escalation), second scores fine
+    _scores = iter([_QS(0.10, ["short"]), _QS(0.95, [])])
+    tracker = MagicMock(); tracker.is_healthy.return_value = True
+    mlog = MagicMock(); mlog.bind.return_value = MagicMock()
+
+    from chuzom.router import route_and_call
+    with (
+        patch("chuzom.router.get_config", return_value=_Cfg()),
+        patch("chuzom.router._build_and_filter_chain", new_callable=AsyncMock,
+              return_value=["openai/gpt-4o", "openai/gpt-4o-mini"]),
+        patch("chuzom.router.providers.call_llm", new_callable=AsyncMock, side_effect=call),
+        patch("chuzom.quality_feedback.score_response", side_effect=lambda *a, **k: next(_scores)),
+        patch("chuzom.quality_feedback.record_quality", lambda *a, **k: None),
+        patch("chuzom.router.get_tracker", return_value=tracker),
+        patch("chuzom.router.log", mlog),
+        patch("chuzom.router._native_notify", lambda *a, **k: None),
+        patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.get_daily_spend_by_task_type", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.log_usage", new_callable=AsyncMock),
+        patch("chuzom.router.reserve_envelope", new_callable=AsyncMock, return_value=(None, True, None)),
+        patch("chuzom.router.commit_envelope", new_callable=AsyncMock),
+        patch("chuzom.router.release_envelope", new_callable=AsyncMock),
+        patch("chuzom.semantic_cache.check", new_callable=AsyncMock, return_value=None),
+        patch("chuzom.semantic_cache.store", new_callable=AsyncMock),
+    ):
+        resp = await route_and_call(
+            TaskType.ANALYZE,
+            "Please analyze this in depth: " + ("context " * 40),
+            profile=RoutingProfile.BALANCED, complexity_hint="moderate",
+        )
+
+    rows = [r for r in load_records(str(ledger)) if not r.get("_invalid")]
+    assert len(rows) == 1
+    r = rows[0]
+    # escalation fired: first attempt (gpt-4o, $0.002) was rejected for low quality →
+    # its cost is the failed-attempt cost; final is gpt-4o-mini ($0.001); actual = sum.
+    assert r["final_model"] == "openai/gpt-4o-mini", "expected a quality escalation to the 2nd model"
+    assert abs(r["failed_attempt_cost_usd"] - 0.002) < 1e-9
+    assert abs(r["actual_cost_usd"] - 0.003) < 1e-9   # 0.001 final + 0.002 failed, no double count
+    assert r["quality_escalation_occurred"] is True
+    assert r["mis_route"] is True   # quality failure of the first-choice tier
