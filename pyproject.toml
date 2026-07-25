@@ -171,6 +171,7 @@ exclude = [
     # Internal docs (NEVER ship per CLAUDE.md)
     "Docs/",
     "CLAUDE.md",
+    "NORTH_STAR.md",
     "SECURITY.md",
     "KIMI.md",
     "RELEASE.md",
