@@ -6,7 +6,32 @@ on:
       - 'v*'
 
 jobs:
+  # Gate: publishing must never ship a release that fails lint (v0.10.1 shipped
+  # with 7 ruff errors because this workflow didn't gate on CI). Mirrors the CI
+  # lint job — same pinned ruff version so the two never diverge.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+        continue-on-error: true
+        id: uv-setup
+      - name: Retry uv setup
+        if: steps.uv-setup.outcome == 'failure'
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: false
+      - run: uv python install 3.11
+      # Pinned ruff version → matches ci.yml; the rule set is curated in
+      # pyproject [tool.ruff.lint].
+      - run: uvx ruff@0.16.0 check src/ tests/
+      - name: Capability-claim guard (no new unbacked marketing claims)
+        run: bash scripts/lint_capability_claims.sh
+
   publish:
+    needs: lint
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
