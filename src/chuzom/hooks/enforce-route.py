@@ -919,11 +919,26 @@ def main() -> None:
     # agentic loop when the task is substantial. A SIMPLE operational task (a
     # one-line fix) costs more via an MGEE plan+run+verify loop than a single
     # completion, so it keeps its completion route. Only moderate+ delegates.
+    # CF-4 capability-driven hybrid: complexity is a proxy for scope, capability is the
+    # real constraint. Moderate/complex tool-needing tasks → full delegate (unchanged).
+    # A SIMPLE task that nonetheless needs to write/run/verify → bounded_operational
+    # (single-milestone, pricing-budgeted, mandatorily verified) instead of an
+    # untoolable completion route. Both redirect to the tool-capable door; llm_delegate
+    # self-selects bounded mode. Gated by CHUZOM_BOUNDED_OPERATIONAL (default off).
+    _orig_prompt = pending.get("original_prompt", "")
     _delegate_ok = _delegate_route_enabled() and complexity in ("moderate", "complex")
-    _op_sig = _detect_operational(pending.get("original_prompt", "")) if _delegate_ok else None
+    _bounded_ok = False
+    if _delegate_route_enabled() and complexity == "simple":
+        try:
+            from chuzom.bounded_operational import should_route_bounded
+            _bounded_ok = should_route_bounded(_orig_prompt, complexity)
+        except Exception:  # noqa: BLE001 — decision failure → no bounded route
+            _bounded_ok = False
+    _op_sig = _detect_operational(_orig_prompt) if (_delegate_ok or _bounded_ok) else None
     if _op_sig is not None and _op_sig.fires:
         expected_tool = "llm_delegate"
         task_type = "delegate"
+        _route_reason = "bounded_operational" if (_bounded_ok and not _delegate_ok) else "operational_intent"
         try:
             _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -931,7 +946,7 @@ def main() -> None:
                 # Record WHY it fired (verb + cue) for post-incident audit.
                 f.write(
                     f"[{ts}] DELEGATE_ROUTE session={session_id[:12]} "
-                    f"reason=operational_intent verb={_op_sig.verb!r} cue={_op_sig.cue!r} "
+                    f"reason={_route_reason} verb={_op_sig.verb!r} cue={_op_sig.cue!r} "
                     f"tool={tool_name}\n"
                 )
         except OSError:

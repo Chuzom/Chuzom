@@ -320,12 +320,14 @@ def summarize(path: str | None = None) -> dict[str, Any]:
 
 # ── Delegate path (aggregate-delegation-only): emit ONE v2 row per delegation ──
 
-def record_delegation(result: dict[str, Any], path: str | None = None) -> bool:
+def record_delegation(result: dict[str, Any], path: str | None = None,
+                      route_kind: RouteKind = "delegate") -> bool:
     """Build a v2 :class:`RouteLedgerRecord` from an MGEE delegation result and record it.
 
-    Aggregate-delegation-only: this is the single parent ``delegate`` row for the whole
-    operation. The MGEE engine's internal ``route_and_call`` invocations are emitted
-    with ``suppress_ledger=True`` so they never double-count here.
+    Aggregate-delegation-only: this is the single parent row for the whole operation
+    (``route_kind`` is ``delegate`` or ``bounded_operational``). The MGEE engine's
+    internal ``route_and_call`` invocations are emitted with ``suppress_ledger=True`` so
+    they never double-count here.
 
     Escalation is quality-driven: a milestone cleared by a tier above the cheapest
     attempted means the initial routing under-shot on QUALITY (mis_route=True), which
@@ -344,8 +346,8 @@ def record_delegation(result: dict[str, Any], path: str | None = None) -> bool:
         actual = float(savings.get("actual_usd", 0.0) or 0.0)
         baseline = float(savings.get("baseline_usd", 0.0) or 0.0)
         rec = RouteLedgerRecord(
-            route_kind="delegate",
-            task_type="delegate",
+            route_kind=route_kind,
+            task_type=route_kind,
             chosen_tier=cheapest,
             final_tier=final_tier,
             route_succeeded=succeeded,

@@ -93,7 +93,7 @@ def _default_adapters() -> dict[int, Any]:
 
 async def llm_delegate(
     task: str, budget_usd: float = 1.0, baseline_cost_per_milestone: float = 0.20,
-    context: str = "",
+    context: str = "", bounded: bool | None = None,
 ) -> str:
     """Agentic delegation: decompose *task* into milestones, run them on the
     cheapest capable tier with objective acceptance checks, escalate on failure
@@ -103,26 +103,61 @@ async def llm_delegate(
 
     *context* is optional conversation context from the calling session; it's
     handed to every delegated agent (bounded) so a routed model isn't blind to
-    what was discussed — not just its own milestones (North Star P1-S2)."""
+    what was discussed — not just its own milestones (North Star P1-S2).
+
+    *bounded* selects the CF-4 bounded-operational mode: a SIMPLE task that needs
+    tools (write/command/verify) runs as a single-milestone, tightly-budgeted,
+    mandatorily-verified route rather than a full plan+run+verify loop or an
+    untoolable completion. ``None`` (default) auto-detects via
+    :func:`should_route_bounded`; ``True``/``False`` force it. Bounded runs cap the
+    plan to one milestone, derive the budget from model pricing, and record the
+    parent ledger row as ``route_kind="bounded_operational"``."""
+    from chuzom.bounded_operational import (
+        MAX_BOUNDED_ATTEMPTS, MAX_BOUNDED_MILESTONES, bounded_op_budget_usd,
+        should_route_bounded,
+    )
+    if bounded is None:
+        try:
+            from chuzom.classify import classify_signals
+            _complexity = classify_signals(task).complexity.value
+            bounded = should_route_bounded(task, _complexity)
+        except Exception:  # noqa: BLE001 — detection failure → full delegate (safe default)
+            bounded = False
+
     planner = (planner_factory or _default_planner)()
     adapters = (adapters_factory or _default_adapters)()
     try:
         milestones = await hybrid_plan(task, planner)
     except PlanRejected as exc:
         return json.dumps({"outcome": "surfaced", "ok": False, "reason": f"planning failed: {exc}"})
+
+    route_kind = "delegate"
+    max_attempts = 2
+    if bounded:
+        # CF-4: cap to a single milestone, derive the budget from pricing, and cap
+        # escalation to one tier. Mandatory objective verification is enforced by the
+        # planner's acceptance check on the (single) milestone — an unverifiable plan
+        # is rejected by hybrid_plan, so a bounded run never records verify=False.
+        route_kind = "bounded_operational"
+        milestones = milestones[:MAX_BOUNDED_MILESTONES]
+        budget_usd = bounded_op_budget_usd(task_type="delegate", model_tier=1)
+        max_attempts = MAX_BOUNDED_ATTEMPTS
+
     result = run_delegation(
         task, milestones, adapters,
         baseline_cost_per_milestone=baseline_cost_per_milestone,
         budget_cap_usd=budget_usd,
+        max_attempts_per_tier=max_attempts,
         session_context=(context or "")[:2000],  # bound: don't blow the agent's prompt
     )
+    result["route_kind"] = route_kind
     # Record the honest saving into chuzom's ledger (fail-open — never breaks the call).
     from chuzom.agentic.telemetry import record_delegation_savings
     await record_delegation_savings(result)
     # North Star measurement: record routing quality — escalation/mis-route/completion/
     # savings — so "route cheap, escalate on failure" is measured, not assumed. Fail-open.
     from chuzom.routing_quality import record_delegation
-    record_delegation(result)
+    record_delegation(result, route_kind=route_kind)
     return json.dumps(result)
 
 
