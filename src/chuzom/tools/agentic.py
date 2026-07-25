@@ -68,8 +68,13 @@ def _default_planner() -> PlannerModel:
             # QUERY (not ANALYZE): the planner must return BARE JSON, but ANALYZE
             # carries a STRUCTURE gate that requires >=2 markdown markers and so
             # rejects every valid plan ("0 markers"). QUERY has only a LENGTH gate.
+            # suppress_ledger: this planner call is INTERNAL to a delegation. The
+            # parent `delegate` row (record_delegation) accounts for the whole
+            # operation, so this must not emit its own top-level completion row —
+            # aggregate-delegation-only, no double counting (CF-1 §4.4).
             resp = await route_and_call(
                 TaskType.QUERY, _planner_prompt(goal), system_prompt=_PLANNER_SYSTEM,
+                suppress_ledger=True,
             )
         except Exception as exc:  # noqa: BLE001 — any routing failure fails closed
             raise PlanRejected(f"planner routing failed: {exc}") from exc

@@ -1356,6 +1356,62 @@ def _enrich_response(
     )
 
 
+# ── North Star route-quality ledger helpers (CF-1) ───────────────────────────
+# Baseline = the highest-quality Claude-class completion model. Savings are honest:
+# a local model's actual API cost is 0, so saved = baseline - 0 = baseline (the work
+# WAS done, it just cost the API budget nothing). Never baseline against a free model.
+_BASELINE_COMPLETION_MODEL = "anthropic/claude-sonnet-4-6"
+
+
+def _model_tier(model: str | None, profile: "RoutingProfile | None" = None) -> int | None:
+    """Map a model id to a coarse cost tier: 0=local, 1=cheap subscription CLI,
+    2=mid external API, 3=premium (Claude). Reuses ``provider_from_model``."""
+    if not model:
+        return None
+    try:
+        prov = provider_from_model(model)
+    except Exception:  # noqa: BLE001 — unknown model shape → treat as mid external
+        return 2
+    if prov in ("ollama",):
+        return 0
+    if prov in ("codex", "gemini_cli"):
+        return 1
+    if prov in ("anthropic", "claude"):
+        return 3
+    return 2
+
+
+def _price_table_version() -> str:
+    """Version tag of the pricing table used for baseline math (reproducibility)."""
+    try:
+        from chuzom import calibration
+        return str(getattr(calibration, "PRICE_TABLE_VERSION", "unknown"))
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+def _baseline_cost(
+    task_type: TaskType, profile: "RoutingProfile | None",
+    input_tokens: int = 0, output_tokens: int = 0,
+) -> float:
+    """Claude-equivalent baseline cost for a route of this shape, priced from the
+    single calibration table. Fail-open to 0.0 (a missing baseline is not a crash)."""
+    try:
+        from chuzom.session_spend import _estimate_cost
+        return float(_estimate_cost(
+            _BASELINE_COMPLETION_MODEL, int(input_tokens or 0), int(output_tokens or 0)
+        ))
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
+def _sum_failed_attempt_costs(chain_errors: list[tuple[str, str]]) -> float:
+    """Cost of failed fallback attempts. The dispatch loop does not meter per-attempt
+    cost separately (failures mostly error before billable completion), so this is 0.0
+    today — a placeholder that keeps the field honest rather than fabricating a number."""
+    return 0.0
+
+
 async def _cli_prompt_with_context(
     prompt: str,
     provider: str,
@@ -1435,6 +1491,7 @@ async def _dispatch_model_loop(
     max_cost_per_task: float | None = None,
     identity: TurnIdentity | None = None,
     routing_policy: "AgentRoutingPolicy | None" = None,
+    suppress_ledger: bool = False,
 ) -> LLMResponse:
     """Execute the main model dispatch loop with primary + emergency fallback chains.
 
@@ -2086,6 +2143,60 @@ async def _dispatch_model_loop(
             except Exception as e:
                 log.warning("session_spend_tracking_failed", error=str(e))
 
+            # ── North Star route-quality ledger (CF-1) ────────────────────────
+            # Record this COMPLETION route where chain_attempts/chain_errors live.
+            # Honesty rules: no tools ran and no objective check ran, so
+            # tool_execution_succeeded / verification_passed are None (NOT True) —
+            # an unverified completion is honestly unverified. A gate_failed /
+            # low_quality entry in chain_errors IS a genuine quality escalation
+            # (a cheap tier's answer was rejected), so we derive it rather than
+            # hardcode False. suppress_ledger is set by MGEE internal calls so a
+            # delegation counts once (aggregate-delegation-only). Fail-open.
+            if not suppress_ledger:
+                try:
+                    from chuzom.routing_quality import (
+                        RouteLedgerRecord, derive_fallback_reason, record_route,
+                    )
+                    _fb_occurred = len(chain_errors) > 0
+                    _fb_reason, _mis = derive_fallback_reason(chain_errors)
+                    _first_model = chain_attempts[0] if chain_attempts else None
+                    _in_tok = getattr(response, "input_tokens", 0)
+                    _out_tok = getattr(response, "output_tokens", 0)
+                    _base = _baseline_cost(task_type, profile, _in_tok, _out_tok)
+                    _actual = float(getattr(response, "cost_usd", 0.0) or 0.0)
+                    record_route(RouteLedgerRecord(
+                        route_kind="completion",
+                        task_type=task_type.value,
+                        chosen_tier=_model_tier(_first_model, profile),
+                        final_tier=_model_tier(response.model, profile),
+                        chosen_model=_first_model,
+                        final_model=response.model,
+                        route_succeeded=True,
+                        tool_execution_attempted=False,
+                        tool_execution_succeeded=None,
+                        verification_attempted=False,
+                        verification_passed=None,
+                        fallback_occurred=_fb_occurred,
+                        fallback_reason=_fb_reason,
+                        quality_escalation_occurred=(_mis is True),
+                        quality_escalation_reason=(
+                            "cheap tier answer rejected by a dispatch gate"
+                            if _mis is True else None
+                        ),
+                        mis_route=_mis,
+                        actual_cost_usd=_actual,
+                        baseline_cost_usd=_base,
+                        saved_usd=max(0.0, _base - _actual),
+                        failed_attempt_cost_usd=_sum_failed_attempt_costs(chain_errors),
+                        prompt_tokens=_in_tok,
+                        completion_tokens=_out_tok,
+                        chain_attempts=list(chain_attempts),
+                        chain_errors=[{"model": m, "reason": r} for m, r in chain_errors],
+                        price_table_version=_price_table_version(),
+                    ))
+                except Exception as _ledger_err:  # noqa: BLE001 — telemetry never breaks routing
+                    log.debug("route ledger emit skipped (non-fatal): %s", _ledger_err)
+
             # Record exchange in session buffer for future context injection
             buf = get_session_buffer()
             buf.record("user", prompt, task_type=task_type.value)
@@ -2510,6 +2621,7 @@ async def route_and_call(
     deadline_monotonic: float | None = None,
     idempotency_key: str | None = None,
     agent_session_id: str | None = None,
+    suppress_ledger: bool = False,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -3273,6 +3385,7 @@ async def route_and_call(
             effective_complexity=effective_complexity,
             identity=identity,
             routing_policy=_routing_policy,
+            suppress_ledger=suppress_ledger,
         )
         # T3-S2 + T3-M1: combined timeout + cancel handling. Both failure
         # modes share the same cleanup contract — release the budget
