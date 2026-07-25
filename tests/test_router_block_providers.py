@@ -57,24 +57,29 @@ async def _chain(cfg: RouterConfig):
 
 
 @pytest.mark.asyncio
-async def test_dynamic_agentic_model_blocked_not_reinjected(monkeypatch, capsys):
+async def test_dynamic_agentic_model_blocked_not_reinjected(monkeypatch):
     """block_providers=[ollama] → the dynamic ollama pick is never pinned/re-injected,
-    and a policy-skip log line is emitted (§18 CF-3 checklist).
+    and a structured policy-skip log event is emitted (§18 CF-3 checklist).
 
-    structlog renders through a PrintLogger to stdout, so the emitted line is asserted
-    via capsys rather than caplog (which only sees the stdlib handler).
+    The log is asserted via structlog.testing.capture_logs, which captures the event at
+    the structlog layer independent of the global render pipeline — so the assertion is
+    not order-dependent on whatever else in the suite reconfigures logging.
     """
+    from structlog.testing import capture_logs
+
     _isolate_dynamic(monkeypatch, block=["ollama"])
     cfg = RouterConfig()
     cfg.chuzom_agentic_model = ""  # dynamic-pick path
-    chain = await _chain(cfg)
+    with capture_logs() as logs:
+        chain = await _chain(cfg)
     assert all(provider_from_model(m) != "ollama" for m in chain), (
         f"blocked ollama provider leaked into chain via agentic pin: {chain}"
     )
-    out = capsys.readouterr().out
-    assert "policy_rejection:block_provider:ollama" in out, (
-        "expected a policy-skip log line for the blocked auto-selected agentic model"
-    )
+    assert any(
+        e.get("event") == "policy_rejection" and e.get("provider") == "ollama"
+        and e.get("scope") == "block_provider"
+        for e in logs
+    ), f"expected a policy_rejection log event for the blocked agentic model; got {logs}"
 
 
 @pytest.mark.asyncio

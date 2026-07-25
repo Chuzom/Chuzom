@@ -794,9 +794,11 @@ async def _build_and_filter_chain(
             not repo_cfg.agentic_model and repo_cfg.block_providers):
             _blocked_prov = provider_from_model(_agentic_model)
             if _blocked_prov in repo_cfg.block_providers:
+                # Structured (not %s-formatted): asserted via structlog capture so the
+                # test doesn't depend on the global render pipeline / stdout config.
                 log.info(
-                    "policy_rejection:block_provider:%s — auto-selected agentic "
-                    "model %s not pinned", _blocked_prov, _agentic_model,
+                    "policy_rejection", scope="block_provider",
+                    provider=_blocked_prov, model=_agentic_model, action="not_pinned",
                 )
                 _agentic_model = None
         if _agentic_model and task_type in AGENTIC_TASK_TYPES:
