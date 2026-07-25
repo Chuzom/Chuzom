@@ -11,9 +11,7 @@ import json
 
 import pytest
 
-from chuzom.agentic.acceptance import diff_check
 from chuzom.agentic.engine import AgentRunResult
-from chuzom.agentic.ledger import Milestone
 from chuzom.bounded_operational import (
     bounded_op_budget_usd,
     bounded_operational_enabled,

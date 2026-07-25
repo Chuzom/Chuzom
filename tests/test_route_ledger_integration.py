@@ -133,8 +133,10 @@ async def test_failed_attempt_cost_folded_on_quality_escalation(temp_db, tmp_pat
     _QS = namedtuple("QS", "score reasons")
     # first model scores LOW (forces one quality escalation), second scores fine
     _scores = iter([_QS(0.10, ["short"]), _QS(0.95, [])])
-    tracker = MagicMock(); tracker.is_healthy.return_value = True
-    mlog = MagicMock(); mlog.bind.return_value = MagicMock()
+    tracker = MagicMock()
+    tracker.is_healthy.return_value = True
+    mlog = MagicMock()
+    mlog.bind.return_value = MagicMock()
 
     from chuzom.router import route_and_call
     with (
@@ -157,7 +159,7 @@ async def test_failed_attempt_cost_folded_on_quality_escalation(temp_db, tmp_pat
         patch("chuzom.semantic_cache.check", new_callable=AsyncMock, return_value=None),
         patch("chuzom.semantic_cache.store", new_callable=AsyncMock),
     ):
-        resp = await route_and_call(
+        await route_and_call(
             TaskType.ANALYZE,
             "Please analyze this in depth: " + ("context " * 40),
             profile=RoutingProfile.BALANCED, complexity_hint="moderate",
