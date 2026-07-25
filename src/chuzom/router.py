@@ -784,6 +784,21 @@ async def _build_and_filter_chain(
                     _agentic_model = _cand
             except Exception:
                 pass
+        # If dynamically selected agentic model is blocked, don't pin it.
+        # The dynamic pick (best_agentic_model above) is chosen independently of
+        # the block/allow filter, so without this guard it would re-inject a
+        # blocked provider that the chain filter already removed. Explicit env/
+        # repo agentic pins are deliberately exempt — an explicit pin is user
+        # intent that overrides their own block list.
+        if (_agentic_model and not config.chuzom_agentic_model and
+            not repo_cfg.agentic_model and repo_cfg.block_providers):
+            _blocked_prov = provider_from_model(_agentic_model)
+            if _blocked_prov in repo_cfg.block_providers:
+                log.info(
+                    "policy_rejection:block_provider:%s — auto-selected agentic "
+                    "model %s not pinned", _blocked_prov, _agentic_model,
+                )
+                _agentic_model = None
         if _agentic_model and task_type in AGENTIC_TASK_TYPES:
             models_to_try = [_agentic_model] + [
                 m for m in models_to_try if m != _agentic_model
