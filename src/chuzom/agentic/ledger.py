@@ -71,6 +71,10 @@ class TaskLedger:
     # to every delegated agent via frozen_context() so a routed model isn't blind
     # to what was discussed (not just its own milestones).
     session_context: str = ""
+    # CF-2 §7.5: capability-provisioned relevant context (candidate files, repo state).
+    # Stored at the LEDGER level, NOT inside session_context, so it is NOT subject to
+    # session_context's 2000-char truncation and SURVIVES tier escalation unchanged.
+    relevant_context: "RelevantContext | None" = None
 
     # ── frontier ────────────────────────────────────────────────────────────
     @property
@@ -111,6 +115,14 @@ class TaskLedger:
             # Prepended, distinct id — pack_prompt renders it as conversation
             # context, NOT as a completed milestone.
             frozen.insert(0, {"id": "SESSION_CONTEXT", "description": self.session_context,
+                              "achieved_by": None, "artifacts": {}})
+        if self.relevant_context is not None:
+            # CF-2: a separate RELEVANT_CONTEXT entry (candidate files / repo state),
+            # prepended ahead of SESSION_CONTEXT. Ledger-level, so it survives
+            # escalation and is not truncated with conversation history.
+            from chuzom.capabilities import serialize_relevant_context
+            frozen.insert(0, {"id": "RELEVANT_CONTEXT",
+                              "description": serialize_relevant_context(self.relevant_context),
                               "achieved_by": None, "artifacts": {}})
         return frozen
 

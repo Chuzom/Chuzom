@@ -50,8 +50,15 @@ def pack_prompt(milestone: Milestone, frozen_context: list[dict[str, Any]]) -> s
     """Build the delegated prompt: the current milestone + the frozen done-work
     so the agent resumes at the frontier instead of redoing completed milestones."""
     lines = [f"TASK: {milestone.description or milestone.id}"]
+    _CONTEXT_IDS = {"SESSION_CONTEXT", "RELEVANT_CONTEXT"}
+    relevant = [c for c in frozen_context if c.get("id") == "RELEVANT_CONTEXT"]
     context = [c for c in frozen_context if c.get("id") == "SESSION_CONTEXT"]
-    completed = [c for c in frozen_context if c.get("id") != "SESSION_CONTEXT"]
+    completed = [c for c in frozen_context if c.get("id") not in _CONTEXT_IDS]
+    if relevant:
+        # CF-2: capability-provisioned repo context. Rendered first (already a
+        # bounded, structured block); it is context, NOT a completed milestone.
+        lines += [""]
+        lines += [str(c.get("description")) for c in relevant]
     if context:
         lines += ["", "CONVERSATION CONTEXT (from the calling session — use it, don't echo it back):"]
         lines += [f"  {c.get('description')}" for c in context]

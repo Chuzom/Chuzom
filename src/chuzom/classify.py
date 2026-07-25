@@ -42,8 +42,9 @@ real LaTeX.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from chuzom.capabilities import CapabilityRequirement, RelevantContext
 from chuzom.types import Complexity, TaskType
 
 # ── Weighted-signal engine (arena core, benchmark fast-paths removed) ─────────
@@ -467,6 +468,10 @@ class ClassifySignal:
     score: int  # winning category's weighted score
     confident: bool  # score >= _CONFIDENCE_THRESHOLD
     method: str = "signals"
+    # CF-2: capability-aware classification. Defaults keep every existing
+    # positional constructor call (task_type, complexity, score, confident) valid.
+    capabilities: CapabilityRequirement = field(default_factory=CapabilityRequirement)
+    relevant_context: RelevantContext | None = None
 
 
 def complexity_for(
@@ -495,7 +500,15 @@ def classify_signals(prompt: str, policy: ClassifyPolicy = HOOK_POLICY) -> Class
     except ValueError:
         task_type = TaskType.QUERY
     complexity = _complexity(prompt, task_type.value, policy)
-    return ClassifySignal(task_type, complexity, best_score, confident)
+    # CF-2: attach the capability vector (needs-tools? which kind?) from the single
+    # shared predicate. Pure/sync/fail-open — never blocks a routing decision.
+    try:
+        from chuzom.capabilities import detect_capabilities
+        capabilities = detect_capabilities(prompt, task_type.value).required
+    except Exception:  # noqa: BLE001 — capability detection must never break classify
+        capabilities = CapabilityRequirement()
+    return ClassifySignal(task_type, complexity, best_score, confident,
+                          capabilities=capabilities)
 
 
 async def classify(

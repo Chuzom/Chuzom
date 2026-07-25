@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
+from chuzom.capabilities import CapabilityRequirement, RelevantContext
+
 
 # ── Provider Indicators ───────────────────────────────────────────────────────
 # Colored emoji icons used in CLI output and MCP tool responses to make it
@@ -205,6 +207,10 @@ class ClassificationResult:
     classifier_cost_usd: float
     classifier_latency_ms: float
     subject: Subject = Subject.GENERAL
+    # CF-2: capability-aware classification. default_factory keeps existing callers
+    # (which don't pass these) valid.
+    capabilities: CapabilityRequirement = field(default_factory=CapabilityRequirement)
+    relevant_context: RelevantContext | None = None
 
     def header(self) -> str:
         """Format a one-line summary for CLI/MCP display.

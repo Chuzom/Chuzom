@@ -213,59 +213,19 @@ def chain_has_claude(chain: list[ModelSpec]) -> bool:
     return any(m.provider == "claude" for m in chain)
 
 
-def needs_claude_tools(prompt: str, task_type: str) -> bool:
+def needs_claude_tools(prompt: str, task_type: str = "") -> bool:
     """Does this prompt require file and command tools?
 
-    If yes, direct execution must use the external tool-capable agent path.
-    Native Claude is only available as a non-strict fallback.
+    Thin wrapper over :func:`chuzom.capabilities.detect_capabilities` — the SINGLE
+    shared predicate for exemption / routing / provisioning / permissions (CF-2). This
+    module holds no regex of its own; all detection lives in ``capabilities``.
+
+    Default (shadow mode) returns the LEGACY boolean so routing is byte-identical to
+    the pre-CF-2 behavior. With ``CHUZOM_CAPABILITY_ROUTING=1`` it returns the richer
+    8-bit vector's ``needs_tools`` (symbol/write/command aware).
     """
-    import re
-
-    # Project structure or local context references (applicable to any task type)
-    if re.search(
-        r'\b(src/|tests/|hooks/|in the codebase|this file|this repo|this project|current project|current version|what version|package\.json|pyproject\.toml|chuzom|blocked by hook|error message)\b',
-        prompt,
-        re.IGNORECASE,
-    ):
-        return True
-
-    # Local machine / filesystem / credential-location / run-the-app requests.
-    # These need native tools and local context that NO routed (web or local-LLM)
-    # model can supply — e.g. "search my machine for the token", "run the app",
-    # "what's in my .env". They must never route regardless of task_type, so this
-    # check sits ABOVE the research/query/generate early-return below.
-    if re.search(
-        r'(?:~/|\$HOME|/Users/|\.env\b|\.pypirc\b|keychain'
-        r'|\b(?:on |in )?my (?:machine|computer|laptop|mac|system|disk|files?|env(?:ironment)?)\b'
-        r'|\b(?:locally|local files?|on disk|file ?system|environment variable|env var)\b'
-        r'|\b(?:search|find|locate|where(?:\W?s| is| are| did)?|store|put|save)\b'
-        r'[^.?!]{0,40}\b(?:token|api[ _-]?key|secret|credential|password)\b'
-        r'|\b(?:run|launch|start|restart|deploy|publish|install|build|test)\b'
-        r'[^.?!]{0,25}\b(?:the app|my app|the server|the dashboard|the script|the suite|the release|locally)\b)',
-        prompt,
-        re.IGNORECASE,
-    ):
-        return True
-
-    # Reading an explicit local file requires tool access even when the
-    # classifier labels the request as a simple query.
-    if re.search(
-        r'\b(?:read|open|inspect|show|cat|summari[sz]e)\s+'
-        r'(?:the\s+)?(?:file\s+)?[\w./-]+\.[A-Za-z0-9]{1,8}\b',
-        prompt,
-        re.IGNORECASE,
-    ):
-        return True
-
-    if task_type not in ("code", "analyze"):
-        return False  # General Q&A, research, generate never need file tools
-
-    # Explicit file references — check for known extensions directly.
-    # Single-pattern approach avoids the polynomial backtracking of [\w/]+\.
-    if re.search(r'\.(py|ts|js|go|rs|java|cpp|yaml|json|md|toml|cfg|sh|sql)\b', prompt):
-        return True
-    # Edit/fix/debug intent with location
-    if re.search(r'\b(fix|debug|investigate|refactor|update|modify)\b', prompt, re.IGNORECASE) and \
-       re.search(r'\b(in|at|from|the)\s+(src|tests|hooks|module|class|function)\b', prompt, re.IGNORECASE):
-        return True
-    return False
+    from chuzom.capabilities import capability_routing_enabled, detect_capabilities
+    decision = detect_capabilities(prompt, task_type)
+    if capability_routing_enabled():
+        return decision.required.needs_tools
+    return decision.legacy_match
