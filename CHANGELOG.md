@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.10.1 — 2026-07-25 — North Star routing quality (measured, not assumed) — non-breaking
+
+Implements the "North Star" remediation: route to the cheapest **capable** model and
+**measure** it honestly. **Non-breaking** — every new behavior ships **default-off /
+shadow mode**, so routing is unchanged on a fresh install. Opt in per feature.
+
+### Added
+
+- **Honest v2 route-quality ledger.** Completion routes are now recorded (previously only
+  agentic/delegate was measured). The new `RouteLedgerRecord` (`schema_version=2`) keeps
+  distinct concepts distinct: *route success ≠ verified quality ≠ tool execution*. A
+  technical fallback (timeout / rate-limit / health / budget / cost) records
+  `mis_route=None`; only capability/verification/quality failures set `mis_route=True`.
+  Unverified completion routes record `verification_passed=None` — never a faked pass.
+  `summarize()` reports split metrics (no blended `completion_rate`; verified vs.
+  unverified; `verification_pass_rate` over attempted-only; `unknown_quality_completion_rate`).
+  Delegations are counted once (aggregate-delegation-only, no double-count). Legacy v1
+  rows still load and never pollute v2 metrics.
+- **Capability-aware classification.** A new single shared predicate
+  (`chuzom.capabilities.detect_capabilities`) emits an 8-bit capability vector used for
+  exemption / routing / provisioning / permissions, plus bounded, **safe** relevant-context
+  collection (path-traversal, symlink, and secret rejection). Opt in with
+  `CHUZOM_CAPABILITY_ROUTING=1`; the default keeps the prior routing behavior.
+- **`bounded_operational` route.** A *simple* task that genuinely needs to write a file or
+  run a command routes to a bounded, single-milestone, pricing-budgeted, **mandatorily
+  verified** tool path instead of an untoolable completion. Opt in with
+  `CHUZOM_BOUNDED_OPERATIONAL=1` (default off).
+
+### Fixed
+
+- **`block_providers` honored for the auto-selected agentic model.** A dynamically
+  auto-selected agentic model no longer bypasses a user's `.chuzom.yml` `block_providers`
+  list (it previously re-injected a blocked provider at the front of the chain). Explicit
+  env/repo agentic pins remain exempt; a structured `policy_rejection` event is logged.
+- **Real `failed_attempt_cost_usd` metering.** The route ledger records the billable cost
+  of a rejected attempt (folded into `actual_cost_usd`, no double-count) instead of a
+  `0.0` placeholder.
+
+### Notes
+
+- Verified end-to-end on the real agent harness (real executor writes a file on disk,
+  verified by an objective check); a live-model E2E test is included and runs opt-in via
+  `CHUZOM_LIVE_OLLAMA=1`.
+
 ## v0.10.0 — 2026-07-25 — Consolidated tool surface (1.0 cutover) — **BREAKING**
 
 The MCP tool surface collapses from ~73 tools to **11 front doors**, and the

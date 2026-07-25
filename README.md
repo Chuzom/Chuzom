@@ -220,6 +220,18 @@ Since 0.10.0 the default MCP surface is **11 consolidated front doors** instead 
 legacy tools (`routing` / `core` tiers also remain). No behaviour is removed — the doors
 dispatch to the same underlying functions.
 
+#### Routing quality & capability routing (0.10.1) — opt-in
+
+0.10.1 adds the "North Star" layer: route to the cheapest **capable** model and **measure**
+it honestly. It is **non-breaking** — everything ships default-off, so routing is unchanged
+until you opt in:
+
+| Env flag | Default | What it enables |
+|---|---|---|
+| *(always on)* | — | Honest v2 route-quality ledger — completion routes are now recorded; verified quality, technical fallback, and quality escalation are never conflated (`~/.chuzom/routing_quality.jsonl`, read via `summarize()`) |
+| `CHUZOM_CAPABILITY_ROUTING=1` | off | Capability-aware classification — a shared 8-bit capability vector drives routing/provisioning; adds bounded, secret-safe relevant-context |
+| `CHUZOM_BOUNDED_OPERATIONAL=1` | off | A simple task that needs to write a file / run a command routes to a bounded, verified tool path instead of an untoolable completion |
+
 ### IDE support matrix
 
 | Tool | Routing | Status | Setup |
