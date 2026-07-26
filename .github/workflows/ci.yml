@@ -30,6 +30,8 @@ jobs:
       - run: uvx ruff@0.16.0 check src/ tests/
       - name: Capability-claim guard (no new unbacked marketing claims)
         run: bash scripts/lint_capability_claims.sh
+      - name: Claim-evidence registry (INV-CLAIM-001..004)
+        run: uv run python scripts/validate_claim_evidence.py
 
   version-check:
     runs-on: ubuntu-latest

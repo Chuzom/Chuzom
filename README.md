@@ -244,8 +244,9 @@ until you opt in:
 | 🔴 Gemini CLI | **Pull** (tool call) | ✅ Production | `chuzom-install-hooks` |
 | 🌙 Kimi Code | **Pull** (MCP tools) | ✅ Beta | Manual MCP config |
 
-> **Recommendation:** Use Claude Code for guaranteed cost savings on every turn.
-> Use Cursor/Copilot/Windsurf for pull-based savings in agent mode.
+> **Recommendation:** Use Claude Code for the most consistent routing on every turn
+> (realized savings depend on your workload). Use Cursor/Copilot/Windsurf for
+> pull-based routing in agent mode.
 
 ### Copilot setup (VS Code ≥ 1.99)
 
@@ -1003,7 +1004,7 @@ export CHUZOM_ENFORCE=hard
 
 ✅ **Drop-in for your dev tool** — no workflow changes  
 ✅ **Automatic model selection** — based on task complexity  
-✅ **35–80% cost savings** — proven on real-world workloads  
+✅ **Cost savings** — routes offloadable work to cheaper models; the magnitude depends on your workload mix (see Benchmarks — a reproducible control-group figure is tracked in the claim-evidence registry)  
 ✅ **Local decision logging** — every choice stays on your machine (no telemetry)  
 ✅ **Live savings dashboard** — `chuzom summary --watch` shows real-time spending  
 ✅ **Session summary** — full-color Tokyo Night dashboard at session end  
@@ -1307,7 +1308,7 @@ enforce: hard
 |---|---|---|
 | `smart` (default) | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze) until routed, so offloadable work goes to cheaper models. Allows file tools for code tasks. Auto-downgrades after 2 violations to prevent stuck sessions. | The default — enforce routing out of the box |
 | `soft` | Logs routing misses but **never blocks** any tool call. Route hints appear in context; the model can follow them voluntarily. Zero risk of stuck sessions, but **saves nothing unless the model volunteers**. | Teams that want advisory-only routing |
-| `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want guaranteed savings |
+| `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want maximum routing enforcement |
 | `strict` | Like `hard` with all escape valves disabled (no auto-pivot, no read-only Bash exception). Sessions can deadlock. | Compliance environments |
 | `advise` | Routes prompts to cheap models, but the enforcement hook **never blocks any tool**. Zero friction. | Testing / evaluation |
 | `off` | Enforcement completely disabled. Routing directives still appear in context. | Debugging routing |
