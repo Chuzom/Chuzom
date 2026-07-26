@@ -1499,9 +1499,15 @@ def calc_savings(
     Returns:
         (net_cost_saved_usd, net_time_saved_sec). May be negative.
     """
-    # Always use Opus as baseline — savings are always measured vs the most
-    # expensive model so comparisons are consistent across all task types.
-    baseline = "opus"
+    # Task-aware baseline (INV-COST-004 / AC-7): credit against the REALISTIC
+    # model that would have handled this task without routing, not always Opus —
+    # otherwise a Haiku-appropriate query is measured against Opus rates and
+    # savings are wildly overstated. Falls back to Opus only when no task context
+    # is supplied (legacy default), exactly as this function's docstring promises.
+    if task_type is not None and complexity is not None:
+        baseline = _get_baseline_for_task(task_type, complexity)
+    else:
+        baseline = "opus"
 
     # Cache-aware path: when any sub-component count is provided, use the
     # 4-component formula. Otherwise fall back to the lumped per-1K rate.
