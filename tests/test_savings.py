@@ -189,7 +189,10 @@ class TestImportSavingsLog:
 
         imported = await cost.import_savings_log()
         assert imported == 2
-        assert log_path.read_text() == ""
+        # AC-5: the log is now atomically CLAIMED (renamed away) rather than
+        # truncated in place, so after a drain it is empty OR absent — either way
+        # the live log no longer holds the imported rows.
+        assert not log_path.exists() or log_path.read_text() == ""
 
         summary = await cost.get_lifetime_savings_summary(days=0)
         assert summary["tasks_routed"] == 2
