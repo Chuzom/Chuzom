@@ -2924,6 +2924,13 @@ async def get_team_savings(
     total_tokens = sum(r[4] for r in rows)
     host_baseline = total_tokens / 1000 * ((_HOST_INPUT_PER_M + _HOST_OUTPUT_PER_M) / 2 / 1000)
     saved_usd = max(0.0, host_baseline - actual_usd)
+    # INV-COST-006 / AC-2: split baseline-equivalent avoided (counterfactual) from
+    # real metered dollars avoided. On a flat-rate subscription host the marginal host
+    # cost is ~$0, so real dollars avoided is 0 unless the host is genuinely metered —
+    # exactly as get_savings_by_period does. Prior to this, get_team_savings emitted
+    # only baseline-avoided as `saved_usd`, which team.py broadcast to Slack/Discord as
+    # unqualified cash (audit P0-2).
+    real_avoided = saved_usd if _host_is_metered() else 0.0
 
     top_models = [
         {"model": r[0], "provider": r[1], "calls": r[2], "cost": r[3]}
@@ -2932,7 +2939,9 @@ async def get_team_savings(
 
     return {
         "total_calls": total_calls,
-        "saved_usd": saved_usd,
+        "saved_usd": saved_usd,                              # back-compat alias (baseline-equivalent)
+        "baseline_equivalent_avoided_usd": round(saved_usd, 4),
+        "real_dollars_avoided_usd": round(real_avoided, 4),
         "actual_usd": actual_usd,
         "free_pct": free_pct,
         "top_models": top_models,
