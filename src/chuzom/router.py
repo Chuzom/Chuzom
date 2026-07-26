@@ -2675,6 +2675,9 @@ async def _dispatch_model_loop(
     # cost-cap raise.
     if (rbac_skipped or policy_skipped) and not chain_attempts and not cost_skipped:
         from chuzom.enterprise.rbac import Permission, PermissionDenied
+        # AC-6/INV-ROUTE-005: a pre-dispatch denial is a terminal 'cancelled' state
+        # (no billable attempt was made) — record it instead of leaving it invisible.
+        _emit_ledger_terminal(correlation_id, "cancelled", route_succeeded=False)
         raise PermissionDenied(identity, Permission.ROUTE_PROMPT)
 
     # Build diagnostic chain summary showing every model that was tried
@@ -2682,6 +2685,7 @@ async def _dispatch_model_loop(
     if chain_errors:
         lines = [f"  {i+1}. {m}: {err}" for i, (m, err) in enumerate(chain_errors)]
         chain_summary = "\nChain failures:\n" + "\n".join(lines) + "\n"
+    _emit_ledger_terminal(correlation_id, "failed", route_succeeded=False)
     raise RuntimeError(
         f"All models failed for {task_type.value}/{profile.value}. "
         f"Last error: {last_error}.{chain_summary}{setup_hint}"
@@ -2975,6 +2979,9 @@ async def route_and_call(
                 )
             except Exception as _audit_err:
                 log.warning("audit_idempotency_dedupe_write_failed", error=str(_audit_err))
+            # AC-6/INV-ROUTE-005: a cache hit is a real terminal outcome (no billable
+            # attempt) — record it so every route ends in exactly one recorded state.
+            _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
             return _cached_resp
 
     # T4-M1: prompt redaction immediately before the prompt heads to any
@@ -3256,6 +3263,8 @@ async def route_and_call(
                         cached=True,
                         detail_extras={"correlation_id": correlation_id},
                     )
+                    # AC-6/INV-ROUTE-005: semantic-cache hit is a bypassed terminal state.
+                    _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
                     return cached
             except Exception as _sc_err:
                 log.debug("Semantic cache check failed (continuing): %s", _sc_err)
