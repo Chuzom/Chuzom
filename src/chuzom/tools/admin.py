@@ -196,7 +196,10 @@ async def llm_usage(period: str = "today") -> str:
     real_lifetime = await get_routing_savings_vs_sonnet(days=0)
     if real_lifetime["total_calls"] > 0:
         lt = real_lifetime
-        lines.append(section("LIFETIME SAVINGS (vs Sonnet 4.6 baseline)"))
+        # get_routing_savings_vs_sonnet computes vs the latest-Opus HOST baseline
+        # (its `_vs_sonnet` name is historical/misleading, per its own docstring);
+        # label the display honestly as the Claude host baseline, not "Sonnet".
+        lines.append(section("LIFETIME SAVINGS (vs Claude host baseline)"))
         tok_str = f"{lt['input_tokens']:,} in + {lt['output_tokens']:,} out"
         lines.append(row(f"  Calls:    {lt['total_calls']}    Tokens: {tok_str}"))
         lines.append(row(f"  Actual:   ${lt['actual_cost']:.4f}    Baseline: ${lt['baseline_cost']:.4f}"))

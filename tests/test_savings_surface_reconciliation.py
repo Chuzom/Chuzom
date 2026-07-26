@@ -85,3 +85,13 @@ def test_sessionstart_digest_uses_opus_not_sonnet_baseline():
     assert "_SONNET_OUT_PER_M" not in txt
     # And it now sources the Opus host rate (with a documented fallback).
     assert "_HOST_INPUT_PER_M" in txt or "_HOST_IN_PER_M_FALLBACK" in txt
+
+
+def test_admin_lifetime_savings_not_mislabeled_sonnet():
+    """AC-4: get_routing_savings_vs_sonnet computes vs the Opus HOST baseline
+    (its name is historical/misleading, per its own docstring). The admin
+    savings display must not mislabel that section a "Sonnet 4.6" baseline."""
+    txt = (_SRC / "tools" / "admin.py").read_text()
+    assert "Sonnet 4.6" not in txt, (
+        "admin.py must not label the Opus-host lifetime baseline 'Sonnet 4.6'"
+    )
