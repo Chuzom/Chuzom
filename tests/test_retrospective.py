@@ -128,8 +128,13 @@ def test_get_session_window_fallback(tmp_path, monkeypatch):
 # ── Facts Analysis Tests ───────────────────────────────────────────────────
 
 def test_analyze_facts_basic(sample_decisions, sample_corrections):
-    """Test basic facts collection."""
-    facts = analyze_facts(sample_decisions, sample_corrections)
+    """Test basic facts collection.
+
+    INV-COST-004: ``total_saved`` is now an INJECTED value (derived by
+    ``build_retrospective`` from the canonical aggregation layer), not summed
+    from a per-decision column. Passing it explicitly proves it flows through.
+    """
+    facts = analyze_facts(sample_decisions, sample_corrections, total_saved=0.0033)
 
     assert facts["total_calls"] == len(sample_decisions)
     assert facts["correction_count"] == len(sample_corrections)
@@ -142,6 +147,16 @@ def test_analyze_facts_basic(sample_decisions, sample_corrections):
         "research": 1,
     }
     assert facts["avg_confidence"] == pytest.approx(0.57, abs=0.01)
+
+
+def test_analyze_facts_ignores_phantom_saved_usd_column(sample_decisions):
+    """AC-7 regression: the real ``routing_decisions`` schema has NO ``saved_usd``
+    column, so analyze_facts must NEVER sum a per-decision ``saved_usd`` key.
+    With no injected total_saved, savings is 0.0 — not a fabricated per-row sum.
+    """
+    poisoned = [dict(d, saved_usd=99.0) for d in sample_decisions]
+    facts = analyze_facts(poisoned, [])
+    assert facts["total_saved"] == 0.0  # phantom column ignored, not summed to 396.0
 
 
 def test_analyze_facts_empty_session():
@@ -272,6 +287,37 @@ def test_generate_actions_empty():
 
 
 # ── Full Retrospective Tests ───────────────────────────────────────────────
+
+def test_build_retrospective_savings_derived_from_ledger(tmp_path, monkeypatch):
+    """AC-7 / INV-COST-004 regression (fail-before, pass-after).
+
+    ``routing_decisions`` rows carry no ``saved_usd`` column, so the old code
+    (``sum(d.get("saved_usd", 0) ...)``) showed a PERMANENT $0 in every debrief.
+    Savings must instead be DERIVED from the canonical aggregation layer over the
+    session window: baseline_equivalent − actual. Here a routed attempt cost
+    $0.001 with a $0.030 Claude-baseline equivalent → $0.029 real saved.
+    """
+    db = tmp_path / "usage.db"
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(db))
+    from chuzom.execution_ledger import LedgerEvent, record_event
+
+    start = datetime(2026, 4, 17, 14, 30, tzinfo=timezone.utc)
+    end = datetime(2026, 4, 17, 14, 33, tzinfo=timezone.utc)
+    mid = (start.timestamp() + end.timestamp()) / 2
+    record_event(LedgerEvent(
+        route_id="r1", event_type="attempt_completed", ts=mid,
+        measured_cost_usd=0.001, baseline_equivalent_cost_usd=0.030, accepted=True,
+    ))
+
+    # Decisions from the REAL schema — deliberately NO saved_usd key present.
+    decisions = [{
+        "timestamp": start.isoformat(), "task_type": "query",
+        "final_model": "haiku", "cost_usd": 0.001, "classifier_confidence": 0.9,
+    }]
+    retro = build_retrospective(start, end, decisions, [])
+    # Before the fix this was 0.0 (phantom column); after, it is ledger-derived.
+    assert retro["facts"]["total_saved"] == pytest.approx(0.029, abs=1e-6)
+
 
 def test_build_retrospective(sample_decisions, sample_corrections):
     """Test full retrospective assembly."""

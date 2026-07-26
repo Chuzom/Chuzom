@@ -137,23 +137,33 @@ def fetch_session_corrections(
 
 # ── IAF Debrief Steps ──────────────────────────────────────────────────────
 
-def analyze_facts(decisions: list[dict], corrections: list[dict]) -> dict:
+def analyze_facts(
+    decisions: list[dict],
+    corrections: list[dict],
+    total_saved: float | None = None,
+) -> dict:
     """Step 1: Collect neutral, data-driven facts about the session.
 
     Args:
         decisions: Routing decisions
         corrections: Manual corrections
+        total_saved: Session savings, DERIVED by the caller from the canonical
+            aggregation layer (INV-COST-004). ``analyze_facts`` never sums a
+            per-decision ``saved_usd`` — the ``routing_decisions`` schema has no
+            such column, so the old sum was a permanent $0 (AC-7). Defaults to
+            0.0 when not injected.
 
     Returns:
         Dict with: total_calls, total_cost, total_saved, duration_min,
                    correction_count, task_distribution, model_distribution,
                    avg_confidence, classification_accuracy
     """
+    saved = float(total_saved or 0.0)
     if not decisions:
         return {
             "total_calls": 0,
             "total_cost": 0.0,
-            "total_saved": 0.0,
+            "total_saved": saved,
             "duration_min": 0,
             "correction_count": len(corrections),
             "task_distribution": {},
@@ -167,9 +177,9 @@ def analyze_facts(decisions: list[dict], corrections: list[dict]) -> dict:
     end_ts = datetime.fromisoformat(decisions[-1]["timestamp"])
     duration_min = int((end_ts - start_ts).total_seconds() / 60)
 
-    # Cost and savings
+    # Cost from decisions; savings are DERIVED (injected), never a phantom column.
     total_cost = sum(d.get("cost_usd", 0) or 0 for d in decisions)
-    total_saved = sum(d.get("saved_usd", 0) or 0 for d in decisions)
+    total_saved = saved
 
     # Distribution by task type and model
     tasks = {}
@@ -436,6 +446,23 @@ def generate_actions(
     return actions
 
 
+def _derive_savings(start: datetime, end: datetime) -> float:
+    """Session savings from the canonical aggregation layer (INV-COST-004).
+
+    savings = Σ baseline_equivalent − Σ actual over billable attempts in the
+    session window. This is the SINGLE source of truth for cost/savings; the
+    retrospective delegates rather than keeping its own arithmetic. Fail-open to
+    0.0 so a ledger read never breaks a debrief.
+    """
+    try:
+        from chuzom.execution_ledger import get_period_accounting
+
+        acc = get_period_accounting(start.timestamp(), end.timestamp())
+        return round(max(0.0, acc.baseline_equivalent_cost_usd - acc.actual_cost_usd), 6)
+    except Exception:  # noqa: BLE001 — a ledger read must never break the debrief
+        return 0.0
+
+
 def build_retrospective(
     start: datetime, end: datetime, decisions: list[dict], corrections: list[dict]
 ) -> dict:
@@ -450,7 +477,7 @@ def build_retrospective(
     Returns:
         Complete retrospective dict
     """
-    facts = analyze_facts(decisions, corrections)
+    facts = analyze_facts(decisions, corrections, total_saved=_derive_savings(start, end))
     gaps = analyze_gaps(decisions, corrections)
     causes = classify_root_causes(gaps)
     actions = generate_actions(causes, corrections, decisions)
