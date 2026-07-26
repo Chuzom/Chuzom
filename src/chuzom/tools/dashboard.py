@@ -38,9 +38,12 @@ _BG_MAGENTA = "\033[45m"
 _FULL_BLOCK = "█"
 _HALF_BLOCK = "▌"
 
-# Host model baseline rates (per million tokens) — Opus 4.6
-HOST_INPUT_PER_M = 15.0
-HOST_OUTPUT_PER_M = 75.0
+# Fail-open fallback only — the authoritative host (frontier Claude) rates live
+# in cost.py's single canonical source and are read at call time in
+# _host_baseline (AC-3/AC-4: no stale, independent, drifting price copies; the
+# hardcoded 15/75 here was ~3x the current list price).
+HOST_INPUT_PER_M = 5.0
+HOST_OUTPUT_PER_M = 25.0
 
 # Provider colors for distribution bars
 _PROVIDER_COLORS = {
@@ -88,8 +91,19 @@ def _window_label(window: str) -> str:
 
 
 def _host_baseline(input_tokens: int, output_tokens: int) -> float:
-    """What the host model (Opus) would charge for the same token volume."""
-    return (input_tokens * HOST_INPUT_PER_M + output_tokens * HOST_OUTPUT_PER_M) / 1_000_000
+    """What the host (frontier Claude) model would charge for the same tokens.
+
+    Reads cost.py's canonical ``_HOST_INPUT_PER_M`` / ``_HOST_OUTPUT_PER_M`` at
+    call time so the dashboard can never drift from the rest of the accounting
+    (AC-3/AC-4 / INV-COST-004). Fails open to the module fallback list price.
+    """
+    try:
+        from chuzom import cost as _cost
+        in_pm = float(_cost._HOST_INPUT_PER_M)
+        out_pm = float(_cost._HOST_OUTPUT_PER_M)
+    except Exception:  # noqa: BLE001 — a price read must never break the dashboard
+        in_pm, out_pm = HOST_INPUT_PER_M, HOST_OUTPUT_PER_M
+    return (input_tokens * in_pm + output_tokens * out_pm) / 1_000_000
 
 
 def _format_tokens(n: int) -> str:
@@ -245,7 +259,16 @@ def _render_dashboard(
     # ── Header ──────────────────────────────────────────────────────────
     lines.append(f"{_BOLD}╔══════════════════════════════════════════════════════════════╗{_RESET}")
     lines.append(f"{_BOLD}║  {_CYAN}Chuzom — Savings Dashboard{_RESET}{_BOLD}                              ║{_RESET}")
-    lines.append(f"{_BOLD}║  {_DIM}Baseline: Opus 4.6 ($15/$75 per 1M tokens){_RESET}{_BOLD}                   ║{_RESET}")
+    # Show the ACTUAL canonical host price used by _host_baseline, not a stale
+    # hardcoded "$15/$75" (AC-3/AC-4). Padded to the 60-col inner box width.
+    _bl_in, _bl_out = HOST_INPUT_PER_M, HOST_OUTPUT_PER_M
+    try:
+        from chuzom import cost as _cost
+        _bl_in, _bl_out = float(_cost._HOST_INPUT_PER_M), float(_cost._HOST_OUTPUT_PER_M)
+    except Exception:  # noqa: BLE001
+        pass
+    _bl_text = f"Baseline: host Claude (${_bl_in:g}/${_bl_out:g} per 1M tokens)"
+    lines.append(f"{_BOLD}║  {_DIM}{_bl_text}{_RESET}{_BOLD}{' ' * max(0, 60 - len(_bl_text))}║{_RESET}")
     lines.append(f"{_BOLD}╠══════════════════════════════════════════════════════════════╣{_RESET}")
 
     # ── Totals ──────────────────────────────────────────────────────────
@@ -326,7 +349,7 @@ def _render_dashboard(
         lines.append("")
         lines.append(f"  {_YELLOW}┌─ SUBSCRIPTION MODE ────────────────────────────────┐{_RESET}")
         lines.append(f"  {_YELLOW}│{_RESET} You're on a flat-rate Claude plan.                 {_YELLOW}│{_RESET}")
-        lines.append(f"  {_YELLOW}│{_RESET} Dollar savings = vs Opus 4.6 baseline (reference).  {_YELLOW}│{_RESET}")
+        lines.append(f"  {_YELLOW}│{_RESET} Dollar savings = vs frontier baseline (reference).  {_YELLOW}│{_RESET}")
         lines.append(f"  {_YELLOW}│{_RESET} Real value = {_BOLD}quota freed{_RESET} for complex tasks.          {_YELLOW}│{_RESET}")
         lines.append(f"  {_YELLOW}│{_RESET} {_format_tokens(total_tokens)} tokens handled by cheaper models      {_YELLOW}│{_RESET}")
         lines.append(f"  {_YELLOW}│{_RESET} = quota preserved for Opus-class work.              {_YELLOW}│{_RESET}")
