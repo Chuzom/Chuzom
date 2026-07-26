@@ -349,6 +349,32 @@ class TestNegativeSavingsAndRoutingOverhead:
         )
         assert cost_saved > 0
 
+    def test_calc_savings_honors_task_aware_baseline_not_hardcoded_opus(self):
+        """AC-7 / INV-COST-004: when task context is given, calc_savings must use
+        the REALISTIC task-aware baseline (_get_baseline_for_task), not a hardcoded
+        Opus. Otherwise a Haiku-appropriate query is credited against Opus rates,
+        inflating savings. Fail-before: the opus-hardcoded figure ≠ the task-aware
+        figure for a task whose realistic baseline isn't Opus.
+        """
+        from chuzom.cost import _claude_cost, _get_baseline_for_task, calc_savings
+
+        it, ot = 5000, 5000
+        baseline_model = _get_baseline_for_task("query", "simple")
+        expected_gross = (
+            _claude_cost(baseline_model, it, ot) - _claude_cost("haiku", it, ot)
+        )
+        gross_saved, _ = calc_savings(
+            "haiku", tokens_used=0, input_tokens=it, output_tokens=ot,
+            task_type="query", complexity="simple", routing_overhead_usd=0.0,
+        )
+        assert gross_saved == pytest.approx(expected_gross, abs=1e-9)
+
+        # And prove it is NOT the opus-hardcoded figure (unless the realistic
+        # baseline genuinely resolves to opus for this task).
+        opus_gross = _claude_cost("opus", it, ot) - _claude_cost("haiku", it, ot)
+        if baseline_model != "opus":
+            assert gross_saved != pytest.approx(opus_gross, abs=1e-9)
+
     @pytest.mark.asyncio
     async def test_get_realized_savings_returns_gross_overhead_net(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
