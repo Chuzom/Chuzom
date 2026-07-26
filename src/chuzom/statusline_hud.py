@@ -144,6 +144,7 @@ def record_routing_decision(
     reason: Optional[str] = None,
     escalated: bool = False,
     quality_score: Optional[float] = None,
+    baseline_cost: Optional[float] = None,
 ) -> str:
     """Record a routing decision and return formatted HUD.
 
@@ -157,6 +158,13 @@ def record_routing_decision(
         reason: Optional explanation of routing choice
         escalated: Whether this was an escalation (low confidence -> high model)
         quality_score: Optional post-call quality score 0.0-1.0
+        baseline_cost: The task-aware Claude-baseline cost for this call (what it
+            would have cost without routing). REQUIRED for the HUD's session
+            savings to be non-zero — historically this was never supplied, so the
+            statusline permanently displayed $0 saved (AC-7). Compute it with the
+            same canonical functions ``log_usage`` uses
+            (``cost._get_baseline_for_task`` + ``cost._claude_cost``) so the HUD
+            and the persisted ``usage.saved_usd`` agree.
 
     Returns:
         Formatted HUD string for statusline
@@ -181,7 +189,7 @@ def record_routing_decision(
         escalated=escalated,
     )
 
-    return render_hud(decision)
+    return render_hud(decision, baseline_cost=baseline_cost)
 
 
 def format_statusline_context(
