@@ -19,8 +19,10 @@ from hypothesis import strategies as st
 
 from chuzom.execution_ledger import (
     LedgerEvent,
+    get_period_accounting,
     get_route_accounting,
     get_session_accounting,
+    reconcile_session,
     record_event,
 )
 
@@ -206,3 +208,67 @@ def test_property_route_actual_equals_sum_of_attempts(tmp_path_factory, attempts
     acc = get_route_accounting(route)
     assert acc.actual_cost_usd == pytest.approx(round(expected, 6), abs=1e-6)
     assert acc.billable_attempt_count == len(attempts)
+
+
+# ── Phase 7 (mutation-driven): get_period_accounting was untested ──────────────
+def test_period_accounting_windows_by_ts(ledger_db):
+    """Aggregation is windowed on ts: [start, end) — end exclusive. Kills the
+    'no tests' mutants on get_period_accounting (the window comparison + bounds)."""
+    record_event(_attempt("rp", "attempt_completed", 0.002, ts=100.0))
+    record_event(_attempt("rp", "attempt_completed", 0.004, ts=300.0))
+
+    only_first = get_period_accounting(50.0, 200.0)
+    assert only_first.billable_attempt_count == 1
+    assert only_first.actual_cost_usd == pytest.approx(0.002)
+
+    both = get_period_accounting(50.0, 400.0)
+    assert both.billable_attempt_count == 2
+    assert both.actual_cost_usd == pytest.approx(0.006)
+
+    # end is EXCLUSIVE: a window ending exactly at t=300 must drop that event.
+    end_exclusive = get_period_accounting(50.0, 300.0)
+    assert end_exclusive.billable_attempt_count == 1
+    # start is INCLUSIVE: a window starting exactly at t=100 keeps it.
+    start_inclusive = get_period_accounting(100.0, 250.0)
+    assert start_inclusive.billable_attempt_count == 1
+
+
+# ── Phase 7 (mutation-driven): reconcile_session (INV-COST-004) was untested ───
+def test_reconcile_session_self_consistency_all_costs_known(ledger_db):
+    """reported=None self-consistency: fully-known costs → reconciled, delta 0."""
+    record_event(_attempt("r", "attempt_completed", 0.003, session_id="sx"))
+    rec = reconcile_session("sx", None)
+    assert rec.canonical_actual_usd == pytest.approx(0.003)
+    assert rec.cost_unknown_attempts == 0
+    assert rec.reconciled is True
+    assert rec.delta_usd == 0.0  # kills delta=0.0 → None mutant
+
+
+def test_reconcile_session_unknown_cost_not_reconciled(ledger_db):
+    """A billable attempt with unknown cost means 'exact' would be a lie."""
+    record_event(_attempt("r", "attempt_failed", None, session_id="sy",
+                          provider_failure_reason="timeout"))
+    record_event(_attempt("r", "attempt_completed", 0.001, session_id="sy"))
+    rec = reconcile_session("sy", None)
+    assert rec.cost_unknown_attempts == 1
+    assert rec.reconciled is False  # kills the cost_unknown==0 comparison mutants
+
+
+def test_reconcile_session_reported_delta_and_tolerance(ledger_db):
+    """reported value: delta = reported − canonical; reconciled iff |delta| <= tol."""
+    record_event(_attempt("r", "attempt_completed", 0.010, session_id="sz"))
+
+    exact = reconcile_session("sz", 0.010)
+    assert exact.delta_usd == pytest.approx(0.0)
+    assert exact.reconciled is True
+    assert exact.reported_actual_usd == pytest.approx(0.010)  # echo, kills reported→None
+
+    drifted = reconcile_session("sz", 0.020)
+    assert drifted.delta_usd == pytest.approx(0.010)   # kills the subtraction mutants
+    assert drifted.reconciled is False                 # kills the tol comparison mutants
+
+    # tol boundary is INCLUSIVE (<=): delta exactly == tol still reconciles.
+    # Kills the `abs(delta) <= tol` → `< tol` mutant.
+    boundary = reconcile_session("sz", 0.010001)       # delta == 1e-6 == default tol
+    assert boundary.delta_usd == pytest.approx(1e-6)
+    assert boundary.reconciled is True

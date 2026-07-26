@@ -134,3 +134,8 @@ routerarena_clean/**/*_result.json
 routerarena_clean/sandbox/label_table.json
 routerarena_clean/sandbox/mcts/*.json
 routerarena_clean/sandbox/memorytree/memory_meta.json
+
+# mutation testing (Phase 7) — generated artifacts, never committed
+mutants/
+.mutmut-cache
+html/
