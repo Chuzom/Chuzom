@@ -3,7 +3,7 @@
 Provides three capabilities:
   1. format_digest(period)       — formatted savings summary for a time window
   2. detect_spend_spike()        — compare today vs 7-day average; flag anomalies
-  3. simulate_without_routing()  — estimate cost if every call hit Claude Sonnet
+  3. simulate_without_routing()  — estimate cost if every call hit the host Claude model
   4. send_to_webhook(url, text)  — HTTP POST to Slack/Discord/generic webhook
 
 The digest is compatible with Slack, Discord (block-formatted), and generic
@@ -21,13 +21,28 @@ from chuzom.cost import _get_db
 
 log = logging.getLogger("chuzom.digest")
 
-_HOST_IN_PER_M  = 15.0    # Opus 4.6 ($15 per M input tokens)
-_HOST_OUT_PER_M = 75.0    # Opus 4.6 ($75 per M output tokens)
+# Fail-open fallback only. The authoritative host (frontier Claude) prices live
+# in cost.py's single canonical source and are read at call time below (AC-4:
+# no independent, drifting price copies per surface).
+_HOST_IN_PER_M_FALLBACK  = 5.0
+_HOST_OUT_PER_M_FALLBACK = 25.0
 
 
 def _host_baseline(in_tok: int, out_tok: int) -> float:
-    """What the host model (Opus) would charge for the same token volume."""
-    return (in_tok * _HOST_IN_PER_M + out_tok * _HOST_OUT_PER_M) / 1_000_000
+    """What the host (frontier Claude) model would charge for the same tokens.
+
+    Prices are read from cost.py's canonical ``_HOST_INPUT_PER_M`` /
+    ``_HOST_OUTPUT_PER_M`` at call time — so a runtime price-sync is reflected and
+    digest can never drift from the rest of the accounting (AC-4 / INV-COST-004).
+    Fails open to the last-known list price.
+    """
+    try:
+        from chuzom import cost as _cost
+        in_pm = float(_cost._HOST_INPUT_PER_M)
+        out_pm = float(_cost._HOST_OUTPUT_PER_M)
+    except Exception:  # noqa: BLE001 — a price read must never break the digest
+        in_pm, out_pm = _HOST_IN_PER_M_FALLBACK, _HOST_OUT_PER_M_FALLBACK
+    return (in_tok * in_pm + out_tok * out_pm) / 1_000_000
 
 
 _PERIOD_SQL: dict[str, str] = {
@@ -127,7 +142,7 @@ async def detect_spend_spike(
 async def simulate_without_routing(period: str = "week") -> tuple[float, float, float]:
     """Estimate what costs would have been without any routing.
 
-    Every successful call is priced at Sonnet rates regardless of the actual
+    Every successful call is priced at the host (frontier Claude) rate regardless of the actual
     provider — the "what if router was off?" baseline.
 
     Returns:
@@ -168,7 +183,7 @@ async def format_digest(period: str = "week") -> str:
         "",
         f"  Calls:      {data['calls']:>6}",
         f"  Actual cost: ${data['cost']:.4f}",
-        f"  Saved:       ${data['saved']:.4f} vs Sonnet baseline",
+        f"  Saved:       ${data['saved']:.4f} vs Claude baseline",
     ]
 
     if data["by_provider"]:
@@ -183,7 +198,7 @@ async def format_digest(period: str = "week") -> str:
     # What if router was off?
     if baseline > 0:
         lines.append("")
-        lines.append(f"  📊 Without routing: ~${baseline:.4f} (Sonnet baseline)")
+        lines.append(f"  📊 Without routing: ~${baseline:.4f} (Claude baseline)")
         lines.append(f"     Routing saved {savings_pct:.0f}% of potential cost")
 
     # Spend spike alert
