@@ -244,3 +244,41 @@ async def test_canonical_ledger_captures_rejected_attempt_cost(temp_db, tmp_path
     # INV-COST-001/002: the user-facing canonical total INCLUDES the rejected 0.002.
     assert acc.actual_cost_usd == pytest.approx(0.003)
     assert acc.terminal_states.get("accepted") == 1
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_hit_records_bypassed_terminal(temp_db, tmp_path, monkeypatch):
+    """AC-6/INV-ROUTE-005: a semantic-cache hit is a terminal 'bypassed' state — it
+    must be recorded (no billable attempt, but a real route outcome), not invisible."""
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(tmp_path / "ledger.db"))
+    monkeypatch.setenv("CHUZOM_SESSION_ID", "cache-sess")
+    from chuzom import execution_ledger
+    from chuzom.router import route_and_call
+
+    cached = LLMResponse(content="cached", model="ollama/qwen3", input_tokens=10,
+                         output_tokens=5, cost_usd=0.0, latency_ms=1.0, provider="ollama")
+    tracker = MagicMock()
+    tracker.is_healthy.return_value = True
+    mlog = MagicMock()
+    mlog.bind.return_value = MagicMock()
+    with (
+        patch("chuzom.router.get_config", return_value=_Cfg()),
+        patch("chuzom.router._build_and_filter_chain", new_callable=AsyncMock,
+              return_value=["openai/gpt-4o"]),
+        patch("chuzom.router.get_tracker", return_value=tracker),
+        patch("chuzom.router.log", mlog),
+        patch("chuzom.router._native_notify", lambda *a, **k: None),
+        patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.get_daily_spend_by_task_type", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.reserve_envelope", new_callable=AsyncMock, return_value=(None, True, None)),
+        patch("chuzom.router.commit_envelope", new_callable=AsyncMock),
+        patch("chuzom.router.release_envelope", new_callable=AsyncMock),
+        patch("chuzom.semantic_cache.check", new_callable=AsyncMock, return_value=cached),
+    ):
+        resp = await route_and_call(TaskType.QUERY, "capital of France?",
+                                    profile=RoutingProfile.BALANCED)
+    assert resp.content == "cached"
+    acc = execution_ledger.get_session_accounting("cache-sess")
+    assert acc.terminal_states.get("bypassed") == 1
+    assert acc.billable_attempt_count == 0  # cache hit → no billable attempt
