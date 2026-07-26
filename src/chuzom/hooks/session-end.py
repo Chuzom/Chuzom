@@ -44,8 +44,18 @@ SESSION_SPEND_FILE   = os.path.join(STATE_DIR, "session_spend.json")
 # Show star CTA once the user has saved at least this much (lifetime)
 STAR_CTA_THRESHOLD_USD = 0.50
 
-HOST_INPUT_PER_M  = 15.0   # Baseline: Opus 4.6 ($15/$75 per M tokens)
-HOST_OUTPUT_PER_M = 75.0   # Matches receipt_store.py opus_equivalent calculation
+# AC-3: derive the host-baseline price from cost.py's single source of truth
+# instead of hardcoding a stale copy. Before this, session-end used $15/$75 (Opus
+# 4.6) while cost.py had moved to the current Opus price — so the end-of-session
+# summary was mispriced independently of every other surface. Fail-open to the
+# prior literals if cost.py can't be imported (a hook must never crash).
+try:
+    from chuzom.cost import _HOST_INPUT_PER_M as _CI, _HOST_OUTPUT_PER_M as _CO
+    HOST_INPUT_PER_M  = float(_CI)
+    HOST_OUTPUT_PER_M = float(_CO)
+except Exception:
+    HOST_INPUT_PER_M  = 15.0
+    HOST_OUTPUT_PER_M = 75.0
 WIDTH = 50
 
 # Model names that indicate test/mock data — never show in production reports.
