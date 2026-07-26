@@ -126,6 +126,23 @@ def test_session_sums_across_routes(ledger_db):
     assert acc.billable_attempt_count == 3
 
 
+# ── INV-COST-005: hook/directive overhead is aggregated ────────────────────────
+def test_directive_injected_overhead_aggregated(ledger_db):
+    """A directive_injected event contributes its token overhead to the session's
+    hook_input_tokens, so net savings can subtract it (INV-COST-005). It is NOT a
+    billable attempt, so it does not affect actual_cost_usd."""
+    record_event(LedgerEvent(session_id="s5", event_type="directive_injected",
+                             hook_input_tokens=446, task_type="query"))
+    record_event(LedgerEvent(session_id="s5", event_type="directive_injected",
+                             hook_input_tokens=227, task_type="analyze"))
+    record_event(_attempt("r5", "attempt_completed", 0.001, session_id="s5",
+                          accepted=True))
+    acc = get_session_accounting("s5")
+    assert acc.hook_input_tokens == 673
+    assert acc.billable_attempt_count == 1        # directives are not attempts
+    assert acc.actual_cost_usd == pytest.approx(0.001)
+
+
 # ── INV-COST-002 property (Hypothesis) ─────────────────────────────────────────
 _costs = st.lists(
     st.tuples(

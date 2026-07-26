@@ -72,11 +72,21 @@ _BASE_BLOCK_TOOLS = frozenset({
     "Bash", "Edit", "MultiEdit", "Write", "NotebookEdit",
 })
 
-# Q&A task types: Claude answering by reading local files is the same as
-# Claude answering directly — both bypass the cheap model. Block file-reading
-# tools so the content must be passed to llm_analyze/llm_query instead.
+# Q&A task types.
+#
+# INV-ROUTE-001/002/003 (correctness-reset, audit P1): file-reading tools are NO
+# LONGER blocked for Q&A. Blocking Read/Grep/Glob while forcing the request through
+# the text-only `llm` door — which cannot fetch a file — created a structural
+# dead-end for any Q&A prompt about an unseen file (the door could not obtain the
+# content the block message told the model to pass as `context`). The enforcement
+# goal ("route the ANSWER to a cheap model, don't let Claude self-answer") is now
+# upheld by the routing directive plus stop-enforce.py's plain-text-override
+# detection (which feeds realization accounting, INV-ENF-003) — NOT by making a
+# valid file-reading task impossible. Reading files to gather context and THEN
+# routing is North-Star-fine; the empty set keeps generative tools (Bash/Edit/
+# Write) blocked while never trapping inspection.
 _QA_TASK_TYPES = frozenset({"query", "research", "generate", "analyze"})
-_QA_ONLY_BLOCK_TOOLS = frozenset({"Glob", "Read", "Grep", "LS"})
+_QA_ONLY_BLOCK_TOOLS = frozenset()
 
 
 def _block_tools_for(task_type: str) -> frozenset:
@@ -1000,9 +1010,9 @@ def main() -> None:
     # blocking them is pure drift — and it is what let one misclassification
     # lock every subsequent tool in the audit (the ls-then-Write chain). These
     # pass independently of the pending directive, so a stuck lock can never
-    # trap inspection work. QA tasks keep their deliberate read-block (content
-    # must reach llm_analyze), and strict is the opt-out of every escape valve,
-    # so both are excluded here.
+    # trap inspection work. (Q&A read tools are now allowed unconditionally via
+    # the empty _QA_ONLY_BLOCK_TOOLS — INV-ROUTE-001/002 — so this escape is only
+    # still needed for read-only Bash on non-Q&A tasks; strict opts out of it.)
     if not _strict and task_type not in _QA_TASK_TYPES:
         if tool_name == "LS":
             _log_violation(session_id, tool_name, expected_tool,
@@ -1015,7 +1025,9 @@ def main() -> None:
                                outcome="ALLOWED(readonly_bash)")
                 sys.exit(0)
 
-    # In hard mode, block ALL remaining native tools including read tools
+    # In hard/strict mode, block remaining GENERATIVE native tools (Bash/Edit/
+    # Write) until routing is satisfied. Read-only tools are NOT blocked
+    # (_QA_ONLY_BLOCK_TOOLS is empty) — INV-ROUTE-001/002, no capability dead-end.
     if enforce == "hard":
         if tool_name in (_BASE_BLOCK_TOOLS | _QA_ONLY_BLOCK_TOOLS | {"Edit", "Write", "MultiEdit"}):
             # Fall through to violation handling below
@@ -1025,15 +1037,13 @@ def main() -> None:
         else:
             pass  # Fall through to violation handling
     else:
-        # smart mode: block write tools for all tasks, block read tools for Q&A only
+        # smart mode: block write tools for all tasks; read-only tools are ALWAYS
+        # allowed (INV-ROUTE-001/002 — no capability dead-end for Q&A about files).
         if tool_name in {"Edit", "Write", "MultiEdit"}:
             # Write tools are blocked until routing is satisfied (all task types)
             pass  # Fall through to violation handling
         elif tool_name in {"Read", "Glob", "Grep", "LS"}:
-            if task_type in _QA_TASK_TYPES:
-                pass  # Block reads for Q&A tasks — fall through to violation handling
-            else:
-                sys.exit(0)  # Allow reads for code tasks (needed for implementation)
+            sys.exit(0)  # Allow read-only context-gathering for ALL task types
         elif tool_name == "Bash" and task_type not in _QA_TASK_TYPES:
             # Code/non-Q&A tasks: allow read-only Bash (find, ls, git log, gh pr view, ...).
             # Investigation often needs shell; routing intent is preserved because

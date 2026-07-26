@@ -3439,6 +3439,22 @@ def main() -> None:
         }
     }
     _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUTTING: tool={tool} task={task_type}/{complexity} method={method}")
+    # INV-COST-005: record the directive's token overhead so it can be netted from
+    # reported savings. This hook injects `additionalContext` into Claude's context on
+    # every routed turn regardless of whether offload actually happens; that cost was
+    # previously unmeasured. Estimated at chars/4; fail-open (a hook must never raise).
+    try:
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        record_event(LedgerEvent(
+            session_id=session_id or os.environ.get("CHUZOM_SESSION_ID", ""),
+            event_type="directive_injected",
+            task_type=str(task_type),
+            hook_input_tokens=len(_final_context) // 4,
+            metadata={"tool": str(tool), "method": str(method),
+                      "complexity": str(complexity)},
+        ))
+    except Exception:
+        pass
     # Visible UI signal — Claude Code surfaces stderr per-prompt so the routing decision is observable.
     print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool} (via {method})", file=sys.stderr)
     json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
