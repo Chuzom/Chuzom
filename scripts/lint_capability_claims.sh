@@ -34,11 +34,19 @@ raw=""
 [ -f README.md ] && raw="$(resolve README.md)"
 for d in docs Docs; do
   [ -d "$d" ] || continue
+  # Exclude internal AUDIT / analysis docs: they quote and analyze claims (using
+  # words like "proven"/"guaranteed") as evidence, and are not user-facing
+  # marketing copy — the exact scope this guard targets. Scanning them would make
+  # honest audit writing trip the marketing-claim ratchet.
   while IFS= read -r f; do
     raw="$raw
 $(resolve "$f")"
   done <<EOF
-$(find "$d" -type f -name '*.md')
+$(find "$d" -type f -name '*.md' \
+    -not -path '*/correctness-reset/*' \
+    -not -path '*/self-audit-loop/*' \
+    -not -path '*/routing-audit-agent/*' \
+    -not -name 'AUDIT_PROMPT*')
 EOF
 done
 files=$(printf '%s\n' "$raw" | grep -v '^$' | sort -u)

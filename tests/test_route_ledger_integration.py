@@ -175,3 +175,72 @@ async def test_failed_attempt_cost_folded_on_quality_escalation(temp_db, tmp_pat
     assert abs(r["actual_cost_usd"] - 0.003) < 1e-9   # 0.001 final + 0.002 failed, no double count
     assert r["quality_escalation_occurred"] is True
     assert r["mis_route"] is True   # quality failure of the first-choice tier
+
+
+@pytest.mark.asyncio
+async def test_canonical_ledger_captures_rejected_attempt_cost(temp_db, tmp_path, monkeypatch):
+    """INV-COST-001 (router boundary): the rejected/escalated attempt's cost reaches the
+    USER-FACING canonical execution ledger — not only the orphaned routing_quality.jsonl.
+
+    This is the fail-before/pass-after proof for audit P0-1: before router.py emits
+    LedgerEvents, get_session_accounting sees zero events (the rejected cost was dropped
+    by the winner-only cost.log_usage/session_spend path); after wiring it sees both
+    attempts and reconciles actual = 0.003.
+    """
+    from collections import namedtuple
+
+    monkeypatch.setenv("CHUZOM_ROUTING_LEDGER", str(tmp_path / "rq.jsonl"))
+    monkeypatch.setenv("CHUZOM_BANDIT", "off")
+    monkeypatch.setenv("CHUZOM_ESCALATE_ON_QUALITY", "1")
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(tmp_path / "ledger.db"))
+    monkeypatch.setenv("CHUZOM_SESSION_ID", "wiring-sess")
+
+    _COST = {"openai/gpt-4o": 0.002, "openai/gpt-4o-mini": 0.001}
+
+    async def call(model, messages, **kwargs):
+        return LLMResponse(content="answer " * 20, model=model, input_tokens=100,
+                           output_tokens=50, cost_usd=_COST[model], latency_ms=10.0,
+                           provider="openai")
+
+    _QS = namedtuple("QS", "score reasons")
+    _scores = iter([_QS(0.10, ["short"]), _QS(0.95, [])])
+    tracker = MagicMock()
+    tracker.is_healthy.return_value = True
+    mlog = MagicMock()
+    mlog.bind.return_value = MagicMock()
+
+    from chuzom import execution_ledger
+    from chuzom.router import route_and_call
+    with (
+        patch("chuzom.router.get_config", return_value=_Cfg()),
+        patch("chuzom.router._build_and_filter_chain", new_callable=AsyncMock,
+              return_value=["openai/gpt-4o", "openai/gpt-4o-mini"]),
+        patch("chuzom.router.providers.call_llm", new_callable=AsyncMock, side_effect=call),
+        patch("chuzom.quality_feedback.score_response", side_effect=lambda *a, **k: next(_scores)),
+        patch("chuzom.quality_feedback.record_quality", lambda *a, **k: None),
+        patch("chuzom.router.get_tracker", return_value=tracker),
+        patch("chuzom.router.log", mlog),
+        patch("chuzom.router._native_notify", lambda *a, **k: None),
+        patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.get_daily_spend_by_task_type", new_callable=AsyncMock, return_value=0.0),
+        patch("chuzom.router.cost.log_usage", new_callable=AsyncMock),
+        patch("chuzom.router.reserve_envelope", new_callable=AsyncMock, return_value=(None, True, None)),
+        patch("chuzom.router.commit_envelope", new_callable=AsyncMock),
+        patch("chuzom.router.release_envelope", new_callable=AsyncMock),
+        patch("chuzom.semantic_cache.check", new_callable=AsyncMock, return_value=None),
+        patch("chuzom.semantic_cache.store", new_callable=AsyncMock),
+    ):
+        await route_and_call(
+            TaskType.ANALYZE,
+            "Please analyze this in depth: " + ("context " * 40),
+            profile=RoutingProfile.BALANCED, complexity_hint="moderate",
+        )
+
+    acc = execution_ledger.get_session_accounting("wiring-sess")
+    assert acc.billable_attempt_count == 2, "both the rejected and accepted attempt must be recorded"
+    assert acc.rejected_attempt_count == 1
+    assert acc.accepted_attempt_count == 1
+    # INV-COST-001/002: the user-facing canonical total INCLUDES the rejected 0.002.
+    assert acc.actual_cost_usd == pytest.approx(0.003)
+    assert acc.terminal_states.get("accepted") == 1

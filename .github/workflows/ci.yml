@@ -30,6 +30,8 @@ jobs:
       - run: uvx ruff@0.16.0 check src/ tests/
       - name: Capability-claim guard (no new unbacked marketing claims)
         run: bash scripts/lint_capability_claims.sh
+      - name: Claim-evidence registry (INV-CLAIM-001..004)
+        run: uv run python scripts/validate_claim_evidence.py
 
   version-check:
     runs-on: ubuntu-latest
@@ -143,7 +145,7 @@ jobs:
           # Run pytest in the background so we can detect the aiosqlite thread hang.
           # pytest writes junit xml before the hang; we read that to determine pass/fail.
           # NOTE: do NOT add --cov here. Coverage instrumentation slows the
-          # full suite past the 280s watchdog below, so pytest never writes
+          # full suite past the watchdog below, so pytest never writes
           # junit before the timeout fires → "Could not read junit xml". Run
           # coverage in a separate, unwrapped job if/when it's needed (N1).
           uv run pytest tests/ -q \
@@ -152,10 +154,12 @@ jobs:
             --junit-xml=/tmp/pytest-results.xml &
           PYTEST_PID=$!
 
-          # Wait up to 280s for pytest to exit normally. The full suite is
-          # ~150s; 280s leaves margin so the watchdog only fires on a real
-          # aiosqlite exit-hang, not a merely-slow run (job timeout is 10m).
-          for i in $(seq 1 280); do
+          # Wait for pytest to exit normally. The full suite is ~150s locally,
+          # but the slowest CI runner (3.11) under a GitHub cache-service outage
+          # has been observed >280s while still ACTIVELY RUNNING (not exit-hung).
+          # 540s leaves ample margin under the 10m job timeout so the watchdog
+          # only fires on a real aiosqlite exit-hang, not a merely-slow run.
+          for i in $(seq 1 540); do
             if ! kill -0 $PYTEST_PID 2>/dev/null; then
               wait $PYTEST_PID
               exit $?
@@ -163,8 +167,15 @@ jobs:
             sleep 1
           done
 
-          # Still running after 150s — pytest is hanging on exit (aiosqlite thread).
-          # Read the junit xml written before the hang to determine true pass/fail.
+          # Still running after the wait. This is a REAL exit-hang ONLY if pytest
+          # already finished the tests (junit written); if junit is absent the
+          # process was still running (a false hang from a slow runner) — surface
+          # that distinctly instead of masking it as a test failure.
+          if [ ! -f /tmp/pytest-results.xml ]; then
+            echo "::error::pytest still running after 540s with no junit — slow runner, not a hang. Re-run."
+            kill $PYTEST_PID 2>/dev/null || true
+            exit 1
+          fi
           echo "pytest is hanging on exit — reading junit results..."
           python3 - <<'PY'
           import sys, xml.etree.ElementTree as ET

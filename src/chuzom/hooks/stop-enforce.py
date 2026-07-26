@@ -101,6 +101,34 @@ def _log_direct_answer(session_id: str, expected_tool: str, strikes: int) -> Non
         pass
 
 
+def _record_override(session_id: str, task_type: str) -> None:
+    """Feed a detected plain-text override into realization accounting (B7).
+
+    Parity with the tool-call override path: increments session_spend.overridden_turns
+    (so realized_savings_usd prorates down) AND emits a canonical plain_text_override
+    ledger event with realization_status=verified_overridden. Fully fail-open — a
+    hook must never raise.
+    """
+    try:
+        from chuzom.session_spend import get_session_spend
+        _spend = get_session_spend()
+        _spend.mark_overridden(_spend.prompt_sequence)
+    except Exception:
+        pass
+    try:
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        record_event(LedgerEvent(
+            session_id=session_id,
+            event_type="plain_text_override",
+            task_type=task_type,
+            override_type="plain_text",
+            realization_status="verified_overridden",
+            used_by_host=False,
+        ))
+    except Exception:
+        pass
+
+
 def main() -> None:
     enforce = os.environ.get("CHUZOM_ENFORCE", "hard").lower()
     if enforce in ("off", "shadow", "soft", "suggest"):
@@ -130,6 +158,13 @@ def main() -> None:
     # Claude answered in plain text this turn — pending state survived
     strikes = _increment_strikes(session_id, task_type, expected_tool)
     _log_direct_answer(session_id, expected_tool, strikes)
+
+    # INV-ENF-002/003 (audit B7): a plain-text override MUST update the same
+    # realization accounting a tool-call override does. Before this, only the
+    # PreToolUse path (enforce-route.py → mark_overridden) decremented realized
+    # savings; plain-text answers were logged as a strike only, so
+    # realized_savings_usd systematically overcounted. Both fail-open.
+    _record_override(session_id, task_type)
 
     # Clear pending — don't double-penalise on the next turn's auto-route consume
     _pending_path(session_id).unlink(missing_ok=True)

@@ -6,6 +6,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+# ── Chuzom disk-write isolation (INV-TEST-000) ──────────────────────────────
+@pytest.fixture(autouse=True)
+def _isolate_chuzom_writes(tmp_path, monkeypatch):
+    """Redirect chuzom's canonical-ledger and provider-health writes to a per-test
+    tmp dir so no test pollutes the developer's real ``~/.chuzom``.
+
+    The execution ledger (``execution_ledger._db_path``) and the health snapshot
+    (``health._snapshot_path``) both default to ``~/.chuzom``; the router and the
+    HealthTracker write to them fail-open on the hot path, so without this an
+    ordinary router/health test would silently write real files. Tests that need a
+    specific path still override these env vars in their own body (monkeypatch runs
+    after this fixture)."""
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(tmp_path / "usage.db"))
+    monkeypatch.setenv("CHUZOM_HEALTH_SNAPSHOT", str(tmp_path / "provider_health.json"))
+
+
 # ── Config-singleton isolation (CHZ-AUD-001) ────────────────────────────────
 @pytest.fixture(autouse=True)
 def _restore_config_singleton():

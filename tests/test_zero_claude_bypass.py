@@ -79,7 +79,14 @@ def stub_ollama():
 
 def _run(prompt: str, home: Path, ollama_url: str, extra_env=None) -> dict | None:
     (home / ".chuzom").mkdir(parents=True, exist_ok=True)
-    env = {k: v for k, v in os.environ.items() if not k.startswith("CHUZOM")}
+    # Hermeticity (INV-TEST-000 / B0-1): build a MINIMAL clean env instead of
+    # inheriting the parent process's os.environ. The hook reads several ambient
+    # (non-CHUZOM_) vars directly — e.g. OLLAMA_BASE_URL/OLLAMA_URL via
+    # effective_ollama_base_url — so copying os.environ let any var set by an
+    # earlier test bleed into this subprocess, making the test order-dependent
+    # (passed alone, failed in the full suite). Only PATH + explicit knobs are kept.
+    env = {k: os.environ[k] for k in ("PATH", "LANG", "LC_ALL", "TMPDIR")
+           if k in os.environ}
     env["HOME"] = str(home)
     env["CHUZOM_OLLAMA_URL"] = ollama_url
     env["CHUZOM_OLLAMA_MODEL"] = STUB_MODEL   # matches /api/tags → passes §2.4 gate
@@ -94,6 +101,12 @@ def _run(prompt: str, home: Path, ollama_url: str, extra_env=None) -> dict | Non
         input=json.dumps({"hook_event_name": "UserPromptSubmit",
                           "prompt": prompt, "session_id": "zc"}),
         capture_output=True, text=True, env=env,
+        # Hermeticity (INV-TEST-000 / B0-1): pin cwd to the isolated HOME so the
+        # hook's `.chuzom.yml` discovery (repo_config/enforce_config walk UP from
+        # cwd) cannot read a config left by, or a cwd leaked from, another test.
+        # Without this, these subprocess tests were order-dependent: they passed
+        # alone but failed in the full suite.
+        cwd=str(home),
     )
     out = result.stdout.strip()
     return json.loads(out) if out else None

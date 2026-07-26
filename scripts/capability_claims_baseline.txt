@@ -41,6 +41,3 @@ Docs/SCENARIO_REPORT.md	prevents	**Actual outcome:** Stale breaker cleared. Prov
 docs/subagent-routing.md	never spends	never spends subscription tokens.
 Docs/subagent-routing.md	never spends	never spends subscription tokens.
 README.md	guarantee	different integration modes — **push** and **pull** — with different guarantees:
-README.md	guaranteed	> **Recommendation:** Use Claude Code for guaranteed cost savings on every turn.
-README.md	guaranteed	| `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want guaranteed savings |
-README.md	proven	✅ **35–80% cost savings** — proven on real-world workloads

@@ -82,3 +82,32 @@ async def test_period_aggregate_real_positive_when_metered(temp_db, monkeypatch)
     wk = (await cost.get_savings_by_period())["week"]
     # In metered API mode the avoided Opus call really would have been billed.
     assert wk["real_dollars_avoided_usd"] == wk["baseline_avoided_usd"] > 0.0
+
+
+# ── AC-2 / INV-COST-006: get_team_savings must carry the same host-mode split ──
+@pytest.mark.asyncio
+async def test_team_savings_real_zero_on_subscription(temp_db, monkeypatch):
+    """Regression for audit P0-2 / AC-2: the team report (which team.py broadcasts to
+    Slack/Discord/Telegram) must NOT present baseline-avoided as cash on a subscription."""
+    monkeypatch.delenv("CHUZOM_CLAUDE_SUBSCRIPTION", raising=False)
+    config_module._config = None
+    free = LLMResponse(content="x", model="ollama/qwen3", input_tokens=1000,
+                       output_tokens=2000, cost_usd=0.0, latency_ms=10, provider="ollama")
+    await cost.log_usage(free, TaskType.QUERY, RoutingProfile.BUDGET)
+
+    data = await cost.get_team_savings(period="week")
+    assert data["baseline_equivalent_avoided_usd"] > 0.0        # counterfactual is real
+    assert data["real_dollars_avoided_usd"] == 0.0             # but no cash on subscription
+    assert data["saved_usd"] == data["baseline_equivalent_avoided_usd"]  # back-compat alias
+
+
+@pytest.mark.asyncio
+async def test_team_savings_real_positive_when_metered(temp_db, monkeypatch):
+    monkeypatch.setenv("CHUZOM_CLAUDE_SUBSCRIPTION", "false")
+    config_module._config = None
+    free = LLMResponse(content="x", model="ollama/qwen3", input_tokens=1000,
+                       output_tokens=2000, cost_usd=0.0, latency_ms=10, provider="ollama")
+    await cost.log_usage(free, TaskType.QUERY, RoutingProfile.BUDGET)
+
+    data = await cost.get_team_savings(period="week")
+    assert data["real_dollars_avoided_usd"] == data["baseline_equivalent_avoided_usd"] > 0.0

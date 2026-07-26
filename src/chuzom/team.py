@@ -96,12 +96,27 @@ def _bar(pct: float, width: int = 8) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+def _savings_label(report: dict[str, Any]) -> str:
+    """Honest savings string (INV-SAVE-005): never an unqualified "Saved: $X".
+
+    Shows baseline-equivalent avoided (a counterfactual quota/token figure) and, only
+    when the host is genuinely metered, the real dollars avoided. On a flat-rate
+    subscription real dollars ≈ $0, so broadcasting baseline-avoided as cash (the prior
+    behavior) overstated savings to external recipients (audit P0-2).
+    """
+    baseline = report.get("baseline_equivalent_avoided_usd",
+                          report.get("saved_usd", 0.0))
+    real = report.get("real_dollars_avoided_usd", 0.0)
+    if real > 0:
+        return f"${real:.4f} real · ${baseline:.4f} vs baseline"
+    return f"${baseline:.4f} vs baseline (≈$0 cash on subscription)"
+
+
 def _slack_payload(report: dict[str, Any]) -> dict:
     user = report.get("user_id", "unknown")
     project = report.get("project_id", "unknown")
     period = report.get("period", "all-time")
     calls = report.get("total_calls", 0)
-    saved = report.get("saved_usd", 0.0)
     free_pct = report.get("free_pct", 0.0)
     top_models = report.get("top_models", [])
 
@@ -120,7 +135,7 @@ def _slack_payload(report: dict[str, Any]) -> dict:
                     {"type": "mrkdwn", "text": f"*Project*\n{project}"},
                     {"type": "mrkdwn", "text": f"*Period*\n{period}"},
                     {"type": "mrkdwn", "text": f"*Calls*\n{calls:,}"},
-                    {"type": "mrkdwn", "text": f"*Saved*\n${saved:.4f}"},
+                    {"type": "mrkdwn", "text": f"*Avoided*\n{_savings_label(report)}"},
                     {"type": "mrkdwn", "text": f"*Free tier*\n{free_pct:.0%}  {_bar(free_pct)}"},
                 ],
             },
@@ -139,7 +154,6 @@ def _discord_payload(report: dict[str, Any]) -> dict:
     project = report.get("project_id", "unknown")
     period = report.get("period", "all-time")
     calls = report.get("total_calls", 0)
-    saved = report.get("saved_usd", 0.0)
     free_pct = report.get("free_pct", 0.0)
     top_models = report.get("top_models", [])
 
@@ -157,7 +171,7 @@ def _discord_payload(report: dict[str, Any]) -> dict:
                 {"name": "Project", "value": project, "inline": True},
                 {"name": "Period", "value": period, "inline": True},
                 {"name": "Calls", "value": str(calls), "inline": True},
-                {"name": "Saved", "value": f"${saved:.4f}", "inline": True},
+                {"name": "Avoided", "value": _savings_label(report), "inline": True},
                 {"name": "Free tier", "value": f"{free_pct:.0%}  {_bar(free_pct)}", "inline": True},
                 {"name": "Top models", "value": model_text, "inline": False},
             ],
@@ -176,7 +190,8 @@ def _telegram_message(report: dict[str, Any], chat_id: str) -> dict:
     project = _esc(report.get("project_id", "unknown"))
     period = _esc(report.get("period", "all-time"))
     calls = report.get("total_calls", 0)
-    saved = report.get("saved_usd", 0.0)
+    baseline = report.get("baseline_equivalent_avoided_usd", report.get("saved_usd", 0.0))
+    real = report.get("real_dollars_avoided_usd", 0.0)
     actual = report.get("actual_usd", 0.0)
     free_pct = report.get("free_pct", 0.0)
     top_models = report.get("top_models", [])
@@ -192,7 +207,9 @@ def _telegram_message(report: dict[str, Any], chat_id: str) -> dict:
         f"📁 *Project:* {project}\n"
         f"📅 *Period:* {period}\n\n"
         f"📊 *Calls:* {calls:,}\n"
-        f"💰 *Saved:* \\${saved:.4f}  \\(paid \\${actual:.4f}\\)\n"
+        f"💰 *Avoided:* \\${baseline:.4f} vs baseline"
+        + (f" \\(\\${real:.4f} real\\)" if real > 0 else " \\(≈\\$0 cash on subscription\\)")
+        + f"  ·  paid \\${actual:.4f}\n"
         f"🆓 *Free tier:* {free_pct:.0%}  {_esc(_bar(free_pct))}\n\n"
         f"🏆 *Top models:*\n{model_lines}\n\n"
         f"_Powered by [llm\\-router](https://github\\.com/ypollak2/llm\\-router)_"

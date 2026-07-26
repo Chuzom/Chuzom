@@ -1462,6 +1462,64 @@ async def _cli_prompt_with_context(
     )
 
 
+def _emit_ledger_attempt(
+    response: Any,
+    model: str,
+    task_type: TaskType,
+    profile: RoutingProfile,
+    *,
+    event_type: str,
+    correlation_id: str | None,
+    accepted: bool | None = None,
+    rejected: bool | None = None,
+    rejection_reason: str | None = None,
+) -> None:
+    """Emit ONE attempt event to the canonical execution ledger (INV-COST-001).
+
+    Records EVERY billable attempt — accepted, gate-rejected, quality-rejected —
+    exactly once, so route/session totals derived by the aggregation layer include
+    rejected/escalated attempt cost (which cost.log_usage/session_spend, called only
+    for the winning attempt, structurally omit). FAIL-OPEN: never raises into routing.
+    """
+    try:
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        host_mode = "metered" if cost._host_is_metered() else "subscription"
+        record_event(LedgerEvent(
+            session_id=os.environ.get("CHUZOM_SESSION_ID", "") or (correlation_id or ""),
+            route_id=correlation_id or "",
+            event_type=event_type,  # type: ignore[arg-type]
+            task_type=task_type.value,
+            routing_profile=profile.value,
+            host_mode=host_mode,
+            provider=getattr(response, "provider", "") or "",
+            model=getattr(response, "model", "") or model,
+            input_tokens=getattr(response, "input_tokens", None),
+            output_tokens=getattr(response, "output_tokens", None),
+            measured_cost_usd=float(getattr(response, "cost_usd", 0.0) or 0.0),
+            accepted=accepted,
+            rejected=rejected,
+            rejection_reason=rejection_reason,
+        ))
+    except Exception:  # noqa: BLE001 — ledger emission must never break routing
+        pass
+
+
+def _emit_ledger_terminal(
+    correlation_id: str | None, terminal_state: str, *, route_succeeded: bool
+) -> None:
+    """Emit the route's single terminal-state event (INV-ROUTE-004/005). FAIL-OPEN."""
+    try:
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        record_event(LedgerEvent(
+            session_id=os.environ.get("CHUZOM_SESSION_ID", "") or (correlation_id or ""),
+            route_id=correlation_id or "",
+            event_type="route_completed" if route_succeeded else "route_failed",
+            terminal_state=terminal_state,  # type: ignore[arg-type]
+        ))
+    except Exception:  # noqa: BLE001
+        pass
+
+
 async def _dispatch_model_loop(
     models_to_try: list[str],
     task_type: TaskType,
@@ -2020,6 +2078,12 @@ async def _dispatch_model_loop(
                     )
                     chain_errors.append((model, f"gate_failed: {_fail_summary}"))
                     _failed_attempt_cost += float(response.cost_usd or 0.0)  # billable, rejected
+                    _emit_ledger_attempt(
+                        response, model, task_type, profile,
+                        event_type="attempt_rejected", rejected=True,
+                        rejection_reason=f"gate_failed:{_fail_summary}",
+                        correlation_id=correlation_id,
+                    )
                     continue
             else:
                 _gate_results = []
@@ -2072,6 +2136,12 @@ async def _dispatch_model_loop(
                         )
                         chain_errors.append((model, f"low_quality:{_qs.score:.2f}"))
                         _failed_attempt_cost += float(response.cost_usd or 0.0)  # billable, rejected
+                        _emit_ledger_attempt(
+                            response, model, task_type, profile,
+                            event_type="attempt_rejected", rejected=True,
+                            rejection_reason=f"low_quality:{_qs.score:.2f}",
+                            correlation_id=correlation_id,
+                        )
                         await _notify(
                             ctx, "info",
                             f"↑ escalating: {model_name} answer scored "
@@ -2083,6 +2153,12 @@ async def _dispatch_model_loop(
 
             tracker.record_success(provider)
             await cost.log_usage(response, task_type, profile, correlation_id=correlation_id)
+            _emit_ledger_attempt(
+                response, model, task_type, profile,
+                event_type="attempt_completed", accepted=True,
+                correlation_id=correlation_id,
+            )
+            _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
             # P1-7: the token reservation is released in this attempt's finally.
 
             # ── Store receipt + track reclaimed tokens (v8.8.0) ────────────
@@ -2514,6 +2590,12 @@ async def _dispatch_model_loop(
 
                     tracker.record_success(provider)
                     await cost.log_usage(response, task_type, RoutingProfile.BUDGET, correlation_id=correlation_id)
+                    _emit_ledger_attempt(
+                        response, model, task_type, RoutingProfile.BUDGET,
+                        event_type="attempt_completed", accepted=True,
+                        correlation_id=correlation_id,
+                    )
+                    _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
 
                     route_log.info(
                         "emergency_fallback_success",
