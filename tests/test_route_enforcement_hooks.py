@@ -123,17 +123,14 @@ def test_enforce_route_soft_mode_still_logs_but_allows(tmp_path):
     assert "expected=llm" in log_text          # consolidated default → door name in the log
 
 
-def test_enforce_route_allows_file_tools_to_prevent_stuck_patterns(tmp_path):
-    """Glob/Read/Grep/LS are now allowed early to prevent stuck patterns where investigation tools keep failing.
+def test_read_tools_allowed_for_qa_in_hard_mode(tmp_path):
+    """P1 / INV-ROUTE-001/002: read-only tools are ALLOWED for Q&A even in hard mode.
 
-    The enforce-route hook v12+ marks these as 'coding' operations and allows them silently
-    to prevent deadlocks. This prevents the scenario where Claude can't investigate the hook
-    because the hook blocks investigation tools.
-
-    v13 behavior: In hard mode, ALL native tools (including Read/Glob/Grep/LS)
-    are blocked until routing is satisfied. This prevents model from bypassing
-    routing by jumping straight to file operations.
-    """
+    Blocking Read/Grep/Glob while forcing the request through the text-only `llm`
+    door (which cannot fetch a file) was a structural dead-end for any Q&A prompt
+    about an unseen file. Read-only context-gathering is now never blocked; routing
+    of the ANSWER is still enforced by the directive + stop-enforce override
+    detection. Generative tools remain blocked (see the write-tool tests)."""
     for tool_name in ("Read", "Glob", "Grep", "LS"):
         session_id = f"sess-qa-{tool_name.lower()}"
         _write_pending(tmp_path, session_id, task_type="query")
@@ -145,17 +142,14 @@ def test_enforce_route_allows_file_tools_to_prevent_stuck_patterns(tmp_path):
             extra_env={"CHUZOM_ENFORCE": "hard"},
         )
 
-        # v13: Read/Glob/Grep/LS are BLOCKED in hard mode for Q&A tasks
         assert result.returncode == 0
-        out = json.loads(result.stdout)
-        assert out["decision"] == "block", f"{tool_name} should be blocked in hard mode for Q&A tasks"
+        assert result.stdout.strip() == "", f"{tool_name} should be ALLOWED for Q&A (no dead-end)"
 
 
-def test_enforce_route_blocks_file_tools_in_hard_mode_for_code_tasks(tmp_path):
-    """v13: In hard mode, content readers Read/Glob/Grep block even for code
-    tasks until routing is satisfied. LS (a directory listing) is now treated as
-    non-generative and exempt — see test_enforce_nongenerative (audit §2.8.1)."""
-    for tool_name in ("Read", "Glob", "Grep"):
+def test_read_tools_allowed_in_hard_mode_for_code_tasks(tmp_path):
+    """Read-only tools are allowed for code tasks in hard mode too — reading files
+    to gather context is non-generative and never a routing bypass."""
+    for tool_name in ("Read", "Glob", "Grep", "LS"):
         session_id = f"sess-code-hard-{tool_name.lower()}"
         _write_pending(tmp_path, session_id, task_type="code", expected_tool="llm_code")
 
@@ -167,12 +161,11 @@ def test_enforce_route_blocks_file_tools_in_hard_mode_for_code_tasks(tmp_path):
         )
 
         assert result.returncode == 0
-        out = json.loads(result.stdout)
-        assert out["decision"] == "block", f"{tool_name} should be blocked in hard mode for code tasks"
+        assert result.stdout.strip() == "", f"{tool_name} should be allowed for code tasks"
 
 
 def test_smart_mode_allows_read_for_code_tasks(tmp_path):
-    """v13: Smart mode allows Read/Glob/Grep/LS for code tasks (needed for implementation)."""
+    """Smart mode allows Read/Glob/Grep/LS for code tasks (needed for implementation)."""
     session_id = "sess-smart-code-read"
     _write_pending(tmp_path, session_id, task_type="code", expected_tool="llm_code")
 
@@ -188,8 +181,10 @@ def test_smart_mode_allows_read_for_code_tasks(tmp_path):
         assert result.stdout.strip() == "", f"{tool_name} should be allowed in smart mode for code tasks"
 
 
-def test_smart_mode_blocks_read_for_qa_tasks(tmp_path):
-    """v13: Smart mode blocks Read/Glob/Grep/LS for Q&A tasks."""
+def test_smart_mode_allows_read_for_qa_tasks(tmp_path):
+    """P1 / INV-ROUTE-001/002: smart mode ALLOWS Read/Glob/Grep/LS for Q&A tasks
+    (previously blocked — a capability dead-end). The answer is still routed via
+    the directive + stop-enforce override detection, not by blocking reads."""
     for task_type in ("query", "research", "generate", "analyze"):
         session_id = f"sess-smart-qa-{task_type}"
         _write_pending(tmp_path, session_id, task_type=task_type)
@@ -202,8 +197,24 @@ def test_smart_mode_blocks_read_for_qa_tasks(tmp_path):
         )
 
         assert result.returncode == 0
+        assert result.stdout.strip() == "", f"Read should be ALLOWED in smart mode for {task_type} tasks"
+
+
+def test_write_tools_still_blocked_for_qa(tmp_path):
+    """The enforcement intent is preserved: generative tools stay blocked until
+    routing is satisfied, so Q&A answers can't be produced by Bash/Edit/Write."""
+    for tool_name in ("Edit", "Write"):
+        session_id = f"sess-qa-write-{tool_name.lower()}"
+        _write_pending(tmp_path, session_id, task_type="query")
+        result = _run_hook(
+            ENFORCE_ROUTE_HOOK,
+            {"session_id": session_id, "tool_name": tool_name},
+            home=tmp_path,
+            extra_env={"CHUZOM_ENFORCE": "hard"},
+        )
+        assert result.returncode == 0
         out = json.loads(result.stdout)
-        assert out["decision"] == "block", f"Read should be blocked in smart mode for {task_type} tasks"
+        assert out["decision"] == "block", f"{tool_name} must still be blocked until routed"
 
 
 def _write_routing_yaml(home: Path, content: str) -> Path:

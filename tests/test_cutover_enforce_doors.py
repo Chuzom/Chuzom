@@ -37,7 +37,7 @@ def _pending(home, sid, **ov):
 
 def test_consolidated_tier_directive_names_llm_door(tmp_path):
     _pending(tmp_path, "s1")
-    r = _run({"session_id": "s1", "tool_name": "Read", "tool_input": {"file_path": "x"}},
+    r = _run({"session_id": "s1", "tool_name": "Write", "tool_input": {"file_path": "x", "content": "y"}},
              tmp_path, {"CHUZOM_ENFORCE": "hard", "CHUZOM_SLIM": "consolidated"})
     out = json.loads(r.stdout)
     assert out["decision"] == "block"
@@ -48,7 +48,7 @@ def test_consolidated_tier_directive_names_llm_door(tmp_path):
 def test_default_unset_names_the_door(tmp_path):
     # 0.10.0: consolidated is the default, so an UNSET CHUZOM_SLIM names the door.
     _pending(tmp_path, "s2")
-    r = _run({"session_id": "s2", "tool_name": "Read", "tool_input": {"file_path": "x"}},
+    r = _run({"session_id": "s2", "tool_name": "Write", "tool_input": {"file_path": "x", "content": "y"}},
              tmp_path, {"CHUZOM_ENFORCE": "hard"})  # no CHUZOM_SLIM → default consolidated
     out = json.loads(r.stdout)
     assert out["decision"] == "block"
@@ -59,7 +59,7 @@ def test_default_unset_names_the_door(tmp_path):
 def test_explicit_legacy_tier_preserves_old_name(tmp_path):
     # Opt back to a legacy tier and the enforced directive keeps the legacy tool name.
     _pending(tmp_path, "s2b")
-    r = _run({"session_id": "s2b", "tool_name": "Read", "tool_input": {"file_path": "x"}},
+    r = _run({"session_id": "s2b", "tool_name": "Write", "tool_input": {"file_path": "x", "content": "y"}},
              tmp_path, {"CHUZOM_ENFORCE": "hard", "CHUZOM_SLIM": "off"})
     out = json.loads(r.stdout)
     assert out["decision"] == "block"
