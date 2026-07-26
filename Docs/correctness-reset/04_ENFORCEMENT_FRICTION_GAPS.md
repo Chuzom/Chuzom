@@ -134,3 +134,55 @@ file-reads; GAP-ENF-1/4 are the un-fixed remainder for **agentic/operational Bas
 new invariant **INV-ROUTE-006: local, non-offloadable execution (repo git/test/gh/file work) is
 never HARD-blocked by routing enforcement** — with a regression test that a `git`/`pytest` Bash
 under `CHUZOM_ENFORCE=hard` returns allow.
+
+> **North-Star correction to INV-ROUTE-006 (see `05_ENFORCEMENT_FIX_PLAN.md`).** "Never
+> HARD-blocked" must NOT be read as "exempt to the frontier." The North Star requires routing on
+> *every* request; the fix is to route execution/repo work to the **tool-capable door** (`llm_act`,
+> provisioned with cwd + repo state), never to a text-only door and never a dead-end. INV-ROUTE-006
+> as carried forward: *no enforcement path may route execution/repo work to a door that cannot
+> perform it.* Exemption was considered and **rejected** as a North-Star anti-goal.
+
+---
+
+## Session 2 evidence (2026-07-26, continued) — the friction recurs every working session
+
+The same reset work, continued into a second long session (`cacff2df-8e5`), hit the **identical**
+GAP-ENF-1 pattern **five** more times — each a HARD block on repo/CI Bash (git status, `gh pr
+view`, reading a pytest-results file, reproducing a test), each resolved only by burning a wasted
+retry to trip the trap auto-pivot. Every one was `expected=llm` (a **text-only** door) on work a
+stateless model cannot do.
+
+**Logs (BLOCKED → forced AUTO-PIVOT cycles):**
+```
+[2026-07-26 16:12:27] VIOLATION … expected=llm got=Bash outcome=BLOCKED
+[2026-07-26 16:13:24] AUTO-PIVOT (trap) … tool=Bash same_turn_blocks=2
+[2026-07-26 20:10:46] VIOLATION … expected=llm got=Bash outcome=BLOCKED
+[2026-07-26 20:10:55] AUTO-PIVOT (trap) … tool=Bash same_turn_blocks=2
+[2026-07-26 20:31:28] VIOLATION … expected=llm got=Bash outcome=BLOCKED
+[2026-07-26 20:31:29] AUTO-PIVOT (trap) … tool=Bash same_turn_blocks=2
+[2026-07-26 21:26:24] VIOLATION … expected=llm got=Bash outcome=BLOCKED
+[2026-07-26 21:26:31] AUTO-PIVOT (trap) … tool=Bash same_turn_blocks=2
+[2026-07-26 22:37:23] VIOLATION … expected=llm got=Bash outcome=BLOCKED
+[2026-07-26 22:37:27] AUTO-PIVOT (trap) … tool=Bash same_turn_blocks=2
+```
+
+**New signal — unstable within a single task (reinforces GAP-ENF-3).** At 22:36–22:37 four
+consecutive read-only Bash calls were `ALLOWED(readonly_bash)`, then a fifth Bash in the same
+task was `BLOCKED` — the classifier/exemption flipped mid-task with no change in the kind of work:
+```
+[2026-07-26 22:36:33] VIOLATION … got=Bash outcome=ALLOWED(readonly_bash)
+[2026-07-26 22:36:45] VIOLATION … got=Bash outcome=ALLOWED(readonly_bash)
+[2026-07-26 22:36:59] VIOLATION … got=Bash outcome=ALLOWED(readonly_bash)
+[2026-07-26 22:37:07] VIOLATION … got=Bash outcome=ALLOWED(readonly_bash)
+[2026-07-26 22:37:23] VIOLATION … got=Bash outcome=BLOCKED   ← same task, now blocked
+```
+
+**Cost of the friction (measured this session):** each BLOCKED cycle = 1 wasted blocked tool call
++ 1 retry to trip the trap ≈ 2 tool round-trips with **zero** routing benefit (the work was never
+offloadable). Five cycles ⇒ ~10 wasted round-trips, on top of the constant per-turn route
+directives on context-dependent prompts (GAP-ENF-2) that a stateless model provably cannot answer.
+
+**Verdict unchanged:** these confirm GAP-ENF-1/2/3 are not one-off — they recur on *every* session
+of legitimate repo work and are exactly what Phase 3.5 (`05_ENFORCEMENT_FIX_PLAN.md`,
+ENF-FIX-1..4) must close: route execution to the **tool-capable** door with provisioned context,
+give a clean one-step escalation (no violation-count trap), and stabilize the needs-tools signal.
