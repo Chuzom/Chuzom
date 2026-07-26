@@ -911,6 +911,41 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
     for line in check_api_keys():
         print(f"  {line}")
 
+    # ── 7b. Provider circuit breakers (INV-HEALTH-001, audit C10) ───────────
+    # doctor runs as a separate process from the MCP server, so it cannot read
+    # the router's in-memory HealthTracker directly. The router persists a
+    # wall-clock snapshot of breaker state; read it here so a tripped breaker is
+    # visible in `doctor` instead of doctor reporting "all healthy" while the
+    # router actively skips a provider on every request.
+    print(f"\n{_bold('  Provider circuit breakers')}")
+    try:
+        from chuzom.health import read_health_snapshot
+
+        snap = read_health_snapshot()
+        providers = (snap or {}).get("providers", {})
+        open_breakers = [
+            name for name, st in providers.items()
+            if st.get("circuit_state") in ("open", "rate_limited")
+        ]
+        if not providers:
+            print(_dim("  no snapshot yet (router has not recorded a failure this session)"))
+        else:
+            for name in sorted(providers):
+                st = providers[name]
+                state = st.get("circuit_state", "unknown")
+                mark = _green("✓") if state == "closed" else _yellow("⚠")
+                detail = f"failures={st.get('consecutive_failures', 0)}"
+                print(f"  {mark} {name}: circuit {state} ({detail})")
+        for name in open_breakers:
+            # Surface in the summary so doctor does NOT print "all healthy" while a
+            # breaker the router enforces is open (the exact C10 divergence).
+            issues.append(
+                f"Provider '{name}' circuit breaker is open — router is skipping it; "
+                f"run llm_health() for live detail"
+            )
+    except Exception as _h_err:  # fail-open: health reporting must never break doctor
+        print(_dim(f"  (health snapshot unavailable: {_h_err})"))
+
     # ── 8. claw-code ───────────────────────────────────────────────────────
     print(
         f"\n{_bold('  claw-code (optional — open-source Claude Code alternative)')}"
