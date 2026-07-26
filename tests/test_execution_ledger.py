@@ -143,6 +143,39 @@ def test_directive_injected_overhead_aggregated(ledger_db):
     assert acc.actual_cost_usd == pytest.approx(0.001)
 
 
+# ── INV-COST-004: reconciliation primitive ─────────────────────────────────────
+def test_reconcile_matches_canonical(ledger_db):
+    from chuzom.execution_ledger import reconcile_session
+    record_event(_attempt("r", "attempt_rejected", 0.002, session_id="rec"))
+    record_event(_attempt("r", "attempt_completed", 0.001, session_id="rec", accepted=True))
+    # A surface reporting the honest total (incl. the rejected 0.002) reconciles.
+    ok = reconcile_session("rec", 0.003)
+    assert ok.reconciled is True
+    assert ok.canonical_actual_usd == pytest.approx(0.003)
+    assert ok.delta_usd == pytest.approx(0.0)
+
+
+def test_reconcile_flags_drift(ledger_db):
+    from chuzom.execution_ledger import reconcile_session
+    record_event(_attempt("r", "attempt_rejected", 0.002, session_id="drift"))
+    record_event(_attempt("r", "attempt_completed", 0.001, session_id="drift", accepted=True))
+    # A surface that omits the rejected attempt (winner-only 0.001) does NOT reconcile.
+    bad = reconcile_session("drift", 0.001)
+    assert bad.reconciled is False
+    assert bad.delta_usd == pytest.approx(-0.002)
+
+
+def test_reconcile_unknown_cost_is_not_exact(ledger_db):
+    from chuzom.execution_ledger import reconcile_session
+    record_event(_attempt("r", "attempt_failed", None, session_id="unk",
+                          provider_failure_reason="timeout"))
+    record_event(_attempt("r", "attempt_completed", 0.001, session_id="unk", accepted=True))
+    # An attempt with unknown cost means the total can't be claimed exact.
+    r = reconcile_session("unk", 0.001)
+    assert r.reconciled is False
+    assert r.cost_unknown_attempts == 1
+
+
 # ── INV-COST-002 property (Hypothesis) ─────────────────────────────────────────
 _costs = st.lists(
     st.tuples(

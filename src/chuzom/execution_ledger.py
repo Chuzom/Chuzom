@@ -314,3 +314,48 @@ def get_period_accounting(
         "period", f"{start_ts:.0f}-{end_ts:.0f}",
         _load_rows("ts >= ? AND ts < ?", (start_ts, end_ts), path),
     )
+
+
+# ── Reconciliation (INV-COST-004) ──────────────────────────────────────────────
+@dataclass
+class Reconciliation:
+    """Result of checking a surface's reported actual-cost against the canonical
+    ledger total. INV-COST-004: no user-facing spend surface may report an
+    actual-cost total different from the aggregation layer. A surface (or its test)
+    calls ``reconcile_session`` with the number it displays; ``reconciled`` is False
+    when it drifts from the ledger, or when any billable attempt has unknown cost
+    (so "exact" would be a lie — see INV-COST-005 fail-behavior)."""
+
+    scope_id: str
+    canonical_actual_usd: float
+    reported_actual_usd: float | None
+    reconciled: bool
+    cost_unknown_attempts: int
+    delta_usd: float
+
+
+def reconcile_session(
+    session_id: str,
+    reported_actual_usd: float | None = None,
+    *,
+    tol: float = 1e-6,
+    path: Path | None = None,
+) -> Reconciliation:
+    """Reconcile a surface's ``reported_actual_usd`` against the canonical session
+    total. With ``reported_actual_usd=None`` it reports only whether the ledger's own
+    total is fully known (no cost_unknown attempts) — the self-consistency check."""
+    acc = get_session_accounting(session_id, path=path)
+    canonical = acc.actual_cost_usd
+    reconciled = acc.cost_unknown_attempts == 0
+    delta = 0.0
+    if reported_actual_usd is not None:
+        delta = round(float(reported_actual_usd) - canonical, 6)
+        reconciled = reconciled and abs(delta) <= tol
+    return Reconciliation(
+        scope_id=session_id,
+        canonical_actual_usd=canonical,
+        reported_actual_usd=reported_actual_usd,
+        reconciled=reconciled,
+        cost_unknown_attempts=acc.cost_unknown_attempts,
+        delta_usd=delta,
+    )
