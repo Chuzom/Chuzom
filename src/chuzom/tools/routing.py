@@ -9,8 +9,9 @@ from mcp.server.fastmcp import Context
 from chuzom.config import get_config
 from chuzom.ensemble import classify_for_routing
 from chuzom.cost import (
-    get_correction_count, get_daily_claude_breakdown, get_daily_claude_tokens,
-    get_savings_summary, log_claude_usage, log_correction, log_usage,
+    _claude_cost, _get_baseline_for_task, get_correction_count,
+    get_daily_claude_breakdown, get_daily_claude_tokens, get_savings_summary,
+    log_claude_usage, log_correction, log_usage,
 )
 from chuzom.input_validation import (
     ValidationError, validate_routing_parameters,
@@ -394,13 +395,30 @@ async def llm_route(
         classification_data=_classification_data,
     )
 
-    # Record routing decision for HUD visibility
+    # Record routing decision for HUD visibility. Supply the task-aware Claude
+    # baseline using the SAME canonical functions log_usage persists with, so the
+    # HUD's session savings match usage.saved_usd instead of the historical
+    # permanent $0 (AC-7: baseline_cost was never supplied). Fail-open to None.
+    try:
+        _baseline_model = _get_baseline_for_task(
+            resolved_task_type.value, classification.complexity.value
+        )
+        _hud_baseline_cost = _claude_cost(
+            _baseline_model,
+            resp.input_tokens,
+            resp.output_tokens,
+            cache_write_t=getattr(resp, "cache_creation_input_tokens", 0),
+            cache_read_t=getattr(resp, "cache_read_input_tokens", 0),
+        )
+    except Exception:
+        _hud_baseline_cost = None
     record_routing_decision(
         model=resp.model,
         confidence=classification.confidence,
         task=f"{resolved_task_type.value}/{classification.complexity.value}",
         cost=resp.cost_usd,
         reason=classification.reasoning,
+        baseline_cost=_hud_baseline_cost,
     )
 
     # Show routing completion with model decision
