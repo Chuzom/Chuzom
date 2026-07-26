@@ -1,0 +1,158 @@
+"""Proof tests for the canonical execution ledger (correctness-reset Phase 2).
+
+Binds to invariants in Docs/correctness-reset/01_FINAL_ACCEPTANCE_CONTRACT.md:
+  INV-COST-001  every billable attempt is one recorded event
+  INV-COST-002  route actual cost == Σ measured cost over billable attempt events
+  INV-COST-003  idempotent on event_id; re-aggregation never double-counts
+  INV-ROUTE-004/005  terminal_state is a recorded field
+
+Hermetic (INV-TEST-000): every test points the ledger at a tmp DB via the
+CHUZOM_EXECUTION_LEDGER_DB env var — no shared ~/.chuzom state leaks between tests.
+"""
+from __future__ import annotations
+
+import uuid
+
+import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+from chuzom.execution_ledger import (
+    LedgerEvent,
+    get_route_accounting,
+    get_session_accounting,
+    record_event,
+)
+
+
+@pytest.fixture()
+def ledger_db(tmp_path, monkeypatch):
+    db = tmp_path / "usage.db"
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(db))
+    return db
+
+
+def _attempt(route_id, event_type, cost, *, session_id="s1", **kw):
+    return LedgerEvent(
+        session_id=session_id,
+        route_id=route_id,
+        attempt_id=str(uuid.uuid4()),
+        event_type=event_type,
+        measured_cost_usd=cost,
+        **kw,
+    )
+
+
+# ── INV-COST-001 / 002 ─────────────────────────────────────────────────────────
+def test_rejected_attempt_is_recorded_and_counted(ledger_db):
+    """A rejected attempt is a first-class billable event and IS in the route total.
+
+    This is the exact P0-1 scenario: a cheap attempt rejected on quality, then an
+    accepted attempt. The route's actual cost must be the SUM of both.
+    """
+    route = "r-esc"
+    assert record_event(_attempt(route, "attempt_rejected", 0.002,
+                                 rejection_reason="low_quality"))
+    assert record_event(_attempt(route, "attempt_completed", 0.001, accepted=True))
+
+    acc = get_route_accounting(route)
+    assert acc.billable_attempt_count == 2
+    assert acc.rejected_attempt_count == 1
+    assert acc.accepted_attempt_count == 1
+    # INV-COST-002: actual = 0.002 (rejected) + 0.001 (accepted)
+    assert acc.actual_cost_usd == pytest.approx(0.003)
+
+
+def test_accepted_only_route(ledger_db):
+    route = "r-clean"
+    record_event(_attempt(route, "attempt_completed", 0.0005, accepted=True))
+    acc = get_route_accounting(route)
+    assert acc.actual_cost_usd == pytest.approx(0.0005)
+    assert acc.rejected_attempt_count == 0
+
+
+def test_unknown_cost_attempt_not_fabricated(ledger_db):
+    """INV-COST-001 failure behavior: an attempt with unknown usage is recorded with
+    measured_cost=None and counted as cost_unknown — never dropped, never invented."""
+    route = "r-timeout"
+    record_event(_attempt(route, "attempt_failed", None,
+                          provider_failure_reason="timeout"))
+    record_event(_attempt(route, "attempt_completed", 0.001, accepted=True))
+    acc = get_route_accounting(route)
+    assert acc.billable_attempt_count == 2
+    assert acc.cost_unknown_attempts == 1
+    assert acc.actual_cost_usd == pytest.approx(0.001)  # unknown not fabricated
+
+
+# ── INV-COST-003 ───────────────────────────────────────────────────────────────
+def test_idempotent_event_id_no_double_count(ledger_db):
+    """Re-recording the SAME event_id is a no-op; re-aggregation is stable."""
+    route = "r-idem"
+    ev = _attempt(route, "attempt_completed", 0.004, accepted=True)
+    assert record_event(ev) is True
+    assert record_event(ev) is True  # duplicate — INSERT OR IGNORE
+    assert record_event(ev) is True
+    acc = get_route_accounting(route)
+    assert acc.billable_attempt_count == 1
+    assert acc.actual_cost_usd == pytest.approx(0.004)
+
+
+def test_reaggregation_is_stable(ledger_db):
+    route = "r-stable"
+    for c in (0.001, 0.002, 0.003):
+        record_event(_attempt(route, "attempt_completed", c))
+    a1 = get_route_accounting(route).actual_cost_usd
+    a2 = get_route_accounting(route).actual_cost_usd
+    assert a1 == a2 == pytest.approx(0.006)
+
+
+# ── INV-ROUTE-004/005 ──────────────────────────────────────────────────────────
+def test_terminal_state_recorded(ledger_db):
+    route = "r-term"
+    record_event(_attempt(route, "attempt_completed", 0.001, accepted=True))
+    record_event(LedgerEvent(route_id=route, event_type="route_completed",
+                             terminal_state="accepted"))
+    acc = get_route_accounting(route)
+    assert acc.terminal_states.get("accepted") == 1
+
+
+# ── session aggregation ────────────────────────────────────────────────────────
+def test_session_sums_across_routes(ledger_db):
+    record_event(_attempt("ra", "attempt_completed", 0.001, session_id="sess"))
+    record_event(_attempt("rb", "attempt_rejected", 0.002, session_id="sess"))
+    record_event(_attempt("rb", "attempt_completed", 0.0005, session_id="sess"))
+    acc = get_session_accounting("sess")
+    assert acc.actual_cost_usd == pytest.approx(0.0035)
+    assert acc.billable_attempt_count == 3
+
+
+# ── INV-COST-002 property (Hypothesis) ─────────────────────────────────────────
+_costs = st.lists(
+    st.tuples(
+        st.sampled_from(["attempt_completed", "attempt_rejected", "attempt_failed"]),
+        st.one_of(st.none(), st.floats(min_value=0, max_value=1.0,
+                                       allow_nan=False, allow_infinity=False)),
+    ),
+    min_size=1, max_size=25,
+)
+
+
+@settings(max_examples=200, deadline=None)
+@given(attempts=_costs)
+def test_property_route_actual_equals_sum_of_attempts(tmp_path_factory, attempts):
+    """For ANY chain of attempts, route actual cost == Σ of the known measured costs.
+
+    INV-COST-002 must hold regardless of accept/reject/fail mix or unknown costs.
+    """
+    db = tmp_path_factory.mktemp("prop") / "usage.db"
+    import os
+    os.environ["CHUZOM_EXECUTION_LEDGER_DB"] = str(db)
+    route = "prop-" + uuid.uuid4().hex[:8]
+    expected = 0.0
+    for et, cost in attempts:
+        record_event(_attempt(route, et, cost))
+        if cost is not None:
+            expected += cost
+    acc = get_route_accounting(route)
+    assert acc.actual_cost_usd == pytest.approx(round(expected, 6), abs=1e-6)
+    assert acc.billable_attempt_count == len(attempts)
