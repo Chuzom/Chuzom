@@ -132,8 +132,9 @@ class TestImportWiringInAdminTools:
         result = await llm_savings()
 
         assert "Savings" in result  # tool returned output
-        # JSONL file should be truncated after import
-        assert log_path.read_text() == ""
+        # AC-5: the log is atomically CLAIMED (renamed away) on import, so
+        # after the flush it is empty OR absent — either way it is drained.
+        assert not log_path.exists() or log_path.read_text() == ""
 
     @pytest.mark.asyncio
     async def test_llm_usage_flushes_jsonl(self, savings_db, monkeypatch):
@@ -153,7 +154,7 @@ class TestImportWiringInAdminTools:
         assert "Usage Dashboard" in result
         assert "native turns not metered" in result
         assert "Session spend counts chuzom tool calls only" in result
-        assert log_path.read_text() == ""
+        assert not log_path.exists() or log_path.read_text() == ""
 
 
 # ── Phase 2: llm_auto tool ───────────────────────────────────────────────────

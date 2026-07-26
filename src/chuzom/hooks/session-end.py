@@ -12,6 +12,7 @@ import sys
 import time
 import urllib.request
 import io
+import uuid
 from datetime import datetime, timezone
 
 try:
@@ -290,15 +291,31 @@ def _sync_import_savings_log() -> None:
     the session summary are one-session behind for free-provider calls.
 
     This is a synchronous, stdlib-only version of ``cost.import_savings_log()``.
+
+    AC-5 (dual-writer race): this drainer and the async ``cost.import_savings_log``
+    both drain the shared log. Reading-then-truncating unlocked let both read the
+    same rows and double-insert into ``savings_stats``. We instead **atomically
+    claim** the log via ``os.replace`` (only one caller wins the rename; the rest
+    get ``FileNotFoundError`` and no-op), then process and delete the claimed copy
+    — or append it back on failure so nothing is lost.
     """
     if not os.path.exists(SAVINGS_LOG_PATH) or not os.path.exists(DB_PATH):
         return
+    claim = f"{SAVINGS_LOG_PATH}.{os.getpid()}.{uuid.uuid4().hex[:8]}.claim"
     try:
-        with open(SAVINGS_LOG_PATH) as f:
+        os.replace(SAVINGS_LOG_PATH, claim)  # atomic claim — serializes drainers
+    except OSError:
+        return  # no live log, or another drainer claimed it first
+    try:
+        with open(claim) as f:
             raw = f.read().strip()
     except OSError:
         return
     if not raw:
+        try:
+            os.remove(claim)
+        except OSError:
+            pass
         return
 
     records = []
@@ -323,6 +340,10 @@ def _sync_import_savings_log() -> None:
             continue
 
     if not records:
+        try:
+            os.remove(claim)
+        except OSError:
+            pass
         return
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -355,11 +376,24 @@ def _sync_import_savings_log() -> None:
         )
         conn.commit()
         conn.close()
-        # Truncate only after successful commit
-        with open(SAVINGS_LOG_PATH, "w") as f:
-            f.write("")
+        # Success — drop the processed claim (the live log was already claimed
+        # away atomically, so there is nothing to truncate).
+        try:
+            os.remove(claim)
+        except OSError:
+            pass
     except Exception:
-        pass
+        # Insert failed — append the claimed rows back to the live log for a
+        # later retry (append, never clobber newly-arrived lines), then drop it.
+        try:
+            with open(claim) as _cf, open(SAVINGS_LOG_PATH, "a") as _lf:
+                _lf.write(_cf.read())
+        except OSError:
+            pass
+        try:
+            os.remove(claim)
+        except OSError:
+            pass
 
 
 def _query_cumulative_savings() -> list[tuple[str, int, int, int, float]]:

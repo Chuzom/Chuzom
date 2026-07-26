@@ -2428,36 +2428,75 @@ async def get_lifetime_savings_summary(days: int = 30) -> dict:
         await db.close()
 
 
+def _safe_unlink(p: Path) -> None:
+    try:
+        p.unlink()
+    except OSError:
+        pass
+
+
+def _restore_claim(claim: Path, live: Path) -> None:
+    """Append a failed claim's lines back to the live log, then drop the claim.
+
+    Uses append (never replace) so newly-arrived lines in ``live`` are preserved.
+    """
+    try:
+        data = claim.read_text()
+    except OSError:
+        return
+    try:
+        with open(live, "a") as f:
+            f.write(data)
+    except OSError:
+        pass
+    _safe_unlink(claim)
+
+
 async def import_savings_log() -> int:
-    """Import savings records from the JSONL file into SQLite, then truncate.
+    """Import savings records from the JSONL file into SQLite, then drop the file.
 
     The PostToolUse hook appends one JSON line per routed call to
-    ``~/.chuzom/savings_log.jsonl``.  This function reads all lines,
-    inserts them into the ``savings_stats`` table, and truncates the file.
+    ``~/.chuzom/savings_log.jsonl``.  This function reads all lines and inserts
+    them into the ``savings_stats`` table.
+
+    AC-5 (dual-writer race): the log is drained by BOTH this async importer and
+    ``session-end.py::_sync_import_savings_log``. Reading-then-truncating unlocked
+    let two concurrent drainers read the same rows and double-insert. We instead
+    **atomically claim** the log via ``os.replace`` (only one caller wins the
+    rename; the rest get ``FileNotFoundError`` and no-op), process the claimed
+    copy, and delete it — or append it back on insert failure so nothing is lost.
 
     Returns:
-        Number of records imported.
+        Number of records imported (0 if another drainer claimed the log first).
     """
     import asyncio
+    import os
+    import uuid
 
-    # Offload synchronous Path.exists() to thread pool to avoid blocking event loop
-    exists = await asyncio.to_thread(SAVINGS_LOG_PATH.exists)
-    if not exists:
-        return 0
+    claim = SAVINGS_LOG_PATH.with_name(
+        f"{SAVINGS_LOG_PATH.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.claim"
+    )
+    # Atomic claim — serializes concurrent drainers at the filesystem layer.
+    try:
+        await asyncio.to_thread(os.replace, str(SAVINGS_LOG_PATH), str(claim))
+    except OSError:
+        return 0  # no live log, or another drainer claimed it first
 
     try:
-        raw = SAVINGS_LOG_PATH.read_text()
+        raw = await asyncio.to_thread(claim.read_text)
     except OSError:
         return 0
 
     lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
     if not lines:
+        await asyncio.to_thread(_safe_unlink, claim)
         return 0
 
     from datetime import datetime, timezone
 
     db = await _get_db()
     imported = 0
+    committed = False
     try:
         for line in lines:
             try:
@@ -2483,13 +2522,15 @@ async def import_savings_log() -> int:
             )
             imported += 1
         await db.commit()
-        # Truncate only after successful commit — prevents data loss
-        try:
-            SAVINGS_LOG_PATH.write_text("")
-        except OSError:
-            pass
+        committed = True
     finally:
         await db.close()
+
+    if committed:
+        await asyncio.to_thread(_safe_unlink, claim)
+    else:
+        # Insert failed — return the rows to the live log for a later retry.
+        await asyncio.to_thread(_restore_claim, claim, SAVINGS_LOG_PATH)
 
     return imported
 
