@@ -9,8 +9,22 @@
 **Every user request and every agent step is first routed to the most cost-effective model
 capable of completing the task at the required quality. The selected model must be able to
 perform the _real work_ — local file operations, tool use, command execution, and
-verification. Claude is used only when the task genuinely requires its higher-level
-capabilities, or when a cheaper model fails to meet the required quality bar.**
+verification. The _most capable_ tier is used only when a cheaper model fails to meet the
+required quality bar — and "most capable" is defined by the live external model leaderboard,
+not by any one vendor. Claude is one candidate on that ladder, not axiomatically the top.**
+
+### Capability is external and live — the leaderboard, not a hardcoded ranking
+
+Which models are "better/most capable" is **not** decided inside Chuzom and is **not** a fixed
+"Claude is best" assumption. It is read from a continuously-updated external ranking:
+
+> **https://artificialanalysis.ai/leaderboards/models**
+
+The frontier moves weekly (new Claude, Gemini, DeepSeek, Qwen, Llama, GPT, … releases). The
+router's cost/capability ordering — and therefore what sits at the *top* of the escalation
+ladder for a given task — must track this leaderboard, so escalation always reaches the current
+best-capable model, which may or may not be Claude on any given day. Pinning "Claude = top" is a
+North-Star violation the moment another model leads.
 
 ## The core reframe: route *executions*, not *completions*
 
@@ -34,10 +48,12 @@ request (user prompt OR agent step)
   2. CLASSIFY    task type · complexity · needs-tools? · which files/context?
   3. PROVISION   give the routed model: working dir (cwd) + file/bash/git tools
                  + repo state + session context (conversation accumulator)
-  4. EXECUTE     run on the CHEAPEST CAPABLE tier (local → Codex → … → Claude) via llm_act
+  4. EXECUTE     run on the CHEAPEST CAPABLE tier (local → Codex → … → frontier) via llm_act,
+                 where "frontier" = the current best-capable model per the leaderboard
   5. VERIFY      objective acceptance check (cmd/lint/diff/canary) — never self-report
   6. ESCALATE    fail or low-quality → next stronger tier, carrying the done-frontier forward.
-                 Claude is the TOP of the ladder, reached only on genuine need.
+                 The TOP of the ladder is the current leaderboard-best model for the task
+                 (may or may not be Claude), reached only on genuine need.
   7. MEASURE     record routing accuracy, completion, tool-success, quality, verification,
                  escalation, savings, mis-routes → routing-quality ledger
 ```
@@ -51,11 +67,13 @@ A change is North-Star-positive iff it does one or more of:
 4. Strengthens **verification** so weak results are caught, not shipped.
 5. Makes **escalation** cheaper, faster, or better-targeted.
 6. Makes routing quality **measurable** rather than assumed.
-7. Reduces the cases where work needlessly reaches Claude.
+7. Reduces the cases where work needlessly reaches the frontier (most-expensive) tier —
+   whichever model the leaderboard currently ranks there, Claude or otherwise.
 
 A change is North-Star-negative if it: blocks a tool-needing task behind a no-tools tool;
-exempts offloadable work straight to Claude; adds surface without adding capability; or
-claims a guarantee that isn't measured.
+exempts offloadable work straight to the frontier tier; adds surface without adding capability;
+assumes a fixed "Claude is best" ranking instead of the live leaderboard; or claims a guarantee
+that isn't measured.
 
 ## Required measurements (measured, not assumed)
 
@@ -74,8 +92,10 @@ claims a guarantee that isn't measured.
 
 - Enforcing a completion tool (`llm_analyze`/`llm_query`) on a task that needs to *run tools* —
   a structural dead-end.
-- Exempting file/repo/operational prompts straight to Claude instead of routing them to a
-  tool-capable model.
+- Exempting file/repo/operational prompts straight to the frontier tier instead of routing them
+  to the cheapest tool-capable model.
+- Treating any single vendor (e.g. Claude) as the fixed "best" model instead of reading the
+  current capability ranking from the live leaderboard (https://artificialanalysis.ai/leaderboards/models).
 - "Guaranteed savings" claims under a default that doesn't enforce routing.
 - Routing decisions that are logged but never verified against actual outcome.
 
