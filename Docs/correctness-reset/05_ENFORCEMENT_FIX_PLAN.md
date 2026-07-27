@@ -95,13 +95,23 @@ genuinely-capable `llm_act` (e.g. tasks that legitimately need Claude), the corr
   one; a non-execution context prompt keeps its text-only suggestion (no over-routing).
   Tests: `test_enf_fix2_context_provisioned_door.py`.
 
-### ENF-FIX-3 — clean escalation to Claude (no friction-by-violation-count)
+### ENF-FIX-3 — clean escalation to Claude (no friction-by-violation-count) — ✅ DONE
 - Replace the punitive "violation 3/4 → auto-pivot after retries" flow with an explicit,
   first-class escalation: when the routed tool-capable door genuinely can't complete (or the
   task needs Claude), escalate cleanly (single signal), recorded in the ledger as an escalation
   — the North-Star ladder, not a trap.
 - **Test:** an escalation path exists that reaches Claude in one step and records an escalation
   event, without N wasted blocked retries.
+- **Implemented:** every enforcement auto-pivot (loop / trap / count) now records a first-class
+  `escalation_started` event in the canonical ledger (`execution_events`) via
+  `_record_escalation`, with `escalation_reason` (loop|trap|count) and the enforced door in
+  metadata — fire-and-forget so accounting never crashes enforcement. Previously an auto-pivot
+  was only a text-log line, invisible to accounting; now escalations are reconciled like any
+  other terminal disposition (INV-COST-001). The clean *one-step* route remains: calling the
+  tool-capable door (`llm_act`, via ENF-FIX-1) clears the lock in one step and is NOT counted as
+  an escalation (it's a route, not a pivot); the trap (2 same-tool blocks) is the bounded native
+  escape and is now a recorded escalation rather than a shamed "violation". Tests:
+  `test_enf_fix3_escalation_event.py`.
 
 ### ENF-FIX-4 — stable needs-tools/repo-context classification (GAP-ENF-3)
 - A stable signal (repo present + needs-tools) that pins a request to the tool-capable door
