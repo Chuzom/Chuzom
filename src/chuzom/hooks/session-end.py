@@ -574,7 +574,10 @@ def _format_routing_section(tools: dict[str, dict]) -> list[str]:
         f"{tokens_str} tokens  "
         f"${total_cost:.4f} actual  "
         f"${total_base:.4f} baseline  "
-        f"{pct_color}{savings_pct}% saved{_RESET}",
+        f"{pct_color}{savings_pct}% saved{_RESET}  "
+        # D5: explicit window so this panel isn't read as comparable to the
+        # (today) provider panels or the lifetime cumulative panel beside it.
+        f"{_C_MUTED}this session{_RESET}",
     ]
     for tool, d in sorted(tools.items(), key=lambda x: -x[1]["count"]):
         clean_models = {m: c for m, c in d["models"].items() if not _is_test_model(m)}
@@ -698,7 +701,9 @@ def _format_free_section(free_rows: list[dict], paid_rows: list[dict]) -> list[s
     saved_color = _C_GREEN if total_saved > 0 else _C_LABEL
     lines = [
         f"    {_C_WHITE}{total_calls}{_RESET} calls  ·  "
-        f"{saved_color}${total_saved:.4f} saved{_RESET} vs Claude host  {_C_MUTED}{label}{_RESET}"
+        f"{saved_color}${total_saved:.4f} saved{_RESET} vs Claude host  "
+        # D5: this-session window (the {label} is a provider descriptor, not a window)
+        f"{_C_MUTED}this session · {label}{_RESET}"
     ]
     lines += body
     return lines

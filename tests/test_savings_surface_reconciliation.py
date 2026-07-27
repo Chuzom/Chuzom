@@ -111,3 +111,12 @@ def test_sessionend_free_section_not_mislabeled_sonnet_and_fallback_is_current()
     assert "HOST_OUTPUT_PER_M = 75.0" not in txt
     assert "HOST_INPUT_PER_M  = 5.0" in txt
     assert "HOST_OUTPUT_PER_M = 25.0" in txt
+
+
+def test_sessionend_session_panels_carry_window_label():
+    """DASH-3 (D5): the this-session savings panels (routing + free) must carry an
+    explicit 'this session' window so they aren't misread against the '(today)'
+    provider panels and the lifetime cumulative panel in the same summary."""
+    txt = (_SRC / "hooks" / "session-end.py").read_text()
+    assert txt.count("this session") >= 2, "routing + free panels must be window-labeled"
+    assert "(today)" in txt, "provider panels stay explicitly (today)-labeled"
