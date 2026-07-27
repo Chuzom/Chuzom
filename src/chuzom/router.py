@@ -881,6 +881,27 @@ async def _build_and_filter_chain(
         if _cx:
             models_to_try = _cx + [m for m in models_to_try if provider_from_model(m) != "codex"]
 
+    # ── Hard provider block — authoritative choke point (Gate-17) ─────────────
+    # CHUZOM_BLOCK_PROVIDERS removes a provider on EVERY path, regardless of how
+    # it entered the chain: base policy (e.g. literal codex/* baked into
+    # policies/standard.yaml), Codex/Gemini injection, or the broker re-assert
+    # just above. Applied LAST so nothing downstream can re-introduce a blocked
+    # provider. This is distinct from CHUZOM_DISABLE_SUBPROCESS_BACKENDS, which
+    # is subprocess-only and deliberately leaves the broker path intact for the
+    # headless gateway daemon — see _blocked_providers().
+    _blocked = _blocked_providers()
+    if _blocked:
+        models_to_try = [
+            m for m in models_to_try if provider_from_model(m) not in _blocked
+        ]
+        if not models_to_try:
+            log.warning(
+                "CHUZOM_BLOCK_PROVIDERS=%s removed every candidate for %s/%s — "
+                "the chain is now empty; unblock a provider or ensure a reachable "
+                "model (e.g. ollama/*) remains.",
+                sorted(_blocked), getattr(task_type, "value", task_type), profile,
+            )
+
     return models_to_try
 
 
@@ -1027,6 +1048,23 @@ def _budget_lock() -> asyncio.Lock:
 def _disabled_subprocess_backends() -> set[str]:
     raw = os.environ.get("CHUZOM_DISABLE_SUBPROCESS_BACKENDS", "")
     return {item.strip().lower() for item in raw.split(",") if item.strip()}
+
+
+def _blocked_providers() -> frozenset[str]:
+    """Providers hard-blocked on EVERY routing path.
+
+    Distinct from ``CHUZOM_DISABLE_SUBPROCESS_BACKENDS``, which disables only a
+    provider's LOCAL subprocess CLI and deliberately still lets a session-broker
+    daemon serve it (the headless gateway's free Codex/Gemini path). By contrast
+    ``CHUZOM_BLOCK_PROVIDERS`` removes a provider from routing entirely — no model
+    with that provider is selectable by ANY path (base policy chain, injection,
+    or broker re-assert). Use it to force metering for honest cost benchmarks
+    (Gate-17: a subscription served at unpriced $0 is unclassified spend) or to
+    take a provider fully offline. Provider names match ``provider_from_model``
+    (e.g. ``codex``, ``gemini_cli``, ``openai``, ``anthropic``, ``ollama``).
+    """
+    raw = os.environ.get("CHUZOM_BLOCK_PROVIDERS", "")
+    return frozenset(item.strip().lower() for item in raw.split(",") if item.strip())
 
 
 async def _maybe_broker_dispatch(
