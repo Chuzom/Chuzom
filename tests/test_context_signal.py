@@ -51,6 +51,18 @@ def test_empty_and_whitespace_safe():
     assert is_context_dependent("   ") is False
 
 
+def test_deictic_word_count_cutoff_is_exactly_twelve():
+    """The short-deictic fallback fires for prompts of ≤12 words only. Pin the
+    boundary exactly (neither <12 nor ≤13): a 12-word deictic prompt IS
+    context-dependent, a 13-word one is NOT. Both are decided by the word-count
+    branch (they don't match the strong context regex)."""
+    twelve = "make it a little bit shorter and cleaner for the final version"
+    thirteen = "make it a little bit shorter and cleaner for the final polished version"
+    assert len(twelve.split()) == 12 and len(thirteen.split()) == 13
+    assert is_context_dependent(twelve) is True     # 12 ≤ 12
+    assert is_context_dependent(thirteen) is False   # 13 > 12
+
+
 def test_signal_does_not_over_exempt_routable_generative_prompts():
     """Regression guard for the reverted CTX_DEP_EXEMPT: the signal errs toward
     True (deictic 'that'/'it' in short prompts), which is fine for the advisory
