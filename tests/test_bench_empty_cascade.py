@@ -14,6 +14,14 @@ This test mocks the litellm call so the first model returns empty and
 the second returns real content — and asserts the router picked the
 second model. Without the fix, the router silently returns the first
 model's empty string.
+
+Update (#5, real ChuzomRouter): ``ChuzomRouter`` no longer runs its own
+litellm cascade — it delegates to ``chuzom.router.route_and_call``, which owns
+the empty-response handling via ``inference_robustness.ensure_non_empty_content``
+(the production path this docstring already credited). So the ChuzomRouter-specific
+bench cascade test was retired: the behavior now lives in the real router it calls
+and is covered by the production router's own tests. ``StaticChainRouter`` still
+runs the local cascade, so its regression stays here.
 """
 
 from __future__ import annotations
@@ -54,25 +62,6 @@ def _fake_completions():
 
     with patch("litellm.acompletion", new=fake_acompletion):
         yield state
-
-
-@pytest.mark.asyncio
-async def test_chuzom_router_cascades_on_empty_response(_fake_completions):
-    """First model returns empty → router must continue down the chain."""
-    from bench.routers import ChuzomRouter
-
-    router = ChuzomRouter()
-    result = await router.route("What is the capital of France?")
-
-    # Cascade happened: at least 2 models were tried.
-    assert _fake_completions["call_count"] >= 2, (
-        f"Expected cascade after empty response, but only "
-        f"{_fake_completions['call_count']} model(s) were called. "
-        f"Models: {_fake_completions['models_called']}"
-    )
-    # And the router returned the non-empty content from the second model.
-    assert result.response.strip() == "Paris"
-    assert result.error == ""
 
 
 @pytest.mark.asyncio

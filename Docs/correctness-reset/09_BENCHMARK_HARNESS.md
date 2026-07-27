@@ -49,10 +49,18 @@ it requires *running* the A/B with real spend and getting a positive, quality-no
 result — an outcome that is genuinely uncertain (that is the point of a control-group test). The
 remaining steps:
 
-1. **Wire `ChuzomRouter` to the real `chuzom.router`** (retire the v0.0.1 stub) so the run
-   measures the product, not a toy. Own PR; needs provider access.
+1. ~~**Wire `ChuzomRouter` to the real `chuzom.router`**~~ ✅ **DONE.** The v0.0.1 stub is
+   retired; `ChuzomRouter` now `classify()`s the prompt and dispatches through
+   `chuzom.router.route_and_call(..., suppress_ledger=True)` — the real signal → chain →
+   dispatch → fallback path — so a run measures the product. Mapping + error path tested in
+   `tests/test_bench_chuzom_router.py` (real router mocked; CI makes no API calls). Known
+   limitation: `classify()` doesn't return the classifier's own cost, so the LLM-classified
+   tail's routing overhead is not yet captured in `routing_overhead_usd` (heuristic path is a
+   genuine $0). Threading that cost through is a small follow-up — until then overhead is honest
+   $0, never fabricated.
 2. **Run the A/B** (`control_group_routers()` over the full corpus) with real spend → feed the
-   rows to `evaluate_savings` → record the `SavingsVerdict` under `bench/results/`.
+   rows to `evaluate_savings` → record the `SavingsVerdict` under `bench/results/`. **Needs
+   provider access + explicit authorization** (real spend; uncertain outcome).
 3. **Larger corpus** if the smoke's 10 prompts are too thin to be non-directional.
 4. Only when a recorded run shows `all_gates_pass` may Gates 15/16/17 flip and a savings
    magnitude be marked `supported` in the claim-evidence registry — feeding Phase 9 (#6).
