@@ -80,7 +80,8 @@ def test_delegate_off_disables_the_execution_redirect(tmp_path):
     """CHUZOM_DELEGATE=off must disable the redirect (same escape hatch as the
     operational redirect)."""
     _pending(tmp_path, "e4", original_prompt="Run the test suite and commit the passing changes.")
-    env = dict(_ENV); env["CHUZOM_DELEGATE"] = "off"
+    env = dict(_ENV)
+    env["CHUZOM_DELEGATE"] = "off"
     r = _run({"session_id": "e4", "tool_name": "Bash", "tool_input": {"command": "git commit -am x"}},
              tmp_path, env)
     out = json.loads(r.stdout)
