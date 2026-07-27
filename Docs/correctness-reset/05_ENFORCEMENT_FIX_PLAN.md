@@ -113,10 +113,23 @@ genuinely-capable `llm_act` (e.g. tasks that legitimately need Claude), the corr
   escape and is now a recorded escalation rather than a shamed "violation". Tests:
   `test_enf_fix3_escalation_event.py`.
 
-### ENF-FIX-4 — stable needs-tools/repo-context classification (GAP-ENF-3)
+### ENF-FIX-4 — stable needs-tools/repo-context classification (GAP-ENF-3) — ✅ DONE
 - A stable signal (repo present + needs-tools) that pins a request to the tool-capable door
   consistently across a session, instead of re-rolling task_type/door each turn.
 - **Test:** successive execution-continuation prompts route to the same tool-capable door.
+- **Implemented:** the ENF-FIX-1 execution redirect no longer gates on
+  `task_type in ("code","coordination")` — since `detect_execution` is high-precision (silent
+  on prose/explanation/pure authoring), it is honored for **any** task_type. So when the
+  classifier wobbles the same repo-work prompt across code/research/query, execution work is
+  pinned to `llm_act` instead of dead-ending at the text-only `llm` door on the research/query
+  turns. Invariant tested: **no task_type routes execution work to the text-only door** — each is
+  either blocked toward `llm_act` or allowed through, never a text-only dead-end
+  (`test_enf_fix4_stable_execution_door.py`).
+- **Honest caveat (out of scope):** `coordination` execution work is still *fully exempted*
+  (allowed, no block) by the pre-existing `LOCAL_BASH_EXEMPT` / FS-exemption paths — not a
+  text-only dead-end, but also not routed to `llm_act`. Tightening those exemptions to route
+  through `llm_act` (rather than exempt to native) is a separate follow-up, noted here so it
+  isn't lost.
 
 ---
 
