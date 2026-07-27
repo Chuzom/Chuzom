@@ -47,6 +47,40 @@ def test_positive_net_savings_and_non_inferior_quality_passes_all_gates():
     assert v.gate16_quality_non_inferior  # equal quality
     assert v.gate17_no_unclassified_spend
     assert v.all_gates_pass
+    # Pin every reported field — these feed the human-readable verdict and must
+    # not silently go wrong (each Row is 100↑/100↓ tokens).
+    assert v.n_prompts == 5
+    assert v.control_cost_usd == pytest.approx(0.25)
+    assert v.chuzom_cost_usd == pytest.approx(0.0)
+    assert v.control_tokens == 1000 and v.chuzom_tokens == 1000
+    assert v.control_quality == pytest.approx(5.0)
+    assert v.chuzom_quality == pytest.approx(5.0)
+
+
+def test_failure_and_exhausted_rows_are_not_unclassified_spend():
+    """A router that failed / exhausted its chain carries no spend to classify —
+    model_chosen '' or '<exhausted>' at $0 must NOT count as unclassified (Gate 17)."""
+    rows = _pair("p0", host_cost=0.05, chuzom_cost=0.0, chuzom_model="<exhausted>")
+    rows += _pair("p1", host_cost=0.05, chuzom_cost=0.0, chuzom_model="")
+    v = evaluate_savings(rows)
+    assert v.unclassified_events == []
+    assert v.gate17_no_unclassified_spend
+
+
+def test_default_non_inferiority_margin_bites():
+    """With the DEFAULT margin (0.5), a 1.0-point quality drop must fail Gate 16 —
+    pins the default so it can't be loosened silently."""
+    rows = _pair("p0", host_cost=0.05, chuzom_cost=0.0, host_q=5, chuzom_q=4)  # delta −1.0
+    v = evaluate_savings(rows)  # no margin arg → default 0.5
+    assert v.non_inferiority_margin == 0.5
+    assert v.quality_delta == pytest.approx(-1.0)
+    assert not v.gate16_quality_non_inferior
+
+
+def test_missing_chuzom_arm_raises():
+    rows = [Row("p0", "always-claude-host", "anthropic/claude-host", 10, 10, 0.05, 5)]
+    with pytest.raises(ValueError, match="Chuzom arm"):
+        evaluate_savings(rows)
 
 
 def test_routing_overhead_is_netted_out_of_savings():
@@ -56,6 +90,16 @@ def test_routing_overhead_is_netted_out_of_savings():
     # net = host(0.05) − chuzom(0.01) − overhead(0.005) = 0.035
     assert v.routing_overhead_usd == pytest.approx(0.005)
     assert v.net_savings_usd == pytest.approx(0.035)
+
+
+def test_non_numeric_overhead_is_treated_as_zero_not_crashed():
+    """A garbage routing_overhead_usd must degrade to $0 (honest, never fabricated
+    or exploding) — pins the except path."""
+    rows = _pair("p0", host_cost=0.05, chuzom_cost=0.01,
+                 chuzom_notes={"routing_overhead_usd": "not-a-number"})
+    v = evaluate_savings(rows)
+    assert v.routing_overhead_usd == pytest.approx(0.0)
+    assert v.net_savings_usd == pytest.approx(0.04)
 
 
 def test_negative_savings_fails_gate15_honestly():
@@ -105,8 +149,11 @@ def test_unpaired_arms_raise():
         Row("p0", "chuzom", "ollama/x", 10, 10, 0.0, 5),
         Row("p1", "always-claude-host", "anthropic/claude-host", 10, 10, 0.05, 5),
     ]
-    with pytest.raises(ValueError, match="unpaired"):
+    with pytest.raises(ValueError, match="unpaired") as exc:
         evaluate_savings(rows)
+    # The message must name the actually-differing prompts (symmetric difference),
+    # so the failure is diagnosable — not a bare "unpaired".
+    assert "p0" in str(exc.value) and "p1" in str(exc.value)
 
 
 def test_missing_control_arm_raises():
