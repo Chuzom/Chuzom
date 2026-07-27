@@ -55,8 +55,11 @@ try:
     HOST_INPUT_PER_M  = float(_CI)
     HOST_OUTPUT_PER_M = float(_CO)
 except Exception:
-    HOST_INPUT_PER_M  = 15.0
-    HOST_OUTPUT_PER_M = 75.0
+    # D8: fall open to the CURRENT host list price (5/25), matching digest/dashboard.
+    # The old 15/75 fallback was ~3x inflated and diverged from every sibling surface
+    # on the rare import failure.
+    HOST_INPUT_PER_M  = 5.0
+    HOST_OUTPUT_PER_M = 25.0
 WIDTH = 50
 
 # Model names that indicate test/mock data — never show in production reports.
@@ -695,7 +698,7 @@ def _format_free_section(free_rows: list[dict], paid_rows: list[dict]) -> list[s
     saved_color = _C_GREEN if total_saved > 0 else _C_LABEL
     lines = [
         f"    {_C_WHITE}{total_calls}{_RESET} calls  ·  "
-        f"{saved_color}${total_saved:.4f} saved{_RESET} vs Sonnet  {_C_MUTED}{label}{_RESET}"
+        f"{saved_color}${total_saved:.4f} saved{_RESET} vs Claude host  {_C_MUTED}{label}{_RESET}"
     ]
     lines += body
     return lines

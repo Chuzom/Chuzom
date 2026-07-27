@@ -95,3 +95,19 @@ def test_admin_lifetime_savings_not_mislabeled_sonnet():
     assert "Sonnet 4.6" not in txt, (
         "admin.py must not label the Opus-host lifetime baseline 'Sonnet 4.6'"
     )
+
+
+def test_sessionend_free_section_not_mislabeled_sonnet_and_fallback_is_current():
+    """DASH-2 (D4/D8): the session-end free-provider savings line compares vs the
+    host (Opus) baseline via _host_baseline, so it must not be labeled "vs Sonnet";
+    and the fail-open fallback price must match the current list (5/25), not the
+    stale 15/75 that diverged from digest/dashboard."""
+    txt = (_SRC / "hooks" / "session-end.py").read_text()
+    # D4: the exact user-visible free-section label (not the unrelated tier-panel comment).
+    assert "saved{_RESET} vs Sonnet" not in txt, "free-section savings mislabeled 'vs Sonnet'"
+    assert "saved{_RESET} vs Claude host" in txt
+    # D8: fallback host price is the current 5/25, not the stale 15/75.
+    assert "HOST_INPUT_PER_M  = 15.0" not in txt
+    assert "HOST_OUTPUT_PER_M = 75.0" not in txt
+    assert "HOST_INPUT_PER_M  = 5.0" in txt
+    assert "HOST_OUTPUT_PER_M = 25.0" in txt
