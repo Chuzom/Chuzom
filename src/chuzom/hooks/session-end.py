@@ -1121,10 +1121,15 @@ def _format_routing_logic(session_start: float | None) -> list[str]:
 
     zero_pct = round(zero_cost / total_hits * 100) if total_hits > 0 else 0
     pct_color = _C_GREEN if zero_pct >= 80 else (_C_YELLOW if zero_pct >= 50 else _C_ORANGE)
+    # D6: this count is the classification-method mix from the classifier log
+    # (model_tracking.jsonl), a different store from the routing_decisions table
+    # that feeds the fallback-rate below. Attribute it explicitly ("classified"
+    # + source + window) so the two counts are not misread as one denominator.
     lines = [
         f"  {_BOLD}Routing{_RESET}  {_C_GREEN}●{_RESET} "
-        f"{_C_WHITE}{total_hits}{_RESET} decisions · "
-        f"{pct_color}{zero_pct}% zero-cost{_RESET}"
+        f"{_C_WHITE}{total_hits}{_RESET} classified · "
+        f"{pct_color}{zero_pct}% zero-cost{_RESET}  "
+        f"{_C_MUTED}today · classifier log{_RESET}"
     ]
     # Find max method name length for alignment
     max_name = max(len(d["method"]) for d in data)
@@ -1238,10 +1243,13 @@ def _format_cumulative_section(periods: list[tuple[str, int, int, int, float]]) 
     efficiency = _query_router_efficiency()
     if efficiency:
         fallbacks = efficiency["total"] - efficiency["on_target"]
+        # D6: this total is from the routing_decisions table — a different store
+        # from the classifier-log "classified" count above. Label it "routed" so
+        # the two denominators are not read as the same number.
         if fallbacks == 0:
-            quality_parts.append(f"{_C_GREEN}0{_RESET} fallbacks ({efficiency['total']})")
+            quality_parts.append(f"{_C_GREEN}0{_RESET} fallbacks ({efficiency['total']} routed)")
         else:
-            quality_parts.append(f"{_C_ORANGE}{fallbacks}{_RESET}/{efficiency['total']} fallbacks")
+            quality_parts.append(f"{_C_ORANGE}{fallbacks}{_RESET}/{efficiency['total']} routed fallbacks")
 
     overhead = _query_classifier_overhead()
     if overhead and overhead['count'] > 0:

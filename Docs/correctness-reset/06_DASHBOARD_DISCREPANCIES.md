@@ -76,12 +76,14 @@ today/week/14d/month/lifetime (Cumulative), with no per-panel window label on se
 number and a lifetime number appear side by side unlabeled → they look comparable but
 aren't.
 
-### D6 — Routing-method mix from a different store/window than the counts  · **MEDIUM**
+### D6 — Routing-method mix from a different store than the counts  · **MEDIUM** · ✅ FIXED (DASH-4)
 `_query_routing_logic` reads `model_tracking.jsonl` grouped by `classification_method`
-from start-of-day (~812–878), while call/token/cost counts come from the `usage` table
-this-session.
-**Why:** the routing-method distribution and the call counts are from different stores
-and windows → "routes" in one panel ≠ "calls" in another; they can't be tied out.
+(start-of-day), while the fallback-rate total comes from the `routing_decisions` table.
+Both are "today" but they are independent logs, so their totals legitimately differ.
+**Fix (DASH-4):** attribution, not forced equality — the classifier-log count is now
+"{n} classified … today · classifier log" and the routing-decisions total is "{n} routed",
+so the two denominators name their sources and are not misread as one. Behavioural +
+source-guard tests in `tests/test_dash4_routing_source_labels.py`.
 
 ### D7 — Free-provider "saved" credits the full host baseline without host-mode framing  · **MEDIUM**
 Free section: `saved = max(0.0, baseline)` because free providers cost $0
