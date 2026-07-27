@@ -1593,6 +1593,24 @@ async def _dispatch_model_loop(
     # is double-counted (a rejected attempt continues; its response is never final).
     _failed_attempt_cost: float = 0.0
 
+    # ── Exhaustion floor (lever ①) ───────────────────────────────────────────
+    # A response that a gate/quality heuristic REJECTED is still a real answer a
+    # model produced. If the whole chain is exhausted by such rejections, returning
+    # the best rejected answer beats raising "all models failed" and handing the
+    # caller nothing (which the benchmark scored q=1). Gates catch *garbage*, not
+    # *wrong answers* — so a heuristic-rejected answer is a legitimate last resort,
+    # never the preferred path (it's only used when NOTHING was accepted). We keep
+    # the longest-content rejected response as a content proxy; provider errors carry
+    # no content and never populate this.
+    _best_rejected: LLMResponse | None = None
+
+    def _remember_rejected(resp: LLMResponse) -> None:
+        nonlocal _best_rejected
+        if resp is None or not (resp.content or "").strip():
+            return
+        if _best_rejected is None or len(resp.content) > len(_best_rejected.content):
+            _best_rejected = resp
+
     # ── P2: quality-gated escalation state ───────────────────────────────────
     # Try cheap first, escalate to the next model ONLY when the cheap answer is
     # actually inadequate — bounded to ONE hop. Read per-dispatch so tests/env
@@ -2084,6 +2102,7 @@ async def _dispatch_model_loop(
                         rejection_reason=f"gate_failed:{_fail_summary}",
                         correlation_id=correlation_id,
                     )
+                    _remember_rejected(response)  # exhaustion floor (lever ①)
                     continue
             else:
                 _gate_results = []
@@ -2147,6 +2166,7 @@ async def _dispatch_model_loop(
                             f"↑ escalating: {model_name} answer scored "
                             f"{_qs.score:.2f} (<{_escalate_threshold:.2f})",
                         )
+                        _remember_rejected(response)  # exhaustion floor (lever ①)
                         continue
                 except Exception as _esc_err:  # never let scoring break routing
                     log.debug("quality escalation check skipped: %s", _esc_err)
@@ -2685,6 +2705,39 @@ async def _dispatch_model_loop(
     if chain_errors:
         lines = [f"  {i+1}. {m}: {err}" for i, (m, err) in enumerate(chain_errors)]
         chain_summary = "\nChain failures:\n" + "\n".join(lines) + "\n"
+
+    # Exhaustion floor (lever ①): the chain is exhausted, but if a model actually
+    # produced an answer that was only rejected by a gate/quality *heuristic*, that
+    # answer is a far better outcome than raising and returning nothing. Gates catch
+    # garbage, not wrong answers — so return the best heuristic-rejected response as
+    # a degraded floor rather than failing the whole route. This is the fix for the
+    # clean-benchmark exhaustion (5 hard prompts → q=1): a real frontier answer was
+    # discarded because it lacked Markdown markers. Only a genuine failure (no model
+    # ever returned content) still raises.
+    if _best_rejected is not None:
+        log.warning(
+            "Chain exhausted by heuristic rejections for %s/%s — returning best "
+            "rejected answer as a degraded floor (%d chars from %s) instead of "
+            "failing the route.%s",
+            task_type.value, profile.value,
+            len(_best_rejected.content), _best_rejected.model, chain_summary,
+        )
+        route_log.warning(
+            "exhaustion_floor_returned",
+            correlation_id=correlation_id,
+            floor_model=_best_rejected.model,
+            floor_chars=len(_best_rejected.content),
+            chain_errors=[{"model": m, "reason": r} for m, r in chain_errors],
+        )
+        # The floor answer's cost is already in _failed_attempt_cost (billed when
+        # rejected); accepting it here does not re-bill. Terminal state is 'accepted'
+        # — an answer WAS returned — with the degradation captured in the logs above.
+        _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
+        return _enrich_response(
+            _best_rejected, classification_data, effective_complexity,
+            task_type, chain_attempts,
+        )
+
     _emit_ledger_terminal(correlation_id, "failed", route_succeeded=False)
     raise RuntimeError(
         f"All models failed for {task_type.value}/{profile.value}. "

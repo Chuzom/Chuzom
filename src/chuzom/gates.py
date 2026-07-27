@@ -136,24 +136,51 @@ def _check_length(contract: RoutingContract, text: str) -> GateResult:
 
 
 def _check_structure(contract: RoutingContract, text: str) -> GateResult:
-    """Verify response has structural elements (headings, sections, lists).
+    """Verify a long response is legible, not a single undifferentiated blob.
 
-    For analysis tasks, a wall of unstructured text is a quality signal.
+    This gate exists to catch **garbage** — a wall of text with no internal
+    structure — not to force Markdown onto valid answers. Prose *is* structure:
+    a multi-sentence, multi-paragraph answer is perfectly legible without a
+    single ``##`` heading or ``-`` bullet.
+
+    The original implementation required ≥2 Markdown markers and rejected
+    everything else >200 chars. That is a false-positive machine: it discarded
+    valid frontier prose (e.g. a 466-char multi-sentence answer with 0 Markdown
+    markers), forcing the router down its fallback chain and — when the chain
+    was exhausted — all the way to a failed dispatch. A model that *answered*
+    the prompt should never be rejected for lacking bullet points.
+
+    So a response counts as structured if ANY of these hold:
+    - it has ≥2 Markdown markers (headings / list items), OR
+    - it has ≥2 paragraphs (blank-line-separated blocks), OR
+    - it has ≥3 sentences (sentence-terminating punctuation).
+
+    Only a long body with none of the above — a true wall of text — fails.
     """
-    structural_markers = (
+    stripped = text.strip()
+    markers = (
         text.count("\n## ") +
         text.count("\n### ") +
         text.count("\n- ") +
         text.count("\n* ") +
         text.count("\n1. ")
     )
+    # Blank-line-separated blocks → paragraphs; sentence-terminating punctuation
+    # followed by whitespace/end → sentences. Both are structure in prose.
+    paragraphs = sum(1 for block in re.split(r"\n\s*\n", stripped) if block.strip())
+    sentences = len(re.findall(r"[.!?](?:\s|$)", stripped))
 
-    # At least 2 structural elements for moderate+ analysis
-    if structural_markers < 2 and len(text) > 200:
+    structured = markers >= 2 or paragraphs >= 2 or sentences >= 3
+
+    # Only long bodies are gated; a short answer can't be a "wall of text".
+    if not structured and len(stripped) > 200:
         return GateResult(
             gate=GateType.STRUCTURE,
             passed=False,
-            reason=f"no structure: {structural_markers} markers in {len(text)} chars",
+            reason=(
+                f"unstructured wall: {markers} markers, {paragraphs} paragraphs, "
+                f"{sentences} sentences in {len(stripped)} chars"
+            ),
         )
     return GateResult(gate=GateType.STRUCTURE, passed=True)
 
