@@ -29,6 +29,10 @@ _PRICES_PER_1K: dict[str, tuple[float, float]] = {
     "openai/o3": (0.060, 0.240),
     "anthropic/claude-3.5-haiku": (0.00080, 0.0040),
     "anthropic/claude-3.5-sonnet": (0.0030, 0.0150),
+    # The host frontier (Chuzom-OFF baseline) — priced at the canonical host rate
+    # (5/25 per 1M = 0.005/0.025 per 1K), matching cost._HOST_INPUT/OUTPUT_PER_M
+    # used across the rest of the accounting surfaces.
+    "anthropic/claude-host": (0.005, 0.025),
     "google/gemini-1.5-flash-8b": (0.0000375, 0.00015),
     "google/gemini-1.5-flash": (0.000075, 0.00030),
 }
@@ -215,3 +219,20 @@ def default_routers() -> list:
         FixedModelRouter(name="always-premium", model="openai/gpt-4o"),
         StaticChainRouter(),
     ]
+
+
+def claude_host_router(model: str = "anthropic/claude-host") -> "FixedModelRouter":
+    """The Chuzom-OFF control arm: the host frontier answers **every** prompt.
+
+    This is the baseline routing is measured *against* for Gates 15/16/17 — "what
+    would this corpus have cost, and scored, if Chuzom weren't routing and the
+    host (Claude) did everything?" `always-premium` (GPT-4o) is a different
+    endpoint; the honest control is the host frontier at the canonical host price.
+    """
+    return FixedModelRouter(name="always-claude-host", model=model)
+
+
+def control_group_routers() -> list:
+    """The A/B lineup for the savings verdict (bench.savings.evaluate_savings):
+    Chuzom ON vs the Chuzom-OFF host control, on the same corpus."""
+    return [ChuzomRouter(), claude_host_router()]
