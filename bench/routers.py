@@ -86,46 +86,61 @@ async def _call_litellm(model: str, prompt: str) -> tuple[str, int, int]:
 
 @dataclass
 class ChuzomRouter:
-    """The actual Chuzom router. v0.0.1 uses the inherited llm-router chain
-    selection. v0.0.2 will exercise the signal/decision engine end-to-end.
+    """The **real** Chuzom router (#5). Classifies the prompt exactly as the
+    product does, then routes it through ``chuzom.router.route_and_call`` — the
+    same signal → chain → dispatch → fallback path the CLI uses — so the benchmark
+    measures the product, not a hand-rolled chain.
+
+    The v0.0.1 stub (a hardcoded 3-model chain) is retired: it never exercised
+    classification, the leaderboard-ordered chain, health filtering, or fallback,
+    so a run against it measured a toy. Ledger writes are suppressed so a bench run
+    never pollutes the real ``usage.db``.
     """
 
     name: str = "chuzom"
-    profile: str = "balanced"
+    allow_llm_classifier: bool = True  # faithful to the product's ambiguous-tail escalation
 
     async def route(self, prompt: str) -> RouterResult:
-        # v0.0.1 stub: ask the chain to pick the cheapest model that works.
-        # The chain is hardcoded here for the smoke; v0.0.2 wires this into
-        # chuzom.router.Router.choose_chain(prompt, profile=self.profile).
-        chain = [
-            "ollama/qwen3.5:latest",
-            "google/gemini-1.5-flash-8b",
-            "openai/gpt-4o-mini",
-        ]
         start = time.perf_counter()
-        last_err = ""
-        for model in chain:
-            try:
-                text, in_tok, out_tok = await _call_litellm(model, prompt)
-                elapsed = int((time.perf_counter() - start) * 1000)
-                return RouterResult(
-                    router_name=self.name,
-                    model_chosen=model,
-                    response=text,
-                    input_tokens=in_tok,
-                    output_tokens=out_tok,
-                    cost_usd=_price(model, in_tok, out_tok),
-                    latency_ms=elapsed,
-                    notes={"chain": chain, "fallback_count": chain.index(model)},
-                )
-            except Exception as err:
-                last_err = f"{type(err).__name__}: {err}"
-                continue
+        try:
+            from chuzom.classify import classify
+            from chuzom.router import route_and_call
+
+            sig = await classify(prompt, allow_llm=self.allow_llm_classifier)
+            resp = await route_and_call(
+                sig.task_type, prompt,
+                complexity_hint=sig.complexity,
+                suppress_ledger=True,  # a benchmark must not write the product ledger
+            )
+        except Exception as err:
+            return RouterResult(
+                router_name=self.name, model_chosen="<exhausted>", response="",
+                input_tokens=0, output_tokens=0, cost_usd=0.0,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                notes={"strategy": "chuzom"}, error=f"{type(err).__name__}: {err}",
+            )
+
+        model = f"{resp.provider}/{resp.model}" if resp.provider and "/" not in resp.model else resp.model
         return RouterResult(
-            router_name=self.name, model_chosen="<exhausted>", response="",
-            input_tokens=0, output_tokens=0, cost_usd=0.0,
-            latency_ms=int((time.perf_counter() - start) * 1000),
-            notes={"chain": chain}, error=last_err or "all models failed",
+            router_name=self.name,
+            model_chosen=model,
+            response=resp.content,
+            input_tokens=resp.input_tokens,
+            output_tokens=resp.output_tokens,
+            cost_usd=resp.cost_usd,
+            latency_ms=int(resp.latency_ms or (time.perf_counter() - start) * 1000),
+            notes={
+                "strategy": "chuzom",
+                "task_type": getattr(sig.task_type, "value", str(sig.task_type)),
+                "complexity": getattr(sig.complexity, "value", str(sig.complexity)),
+                "classification_method": sig.method,
+                "chain_attempts": list(resp.chain_attempts),
+                "cache_hit": resp.cache_hit,
+                # routing_overhead_usd is intentionally omitted, not fabricated:
+                # classify() does not return the classifier's own cost. The
+                # heuristic path is genuinely $0; the LLM-classified tail's
+                # overhead is a documented follow-up (09_BENCHMARK_HARNESS.md).
+            },
         )
 
 
