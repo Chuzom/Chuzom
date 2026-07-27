@@ -78,12 +78,21 @@ leaderboard falls back safely to the current Claude ceiling; invariants still ho
 
 </details>
 
-### R2 — artificialanalysis.ai is not one of the sources  · low-value
+### R2 — artificialanalysis.ai is not one of the sources  · RESOLVED — won't add
 The task named artificialanalysis.ai specifically; the current composite uses
-Arena-Hard/Aider/HuggingFace instead. These are functionally equivalent public capability
-signals. Adding artificialanalysis.ai as an additional weighted source in `benchmark_fetcher`
-is straightforward **if** its data is publicly fetchable without auth; otherwise the existing
-composite already satisfies "a live leaderboard, not hardcoded."
+Arena-Hard/Aider/HuggingFace instead — functionally equivalent public capability signals.
+
+**Resolution (checked 2026-07-27): do NOT add it.** Artificial Analysis's data is **not
+auth-free**. Even the free tier requires creating an account and generating an `x-api-key`
+(kept server-side), is rate-limited to 1,000 req/day, and mandates attribution to
+`https://artificialanalysis.ai/` on all use ([Data API docs](https://artificialanalysis.ai/data-api/docs),
+[Data API](https://artificialanalysis.ai/data-api)). Wiring it in would therefore require the
+user to provision and store a third-party API credential — outside the scope of an autonomous
+change, and a new secret + attribution obligation for marginal value. The existing multi-source
+composite already fetches without auth and already satisfies the North Star ("a live
+leaderboard, not a hardcoded Claude-top"). If a Chuzom operator later wants AA specifically,
+they can add it as a keyed source in `benchmark_fetcher` — a small, opt-in follow-up, not a
+correctness-reset requirement. **#14 is therefore fully complete** (core + R1 + R2).
 
 ## Recommendation
 
