@@ -137,6 +137,43 @@ Tests in `tests/test_dash5_saved_definition.py`.
 - **DASH-5 (D9):** One definition of "saved" across panels (realized-net everywhere, or
   label gross vs realized). Test: label consistency / net==gross−overhead everywhere shown.
 
-DASH-1b and DASH-4 are the structural ones; DASH-1a/2/3/5 are label/window/dedup honesty
-(fastest). All are read-only display fixes — no live-routing change; verdict stays NOT
-QUALIFIED.
+DASH-1b is the structural one; DASH-1a/2/3/4/5 are label/window/dedup honesty. All are
+read-only display fixes — no live-routing change; verdict stays NOT QUALIFIED.
+
+---
+
+## Completion status (2026-07-27)
+
+| Discrepancy | Sev | Fix | Status |
+|---|---|---|---|
+| D2 — Codex double-count | HIGH | DASH-1a (#176) | ✅ FIXED |
+| D3 — fabricated Codex tokens | HIGH | DASH-1a (#176) | ✅ FIXED |
+| D4 — "vs Sonnet" mislabel | MED | DASH-2 (#175) | ✅ FIXED |
+| D7 — full-baseline without host framing | MED | DASH-2 (#175) | ✅ FIXED |
+| D5 — mixed windows unlabeled | MED | DASH-3 (#175) | ✅ FIXED |
+| D6 — routing mix vs counts, different stores | MED | DASH-4 (#177) | ✅ FIXED |
+| D8 — stale 15/75 fallback | LOW | DASH-2 (#175) | ✅ FIXED |
+| D9 — net-vs-gross "saved" | LOW | DASH-5 (#178) | ✅ FIXED |
+| **D1 — four unreconcilable savings bases** | HIGH | **DASH-1b** | ⏸ **DEFERRED (structural)** |
+
+Eight of nine discrepancies are fixed, each with a fail-before/pass-after test. **D1
+(DASH-1b) is deliberately deferred** — it is not a low-risk display edit, and forcing it
+would risk introducing a *new* discrepancy. Two concrete blockers, established by direct
+code inspection:
+
+1. **Window mismatch.** The Codex/Gemini panels are `date(timestamp,'localtime') =
+   date('now')` — **today**-scoped — while Routing/Free are **this-session**-scoped. There
+   is no single canonical total for all four to sum to unless Codex/Gemini are *also*
+   re-windowed to session scope, which changes *what those panels measure*.
+2. **Basis is an information tradeoff, not a formatting choice.** `codex_usage`/
+   `gemini_usage` store `cost_saved_usd` = the **actual per-call counterfactual** captured
+   at log time (what the specific alternative model would have cost). Recomputing every
+   panel via `_host_baseline(tokens)` for uniformity would **discard** that real
+   counterfactual in favour of a notional Opus-host baseline. Which basis is *canonical*
+   is a correctness decision with a real downside either way.
+
+DASH-1b therefore belongs with the deliberate-treatment tier (alongside Batch B
+enforcement, leaderboard capability ranking, the control-group benchmark, and the final
+verdict), not the autonomous low-risk display loop. It needs an explicit basis decision
+(recompute-to-host vs preserve-stored-counterfactual), a windowing decision, and
+bidirectional tests before it is safe to implement.
