@@ -251,6 +251,48 @@ metered/removed (caveat #1), then (b) lever ② to lift the last local q=1 misse
 **RELEASE NOT QUALIFIED** — but for a shrinking, well-localised reason, with the biggest defect
 now fixed and regression-locked (`test_exhaustion_floor`, `test_contract_gates` prose cases).
 
+## Seventh run — Gate 17 closed via `CHUZOM_BLOCK_PROVIDERS` (2026-07-27)
+
+The sixth run's residual leak was that `CHUZOM_DISABLE_SUBPROCESS_BACKENDS=codex` didn't fully
+block Codex — the session-broker path bypassed it (`router.py`), so 6 escalations still recorded
+`codex/gpt-5.5` at unpriced $0. **Overloading that flag to mean "fully off" was rejected** because
+Chuzom's own gateway daemon (`gateway.py:59`, `gateway_service.py`) sets it and *relies on*
+broker-Codex as its free path — a hard override would strip the daemon's free tier.
+
+Fix (#202): a **distinct** control, `CHUZOM_BLOCK_PROVIDERS`, that removes a provider on EVERY
+path (base chain, injection, broker) via one authoritative filter, leaving
+`DISABLE_SUBPROCESS_BACKENDS` subprocess-only. Re-ran moderate+hard with
+`CHUZOM_BLOCK_PROVIDERS=codex,gemini_cli` (fresh DB, GPT-4o judge):
+
+- **`GATE17=True`, `unclassified=[]`, zero Codex/Gemini leaks.** Every escalation hit a metered
+  OpenAI model — `openai/o3` ($0.005–0.012), `openai/gpt-4o` ($0.001–0.001), `openai/gpt-4o-mini`
+  ($0.0002–0.0003), all correctly priced. **The Gate-17 leak is closed.**
+
+### What full metering exposed (two pre-existing issues the leak was masking) → lever ②
+
+With Codex/Gemini genuinely unreachable, **9 hard prompts exhausted to q=1** (delta −1.36, net
+−$0.001). These are NOT caught by the ① exhaustion floor because they produced **no content** to
+floor — they are *provider-error* exhaustions, from two real chain defects:
+
+1. **`nomic-embed-text` (an embedding model) sits in the generation candidate chain.** It can
+   never generate — every attempt fails `"nomic-embed-text:latest does not support generate"` —
+   wasting a chain slot on the hard prompts. **Chain-hygiene bug.**
+2. **The premium chain is `o3 → qwen3:32b` with no metered mid-tier.** When `o3` errors
+   (rate-limited under benchmark load) only slow local models remain (`qwen3.5` times out at
+   120s), so the chain exhausts. **Escalation-ladder gap** — needs `gpt-4o`/`gpt-4o-mini` as
+   metered fallbacks between o3 and local (exactly lever ②).
+
+Neither is caused by #202, and **neither affects production** (`CHUZOM_BLOCK_PROVIDERS` is empty
+by default; the daemon keeps broker-Codex). They are surfaced *because* honest metering removed
+the free path that was silently answering those prompts. Gates 15/16 **PASS in the realistic
+config** (sixth run, broker-Codex available); this seventh run is the strict full-metering
+measurement that isolates the remaining o3-fragility for lever ②.
+
+**Gate impact:** Gate 17 **PASS** (clean control, `unclassified=[]`). Verdict remains **RELEASE
+NOT QUALIFIED** on Gate 13 (equivalent mutants) and the two-consecutive-audit rule — the
+benchmark gates 15/16/17 are now all green in the realistic config, with lever ② the next
+quality lift for the strict full-metering case.
+
 ## To extend
 
 - Run the **moderate/hard** corpora for a fuller quota curve (more escalations; needs an

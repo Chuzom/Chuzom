@@ -12,11 +12,16 @@ rather than weakening the bar.
 
 ## Verdict: **RELEASE NOT QUALIFIED**
 
-Still-unmet mandatory gates: **13** (mutations not run to closure), **17** (one residual
-Codex-broker-leak class of unclassified spend), and the **consecutive-audit rule**. Gates
-**15 and 16 now PASS on moderate/hard** after the lever-① gate/exhaustion fix (#201) — quality
-flipped −1.00 → −0.45 (within margin, robust) and cash −$0.010 → +$0.003 (positive but thin;
-Gate 15 is PASS-with-caveat pending the same Codex-broker fix that Gate 17 needs). Detail below.
+Still-unmet mandatory gates: **13** (mutations not run to closure) and the
+**consecutive-audit rule**. **Gate 17 now PASSES** — the Codex-broker leak is closed by the
+`CHUZOM_BLOCK_PROVIDERS` hard-block control (#202): a full-metering re-run shows
+`unclassified=[]`, zero Codex/Gemini leaks. Gates **15 and 16 PASS on moderate/hard** in the
+realistic config (broker-Codex free path available) after the lever-① fix (#201): quality
+−1.00 → −0.45, cash −$0.010 → +$0.003. **Honest caveat surfaced by full metering:** with
+Codex/Gemini fully blocked, 9 hard prompts *exhaust* (q=1) because the premium chain is
+`o3 → qwen3:32b` with no metered mid-tier, and an embedding model (`nomic-embed-text`) pollutes
+the generation chain — two pre-existing issues the leak was masking, now tracked as **lever ②**
+(escalation-ladder + chain-hygiene). Detail below.
 
 > **Update (ENF-FIX-1..4 merged, #181–#184):** Gates **5** and **11** now **PASS** — the
 > execution-work capability dead-end (GAP-ENF-1 / INV-ROUTE-006) is closed and
@@ -47,7 +52,7 @@ Gate 15 is PASS-with-caveat pending the same Codex-broker fix that Gate 17 needs
 | 14 | No numeric public claim without current reproducible evidence | **PASS** | B6: unsupported claim retracted; claim-evidence registry + CI validator gate |
 | 15 | Control-group benchmark shows positive net verified token savings | **PASS (positive net; thin, mild residual confound)** | Harness built and **run for real** (`10_CODEX_QUOTA_BENCHMARK.md`). Easy corpus: clean pass. Moderate/hard, clean metered, **after the lever-① fix (#201)**: chuzom **$0.02662 vs GPT-4o $0.02958 → NET +$0.00296** (Chuzom cheaper) — flipped from the pre-fix −$0.01011. The lever-① gate/exhaustion bug (below, Gate 11-adjacent) was discarding valid frontier answers and forcing q=1 exhaustions. **Caveat:** the +$0.003 is *thin* and still mildly confounded by the residual Codex-broker leak (6 escalations unpriced at $0, Gate 17); if metered they could tip it slightly negative. Positive and reproducible, but not yet a *robust* blanket margin — so PASS-with-caveat, not a clean release-scale win |
 | 16 | Quality within non-inferiority margin | **PASS (−0.45, within 0.5 margin — robust)** | Easy delta −0.20. Moderate/hard, clean metered, **after the lever-① fix (#201)**: delta **−0.45**, within the 0.5 margin — flipped from the pre-fix −1.00. The −1.00 was caused by the premium chain **exhausting** to q=1 on 5 hard prompts because a heuristic gate discarded real answers; the fix (prose-aware structure gate + exhaustion floor) drops exhaustions to **0**. This flip is **robust** — it depends on exhaustions vanishing, independent of Codex pricing. o3 answers now accepted (mod-05: q=2→q=5). Regression-locked by `test_exhaustion_floor`, `test_contract_gates` prose cases |
-| 17 | No benchmark event has unclassified spend | **FAIL (narrowed to the Codex-broker leak only)** | The Gate-17 check fires correctly. Post-fix it flags **6** residual `codex/gpt-5.5` $0 escalations — because `CHUZOM_DISABLE_SUBPROCESS_BACKENDS` suppresses Codex's availability check but not Codex when it's already a broker provider (router.py:606–611). This is now the **sole** remaining benchmark blocker (the gate/exhaustion defect is fixed). Closing it needs the broker-Codex path metered or removed (caveat #1); until then Gate 15's margin stays thin |
+| 17 | No benchmark event has unclassified spend | **PASS (clean control shipped — `unclassified=[]` proven)** | Closed by `CHUZOM_BLOCK_PROVIDERS` (#202): a hard provider block on EVERY routing path (base chain, injection, broker), distinct from the subprocess-only `DISABLE_SUBPROCESS_BACKENDS` so the gateway daemon keeps its free broker-Codex path. Re-run with `CHUZOM_BLOCK_PROVIDERS=codex,gemini_cli`: **`GATE17=True`, `unclassified=[]`, zero Codex/Gemini leaks** — every escalation hit a metered OpenAI model (o3/gpt-4o/gpt-4o-mini), all priced. Regression-locked by `test_block_providers` incl. the guard that `DISABLE_SUBPROCESS_BACKENDS` still allows broker-Codex |
 | 18 | No unknown realization counted as verified realized | **PARTIAL** | Ledger models `realization_status` incl. `unknown`; full savings model not yet deriving realized from it end-to-end |
 | 19 | Schema migrations + rollback tested | **PARTIAL** | `execution_events` is additive (`CREATE TABLE IF NOT EXISTS`); legacy stores untouched |
 | 20 | Complete suite passes from a clean checkout | **PASS (with known-flaky caveat)** | Hermetic in CI (3.13/3.14 green across the series). Two known-flaky, non-blocking classes on a loaded host: the `test (3.11)` aiosqlite-watchdog job, and RC-0 order-pollution in `test_direct_executor::TestExecuteAgentContext` (passes in isolation). A real regression fails 3.13/3.14 too |
