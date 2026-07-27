@@ -89,6 +89,85 @@ def _overhead_of(row) -> float:
         return 0.0
 
 
+@dataclass(frozen=True)
+class QuotaVerdict:
+    """Subscription-host savings: how many paid-frontier CALLS Chuzom avoided.
+
+    When the host frontier is a *subscription* (Codex), per-call cash is ~$0 but each
+    call spends finite quota. The honest metric is therefore **frontier calls made**,
+    not cash — Chuzom keeps work on local models and only escalates to the frontier
+    when needed, so ``frontier_calls_freed`` is the real saving. Tokens are NOT used
+    here because the Codex CLI doesn't report them (never fabricated)."""
+    n_prompts: int
+    frontier_prefix: str
+    control_frontier_calls: int          # the always-frontier arm (one per prompt)
+    chuzom_frontier_calls: int           # Chuzom's escalations to the frontier
+    chuzom_local_calls: int              # Chuzom prompts kept off the frontier
+    frontier_calls_freed: int            # control − chuzom
+    frontier_calls_freed_pct: float
+    control_quality: float
+    chuzom_quality: float
+    quality_delta: float
+    non_inferiority_margin: float
+
+    @property
+    def gate_quota_freed(self) -> bool:
+        return self.frontier_calls_freed > 0
+
+    @property
+    def gate_quality_non_inferior(self) -> bool:
+        return self.quality_delta >= -self.non_inferiority_margin
+
+
+def _is_frontier(model_chosen: str, prefix: str) -> bool:
+    return model_chosen.startswith(prefix + "/") or model_chosen == prefix
+
+
+def evaluate_quota_savings(
+    rows: Iterable,
+    *,
+    chuzom_arm: str = CHUZOM_ARM,
+    control_arm: str = "always-codex",
+    frontier_prefix: str = "codex",
+    non_inferiority_margin: float = 0.5,
+) -> QuotaVerdict:
+    """Frontier-quota savings for a subscription host (e.g. Codex). Counts how many
+    frontier calls each arm made over the same paired corpus; Chuzom's saving is the
+    frontier calls it avoided by staying local, at non-inferior quality."""
+    rows = list(rows)
+    chuzom = [r for r in rows if r.router_name == chuzom_arm]
+    control = [r for r in rows if r.router_name == control_arm]
+    if not chuzom:
+        raise ValueError(f"no rows for Chuzom arm {chuzom_arm!r}")
+    if not control:
+        raise ValueError(f"no rows for control arm {control_arm!r}")
+    if {r.corpus_id for r in chuzom} != {r.corpus_id for r in control}:
+        raise ValueError("A/B arms cover different prompts — unpaired comparison")
+
+    c_front = sum(1 for r in control if _is_frontier(r.model_chosen, frontier_prefix))
+    z_front = sum(1 for r in chuzom if _is_frontier(r.model_chosen, frontier_prefix))
+    z_local = len(chuzom) - z_front
+    freed = c_front - z_front
+
+    def _q(rs):
+        return sum(r.judge_score for r in rs) / len(rs) if rs else 0.0
+
+    cq, zq = _q(control), _q(chuzom)
+    return QuotaVerdict(
+        n_prompts=len({r.corpus_id for r in chuzom}),
+        frontier_prefix=frontier_prefix,
+        control_frontier_calls=c_front,
+        chuzom_frontier_calls=z_front,
+        chuzom_local_calls=z_local,
+        frontier_calls_freed=freed,
+        frontier_calls_freed_pct=(freed / c_front * 100.0) if c_front else 0.0,
+        control_quality=cq,
+        chuzom_quality=zq,
+        quality_delta=zq - cq,
+        non_inferiority_margin=non_inferiority_margin,
+    )
+
+
 def evaluate_savings(
     rows: Iterable,
     *,

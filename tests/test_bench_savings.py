@@ -10,8 +10,13 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from bench.routers import claude_host_router, control_group_routers
-from bench.savings import evaluate_savings
+from bench.routers import (
+    CodexRouter,
+    claude_host_router,
+    codex_control_group_routers,
+    control_group_routers,
+)
+from bench.savings import evaluate_quota_savings, evaluate_savings
 
 
 @dataclass(frozen=True)
@@ -166,3 +171,57 @@ def test_control_group_lineup_is_chuzom_plus_host():
     names = {r.name for r in control_group_routers()}
     assert names == {"chuzom", "always-claude-host"}
     assert claude_host_router().model == "anthropic/claude-host"
+
+
+# ── Subscription-host QUOTA benchmark (Codex) ─────────────────────────────────
+
+def _qrow(cid, router, model, q=5):
+    return Row(cid, router, model, 0, 0, 0.0, q)
+
+
+def test_quota_verdict_counts_frontier_calls_freed():
+    """always-codex hits the frontier on every prompt; Chuzom keeps 2 of 3 local and
+    escalates 1 → 2 frontier calls freed, at equal quality."""
+    rows = [
+        _qrow("p0", "always-codex", "codex/gpt-5.5"),
+        _qrow("p1", "always-codex", "codex/gpt-5.5"),
+        _qrow("p2", "always-codex", "codex/gpt-5.5"),
+        _qrow("p0", "chuzom", "ollama/qwen3"),
+        _qrow("p1", "chuzom", "ollama/qwen3"),
+        _qrow("p2", "chuzom", "codex/gpt-5.5"),   # one genuine escalation
+    ]
+    v = evaluate_quota_savings(rows)
+    assert v.n_prompts == 3
+    assert v.control_frontier_calls == 3
+    assert v.chuzom_frontier_calls == 1
+    assert v.chuzom_local_calls == 2
+    assert v.frontier_calls_freed == 2
+    assert v.frontier_calls_freed_pct == pytest.approx(66.6667, abs=1e-3)
+    assert v.gate_quota_freed
+    assert v.gate_quality_non_inferior  # equal quality
+
+
+def test_quota_verdict_flags_quality_regression():
+    rows = [
+        _qrow("p0", "always-codex", "codex/gpt-5.5", q=5),
+        _qrow("p0", "chuzom", "ollama/qwen3", q=3),  # −2 quality
+    ]
+    v = evaluate_quota_savings(rows, non_inferiority_margin=0.5)
+    assert v.frontier_calls_freed == 1  # freed a call...
+    assert not v.gate_quality_non_inferior  # ...but at too big a quality cost
+
+
+def test_quota_verdict_no_freed_when_chuzom_also_always_escalates():
+    rows = [
+        _qrow("p0", "always-codex", "codex/gpt-5.5"),
+        _qrow("p0", "chuzom", "codex/gpt-5.5"),  # Chuzom escalated too → nothing freed
+    ]
+    v = evaluate_quota_savings(rows)
+    assert v.frontier_calls_freed == 0
+    assert not v.gate_quota_freed
+
+
+def test_codex_control_group_lineup():
+    names = {r.name for r in codex_control_group_routers()}
+    assert names == {"chuzom", "always-codex"}
+    assert CodexRouter().model == "gpt-5.5"
