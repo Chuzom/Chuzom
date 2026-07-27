@@ -43,6 +43,38 @@ freed / potential, not metered cash).
   here. Gates 15/16/17 remain **FAIL** pending a metered run; the release verdict is unchanged:
   **RELEASE NOT QUALIFIED**.
 
+## Second run — moderate + hard corpus (2026-07-27, real Codex quota + local judge)
+
+Ran `moderate + hard` (33 prompts, 16 subjective) through the same lineup, with a **local
+Ollama judge** (`qwen3.5:latest`) for the subjective prompts (free, no quota — but see the
+judge caveat below).
+
+| arm | Codex frontier calls | mean quality (0–5) |
+|---|---|---|
+| `always-codex` (control) | **33 / 33** | 3.06 |
+| `chuzom` | **9 / 33** (24 non-Codex) | 2.88 |
+
+- **Codex frontier calls freed: 24 / 33 = 73%** — down from easy's 100%, exactly the expected
+  curve: harder prompts pull Chuzom to the frontier more (9 escalations vs 0 on easy).
+- **Chuzom's 24 "non-Codex" calls are not all local:** on 2 hard prompts (hard-10, hard-16) it
+  escalated to the **Claude-Opus subscription host** (`anthropic/claude-opus-4-8`) via the
+  subscription path — a different frontier, not Codex. The 73% is specifically *Codex-quota*
+  freed; Chuzom still used a (host) frontier ~2× on hard prompts. Honest, not hidden.
+
+### ⚠️ The quality numbers here are LOW-CONFIDENCE — the judge is the confound
+Both arms scored ~3/5, and the local Ollama judge gave **q=1 to several genuine frontier
+responses** — Codex on mod-01/04/11/14 and hard-09/11, and even Claude-Opus on hard-10/16
+(17 `q=1` rows total). A frontier model scoring 1/5 on these prompts is implausible; it means
+`qwen3.5` is a **harsh/noisy subjective judge**, so the `delta=−0.18` "non-inferiority" is **not
+trustworthy**. What IS trustworthy is the **frontier-calls-freed** figure (73%) — it's counted
+objectively from `model_chosen`, independent of the judge. **To draw any quality conclusion, the
+run must be repeated with a reliable frontier-grade judge** (needs a metered/subscription judge
+model with real capability), which we did not have.
+
+**Verdict impact: none.** This is still the quota metric, not cash; Gates 15/16/17 remain FAIL,
+and the quality axis is inconclusive pending a real judge. Release verdict unchanged: **RELEASE
+NOT QUALIFIED**.
+
 ## To extend
 
 - Run the **moderate/hard** corpora for a fuller quota curve (more escalations; needs an
