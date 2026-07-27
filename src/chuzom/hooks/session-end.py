@@ -55,8 +55,11 @@ try:
     HOST_INPUT_PER_M  = float(_CI)
     HOST_OUTPUT_PER_M = float(_CO)
 except Exception:
-    HOST_INPUT_PER_M  = 15.0
-    HOST_OUTPUT_PER_M = 75.0
+    # D8: fall open to the CURRENT host list price (5/25), matching digest/dashboard.
+    # The old 15/75 fallback was ~3x inflated and diverged from every sibling surface
+    # on the rare import failure.
+    HOST_INPUT_PER_M  = 5.0
+    HOST_OUTPUT_PER_M = 25.0
 WIDTH = 50
 
 # Model names that indicate test/mock data — never show in production reports.
@@ -571,7 +574,10 @@ def _format_routing_section(tools: dict[str, dict]) -> list[str]:
         f"{tokens_str} tokens  "
         f"${total_cost:.4f} actual  "
         f"${total_base:.4f} baseline  "
-        f"{pct_color}{savings_pct}% saved{_RESET}",
+        f"{pct_color}{savings_pct}% saved{_RESET}  "
+        # D5: explicit window so this panel isn't read as comparable to the
+        # (today) provider panels or the lifetime cumulative panel beside it.
+        f"{_C_MUTED}this session{_RESET}",
     ]
     for tool, d in sorted(tools.items(), key=lambda x: -x[1]["count"]):
         clean_models = {m: c for m, c in d["models"].items() if not _is_test_model(m)}
@@ -695,7 +701,9 @@ def _format_free_section(free_rows: list[dict], paid_rows: list[dict]) -> list[s
     saved_color = _C_GREEN if total_saved > 0 else _C_LABEL
     lines = [
         f"    {_C_WHITE}{total_calls}{_RESET} calls  ·  "
-        f"{saved_color}${total_saved:.4f} saved{_RESET} vs Sonnet  {_C_MUTED}{label}{_RESET}"
+        f"{saved_color}${total_saved:.4f} saved{_RESET} vs Claude host  "
+        # D5: this-session window (the {label} is a provider descriptor, not a window)
+        f"{_C_MUTED}this session · {label}{_RESET}"
     ]
     lines += body
     return lines
