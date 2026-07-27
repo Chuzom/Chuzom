@@ -33,7 +33,28 @@ in the ordering layer**, not merely documented.
 
 Two things, both narrower and one genuinely delicate:
 
-### R1 — the escalation / reasoning TOP is a hardcoded Claude preference  · the delicate one
+### R1 — RESOLVED after a deeper trace: the ceiling IS leaderboard-driven  · ✅
+**Correction (from tracing `apply_benchmark_ordering` + `reorder_for_pressure`).** The initial
+framing below ("the ceiling is a hardcoded Claude preference") was imprecise. The live
+chain-builder sorts the **entire** chain quality-first from the leaderboard's `task_scores`
+(quality-descending, cost tie-break within a 5% tier). So when the leaderboard ranks a
+**non-Claude** model highest for a task, that model leads the chain **ahead of Claude** — Claude
+is *not* a hardcoded ceiling. Proven and regression-locked, in both directions, by
+`tests/test_leaderboard_ceiling.py`:
+
+- leaderboard #1 (non-Claude) → leads, ahead of Claude, even when the static chain lists Claude first;
+- when the leaderboard genuinely ranks Claude #1 → Claude leads (no fixed bias, follows the board both ways);
+- no leaderboard data → safe fallback to the static (Claude-including) chain, unchanged, nothing dropped.
+
+The only "hardcoded Claude" that remains is (a) the **safe default** when the leaderboard is
+silent — which is correct, you want a sane fallback — and (b) `allowed_claude`, which is a
+**validation constraint** (which Claude versions are permitted, and in what order *among
+themselves*), enforced by `_validate_chain_invariants` — **not** an ordering ceiling. So R1 is
+satisfied: the escalation ceiling follows the leaderboard, with a safe Claude fallback only when
+there is no data. **#14 is complete** (core + R1); R2 (below) is the only optional remainder.
+
+<details><summary>Original (imprecise) R1 framing, kept for the record</summary>
+
 `profiles.py` `_PROFILE_MODEL_CONSTRAINTS` hardcodes the Claude preference order for the
 escalation and REASONING profiles:
 
@@ -54,6 +75,8 @@ leaderboard-sourced means the last-resort model could become non-Claude when the
 says so — correct per the North Star, but a behavior change to the fallback ceiling that needs
 its own focused, bidirectionally-tested PR (leaderboard #1 is honored; a stale/empty
 leaderboard falls back safely to the current Claude ceiling; invariants still hold).
+
+</details>
 
 ### R2 — artificialanalysis.ai is not one of the sources  · low-value
 The task named artificialanalysis.ai specifically; the current composite uses
