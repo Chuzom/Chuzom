@@ -475,6 +475,28 @@ def _log_violation(
         pass
 
 
+def _record_escalation(session_id: str, turn_id, task_type: str,
+                       enforced_door: str, reason: str) -> None:
+    """ENF-FIX-3: record a first-class escalation event when enforcement releases
+    the lock to let the host proceed (an auto-pivot). Previously an auto-pivot was
+    only a text-log line, invisible to accounting; the North-Star ladder treats
+    reaching Claude as an *escalation*, which must be reconciled in the canonical
+    ledger (INV-COST-001) like any other terminal disposition. Fire-and-forget —
+    accounting must never block or crash enforcement."""
+    try:
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        record_event(LedgerEvent(
+            session_id=session_id,
+            turn_id=str(turn_id),
+            event_type="escalation_started",
+            task_type=task_type or "unknown",
+            escalation_reason=reason,
+            metadata={"enforced_door": enforced_door, "source": "enforce-route"},
+        ))
+    except Exception:
+        pass
+
+
 def _violation_counter_path(session_id: str) -> Path:
     """Path to violation counter file for this session."""
     return _ROUTER_DIR / f"violations_{session_id}.json"
@@ -1138,6 +1160,8 @@ def main() -> None:
                 )
         except OSError:
             pass
+        _record_escalation(session_id, pending.get("turn_id", 0) if pending else 0,
+                           task_type, expected_tool, reason="loop")
         _clear_pending(session_id)  # Clear pending so subsequent tools also pass
         _clear_violation_count(session_id)
         sys.exit(0)
@@ -1161,6 +1185,7 @@ def main() -> None:
                 )
         except OSError:
             pass
+        _record_escalation(session_id, _turn_id, task_type, expected_tool, reason="trap")
         _clear_pending(session_id)
         _clear_turn_blocks(session_id)
         _clear_violation_count(session_id)
@@ -1182,6 +1207,7 @@ def main() -> None:
                 )
         except OSError:
             pass
+        _record_escalation(session_id, _turn_id, task_type, expected_tool, reason="count")
         _clear_pending(session_id)  # Persist the pivot for the rest of the turn
         sys.exit(0)  # Allow this tool call to prevent deadlock
 
