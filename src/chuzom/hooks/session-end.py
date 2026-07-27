@@ -246,6 +246,13 @@ def _session_start_iso(ts: float) -> str:
 
 _FREE_PROVIDERS = {"ollama", "codex", "gemini_cli"}
 
+# D2: providers that have their own dedicated dashboard panel (rendered from
+# their own usage table). Codex is logged to BOTH `usage` (cost.log_usage forces
+# cost_usd=0 for free providers) AND `codex_usage`, so counting it in the
+# model_tracking-derived free split double-counts it against `_format_codex_section`.
+# Exclude these from the free split — the dedicated panel is the single owner.
+_DEDICATED_PANEL_PROVIDERS = {"codex"}
+
 
 def _query_session_data(session_start: float) -> tuple[list[dict], list[dict], list[dict]]:
     """Return (paid_rows, cc_rows, free_rows) split by provider type."""
@@ -270,7 +277,9 @@ def _query_session_data(session_start: float) -> tuple[list[dict], list[dict], l
         paid  = [r for r in clean
                  if r.get("provider") not in _FREE_PROVIDERS | {"subscription"}]
         cc    = [r for r in clean if r.get("provider") == "subscription"]
-        free  = [r for r in clean if r.get("provider") in _FREE_PROVIDERS]
+        free  = [r for r in clean
+                 if r.get("provider") in _FREE_PROVIDERS
+                 and r.get("provider") not in _DEDICATED_PANEL_PROVIDERS]  # D2
         return paid, cc, free
     except Exception:
         return [], [], []
@@ -638,28 +647,25 @@ def _net_session_line(free_rows: list[dict], paid_rows: list[dict]) -> str | Non
     )
 
 
-def _format_free_section(free_rows: list[dict], paid_rows: list[dict]) -> list[str]:
-    """Format free-model (Ollama / Codex) session savings.
+def _format_free_section(free_rows: list[dict], paid_rows: list[dict] | None = None) -> list[str]:
+    """Format free-model (Ollama) session savings.
 
-    Codex doesn't track tokens; we estimate from the avg tokens/call across paid rows.
+    D3: a savings figure is only ever derived from **real** token counts. When a
+    free provider reports no token volume we cannot compute a defensible
+    baseline, so we show ``—`` and claim ``$0`` rather than inventing tokens from
+    unrelated paid-call averages. (Codex is excluded from ``free_rows`` upstream —
+    D2 — and reported by ``_format_codex_section`` from ``codex_usage``; the
+    ``paid_rows`` parameter is retained only for call-site compatibility.)
     """
     if not free_rows:
         return []
-
-    # Compute avg tokens/call from paid rows (for Codex estimation)
-    paid_with_tokens = [r for r in paid_rows if (r.get("input_tokens") or 0) > 0]
-    if paid_with_tokens:
-        avg_in  = sum(r.get("input_tokens",  0) for r in paid_with_tokens) / len(paid_with_tokens)
-        avg_out = sum(r.get("output_tokens", 0) for r in paid_with_tokens) / len(paid_with_tokens)
-    else:
-        avg_in, avg_out = 500.0, 300.0  # conservative fallback
 
     # Aggregate by provider
     by_provider: dict[str, dict] = {}
     for r in free_rows:
         p = r.get("provider", "?")
         if p not in by_provider:
-            by_provider[p] = {"calls": 0, "in": 0, "out": 0, "estimated": False}
+            by_provider[p] = {"calls": 0, "in": 0, "out": 0}
         by_provider[p]["calls"] += 1
         by_provider[p]["in"]    += r.get("input_tokens",  0) or 0
         by_provider[p]["out"]   += r.get("output_tokens", 0) or 0
@@ -669,25 +675,21 @@ def _format_free_section(free_rows: list[dict], paid_rows: list[dict]) -> list[s
     body: list[str] = []
     for provider, d in sorted(by_provider.items(), key=lambda x: -x[1]["calls"]):
         in_t, out_t = d["in"], d["out"]
-        est = False
-        if in_t == 0 and out_t == 0:
-            if paid_with_tokens:
-                # Estimate from paid call averages (Codex doesn't report tokens)
-                in_t  = int(avg_in  * d["calls"])
-                out_t = int(avg_out * d["calls"])
-                est   = True
-            else:
-                # No evidence of work done — don't claim savings
-                est = True
-        baseline = _host_baseline(in_t, out_t)
-        saved    = max(0.0, baseline) if (in_t + out_t) > 0 else 0.0
+        known = (in_t + out_t) > 0
+        saved = _host_baseline(in_t, out_t) if known else 0.0
         total_saved += saved
-        est_tag  = f" {_C_MUTED}~est{_RESET}" if est else ""
-        in_k  = f"{in_t  // 1000}k" if in_t  >= 1000 else str(in_t)
-        out_k = f"{out_t // 1000}k" if out_t >= 1000 else str(out_t)
+        if known:
+            in_k  = f"{in_t  // 1000}k" if in_t  >= 1000 else str(in_t)
+            out_k = f"{out_t // 1000}k" if out_t >= 1000 else str(out_t)
+            tok_disp   = f"{in_k}↑ {out_k}↓"
+            saved_disp = f"{_C_GREEN}${saved:.4f}{_RESET}"
+        else:
+            # Unknown token volume — no fabrication, no claimed savings.
+            tok_disp   = f"{_C_MUTED}—↑ —↓{_RESET}"
+            saved_disp = f"{_C_MUTED}${saved:.4f}{_RESET}"
         body.append(
             f"    {_C_LABEL}{provider:<10}{_RESET}  {d['calls']:>3}×  "
-            f"{in_k}↑ {out_k}↓{est_tag}  {_C_GREEN}${saved:.4f}{_RESET}"
+            f"{tok_disp}  {saved_disp}"
         )
 
     # Label based on actual providers present
