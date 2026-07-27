@@ -29,8 +29,11 @@ from chuzom.execution_signal import detect_execution, needs_execution
 ])
 def test_fires_on_execution_requests(prompt):
     sig = detect_execution(prompt)
-    assert sig.fires, f"should fire (needs local execution): {prompt!r} — {sig.reason}"
+    # `is True`, not truthiness — `fires` must be a real bool (a None would slip
+    # past `not sig.fires` in the enforce-route gate and mis-route).
+    assert sig.fires is True, f"should fire (needs local execution): {prompt!r} — {sig.reason}"
     assert sig.verb and sig.obj
+    assert "execution verb" in sig.reason and "repo/command object" in sig.reason
 
 
 # ── SILENT: explanation, prose, and pure authoring must NOT fire ──────────────
@@ -55,12 +58,14 @@ def test_fires_on_execution_requests(prompt):
 ])
 def test_silent_on_non_execution(prompt):
     sig = detect_execution(prompt)
-    assert not sig.fires, f"should stay silent: {prompt!r} — matched {sig.verb!r}/{sig.obj!r}"
+    # `is False`, not falsiness — a None `fires` would be treated as "silent" by
+    # `not sig.fires` yet is a contract violation; pin the exact bool.
+    assert sig.fires is False, f"should stay silent: {prompt!r} — matched {sig.verb!r}/{sig.obj!r}"
 
 
 def test_needs_execution_helper_agrees():
-    assert needs_execution("Run the test suite and commit the passing changes.")
-    assert not needs_execution("Explain how continuous deployment works.")
+    assert needs_execution("Run the test suite and commit the passing changes.") is True
+    assert needs_execution("Explain how continuous deployment works.") is False
 
 
 def test_reason_records_matched_axes():
@@ -69,3 +74,24 @@ def test_reason_records_matched_axes():
     assert sig.verb in {"rebase", "push"}
     assert sig.obj in {"git", "branch", "main"}  # first concrete anchor matched
     assert "execution verb" in sig.reason
+
+
+def test_reason_and_axes_are_recorded_on_every_non_firing_branch():
+    """Transparency contract: each non-firing path must name WHY it declined, and
+    a lone matched verb/object must still be surfaced for the audit log. (Also
+    kills mutants that blank the reason or drop the verb/obj on these paths.)"""
+    # Explanatory lead.
+    s = detect_execution("Explain how to run the test suite.")
+    assert s.fires is False and "explanatory" in s.reason
+    # Prose/content deliverable.
+    s = detect_execution("Write a blog post about deploying the app.")
+    assert s.fires is False and "prose" in s.reason
+    # Verb present but NO concrete object → declines, but records the matched verb.
+    s = detect_execution("Please run it again for me.")
+    assert s.fires is False
+    assert s.verb == "run" and s.obj is None
+    assert "missing execution verb or repo/command object" in s.reason
+    # Object present but NO execution verb → declines, records the matched object.
+    s = detect_execution("The test suite is comprehensive and well organized.")
+    assert s.fires is False
+    assert s.verb is None and s.obj is not None
