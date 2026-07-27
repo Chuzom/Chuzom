@@ -126,6 +126,75 @@ comparison is apples-to-apples), across a larger corpus, then the two-consecutiv
 (#6). Until then the verdict is unchanged — **RELEASE NOT QUALIFIED** — now for a precise,
 evidence-based reason rather than an un-run gate.
 
+## Fifth run — the CLEAN metered-escalation cash A/B (2026-07-27)
+
+The direct answer to "point the escalation tier at OpenAI and re-run." This removes the
+subscription-offload confound the fourth run flagged, by forcing every escalation onto a
+**metered** tier and eliminating all cache contamination:
+
+- **Escalation tier metered:** `CHUZOM_DISABLE_SUBPROCESS_BACKENDS=codex,gemini_cli` +
+  `CHUZOM_CLAUDE_SUBSCRIPTION=false` — Codex/Gemini/Claude subscription hosts off, so
+  escalations must reach a priced OpenAI model (`gpt-4o`, `gpt-4o-mini`, or `o3`).
+- **Zero cache contamination:** ran against a **fresh isolated `CHUZOM_DB_PATH`** (empty
+  `semantic_cache` table) and a cleared `bench/cache/`. This matters: the router's semantic
+  response cache (`semantic_cache.check`, router.py:3244) is gated **only** on task_type /
+  `model_override` — **not** on `prompt_cache_enabled` — so earlier reruns served stale
+  `cache/…` model choices from a prior run's rows. A fresh DB is the only way to force every
+  prompt to route live.
+
+### Moderate + hard corpus (33 prompts, GPT-4o judge)
+
+| arm | cost | quality (GPT-4o judge) |
+|---|---|---|
+| always-GPT-4o (control) | $0.02930 | 4.88 |
+| chuzom | **$0.03941** | **3.88** |
+
+- **NET cash −$0.01011** — Chuzom is **more expensive** than just using GPT-4o. Gate 15 = **False**.
+- **Quality delta −1.00** — well beyond the 0.5 margin. Gate 16 = **False**.
+- **5 unclassified** (`mod-01/04/11/14`, `hard-11`). Gate 17 = **False**.
+- **All three gates FAIL.** This is the honest, un-confounded moderate/hard result.
+
+### Why it flips negative once the offload is removed
+
+The fourth run's apparent "+$0.03 at −0.33 quality" was **subscription-offload** — the hard
+prompts answered by Codex/Claude-Opus at a fake $0. Metered, that illusion is gone:
+
+- **5 hard prompts EXHAUSTED** (`hard-04…08`, `model_chosen=<exhausted>`, q=1). With
+  subscriptions off and `openai/o3` failing its structure gate, Chuzom's premium chain ran
+  out of models. Those five q=1 failures are what drives the −1.00 quality drop — i.e. the
+  offload was *masking real capability gaps* on the hard tier, not saving money.
+- **o3 escalations are expensive and not reliably better:** `mod-05` → o3 at **$0.015 for
+  q=2** (worse than GPT-4o), `hard-10/16` → o3 at ~$0.012 each. Metered escalation on the
+  hard tier costs more than the flat GPT-4o baseline it's compared against.
+
+### Two honesty caveats — both make the negative *more* robust
+
+1. **Codex still leaked 5× at $0.** `CHUZOM_DISABLE_SUBPROCESS_BACKENDS` suppresses the Codex
+   *availability check* but does **not** remove Codex when it is already in the broker/provider
+   chain (router.py:606–611: `… or "codex" in _broker_provs`). So 5 escalations still recorded
+   as unpriced `codex/gpt-5.5` $0 (correctly flagged by Gate 17). Had those been metered too,
+   Chuzom would be **even more** expensive → the net-negative conclusion only strengthens.
+   *(Separate finding: the disable flag is incomplete against broker-sourced Codex — logged,
+   not chased here.)*
+2. **The 5 exhaustions are exactly what production offload hides.** In normal operation those
+   hard prompts silently offload to a subscription; the benchmark makes the underlying
+   "premium chain can't do this on metered-only" visible.
+
+### Honest conclusion (supersedes the fourth run's moderate/hard read)
+
+- ✅ Easy corpus remains a **clean** Gate 15/16/17 pass (fully local, un-confounded).
+- ❌ **Moderate/hard is a clean NEGATIVE once the escalation tier is metered:** net −$0.01,
+  quality −1.00, all gates fail. There is **no blanket cash win across difficulty**, and the
+  earlier "+$0.03" was an artifact of pricing subscription-offload at $0.
+- The benchmark harness behaved correctly throughout — Gate 17 flagged every unpriced
+  escalation; the exhaustion rows are honestly recorded at q=1, not hidden.
+
+**Gate impact:** Gates 15/16/17 remain **FAIL** — now with *metered* evidence rather than an
+un-run or confounded gate. The North-Star value that IS proven is the **subscription-quota**
+metric (frontier calls freed: 100% easy / 73% moderate-hard) and the **easy-corpus cash** win;
+the blanket moderate/hard *cash* claim is disproven under clean conditions. Verdict unchanged:
+**RELEASE NOT QUALIFIED**.
+
 ## To extend
 
 - Run the **moderate/hard** corpora for a fuller quota curve (more escalations; needs an
