@@ -13,15 +13,18 @@ rather than weakening the bar.
 ## Verdict: **RELEASE NOT QUALIFIED**
 
 Still-unmet mandatory gates: **13** (mutations not run to closure) and the
-**consecutive-audit rule**. **Gate 17 now PASSES** — the Codex-broker leak is closed by the
-`CHUZOM_BLOCK_PROVIDERS` hard-block control (#202): a full-metering re-run shows
-`unclassified=[]`, zero Codex/Gemini leaks. Gates **15 and 16 PASS on moderate/hard** in the
-realistic config (broker-Codex free path available) after the lever-① fix (#201): quality
-−1.00 → −0.45, cash −$0.010 → +$0.003. **Honest caveat surfaced by full metering:** with
-Codex/Gemini fully blocked, 9 hard prompts *exhaust* (q=1) because the premium chain is
-`o3 → qwen3:32b` with no metered mid-tier, and an embedding model (`nomic-embed-text`) pollutes
-the generation chain — two pre-existing issues the leak was masking, now tracked as **lever ②**
-(escalation-ladder + chain-hygiene). Detail below.
+**consecutive-audit rule** — the two *structural* blockers, no longer any benchmark or routing
+defect. The benchmark gates are now green in BOTH configs:
+- **Gate 17 PASS** — Codex-broker leak closed by `CHUZOM_BLOCK_PROVIDERS` (#202): full-metering
+  re-run shows `unclassified=[]`, zero leaks.
+- **Gates 15 & 16 PASS** — after lever ① (#201, gate/exhaustion fix) and lever ② (#204, metered
+  mid-tier + embedding chain hygiene). In the **strict full-metering** config (the one that
+  previously failed): net **+$0.02897**, quality **−0.36** (within margin), **0 exhaustions**
+  (was 9). Realistic config is at least as good. The embedding-model pollution and the
+  no-metered-mid-tier gap (both masked by the old leak) are fixed.
+
+Residual (non-blocking): 2 moderate prompts (`mod-07`, `mod-12`) still score q=1 on a local
+model without escalating — a classifier/escalation-threshold tuning item, not a gate blocker.
 
 > **Update (ENF-FIX-1..4 merged, #181–#184):** Gates **5** and **11** now **PASS** — the
 > execution-work capability dead-end (GAP-ENF-1 / INV-ROUTE-006) is closed and
@@ -50,8 +53,8 @@ the generation chain — two pre-existing issues the leak was masking, now track
 | 12 | Doctor and router provider-health reconcile | **PASS** | C10 fixed + tested (`test_doctor_health_reconciliation`) |
 | 13 | All critical mutations killed | **FAIL (honest — equivalent mutants remain)** | Scoped mutmut over hermetic modules: `execution_ledger.py` (#173), `execution_signal.py` (**32→48 / 54**; pinned `fires is True/False`, asserted the reason/verb/obj transparency contract), `operational_signal.py` (**33→48 / 54**; asserted the reason + matched verb/cue on every non-firing branch), `context_signal.py` (**10→12 / 13**; pinned the 12-word deictic cutoff exactly at the boundary), and `bench/savings.py` (**82→98 / 102**; pinned every reported field, failure/exhausted-row classification, default non-inferiority margin, missing-Chuzom-arm raise, non-numeric-overhead degradation, and the unpaired-error message). Remaining survivors are provably **equivalent mutants** (capturing-group `group(0)==group(1)`; `None`-then-`or 0.0` overhead defaults; `getattr` default on rows that always carry `notes`; unreachable empty-arm fallback; synthetic `XX`-padding of internal strings whose meaning is unchanged). Gate stays FAIL because equivalent mutants can't be killed without over-fitting — documented, not hidden |
 | 14 | No numeric public claim without current reproducible evidence | **PASS** | B6: unsupported claim retracted; claim-evidence registry + CI validator gate |
-| 15 | Control-group benchmark shows positive net verified token savings | **PASS (positive net; thin, mild residual confound)** | Harness built and **run for real** (`10_CODEX_QUOTA_BENCHMARK.md`). Easy corpus: clean pass. Moderate/hard, clean metered, **after the lever-① fix (#201)**: chuzom **$0.02662 vs GPT-4o $0.02958 → NET +$0.00296** (Chuzom cheaper) — flipped from the pre-fix −$0.01011. The lever-① gate/exhaustion bug (below, Gate 11-adjacent) was discarding valid frontier answers and forcing q=1 exhaustions. **Caveat:** the +$0.003 is *thin* and still mildly confounded by the residual Codex-broker leak (6 escalations unpriced at $0, Gate 17); if metered they could tip it slightly negative. Positive and reproducible, but not yet a *robust* blanket margin — so PASS-with-caveat, not a clean release-scale win |
-| 16 | Quality within non-inferiority margin | **PASS (−0.45, within 0.5 margin — robust)** | Easy delta −0.20. Moderate/hard, clean metered, **after the lever-① fix (#201)**: delta **−0.45**, within the 0.5 margin — flipped from the pre-fix −1.00. The −1.00 was caused by the premium chain **exhausting** to q=1 on 5 hard prompts because a heuristic gate discarded real answers; the fix (prose-aware structure gate + exhaustion floor) drops exhaustions to **0**. This flip is **robust** — it depends on exhaustions vanishing, independent of Codex pricing. o3 answers now accepted (mod-05: q=2→q=5). Regression-locked by `test_exhaustion_floor`, `test_contract_gates` prose cases |
+| 15 | Control-group benchmark shows positive net verified token savings | **PASS (robust — strict full-metering)** | Harness built and **run for real** (`10_CODEX_QUOTA_BENCHMARK.md`). After lever ① (#201) and **lever ② (#204)**, the **strict full-metering** run (Codex/Gemini hard-blocked, so no offload confound at all): chuzom **$0.00130 vs GPT-4o $0.03027 → NET +$0.02897**. The earlier "thin +$0.003" caveat is resolved — with the embedding-model pollution removed, local models succeed on far more prompts and the `gpt-4o-mini` mid-tier handles escalations at ~$0.0003. No residual confound (Gate 17 also clean). Regression-locked by `test_lever2_ladder`, `test_block_providers` |
+| 16 | Quality within non-inferiority margin | **PASS (−0.36, within 0.5 margin — robust)** | Easy delta −0.20. Strict full-metering moderate/hard after lever ①+②: delta **−0.36**, within margin — flipped from the pre-① −1.36 with **0 exhaustions** (was 9). ① (prose-aware structure gate + exhaustion floor) stopped discarding valid answers; ② (metered mid-tier + embedding chain hygiene) removed the provider-error exhaustions. Robust — holds under strict metering. Residual: 2 local q=1 misses (mod-07, mod-12) → classifier/escalation tuning, non-blocking. Regression-locked by `test_exhaustion_floor`, `test_contract_gates`, `test_lever2_ladder` |
 | 17 | No benchmark event has unclassified spend | **PASS (clean control shipped — `unclassified=[]` proven)** | Closed by `CHUZOM_BLOCK_PROVIDERS` (#202): a hard provider block on EVERY routing path (base chain, injection, broker), distinct from the subprocess-only `DISABLE_SUBPROCESS_BACKENDS` so the gateway daemon keeps its free broker-Codex path. Re-run with `CHUZOM_BLOCK_PROVIDERS=codex,gemini_cli`: **`GATE17=True`, `unclassified=[]`, zero Codex/Gemini leaks** — every escalation hit a metered OpenAI model (o3/gpt-4o/gpt-4o-mini), all priced. Regression-locked by `test_block_providers` incl. the guard that `DISABLE_SUBPROCESS_BACKENDS` still allows broker-Codex |
 | 18 | No unknown realization counted as verified realized | **PARTIAL** | Ledger models `realization_status` incl. `unknown`; full savings model not yet deriving realized from it end-to-end |
 | 19 | Schema migrations + rollback tested | **PARTIAL** | `execution_events` is additive (`CREATE TABLE IF NOT EXISTS`); legacy stores untouched |
