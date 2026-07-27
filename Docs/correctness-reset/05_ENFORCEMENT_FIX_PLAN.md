@@ -79,12 +79,21 @@ genuinely-capable `llm_act` (e.g. tasks that legitimately need Claude), the corr
   (4, integration). The operational redirect (`test_consolidated_operational_names_llm_act`) is
   unchanged.
 
-### ENF-FIX-2 — PROVISION context on context-dependent routing (GAP-ENF-2)
+### ENF-FIX-2 — PROVISION context on context-dependent routing (GAP-ENF-2) — ✅ DONE
 - When `_is_context_dependent(prompt)`, route to `llm_act` **with cwd + repo state + session
   context** (North-Star PROVISION), instead of emitting a `call llm_research FIRST` text-only
   directive. No blind text-only directive on context-dependent prompts.
 - **Test:** a context-dependent prompt's enforced directive names a tool-capable, provisioned
   door — never `llm_research`/`llm_query` FIRST-and-ONLY.
+- **Implemented:** the GAP-ENF-2 hard-directive dead-end was already closed (the
+  context-dependent branch in `auto-route.py` sets `write_pending=False` + an advisory
+  directive, and `_is_context_dependent` fires correctly on the logged repo-continuation
+  prompts) — so this increment (a) **regression-locks** that behaviour (no `FIRST and ONLY` /
+  `HARD ENFORCEMENT` on a context-dependent prompt), and (b) adds the North-Star **door
+  alignment**: when the context-dependent prompt ALSO trips ENF-FIX-1's execution signal, the
+  advisory names the provisioned tool-capable door `llm_act(context=…)` instead of a text-only
+  one; a non-execution context prompt keeps its text-only suggestion (no over-routing).
+  Tests: `test_enf_fix2_context_provisioned_door.py`.
 
 ### ENF-FIX-3 — clean escalation to Claude (no friction-by-violation-count)
 - Replace the punitive "violation 3/4 → auto-pivot after retries" flow with an explicit,
