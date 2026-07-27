@@ -67,3 +67,27 @@ remaining steps:
 
 Until then the verdict stays **RELEASE NOT QUALIFIED**, honestly: the measurement apparatus is
 now correct and reproducible, but the measurement itself has not been run to a passing result.
+
+## End-to-end validation (2026-07-27, $0)
+
+The harness was executed end-to-end for the first time against **local Ollama only** (no API
+keys present in the environment), to validate the pipeline without spend:
+`python -m bench --easy-only --routers chuzom,always-cheap --no-cache`.
+
+- **It runs.** The real `ChuzomRouter` (→ `chuzom.router.route_and_call` → Ollama dispatch,
+  `suppress_ledger=True`) produced 40 valid `RunRow`s across both arms with no crashes;
+  deterministic grading, the scorecard, and `bench/results/*.{json,md}` all worked.
+- **`evaluate_savings` works on real rows** (not just the synthetic test rows): fed the produced
+  results (with `always-cheap` as a stand-in control, since there is no keyed Claude arm), it
+  returned a well-formed `SavingsVerdict` — `net=$0.00` (both arms free), `quality_delta=+0.60`,
+  `unclassified_events=[]`.
+- **The verdict is honest under a real run:** with both arms free there is nothing to save, so
+  **Gate 15 correctly FAILS** (`net > 0` is False); Ollama `$0` is correctly classified (Gate 17
+  passes); Gate 16 runs on real judge scores. It cannot be gamed green.
+
+So the apparatus is **proven functional end-to-end**, de-risking the paid run. The **only**
+remaining step for a real Gate 15/16/17 result is provider keys: `ANTHROPIC_API_KEY` for the
+`always-claude-host` control arm (and its model id pointed at a real callable Claude tier, not
+the `anthropic/claude-host` pricing placeholder), plus `OPENAI_API_KEY`/`GEMINI_API_KEY` so
+Chuzom's chain can reach its paid escalation tiers. With those set, the same command with
+`control_group_routers()` produces the real verdict.
