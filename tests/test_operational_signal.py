@@ -75,6 +75,28 @@ def test_detect_non_operational_has_no_reason():
     assert sig.verb is None or sig.cue is None   # at least one axis missing
 
 
+def test_reason_and_axes_recorded_on_every_non_firing_branch():
+    """Transparency contract: each non-firing branch must name WHY it declined,
+    and a lone matched verb/cue must still be surfaced for the enforced-route audit
+    log. (Also kills mutants that blank/mangle the reason or drop verb/cue here.)"""
+    # Explanatory lead.
+    s = detect_operational("Explain how the parser works.")
+    assert s.fires is False and "explanatory" in s.reason
+    # Prose/content deliverable (short-circuits before the verb/cue check).
+    s = detect_operational("Write a poem about spring.")
+    assert s.fires is False and "prose" in s.reason
+    # Change verb but NO verify cue → declines, records the matched verb.
+    s = detect_operational("Implement a REST endpoint for users.")
+    assert s.fires is False
+    assert s.verb == "Implement" and s.cue is None
+    assert "missing change verb or verification cue" in s.reason
+    # Verify cue but NO change verb → declines, records the matched cue.
+    s = detect_operational("The unit test is comprehensive and well organized.")
+    assert s.fires is False
+    assert s.verb is None and s.cue is not None
+    assert "missing change verb or verification cue" in s.reason
+
+
 def test_empty_and_none_are_safe():
     assert is_operational("") is False
     assert is_operational(None) is False          # type: ignore[arg-type]
