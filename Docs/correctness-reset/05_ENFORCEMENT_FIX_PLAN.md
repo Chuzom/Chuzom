@@ -125,11 +125,17 @@ genuinely-capable `llm_act` (e.g. tasks that legitimately need Claude), the corr
   turns. Invariant tested: **no task_type routes execution work to the text-only door** — each is
   either blocked toward `llm_act` or allowed through, never a text-only dead-end
   (`test_enf_fix4_stable_execution_door.py`).
-- **Honest caveat (out of scope):** `coordination` execution work is still *fully exempted*
-  (allowed, no block) by the pre-existing `LOCAL_BASH_EXEMPT` / FS-exemption paths — not a
-  text-only dead-end, but also not routed to `llm_act`. Tightening those exemptions to route
-  through `llm_act` (rather than exempt to native) is a separate follow-up, noted here so it
-  isn't lost.
+- **Coordination `LOCAL_BASH_EXEMPT` — RESOLVED as working-as-intended (not a follow-up).**
+  `coordination` local Bash is exempted to native rather than routed to `llm_act`. On review
+  this is **correct**, not a gap: `llm_act`'s agentic executor runs in a **sandbox** (bash
+  allowlist + path guards + network block — the P1 hardening), so it cannot perform work against
+  the user's *actual local working tree* (e.g. `git status`/`pytest` on this repo). Routing
+  genuinely-local repo Bash to a sandboxed `llm_act` would **break** it — friction with no
+  savings, the exact GAP-ENF-1 anti-goal. So exempting non-offloadable local repo Bash to native
+  is the pragmatic right behavior; the North-Star target ("run execution inside `llm_act`") only
+  applies when the work is actually offloadable to the sandbox. INV-ROUTE-006 is about never
+  routing execution to a door that *cannot perform it* — a text-only door; native execution of
+  local repo work is not that. **No change; documented so it isn't re-opened as a bug.**
 
 ---
 

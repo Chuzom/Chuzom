@@ -120,3 +120,12 @@ def test_sessionend_session_panels_carry_window_label():
     txt = (_SRC / "hooks" / "session-end.py").read_text()
     assert txt.count("this session") >= 2, "routing + free panels must be window-labeled"
     assert "(today)" in txt, "provider panels stay explicitly (today)-labeled"
+
+
+def test_sessionend_declares_panels_non_additive():
+    """DASH-1b (D1): the summary must lead with a single canonical session Net and
+    explicitly declare the per-tier / per-scope panels below are NOT additive, so a
+    reader never sums four differently-based savings figures (the D1 mis-count)."""
+    txt = (_SRC / "hooks" / "session-end.py").read_text()
+    assert "session bottom line" in txt
+    assert "not additive" in txt

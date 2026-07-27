@@ -119,13 +119,18 @@ Tests in `tests/test_dash5_saved_definition.py`.
   (D3) `_format_free_section` no longer fabricates tokens from unrelated paid-call
   averages — unknown token volume renders `—` and claims `$0`. Behavioural fail-before/
   pass-after tests in `tests/test_dash1a_codex_dedupe.py`.
-- **DASH-1b (D1) — DEFERRED (structural/semantic, own task):** unify onto ONE savings
-  basis. Free + routing panels recompute `_host_baseline` (Opus); the Codex/Gemini panels
-  render stored `cost_saved_usd` (a *different* basis); the star-CTA lifetime figure is a
-  third. Reconciling them changes the **meaning** of the displayed Codex/Gemini numbers
-  (recompute-from-tokens vs stored), so it is not a low-risk display edit — it needs a
-  deliberate basis decision. Test target: for a seeded session, Σ panel savings == one
-  canonical session total.
+- **DASH-1b (D1) — ✅ RESOLVED:** a single summed "Σ panel savings == canonical total" is
+  **intentionally not provided**, because the panels measure genuinely different **scopes** by
+  design — Routing/Free are *this-session* (`_host_baseline`), Codex/Gemini are *today*
+  (`codex_usage`/`gemini_usage` stored), Cumulative is *lifetime* — and re-windowing the
+  provider panels to force a sum would change **what they measure**. Instead the summary already
+  leads with ONE canonical session figure — the honest **Net** line (`_net_session_line`: host
+  baseline − actual paid, unclamped) — and DASH-2/3/5 label every panel's basis (gross/realized)
+  and window (this session / today / lifetime). DASH-1b adds the final piece: an explicit
+  **non-additivity legend** under the Net line ("Net is the session bottom line; the panels
+  below are per-tier / per-scope breakdowns — not additive"), so a reader never sums the four
+  differently-based figures — which was the concrete D1 harm. Guard:
+  `test_sessionend_declares_panels_non_additive`.
 - **DASH-2 (D4 + D7 + D8):** Honest labels + fallback. "vs Sonnet" → "vs Claude host
   baseline"; host-mode-aware "saved"/"quota freed"; fallback 15/75 → 5/25. Source-guard
   test (no "vs Sonnet"; fallback == 5/25) mirroring `test_sessionstart_digest_uses_opus_not_sonnet_baseline`.
