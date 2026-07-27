@@ -107,12 +107,21 @@ two definitions (INV-COST-005 not applied uniformly).
 
 ## Fix plan → tasks (each a low-risk display-surface PR, own branch, fail-before/pass-after test)
 
-- **DASH-1 (D1 + D2 + D3):** Make the session summary derive **all** savings from ONE
-  basis. Concretely: exclude Codex from the Free section (it has a dedicated panel), and
-  price every panel from one source — prefer the canonical ledger/`dashboard_data`
-  pre-computed `saved_usd` over per-panel `_host_baseline` recompute; never estimate
-  tokens (show "—" when unknown). Test: for a seeded session, Σ panel savings == the
-  canonical session total; Codex appears once.
+- **DASH-1a (D2 + D3) — ✅ DONE (PR pending):** the two unambiguous display-honesty
+  parts. (D2) Exclude Codex from the Free split — Codex is logged to *both* `usage`
+  (`cost.log_usage` forces `cost_usd=0`, cost.py:706) and `codex_usage`, so the Free
+  section double-counted it against the dedicated `_format_codex_section`. Fixed via a
+  `_DEDICATED_PANEL_PROVIDERS = {"codex"}` exclusion at the `_query_session_data` split.
+  (D3) `_format_free_section` no longer fabricates tokens from unrelated paid-call
+  averages — unknown token volume renders `—` and claims `$0`. Behavioural fail-before/
+  pass-after tests in `tests/test_dash1a_codex_dedupe.py`.
+- **DASH-1b (D1) — DEFERRED (structural/semantic, own task):** unify onto ONE savings
+  basis. Free + routing panels recompute `_host_baseline` (Opus); the Codex/Gemini panels
+  render stored `cost_saved_usd` (a *different* basis); the star-CTA lifetime figure is a
+  third. Reconciling them changes the **meaning** of the displayed Codex/Gemini numbers
+  (recompute-from-tokens vs stored), so it is not a low-risk display edit — it needs a
+  deliberate basis decision. Test target: for a seeded session, Σ panel savings == one
+  canonical session total.
 - **DASH-2 (D4 + D7 + D8):** Honest labels + fallback. "vs Sonnet" → "vs Claude host
   baseline"; host-mode-aware "saved"/"quota freed"; fallback 15/75 → 5/25. Source-guard
   test (no "vs Sonnet"; fallback == 5/25) mirroring `test_sessionstart_digest_uses_opus_not_sonnet_baseline`.
@@ -124,5 +133,6 @@ two definitions (INV-COST-005 not applied uniformly).
 - **DASH-5 (D9):** One definition of "saved" across panels (realized-net everywhere, or
   label gross vs realized). Test: label consistency / net==gross−overhead everywhere shown.
 
-DASH-1 and DASH-4 are the structural ones; DASH-2/3/5 are label/window honesty (fastest).
-All are read-only display fixes — no live-routing change; verdict stays NOT QUALIFIED.
+DASH-1b and DASH-4 are the structural ones; DASH-1a/2/3/5 are label/window/dedup honesty
+(fastest). All are read-only display fixes — no live-routing change; verdict stays NOT
+QUALIFIED.
