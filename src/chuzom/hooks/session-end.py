@@ -1536,6 +1536,16 @@ def _format(tools: dict[str, dict], cc_rows: list[dict], free_rows: list[dict],
         _net_line = _net_session_line(free_rows, paid_rows)
         if _net_line:
             lines.append(_net_line)
+            # D1 (DASH-1b): the Net line above is the single canonical session
+            # bottom-line (host baseline − actual paid). Everything below — the
+            # per-tier Routing/Free panels, and the separately-scoped Codex/Gemini
+            # (today) and lifetime panels — are scope-labeled BREAKDOWNS computed on
+            # their own basis/window. They are deliberately NOT a single running
+            # total; say so, so a reader never sums across scopes.
+            lines.append(
+                f"  {_C_MUTED}Net is the session bottom line; the panels below are "
+                f"per-tier / per-scope breakdowns — not additive.{_RESET}"
+            )
             lines.append("")
         lines += session_lines
 
