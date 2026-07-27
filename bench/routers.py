@@ -226,6 +226,64 @@ class StaticChainRouter:
         )
 
 
+@dataclass
+class CodexRouter:
+    """Control arm for the SUBSCRIPTION-host quota benchmark: send **every** prompt
+    to the Codex CLI frontier (a paid subscription with real quota/limits).
+
+    This is the "Chuzom OFF" baseline when the host frontier is Codex rather than a
+    metered API: what would this corpus cost in *frontier quota* if you never routed
+    and always used Codex? Chuzom, by contrast, keeps most work on local Ollama and
+    only escalates to Codex when needed — the difference is **quota freed**.
+
+    Codex is a subscription: per-call cash is ~$0 at the boundary but each call
+    consumes a finite, costly resource, so the honest savings unit here is
+    **frontier calls made**, not cash. ``run_codex`` does not return token counts,
+    so we set tokens to 0 rather than fabricate them (D3).
+    """
+
+    name: str = "always-codex"
+    model: str = "gpt-5.5"
+
+    async def route(self, prompt: str) -> RouterResult:
+        start = time.perf_counter()
+        try:
+            from chuzom.codex_agent import run_codex
+
+            res = await run_codex(prompt, model=self.model)
+        except Exception as err:
+            return RouterResult(
+                router_name=self.name, model_chosen=f"codex/{self.model}", response="",
+                input_tokens=0, output_tokens=0, cost_usd=0.0,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                notes={"provider": "codex"}, error=f"{type(err).__name__}: {err}",
+            )
+        elapsed = int((time.perf_counter() - start) * 1000)
+        if not res.success:
+            return RouterResult(
+                router_name=self.name, model_chosen=f"codex/{res.model}", response="",
+                input_tokens=0, output_tokens=0, cost_usd=0.0, latency_ms=elapsed,
+                notes={"provider": "codex", "exit_code": res.exit_code},
+                error=res.content[:200] or f"codex exit {res.exit_code}",
+            )
+        return RouterResult(
+            router_name=self.name,
+            model_chosen=f"codex/{res.model}",
+            response=res.content,
+            input_tokens=0,   # run_codex returns no token counts — honest 0, not fabricated
+            output_tokens=0,
+            cost_usd=0.0,     # subscription: $0 marginal cash; quota (a frontier CALL) is the cost
+            latency_ms=elapsed,
+            notes={"provider": "codex", "frontier_call": 1},
+        )
+
+
+def codex_control_group_routers() -> list:
+    """A/B lineup for the SUBSCRIPTION-host quota benchmark: Chuzom (Ollama-first,
+    escalating to the Codex frontier only when needed) vs always-Codex."""
+    return [ChuzomRouter(), CodexRouter()]
+
+
 def default_routers() -> list:
     """The v0.0.1 head-to-head lineup."""
     return [
