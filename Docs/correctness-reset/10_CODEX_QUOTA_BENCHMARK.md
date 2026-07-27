@@ -189,11 +189,67 @@ prompts answered by Codex/Claude-Opus at a fake $0. Metered, that illusion is go
 - The benchmark harness behaved correctly throughout — Gate 17 flagged every unpriced
   escalation; the exhaustion rows are honestly recorded at q=1, not hidden.
 
-**Gate impact:** Gates 15/16/17 remain **FAIL** — now with *metered* evidence rather than an
-un-run or confounded gate. The North-Star value that IS proven is the **subscription-quota**
-metric (frontier calls freed: 100% easy / 73% moderate-hard) and the **easy-corpus cash** win;
-the blanket moderate/hard *cash* claim is disproven under clean conditions. Verdict unchanged:
-**RELEASE NOT QUALIFIED**.
+**Gate impact:** Gates 15/16/17 read **FAIL** on this run — but the fifth run is not a verdict,
+it is a **diagnosis**. It localised the loss to a specific, fixable defect (below), not a
+capability ceiling. See the sixth run for the fix and the before/after.
+
+## Root-cause diagnosis (what the fifth run actually found)
+
+The −1.00 quality drop and net-negative cost were **not** Chuzom being incapable on hard
+prompts. They trace to one defect chain in `router.py` / `gates.py`:
+
+1. **The `STRUCTURE` gate rejected valid prose.** `_check_structure` failed any response >200
+   chars with <2 Markdown markers — so a legible multi-sentence answer with no `##`/`-` was
+   discarded as "no structure" (log: `structure: no structure: 0 markers in 466 chars`). The
+   gate's own docstring says gates "catch garbage, not wrong answers"; requiring bullet points
+   on prose is a false-positive machine.
+2. **Exhaustion returned nothing.** When every model's answer was gate-rejected, the router
+   raised `RuntimeError("All models failed")` — so 5 hard prompts recorded `<exhausted>` / q=1.
+   A real frontier answer that failed a *heuristic* was thrown away rather than returned.
+
+Both are **lever ①** from the improvement roadmap, and both were fixed (PR #201).
+
+## Sixth run — the fix applied (2026-07-27, same clean conditions)
+
+Identical setup to the fifth run (fresh isolated `CHUZOM_DB_PATH`, metered escalation,
+Codex/Claude subscriptions off, GPT-4o judge) — re-run **with** the lever-① fix: a prose-aware
+structure gate (prose counts as structure) plus an **exhaustion floor** (return the best
+heuristic-rejected answer instead of raising).
+
+| metric | fifth run (before) | **sixth run (after fix)** |
+|---|---|---|
+| control (GPT-4o) cost | $0.02930 | $0.02958 |
+| chuzom cost | $0.03941 | **$0.02662** |
+| net cash | **−$0.01011** | **+$0.00296** (Chuzom cheaper) |
+| quality delta | **−1.00** | **−0.45** (within 0.5 margin) |
+| exhausted rows (q=1) | **5** (hard-04…08) | **0** |
+| Gate 15 (net savings) | ❌ | **✅ True** |
+| Gate 16 (quality non-inferior) | ❌ | **✅ True** |
+| Gate 17 (no unclassified spend) | ❌ | ❌ (residual Codex leak only) |
+
+- **Gates 15 and 16 flip FAIL → PASS on moderate/hard** from lever ① alone. The exhaustion
+  collapse is gone: **zero** prompts exhaust; the −1.00 quality drop becomes −0.45 (within the
+  0.5 non-inferiority margin).
+- **o3 answers are now accepted instead of discarded:** mod-05 went from **q=2 at $0.015** (its
+  answer rejected, then a worse fallback accepted) to **q=5 at $0.004** (real answer kept). o3
+  escalations are correctly metered ($0.004–0.011), all q=5.
+- **Gate 17 still FAIL — but the reason narrowed** to the residual Codex-broker leak (6
+  escalations still `codex/gpt-5.5` at $0 because `CHUZOM_DISABLE_SUBPROCESS_BACKENDS` doesn't
+  remove broker-sourced Codex, `router.py:606–611`). That is **caveat #1 / lever ②-adjacent**,
+  not the gate bug. Because those 6 calls are unpriced, the **+$0.003 net is thin** — if metered
+  they could tip it slightly negative, so Gate 15 is "positive but still mildly confounded,"
+  while **Gate 16's quality flip is robust** (it depends on exhaustions vanishing, independent
+  of Codex pricing).
+- Remaining 2 q=1 (mod-07, mod-10) are genuine **local-model** misses (not escalated) —
+  candidates for **lever ②** (leaderboard-driven escalation ladder / earlier escalation).
+
+**Gate impact:** the fix converts the moderate/hard tier from a clean negative into a
+**quality-non-inferior, net-positive-but-thin** result — Gate 16 a real PASS, Gate 15 positive,
+Gate 17 blocked only on the narrower Codex-broker leak. The path to a fully clean moderate/hard
+Gate 15/16/17 pass is now concrete: (a) fix the broker-Codex leak so those escalations are
+metered/removed (caveat #1), then (b) lever ② to lift the last local q=1 misses. Verdict remains
+**RELEASE NOT QUALIFIED** — but for a shrinking, well-localised reason, with the biggest defect
+now fixed and regression-locked (`test_exhaustion_floor`, `test_contract_gates` prose cases).
 
 ## To extend
 
