@@ -100,6 +100,31 @@ def is_ollama_available() -> bool:
     return result
 
 
+# Substrings that mark an Ollama model as embedding-only (cannot generate text).
+# Covers the common families: nomic-embed-text, mxbai-embed-large, snowflake-
+# arctic-embed, bge-*, gte-*, e5-*, all-minilm.
+_EMBEDDING_NAME_MARKERS: tuple[str, ...] = (
+    "embed", "bge-", "-bge", "gte-", "e5-", "minilm",
+)
+
+
+def _is_embedding_model(name: str, meta: dict | None = None) -> bool:
+    """True when an Ollama model is embedding-only (no text generation).
+
+    Detected by the conventional name markers above and, when the Ollama
+    ``/api/tags`` response includes it, an embedding-family hint under
+    ``details.family`` (e.g. ``bert``/``nomic-bert``). Fails safe: unknown
+    models are treated as generation-capable, never silently dropped.
+    """
+    low = name.lower()
+    if any(marker in low for marker in _EMBEDDING_NAME_MARKERS):
+        return True
+    family = ((meta or {}).get("details") or {}).get("family", "")
+    if isinstance(family, str) and ("bert" in family.lower() or "embed" in family.lower()):
+        return True
+    return False
+
+
 def _update_discovery_cache(ollama_models: list[dict]) -> None:
     """Write discovered Ollama models to ~/.chuzom/discovery.json.
 
@@ -112,6 +137,14 @@ def _update_discovery_cache(ollama_models: list[dict]) -> None:
     for m in ollama_models:
         name = m.get("name", "")
         if not name:
+            continue
+        # Lever ②: embedding-only models (nomic-embed-text, mxbai-embed-large,
+        # bge-*, etc.) cannot generate text — Ollama rejects /api/generate for
+        # them ("does not support generate"). Tagging them generation-capable
+        # here put them into routing chains, where they always errored and, on
+        # premium/complex routes, contributed to chain exhaustion. Skip them at
+        # the source so they never enter a generation chain.
+        if _is_embedding_model(name, m):
             continue
         model_id = f"ollama/{name}"
         models[model_id] = {
@@ -416,7 +449,10 @@ def _probe_ollama_direct(base_url: str = "http://localhost:11434") -> list[str]:
             data = json.loads(resp.read())
         models = data.get("models", [])
         _update_discovery_cache(models)
-        return [f"ollama/{m['name']}" for m in models if m.get("name")]
+        return [
+            f"ollama/{m['name']}" for m in models
+            if m.get("name") and not _is_embedding_model(m["name"], m)
+        ]
     except Exception:
         return []
 
@@ -437,6 +473,10 @@ def get_cached_ollama_models() -> list[str]:
         return [
             m_id for m_id, m_data in cached.items()
             if m_data.get("provider") == "ollama"
+            # Lever ②: exclude embedding-only models even from a STALE cache
+            # written before this filter existed (24h TTL) — they can never
+            # generate, so they must never reach a routing chain.
+            and not _is_embedding_model(m_id.split("/", 1)[-1], m_data)
         ]
 
     # Cache empty or stale — try a live probe to refresh it.

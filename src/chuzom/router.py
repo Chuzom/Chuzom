@@ -701,6 +701,50 @@ async def _build_and_filter_chain(
                 )
                 models_to_try = models_to_try[:first_paid] + gemini_chain + models_to_try[first_paid:]
 
+        # ── Metered mid-tier injection (lever ②) ───────────────────────────────
+        # The complex/premium base chain can jump straight from a reasoning model
+        # (openai/o3) to a slow local model. If o3 errors (e.g. a rate limit),
+        # only the slow local remains and the chain EXHAUSTS. Insert cheap,
+        # reliable metered OpenAI models (gpt-4o-mini → gpt-4o) just BEFORE the
+        # first reasoning model so a capable metered fallback always exists.
+        # Cheapest-capable-first (the North Star): quality-gated escalation
+        # (see the P2 block in the dispatch loop) promotes to o3 only when a
+        # cheap answer scores low. Guarded by OpenAI availability and, so it is
+        # never front-run over a free path, it sits AFTER any injected
+        # Ollama/Codex/Gemini and only ahead of o3 + the slow local floor.
+        if (
+            profile in (RoutingProfile.PREMIUM, RoutingProfile.REASONING)
+            and "openai" in available
+            and "openai" not in _blocked_providers()
+        ):
+            _mid = [
+                m for m in ("openai/gpt-4o-mini", "openai/gpt-4o")
+                if m not in models_to_try
+            ]
+            if _mid:
+                def _is_openai_reasoning(m: str) -> bool:
+                    return (
+                        provider_from_model(m) == "openai"
+                        and m.rsplit("/", 1)[-1].startswith(("o1", "o3", "o4"))
+                    )
+                # Sit before the first OpenAI reasoning model; if none, before the
+                # first (slow) local model; else append.
+                _idx = next(
+                    (i for i, m in enumerate(models_to_try) if _is_openai_reasoning(m)),
+                    None,
+                )
+                if _idx is None:
+                    _idx = next(
+                        (i for i, m in enumerate(models_to_try)
+                         if provider_from_model(m) == "ollama"),
+                        len(models_to_try),
+                    )
+                log.debug(
+                    "Metered mid-tier (gpt-4o-mini→gpt-4o) injected at index %d "
+                    "for %s (before o3/local)", _idx, profile.value,
+                )
+                models_to_try = models_to_try[:_idx] + _mid + models_to_try[_idx:]
+
         # ── Re-apply block/allow filters after injection ───────────────────────
         # block_providers/block_models/allow_models were only ever checked ONCE,
         # before the Ollama/Codex/Gemini-CLI injection steps above — each of
