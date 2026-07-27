@@ -216,6 +216,21 @@ def _is_operational_prompt(prompt: str) -> bool:
     return bool(sig and sig.fires)
 
 
+def _detect_execution(prompt: str):
+    """Return the ExecutionSignal for *prompt* (needs-local-execution / repo ops),
+    or None on any failure. ENF-FIX-1 (GAP-ENF-1): execution work lacking a
+    verification cue does not trip ``detect_operational``, so this SEPARATE
+    high-precision signal lets enforcement name the tool-capable door for it.
+    Lazy, fail-open import — a None result means the redirect never fires."""
+    if not prompt:
+        return None
+    try:
+        from chuzom.execution_signal import detect_execution
+        return detect_execution(prompt)
+    except Exception:
+        return None
+
+
 def _delegate_route_enabled() -> bool:
     """The enforced operational→delegate redirect is ON by default now that the
     agentic executor is sandboxed (North Star P1: the bash allowlist + path guards
@@ -945,19 +960,37 @@ def main() -> None:
         except Exception:  # noqa: BLE001 — decision failure → no bounded route
             _bounded_ok = False
     _op_sig = _detect_operational(_orig_prompt) if (_delegate_ok or _bounded_ok) else None
-    if _op_sig is not None and _op_sig.fires:
+    _fires = _op_sig is not None and _op_sig.fires
+    # ENF-FIX-1 (GAP-ENF-1 / INV-ROUTE-006): execution/repo work that lacks a
+    # verification cue does NOT trip detect_operational, so before this it was
+    # routed to the text-only door and dead-ended the moment it reached Bash. A
+    # SEPARATE high-precision execution signal names the tool-capable door for
+    # such code/coordination work — never by broadening detect_operational (which
+    # would over-route prose). Same complexity gate + escape hatch as above.
+    _exec_sig = None
+    if (not _fires and (_delegate_ok or _bounded_ok)
+            and task_type in ("code", "coordination")):
+        _exec_sig = _detect_execution(_orig_prompt)
+        if _exec_sig is not None and _exec_sig.fires:
+            _fires = True
+    if _fires:
         expected_tool = "llm_delegate"
         task_type = "delegate"
-        _route_reason = "bounded_operational" if (_bounded_ok and not _delegate_ok) else "operational_intent"
+        _bounded = _bounded_ok and not _delegate_ok
+        if _op_sig is not None and _op_sig.fires:
+            _route_reason = "bounded_operational" if _bounded else "operational_intent"
+            _why = f"verb={_op_sig.verb!r} cue={_op_sig.cue!r}"
+        else:
+            _route_reason = "bounded_execution" if _bounded else "execution_intent"
+            _why = f"verb={_exec_sig.verb!r} obj={_exec_sig.obj!r}"
         try:
             _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
             ts = time.strftime("%Y-%m-%d %H:%M:%S")
             with _LOG_PATH.open("a", encoding="utf-8") as f:
-                # Record WHY it fired (verb + cue) for post-incident audit.
+                # Record WHY it fired (verb + cue/obj) for post-incident audit.
                 f.write(
                     f"[{ts}] DELEGATE_ROUTE session={session_id[:12]} "
-                    f"reason={_route_reason} verb={_op_sig.verb!r} cue={_op_sig.cue!r} "
-                    f"tool={tool_name}\n"
+                    f"reason={_route_reason} {_why} tool={tool_name}\n"
                 )
         except OSError:
             pass
