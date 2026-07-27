@@ -3276,12 +3276,24 @@ def main() -> None:
     # WHY and what to do instead: answer from real context, or route WITH context
     # via llm_query(context=…) — never relay a context-free draft as an answer.
     if not zero_claude and _is_context_dependent(prompt):
+        # ENF-FIX-2 (GAP-ENF-2): a context-dependent prompt that ALSO needs local
+        # execution / repo ops can't be completed by a text-only door even WITH
+        # context — so name the PROVISIONED tool-capable door (llm_act with
+        # context). A context-dependent prompt that needs no execution keeps its
+        # text-only suggestion (no over-routing). Composes with ENF-FIX-1's signal.
+        _ctx_tool = tool
+        try:
+            from chuzom.execution_signal import needs_execution as _needs_exec
+            if _needs_exec(prompt):
+                _ctx_tool = "llm_act"
+        except Exception:
+            pass
         _context_note = (
             "🧠 CONTEXT-DEPENDENT PROMPT — this references your local files / repo / "
             "history / state, which a stateless routed model cannot see. No blind "
             "draft was generated (it would be fabrication). Answer from your real "
             "context (read the files, use tools, prior turns); if you do route, pass "
-            "the relevant slices via llm_query(context=…). Never present a context-"
+            f"the relevant slices via {_ctx_tool}(context=…). Never present a context-"
             "free draft as the answer.\n\n"
         )
         # Part B (bounce-back fix): a context-dependent prompt references local
@@ -3295,12 +3307,12 @@ def main() -> None:
         # the tool in the directive also keeps the routing display consistent.
         write_pending = False
         directive = _context_note + (
-            f"⚡ ROUTE (advisory): {task_type}/{complexity} → {tool} [via {method}] — but "
+            f"⚡ ROUTE (advisory): {task_type}/{complexity} → {_ctx_tool} [via {method}] — but "
             f"this prompt is context-dependent, so a stateless routed model can't see your "
             f"repo. Nothing is blocked; prefer handling it DIRECTLY with your tools, or "
-            f"route WITH context via {tool}(context=…). Never relay a context-free draft."
+            f"route WITH context via {_ctx_tool}(context=…). Never relay a context-free draft."
         )
-        indicator = f"🧠 {task_type}/{complexity} → {tool} · context-dependent [via {method}]"
+        indicator = f"🧠 {task_type}/{complexity} → {_ctx_tool} · context-dependent [via {method}]"
 
     # ── Per-session paid-API spend cap (#3) ──────────────────────────────────────
     # Drafts are already free-only; this is the backstop for the rest of routing.
