@@ -75,6 +75,57 @@ model with real capability), which we did not have.
 and the quality axis is inconclusive pending a real judge. Release verdict unchanged: **RELEASE
 NOT QUALIFIED**.
 
+## Third + fourth runs — the CASH benchmark (metered GPT-4o, 2026-07-27)
+
+With a billing-active `OPENAI_API_KEY`, ran the real cash A/B: **Chuzom vs always-GPT-4o**
+(`FixedModelRouter openai/gpt-4o`, metered). This is the Gate-15 test — positive net *cash*
+savings — and (for moderate/hard) a **reliable GPT-4o judge** replaces the weak Ollama judge.
+
+### Easy corpus (20 prompts, objective grading — reliable, no judge)
+
+| arm | cost | quality |
+|---|---|---|
+| always-GPT-4o | $0.00242 | 5.00 |
+| chuzom | **$0.00000** (100% local Ollama) | 4.80 |
+
+Net cash **+$0.00242**; delta −0.20 (objective, trustworthy). **Gates 15 / 16 / 17 all PASS** —
+a **clean** cash win: Chuzom answered every easy prompt on free local models at near-parity.
+Small in absolute terms (short prompts), but real and un-confounded.
+
+### Moderate + hard corpus (33 prompts, GPT-4o judge)
+
+| arm | cost | quality (GPT-4o judge) |
+|---|---|---|
+| always-GPT-4o | $0.03030 | 4.94 |
+| chuzom | **$0.00000** | 4.61 |
+
+- Net cash **+$0.03030** (Gate 15 net>0 = True); quality delta **−0.33**, within the 0.5 margin,
+  now **reliably judged** (Gate 16 = True). Every prompt Chuzom escalated scored q=5.
+- **Gate 17 = FALSE — and this is the key honesty catch.** On 11/33 prompts Chuzom escalated to
+  **other subscriptions** — `codex/gpt-5.5` (9) and `anthropic/claude-opus` (2) — recorded at
+  $0 cash. Gate 17 correctly flags all 11 as **unclassified spend**: a non-local model at $0
+  means its true (quota) cost was not captured. So Chuzom did **not** do the hard prompts for
+  free — it **offloaded them to other paid subscriptions** whose cost is real but unpriced here.
+
+### Honest conclusion (Gates 15/16/17)
+
+- ✅ **Chuzom genuinely saves cash when it stays fully local** — easy corpus is a **clean** pass
+  of all three gates (chuzom $0 vs GPT-4o $0.0024, reliable objective quality).
+- ✅ **Quality holds when it escalates** — moderate/hard, reliably GPT-4o-judged: −0.33, within
+  margin, escalated prompts all q=5.
+- ❌ **It does NOT cleanly demonstrate blanket cash savings across difficulty.** On hard prompts
+  the apparent "$0" is **subscription-offload** (Codex/Claude-Opus quota), not free work —
+  **Gate 17 fails**, so the +$0.03 overstates the real resource saving. The benchmark correctly
+  refuses to certify it.
+
+**Gate impact:** the easy-corpus run is the first clean Gate 15/16/17 pass, but a *single small
+easy corpus* is not the release bar, and the moderate/hard run shows the savings claim is
+**confounded once Chuzom must escalate** (subscription-offload). A defensible Gate-15 PASS needs
+a run where the escalation tier is **also metered** (so the offload cost is captured and the
+comparison is apples-to-apples), across a larger corpus, then the two-consecutive-audit rule
+(#6). Until then the verdict is unchanged — **RELEASE NOT QUALIFIED** — now for a precise,
+evidence-based reason rather than an un-run gate.
+
 ## To extend
 
 - Run the **moderate/hard** corpora for a fuller quota curve (more escalations; needs an
