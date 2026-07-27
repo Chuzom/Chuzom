@@ -987,11 +987,18 @@ def main() -> None:
     # verification cue does NOT trip detect_operational, so before this it was
     # routed to the text-only door and dead-ended the moment it reached Bash. A
     # SEPARATE high-precision execution signal names the tool-capable door for
-    # such code/coordination work — never by broadening detect_operational (which
-    # would over-route prose). Same complexity gate + escape hatch as above.
+    # such work — never by broadening detect_operational (which would over-route
+    # prose). Same complexity gate + escape hatch as above.
+    #
+    # ENF-FIX-4 (GAP-ENF-3): honor the execution signal REGARDLESS of task_type.
+    # The heuristic classifier gives near-identical repo-work prompts different
+    # task_types turn to turn (code/coordination/research/query), so gating the
+    # redirect on code/coordination let a re-classification to research/query
+    # dead-end the same work at the text-only door. Because detect_execution is
+    # high-precision (silent on prose/explanation/pure authoring), honoring it for
+    # any task_type pins execution work to the tool-capable door consistently.
     _exec_sig = None
-    if (not _fires and (_delegate_ok or _bounded_ok)
-            and task_type in ("code", "coordination")):
+    if not _fires and (_delegate_ok or _bounded_ok):
         _exec_sig = _detect_execution(_orig_prompt)
         if _exec_sig is not None and _exec_sig.fires:
             _fires = True
