@@ -98,12 +98,14 @@ digest (#168) and dashboard (#169) fall open to **5/25**.
 **Why:** on the rare import failure, the session summary would show a 3×-inflated baseline
 while every other surface shows the current price. Fix: unify the fallback to 5/25.
 
-### D9 — Net-vs-gross savings shown inconsistently across panels  · **LOW**
-Codex/Gemini panels show gross − overhead = **realized** (`_format_codex_section` ~1466,
-`_format_provider_section` ~1408), while Routing/Free show **gross** saved with no overhead
-netting.
-**Why:** "saved" means realized-net in two panels and gross in two others — the same word,
-two definitions (INV-COST-005 not applied uniformly).
+### D9 — Net-vs-gross savings shown inconsistently across panels  · **LOW** · ✅ FIXED (DASH-5)
+Codex/Gemini panels show gross − overhead = **realized** (`_format_codex_section`,
+`_format_provider_section`), while Routing/Free showed bare **"saved"** (gross, no overhead
+netting) — the same word, two definitions.
+**Fix (DASH-5):** qualify the gross panels explicitly — Routing "% saved (gross)", Free
+"$X gross saved" — reserving "realized" for the overhead-netted figure. Labels made honest;
+actually *netting* Routing/Free for overhead is the DASH-1b single-basis work.
+Tests in `tests/test_dash5_saved_definition.py`.
 
 ---
 

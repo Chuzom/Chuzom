@@ -583,7 +583,10 @@ def _format_routing_section(tools: dict[str, dict]) -> list[str]:
         f"{tokens_str} tokens  "
         f"${total_cost:.4f} actual  "
         f"${total_base:.4f} baseline  "
-        f"{pct_color}{savings_pct}% saved{_RESET}  "
+        # D9: this is baseline-avoided GROSS of routing overhead — qualify it so
+        # it's not equated with the Codex/Gemini "realized" (gross − overhead).
+        # "% saved" is kept contiguous (the savings-clamp test relies on it).
+        f"{pct_color}{savings_pct}% saved{_RESET} {_C_MUTED}(gross){_RESET}  "
         # D5: explicit window so this panel isn't read as comparable to the
         # (today) provider panels or the lifetime cumulative panel beside it.
         f"{_C_MUTED}this session{_RESET}",
@@ -703,7 +706,10 @@ def _format_free_section(free_rows: list[dict], paid_rows: list[dict] | None = N
     saved_color = _C_GREEN if total_saved > 0 else _C_LABEL
     lines = [
         f"    {_C_WHITE}{total_calls}{_RESET} calls  ·  "
-        f"{saved_color}${total_saved:.4f} saved{_RESET} vs Claude host  "
+        # D9: gross of routing overhead (matches the Routing panel; distinct from
+        # the Codex/Gemini "realized" figure). "saved{_RESET} vs Claude host" is
+        # kept contiguous (the DASH-2 mislabel guard relies on it).
+        f"{saved_color}${total_saved:.4f} gross saved{_RESET} vs Claude host  "
         # D5: this-session window (the {label} is a provider descriptor, not a window)
         f"{_C_MUTED}this session · {label}{_RESET}"
     ]

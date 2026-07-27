@@ -128,7 +128,7 @@ def test_free_section_does_not_fabricate_tokens():
     assert "~est" not in text, "must not tag rows as estimated — no fabrication"
     assert "—" in text, "unknown token volume must render as an em-dash"
     # The header total and the provider row must both claim exactly $0.
-    assert "$0.0000 saved" in text, "no savings may be claimed from unknown tokens"
+    assert "$0.0000 gross saved" in text, "no savings may be claimed from unknown tokens"
     assert "0.0001" not in text and "0.001" not in text, "no fabricated dollar figure"
 
 
@@ -139,4 +139,4 @@ def test_free_section_still_credits_real_tokens():
     text = _strip("\n".join(se._format_free_section(free_rows, [])))
     assert "~est" not in text
     assert "—" not in text, "real tokens must render numerically, not as —"
-    assert "$0.0000 saved" not in text, "real token volume must credit a positive baseline"
+    assert "$0.0000 gross saved" not in text, "real token volume must credit a positive baseline"
