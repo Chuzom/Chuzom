@@ -61,13 +61,23 @@ genuinely-capable `llm_act` (e.g. tasks that legitimately need Claude), the corr
 
 ## Work items (Phase 3.5 — each its own tested, pushed increment)
 
-### ENF-FIX-1 — tool-capable door for execution work (GAP-ENF-1) — highest priority
+### ENF-FIX-1 — tool-capable door for execution work (GAP-ENF-1) — highest priority — ✅ DONE
 - CLASSIFY: a request needing local command execution / repo file ops → needs-tools=true.
 - Enforcement: the enforced door for such requests is `llm_act` (tool-capable), never a
   text-only door. Extend the operational→`llm_act` redirect to code/coordination-with-execution.
 - **Test:** an execution request under hard enforcement yields a directive naming `llm_act`
   (not `llm`/`llm_query`); calling `llm_act` clears the lock. A text-only door is never named
   for a needs-tools request.
+- **Implemented:** a SEPARATE high-precision signal `execution_signal.detect_execution`
+  (execution/VCS verb + concrete repo/command object, reusing `operational_signal`'s
+  explanatory-lead / content guards) — **NOT** by broadening `detect_operational`, which would
+  over-route prose. `enforce-route.py` folds it into the redirect: a `code`/`coordination`
+  request that needs execution but has no verification cue now names `llm_act`; an explanatory
+  prompt with the same task_type still names the text-only door (the signal, not the task_type,
+  gates the redirect); `CHUZOM_DELEGATE=off` disables it; calling `llm_act` clears the lock.
+  Tests: `test_execution_signal.py` (24, bidirectional) + `test_enf_fix1_execution_door.py`
+  (4, integration). The operational redirect (`test_consolidated_operational_names_llm_act`) is
+  unchanged.
 
 ### ENF-FIX-2 — PROVISION context on context-dependent routing (GAP-ENF-2)
 - When `_is_context_dependent(prompt)`, route to `llm_act` **with cwd + repo state + session
