@@ -95,4 +95,13 @@ _(empty — the first pass cannot run until the Gate-13 freeze blocker is cleare
 
 | Date | Frozen SHA | Mechanical | Benchmark | Gate review | Pass? |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| 2026-07-28 | `54dba38`→`22895cd` | suite clean (rc=0, 0 FAILED) + claim validator OK | **Gate 16 FAIL**: net +$0.02814 (G15✓), 0 exhaustions, unclassified=[] (G17✓), but quality **delta −0.58 > 0.5 margin** | halted at Gate 16 | **NO** |
+
+**Pass 1 outcome — a real finding, no count started.** The benchmark measured a
+quality delta of **−0.58** (outside the 0.5 non-inferiority margin), whereas an
+earlier run measured −0.36 (inside). Gate 16 therefore **flips across the margin
+between runs → it is NOT robustly proven** (working rule: an unproven gate is FAIL).
+The two-pass count does not begin. Root cause is the residual local q=1 misses
+(`mod-07`, `mod-12`) plus run-to-run judge/local variance — i.e. **task #27**
+(classifier/escalation tuning). Fix #27 so quality is robustly within margin, then
+re-freeze and restart the audit. Verdict unchanged: **RELEASE NOT QUALIFIED.**
