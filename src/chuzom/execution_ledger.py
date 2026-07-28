@@ -182,7 +182,10 @@ CREATE INDEX IF NOT EXISTS idx_exec_ts ON execution_events(ts);
 def _connect(path: Path | None = None) -> sqlite3.Connection:
     p = path or _db_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(p), timeout=5.0)
+    # 30s busy-timeout (was 5s): under pathological CI-runner load, rapid open/write/
+    # close cycles can transiently hold the WAL lock long enough that a 5s wait errored
+    # with `database is locked`. A longer wait lets the writer drain instead of failing.
+    conn = sqlite3.connect(str(p), timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_DDL)
     return conn
