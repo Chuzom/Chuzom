@@ -158,3 +158,98 @@ def test_structure_result_fields_are_populated():
     ok = _check_structure(c, "short prose. two sentences. three sentences here.")
     assert ok.gate == GateType.STRUCTURE
     assert ok.passed is True
+
+
+# ── _check_citation (pre-existing): kill detection/combo/boundary/field mutants ─
+
+from chuzom.gates import _check_citation  # noqa: E402
+
+
+def _cite(text):
+    return _check_citation(_contract(task_type=TaskType.RESEARCH), text)
+
+
+def test_citation_url_only_passes():
+    """A bare (lowercase) URL is sufficient citation. The url regex is
+    case-SENSITIVE (`https?://`, no IGNORECASE), so a lowercase URL matches the
+    original but NOT the `HTTPS?://` case-fold mutant → kills it."""
+    assert _cite("See https://example.com/paper for details. " + "x" * 300).passed
+
+
+def test_citation_marker_only_passes():
+    """Citation markers alone suffice — pins the has_citation regex (incl. case)."""
+    for marker in ("See [1] here.", "As [source] notes.", "According to the study.",
+                   "per the report", "ACCORDING TO everyone"):
+        assert _cite(marker + " " + "x" * 300).passed, marker
+
+
+def test_citation_reference_word_only_passes():
+    """The word 'reference' or 'source' alone suffices — pins has_reference + case."""
+    assert _cite("This reference explains it. " + "x" * 300).passed
+    assert _cite("Our SOURCE confirms it. " + "x" * 300).passed
+
+
+def test_citation_no_signal_short_passes_long_fails():
+    """No url/citation/reference: a short body passes (gate n/a); a >300-char body
+    fails with the exact reason. Pins the >300 boundary, the reason, and fields."""
+    assert _cite("x" * 100).passed, "short uncited body is not gated"
+    r = _cite("x" * 400)
+    assert r.gate == GateType.CITATION and r.passed is False
+    assert r.reason == "no citations found in research response"
+
+
+def test_citation_length_boundary_exact():
+    """Exactly 300 uncited chars pass (not gated); 301 fail. Kills >=300 and >301."""
+    assert _cite("x" * 300).passed
+    assert not _cite("x" * 301).passed
+
+
+def test_citation_combination_is_or_not_and():
+    """Each signal independently suffices — kills the `or`→`and` boolean mutants:
+    citation-only (no url, no reference) and url-only (no citation, no reference)
+    must BOTH pass."""
+    assert _cite("[1] only " + "x" * 300).passed          # citation only
+    assert _cite("http://a.b/c only " + "x" * 300).passed  # url only
+
+
+# ── _check_format (pre-existing): kill fmt-branch / json / field mutants ───────
+
+from dataclasses import replace as _dc_replace  # noqa: E402
+
+from chuzom.gates import _check_format  # noqa: E402
+
+
+def _fmt_contract(required_format):
+    c = _contract(task_type=TaskType.GENERATE)
+    return _dc_replace(c, constraints=_dc_replace(c.constraints, required_format=required_format))
+
+
+def test_format_none_required_passes():
+    """required_format=None → passes with the 'no format required' reason. Kills the
+    `fmt is None`/`is not None` flip and the field/reason mutants on that path."""
+    r = _check_format(_fmt_contract(None), "anything at all")
+    assert r.gate == GateType.FORMAT and r.passed is True
+    assert r.reason == "no format required"
+
+
+def test_format_json_valid_passes():
+    """required_format='json' + valid JSON → passes via the final return. Kills the
+    `fmt=='json'` string/case flips and json.loads(None) on the happy path."""
+    r = _check_format(_fmt_contract("json"), '{"a": 1, "b": [2, 3]}')
+    assert r.gate == GateType.FORMAT and r.passed is True
+
+
+def test_format_json_invalid_fails_with_reason():
+    """required_format='json' + invalid JSON → fails with the exact 'invalid JSON'
+    reason. Kills the passed/gate/reason field mutants and the reason string/case."""
+    r = _check_format(_fmt_contract("json"), "this is not json{")
+    assert r.gate == GateType.FORMAT
+    assert r.passed is False
+    assert r.reason == "invalid JSON"
+
+
+def test_format_non_json_format_is_not_json_checked():
+    """required_format='code' (≠ json) skips the JSON parse and passes — kills the
+    `fmt == 'json'` → `fmt != 'json'` mutant (which would JSON-check code)."""
+    r = _check_format(_fmt_contract("code"), "def f(): return 1")
+    assert r.gate == GateType.FORMAT and r.passed is True
