@@ -447,7 +447,13 @@ def execute_agent(
 
     try:
         from chuzom.agentic_registry import get_registry, rank as _registry_rank
-        _verdicts = get_registry()  # cached; only probes when model set changes
+        # Hot-path caller: use the non-blocking soft-hint mode. execute_agent uses
+        # verdicts only to *rank* an already-chosen chain, so a stale/empty registry
+        # is harmless — but a live probe here would block on per-model network calls
+        # (seconds each) and, under pytest, made the suite order-dependent on the
+        # shared verdict cache and could hang (the RC-0 flake). allow_probe=False
+        # returns the cache as a soft hint, else {}.
+        _verdicts = get_registry(allow_probe=False)
     except Exception:
         _verdicts = {}
 
