@@ -3362,6 +3362,20 @@ async def route_and_call(
                 available_providers=sorted(available),
                 candidate_count=0,
             )
+            # #32: when a CHUZOM_BLOCK_PROVIDERS hard filter is active (see
+            # _blocked_providers) and the chain came out empty, surface the block
+            # as a likely cause — otherwise the generic "install Ollama / set a key"
+            # message is misleading (the fix may just be to unblock a provider).
+            _blocked = _blocked_providers()
+            if _blocked:
+                raise ValueError(
+                    f"No routable models for {task_type.value}/{profile.value} with "
+                    f"CHUZOM_BLOCK_PROVIDERS={sorted(_blocked)} active — the hard "
+                    f"provider block may have removed every candidate. Configured "
+                    f"providers: {sorted(available) or 'none'}. Fix: remove a provider "
+                    f"from CHUZOM_BLOCK_PROVIDERS, or ensure a non-blocked provider "
+                    f"(e.g. ollama/*) has a reachable model."
+                )
             raise ValueError(
                 f"No providers available for {task_type.value}/{profile.value}. "
                 f"Configured providers: {available or 'none'}. "
