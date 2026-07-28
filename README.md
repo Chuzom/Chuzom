@@ -1019,9 +1019,12 @@ export CHUZOM_ENFORCE=hard
 
 ## Benchmarks
 
-Directional measurements on the built-in smoke corpus of 53 prompts
-(easy.jsonl × 20, hard.jsonl × 16, moderate.jsonl × 17).  These numbers are
-illustrative — not statistically significant at this corpus size.
+Directional measurements on the built-in smoke corpus of 77 prompts
+(easy.jsonl × 20, hard.jsonl × 16, moderate.jsonl × 17, plus the objective-heavy
+extension moderate2.jsonl × 12 and hard2.jsonl × 12).  The audited release benchmark
+uses the moderate + hard baseline (33 prompts); the extension sharpens the quality
+estimate. These numbers are illustrative — not statistically significant at this
+corpus size.
 
 ```
 Model Selection Strategy          Accuracy    Cost/1K    Quality
