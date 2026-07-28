@@ -37,7 +37,8 @@ HOME="$FRESH_HOME" OPENAI_API_KEY=sk-test-dummy-key-for-ci-only-no-real-calls-ma
   > /tmp/audit_suite.log 2>&1
 SUITE_RC=$?
 set -e 2>/dev/null || true
-FAILS="$(grep -cE '^FAILED ' /tmp/audit_suite.log 2>/dev/null || echo 0)"
+FAILS="$(grep -cE '^FAILED ' /tmp/audit_suite.log 2>/dev/null || true)"
+FAILS="${FAILS:-0}"
 echo "pytest rc=$SUITE_RC, FAILED lines=$FAILS"
 # Known-flake allowance: the RC-0 and perf flakes are fixed (#206/#209); the only
 # tolerated residual is the aiosqlite watchdog on the 3.11 job (not this runner).
