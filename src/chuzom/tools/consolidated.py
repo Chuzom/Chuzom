@@ -1,4 +1,4 @@
-"""Consolidated tool surface — North Star P4 / 1.0 direction (Docs/TOOL_SURFACE_PROPOSAL.md).
+"""Consolidated tool surface — North Star P4 / 1.0 direction (Docs/archive/TOOL_SURFACE_PROPOSAL.md).
 
 These are the front-door tool names from the 73→11 proposal, registered ALONGSIDE
 the existing tools (nothing is removed — this is a NON-BREAKING alias layer that

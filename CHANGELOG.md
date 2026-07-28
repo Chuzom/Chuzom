@@ -305,7 +305,7 @@ versions in the durable `routing_outcomes` ledger:
 Prompted by the 2026-07-20 routing retrospective. Multiple savings surfaces used
 different windows, labels, baseline **models**, and baseline **prices**, so their
 reported numbers disagreed by an order of magnitude. Full write-up:
-`docs/savings-integrity-corrections.md`.
+`Docs/archive/savings-integrity-corrections.md`.
 
 > ⚠️ **Reported savings numbers change.** The baseline price was ~3× too high, so
 > historical `saved_usd` was ~3× inflated; the corrected figures are lower. This is

@@ -101,6 +101,6 @@ that isn't measured.
 
 ## Related
 
-- Phased implementation: `docs/END_TO_END_ROUTING_PLAN.md`
-- Tool-surface consolidation (1.0): `docs/TOOL_SURFACE_PROPOSAL.md`
-- Near-term remediation: `docs/PLAN_0_9_1.md`
+- Phased implementation: `Docs/archive/END_TO_END_ROUTING_PLAN.md`
+- Tool-surface consolidation (1.0): `Docs/archive/TOOL_SURFACE_PROPOSAL.md`
+- Near-term remediation: `Docs/archive/PLAN_0_9_1.md`

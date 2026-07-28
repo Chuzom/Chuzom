@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 """SHA-256 contamination audit — the load-bearing guarantee of Firewall v2.
 
-Firewall v2 (``Docs/ROUTERARENA_CLEAN_075_PLAN.md`` §2) upgrades academic-
+Firewall v2 (``Docs/archive/ROUTERARENA_CLEAN_075_PLAN.md`` §2) upgrades academic-
 benchmark *train/validation* splits from "banned" to "allowed **iff** a hash
 audit proves 0 overlap with RouterArena's eval prompts." This module is that
 audit, in a form that is (a) pure and unit-testable, (b) importable by the
