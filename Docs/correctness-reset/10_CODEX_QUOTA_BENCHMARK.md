@@ -293,6 +293,41 @@ NOT QUALIFIED** on Gate 13 (equivalent mutants) and the two-consecutive-audit ru
 benchmark gates 15/16/17 are now all green in the realistic config, with lever ② the next
 quality lift for the strict full-metering case.
 
+## Eighth run — lever ② applied: 0 exhaustions, all gates pass under STRICT metering (#204)
+
+Lever ② (PR #204) fixed the two defects the seventh run isolated: (a) an embedding-only model
+(`nomic-embed-text`) polluting generation chains as the *top* candidate — always erroring and
+tripping the local circuit breaker — now filtered at both the discovery-cache write and read
+(so stale 24h caches are cleaned too); (b) no metered mid-tier in the premium chain — now
+`gpt-4o-mini → gpt-4o` is injected before `o3` (cheapest-capable-first; quality-gated escalation
+promotes to o3 only on a low-scoring cheap answer).
+
+Re-ran the **same strict full-metering config** (`CHUZOM_BLOCK_PROVIDERS=codex,gemini_cli`, fresh
+DB, GPT-4o judge) that the seventh run failed:
+
+| metric | 7th run (before ②) | **8th run (after ②)** |
+|---|---|---|
+| chuzom cost | — | **$0.00130** |
+| net cash | −$0.001 | **+$0.02897** |
+| quality delta | −1.36 | **−0.36** (within margin) |
+| exhausted (q=1) | 9 | **0** |
+| embedding in chain | yes (top candidate) | **none** |
+| Gate 15 / 16 / 17 | ❌ / ❌ / ✅ | **✅ / ✅ / ✅** |
+
+- **All three benchmark gates now PASS even under strict full metering** — not just the realistic
+  config. Zero exhaustions. Removing the embedding model let local models succeed on far more
+  prompts (chuzom cost fell to **$0.0013**), and the `gpt-4o-mini` mid-tier handles escalations
+  for ~$0.0003 at q=5.
+- **Residual:** 2 moderate prompts (`mod-07`, `mod-12`) still score q=1 on a local model without
+  escalating — a classifier / P2-escalation-threshold tuning item (tracked separately), not an
+  exhaustion. Closing them would push the −0.36 delta further within margin.
+
+**Gate impact:** the benchmark gates **15/16/17 are green in both the realistic AND the strict
+full-metering configs**. The control-group / real-savings work (deferred item #5) is
+substantively complete. Verdict remains **RELEASE NOT QUALIFIED** solely on **Gate 13**
+(equivalent mutants) and the **two-consecutive-audit rule** — the two structural blockers, no
+longer any benchmark/routing defect.
+
 ## To extend
 
 - Run the **moderate/hard** corpora for a fuller quota curve (more escalations; needs an
