@@ -253,3 +253,120 @@ def test_format_non_json_format_is_not_json_checked():
     `fmt == 'json'` → `fmt != 'json'` mutant (which would JSON-check code)."""
     r = _check_format(_fmt_contract("code"), "def f(): return 1")
     assert r.gate == GateType.FORMAT and r.passed is True
+
+
+# ── _check_syntax keyword detection + threshold + fields ──────────────────────
+
+# One 2-line, syntax-broken snippet per detected keyword. Two lines start with the
+# SAME keyword → 2 code-indicators → the text is parsed → SyntaxError → FAIL.
+# Breaking that keyword's detection drops indicators below 2 → "non-code" → the
+# broken code would pass. Asserting FAIL kills the per-keyword string+case mutants
+# AND the `code_indicators < 2` → `<= 2` / `< 3` threshold mutants.
+_SYNTAX_BROKEN = {
+    "def ": "def f(:\ndef g(:",
+    "class ": "class A(:\nclass B(:",
+    "import ": "import (\nimport (",
+    "from ": "from (\nfrom (",
+    "if ": "if :\nif :",
+    "for ": "for :\nfor :",
+    "return ": "return (\nreturn (",
+}
+
+
+@pytest.mark.parametrize("keyword,code", list(_SYNTAX_BROKEN.items()))
+def test_syntax_each_keyword_is_detected_and_broken_code_fails(keyword, code):
+    c = _contract(task_type=TaskType.CODE)
+    r = _check_syntax(c, code)
+    assert r.gate == GateType.SYNTAX
+    assert r.passed is False, f"{keyword!r} code with a syntax error must fail"
+    assert "SyntaxError" in r.reason
+
+
+def test_syntax_non_code_response_fields():
+    """Non-code prose returns gate=SYNTAX, passed=True, reason='non-code response'
+    — kills the field/reason mutants on that branch."""
+    c = _contract(task_type=TaskType.CODE)
+    r = _check_syntax(c, "Just one short sentence, nothing code-like about it.")
+    assert r.gate == GateType.SYNTAX
+    assert r.passed is True
+    assert r.reason == "non-code response"
+
+
+def test_syntax_valid_fenced_code_fields():
+    """Valid fenced code returns gate=SYNTAX, passed=True — kills the final
+    `gate=None` mutant on the valid path."""
+    c = _contract(task_type=TaskType.CODE)
+    r = _check_syntax(c, "```python\ndef add(a, b):\n    return a + b\n```")
+    assert r.gate == GateType.SYNTAX and r.passed is True
+
+
+# ── _check_length fields + premium-downshift warning ──────────────────────────
+
+def test_length_gate_result_fields():
+    c = _contract(complexity=Complexity.COMPLEX)
+    ok = _check_length(c, "x" * c.constraints.min_output_length)
+    assert ok.gate == GateType.LENGTH and ok.passed is True
+    bad = _check_length(c, "x")
+    assert bad.gate == GateType.LENGTH and bad.passed is False
+
+
+def test_length_premium_warning_names_task_and_phrases(caplog):
+    """A short answer on a COMPLEX/premium task logs a WARNING that names the
+    task_type/complexity and the downshift phrasing — kills the log-string and
+    the None-arg (task_type/complexity) mutants."""
+    import logging
+    c = _contract(task_type=TaskType.ANALYZE, complexity=Complexity.COMPLEX)
+    with caplog.at_level(logging.WARNING, logger="chuzom.gates"):
+        _check_length(c, "x")  # far under min → premium warning path
+    msgs = [rec.getMessage() for rec in caplog.records]
+    joined = " ".join(msgs)
+    assert any("premium task" in m for m in msgs), msgs
+    assert "analyze" in joined and "complex" in joined
+    assert "downshift" in joined
+    # Pin the message text EXACTLY enough to kill the log-string mutants: no
+    # mutmut XX-wrapping survives, and the exact-case phrases kill the case flips.
+    assert "XX" not in joined, "log string must not carry mutmut XX-padding"
+    assert "Length gate failed on premium task" in joined      # exact case
+    assert "A brief valid answer may be forcing" in joined     # exact case
+
+
+# ── run_gates pytest-skip branch ──────────────────────────────────────────────
+
+def test_run_gates_skips_under_pytest_when_not_forced_on(monkeypatch):
+    """With PYTEST_CURRENT_TEST set and CHUZOM_GATES unset/≠on, run_gates auto-skips
+    and returns (True, []) — kills the PYTEST_CURRENT_TEST env-name string/case
+    mutants and the `return True, []` → `return False, []` mutant."""
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "x::y (call)")
+    monkeypatch.delenv("CHUZOM_GATES", raising=False)
+    c = build_contract("g", TaskType.CODE, Complexity.MODERATE, "test/m")
+    passed, results = run_gates(c, "x")  # would FAIL length if gates ran
+    assert passed is True and results == []
+
+
+# ── _check_citation pass-path fields ──────────────────────────────────────────
+
+def test_citation_pass_paths_report_gate():
+    """Kills the `gate=None` mutants on both citation pass paths (cited, and
+    short-uncited)."""
+    assert _cite("See [1].").gate == GateType.CITATION
+    assert _cite("x" * 50).gate == GateType.CITATION
+
+
+def test_syntax_single_code_indicator_line_is_non_code():
+    """A SINGLE code-indicator line is below the ≥2 threshold → treated as
+    non-code and passed (the gate isn't confident it's code). Kills the
+    `sum(1 …)` → `sum(2 …)` mutant, which would count one line as 2 and parse it."""
+    c = _contract(task_type=TaskType.CODE)
+    r = _check_syntax(c, "def f(:")   # one broken code line, on its own
+    assert r.passed is True, "a lone code-ish line is non-code, not a syntax failure"
+
+
+def test_syntax_only_first_ten_lines_are_scanned_for_indicators():
+    """Indicator scan is bounded to the first 10 lines (`lines[:10]`). With one
+    code line at the top and a second only at line 11, the count stays at 1 (<2)
+    → non-code → pass. The `[:10]`→`[:11]` mutant would see 2 indicators, parse,
+    and fail — so asserting PASS kills it."""
+    c = _contract(task_type=TaskType.CODE)
+    lines = ["def f(:"] + ["just some prose here"] * 9 + ["class B(:"]  # 11 lines
+    r = _check_syntax(c, "\n".join(lines))
+    assert r.passed is True
