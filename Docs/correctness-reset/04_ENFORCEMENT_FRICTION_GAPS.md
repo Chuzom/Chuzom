@@ -116,6 +116,35 @@ local-toolchain Bash in that turn is exempt too.
 
 ---
 
+## GAP-ENF-5 — The block message CLAIMS reads/Bash are allowed, then blocks them (banner ↔ behavior contradiction)
+
+**What happened (2026-07-27/28).** On several turns the injected enforcement banner stated
+verbatim:
+
+> "⚠ ENFORCEMENT ACTIVE … File reads and implementation tools (Edit/Write/Bash) stay allowed —
+> only the route-first step is enforced, and only for the blocklisted tools for {query,generate,analyze}."
+
+…yet the very next `Read` (on `router.py`) and `Bash` (running the CI-exact suite / grepping the
+repo) were **BLOCKED** with "Routing directive BLOCKED … Tool attempted: Read/Bash". The block was
+cleared only by re-issuing the tool to trip the trap auto-pivot.
+
+**Why it matters.** This is worse than GAP-ENF-1 alone: the operator-facing message actively
+**mis-describes** the enforcement contract. A reader (human or agent) who trusts the banner will
+plan to read/inspect freely, then be blocked anyway — the guidance and the gate disagree. Either
+the banner is wrong (reads/Bash are NOT actually exempt for these task types) or the gate is wrong
+(they should be). Both are defects; the contradiction is the finding.
+
+**Repro this session.** `analyze/moderate` and `generate/moderate` directives fired on
+context-dependent repo prompts; banner said reads/Bash allowed; `Read`/`Bash` were BLOCKED on the
+first attempt and only allowed after the trap auto-pivot (2nd identical call).
+
+**Fix direction.** Make the banner tell the truth for the task type it fired on: if `Read`/`Bash`
+are in the blocklist for `analyze`/`generate`/`query`, the banner must not claim they "stay
+allowed." Better: exempt read-only inspection (`Read`, readonly `Bash`) as the banner promises, so
+the gate matches its own description — this also subsumes GAP-ENF-1/4.
+
+---
+
 ## Severity & framing
 
 None of these broke the work (the escape valves — soft mode, trap auto-pivot, readonly-bash
