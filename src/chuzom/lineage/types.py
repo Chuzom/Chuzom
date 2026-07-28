@@ -101,6 +101,12 @@ class LineageRecord:
     step_index: int | None = None
     parent_session_id: str | None = None
     framework: str | None = None
+    # #28 (Gate 7): actual measured token counts, so summary.py can compute a real
+    # token counterfactual instead of estimating from latency. Default 0 = "not
+    # recorded" (legacy rows / callers that don't pass them) — summary falls back
+    # to the latency estimate only when both are 0.
+    input_tokens: int = 0
+    output_tokens: int = 0
 
     def to_row(self) -> tuple:
         return (
@@ -126,6 +132,8 @@ class LineageRecord:
             self.step_index,
             self.parent_session_id,
             self.framework,
+            self.input_tokens,
+            self.output_tokens,
         )
 
 
@@ -196,6 +204,8 @@ def make_record(
     step_index: int | None = None,
     parent_session_id: str | None = None,
     framework: str | None = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
 ) -> LineageRecord:
     """Convenience builder — derives tier + inversion automatically."""
     tier = model_tier if model_tier is not None else tier_for_model(model_chosen)
@@ -223,4 +233,6 @@ def make_record(
         step_index=step_index,
         parent_session_id=parent_session_id,
         framework=framework,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )

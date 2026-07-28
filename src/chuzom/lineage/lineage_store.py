@@ -139,7 +139,9 @@ class LineageStore:
                     session_id TEXT,
                     step_index INTEGER,
                     parent_session_id TEXT,
-                    framework TEXT
+                    framework TEXT,
+                    input_tokens INTEGER DEFAULT 0,
+                    output_tokens INTEGER DEFAULT 0
                 )
             """)
             # Indexes on both tables.
@@ -174,6 +176,11 @@ class LineageStore:
                 ("step_index", "step_index INTEGER"),
                 ("parent_session_id", "parent_session_id TEXT"),
                 ("framework", "framework TEXT"),
+                # #28 (Gate 7): actual token counts. Additive with DEFAULT 0 so
+                # pre-#28 rows read back as "not recorded" and summary.py falls
+                # back to its latency estimate for them.
+                ("input_tokens", "input_tokens INTEGER DEFAULT 0"),
+                ("output_tokens", "output_tokens INTEGER DEFAULT 0"),
             ):
                 if col not in existing_cols:
                     conn.execute(f"ALTER TABLE lineage ADD COLUMN {ddl}")
@@ -327,6 +334,10 @@ class LineageStore:
                     "host": provider,
                     "notes": raw.get("notes") or "",
                     "framework": None,
+                    # #28: legacy routing_decisions rows have no split token
+                    # counts — 0 signals "not recorded" so summary.py estimates.
+                    "input_tokens": 0,
+                    "output_tokens": 0,
                 })
 
         adapted.sort(key=lambda r: r["timestamp"], reverse=True)
@@ -377,8 +388,8 @@ class LineageStore:
                     fired_decisions, chain_attempted, model_chosen,
                     model_tier, inversion, outcome, latency_ms, cost_usd,
                     notes, agent_id, session_id, step_index,
-                    parent_session_id, framework
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    parent_session_id, framework, input_tokens, output_tokens
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rec.to_row(),
             )
@@ -419,6 +430,8 @@ class LineageStore:
             "step_index": rec.step_index,
             "parent_session_id": rec.parent_session_id,
             "framework": rec.framework,
+            "input_tokens": rec.input_tokens,
+            "output_tokens": rec.output_tokens,
         }
 
     def _row_to_lineage_dict(self, row: dict) -> dict:

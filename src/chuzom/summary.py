@@ -64,6 +64,10 @@ class SessionSummaryData:
     baseline_cost_usd: float = 0.0
     savings_usd: float = 0.0
     savings_pct: float = 0.0
+    # #28 (Gate 7): how many rows fell back to the latency ESTIMATE for their
+    # baseline tokens (no actual counts recorded). 0 ⇒ the baseline is fully
+    # measured; >0 ⇒ partially estimated — callers should label it honestly.
+    baseline_estimated_rows: int = 0
     tier_counts: dict[str, int] = field(default_factory=dict)
     tier_costs: dict[str, float] = field(default_factory=dict)
     provider_counts: dict[str, int] = field(default_factory=dict)
@@ -189,17 +193,26 @@ def collect(
         if "pii" in notes or "secret" in notes:
             data.pii_catches += 1
 
-    # Baseline cost: estimate input/output tokens per row (we don't store
-    # them yet — approximate from latency as a proxy: rough rule that
-    # ~500 output tokens ≈ 2000ms latency). This is intentionally simple;
-    # v0.0.3 will store actual token counts in lineage.
+    # Baseline cost: the counterfactual "what if a premium host did every row".
+    # #28 (Gate 7): use the ACTUAL measured token counts recorded in lineage
+    # (input_tokens/output_tokens) when present. Rows written before #28 (or by
+    # callers that didn't pass tokens) carry 0/0 — for those we fall back to the
+    # old latency proxy (~500 output tokens ≈ 2000ms) so historical rows still
+    # contribute a baseline. `data.baseline_is_estimated` records whether ANY row
+    # used the fallback, so callers can label the figure honestly.
     for row in rows:
-        latency = row.get("latency_ms", 0) or 0
-        est_output_tokens = max(20, latency // 4)  # rough proxy
-        est_input_tokens = max(50, est_output_tokens * 2)
+        in_tok = int(row.get("input_tokens", 0) or 0)
+        out_tok = int(row.get("output_tokens", 0) or 0)
+        if in_tok > 0 or out_tok > 0:
+            input_tokens, output_tokens = in_tok, out_tok
+        else:
+            latency = row.get("latency_ms", 0) or 0
+            output_tokens = max(20, latency // 4)  # rough proxy (legacy rows)
+            input_tokens = max(50, output_tokens * 2)
+            data.baseline_estimated_rows += 1
         data.baseline_cost_usd += (
-            (est_input_tokens / 1000) * _BASELINE_PER_1K_INPUT
-            + (est_output_tokens / 1000) * _BASELINE_PER_1K_OUTPUT
+            (input_tokens / 1000) * _BASELINE_PER_1K_INPUT
+            + (output_tokens / 1000) * _BASELINE_PER_1K_OUTPUT
         )
     data.savings_usd = max(0.0, data.baseline_cost_usd - data.total_cost_usd)
     if data.baseline_cost_usd > 0:
