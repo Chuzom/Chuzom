@@ -1,9 +1,15 @@
 name: Publish to PyPI
 
+# PyPI publishing is PAUSED — aligned with publish.yml. The v* tag trigger auto-published
+# on every release tag, which contradicted publish.yml's deliberate pause ("not ready to
+# publish yet"). Switched to manual dispatch so tagging a release (e.g. v1.0.0) no longer
+# ships to PyPI. To RESUME automated releases, restore the tag trigger:
+#   on:
+#     push:
+#       tags:
+#         - 'v*'
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 jobs:
   # Gate: publishing must never ship a release that fails lint (v0.10.1 shipped
