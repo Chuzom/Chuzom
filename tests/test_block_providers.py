@@ -17,7 +17,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 import chuzom.session_broker as sb
-from chuzom.router import _blocked_providers, _build_and_filter_chain, provider_from_model
+from chuzom.router import (
+    _blocked_providers,
+    _build_and_filter_chain,
+    provider_from_model,
+    route_and_call,
+)
 from chuzom.types import Complexity, RoutingProfile, TaskType
 
 
@@ -115,3 +120,17 @@ async def test_block_wins_over_disable_broker_allowance(mock_env, monkeypatch):
     assert chain
     assert not any(provider_from_model(m) == "codex" for m in chain), \
         f"block must override the broker allowance, got {chain[:4]}"
+
+
+@pytest.mark.asyncio
+async def test_blocking_all_providers_raises_block_diagnostic(temp_db, mock_env, monkeypatch):
+    """#32: when CHUZOM_BLOCK_PROVIDERS empties the chain, the error must name the
+    block (so the fix is 'unblock a provider'), not the misleading generic
+    'install Ollama / set a key' message."""
+    monkeypatch.setenv(
+        "CHUZOM_BLOCK_PROVIDERS",
+        "openai,ollama,anthropic,codex,gemini_cli,deepseek,openrouter,xai,perplexity,google,fireworks,groq",
+    )
+    sb._provider_cache = None
+    with pytest.raises(ValueError, match="CHUZOM_BLOCK_PROVIDERS"):
+        await route_and_call(TaskType.ANALYZE, "analyze this in depth", complexity_hint="complex")
