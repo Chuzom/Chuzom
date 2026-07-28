@@ -1,5 +1,95 @@
 # Changelog
 
+## [Unreleased]
+
+_Nothing yet. Add a bullet here in your PR when you change routing behavior or a
+user-facing surface, then move it under the next version heading at release time._
+
+## v1.0.0 — 2026-07-28 — First stable release: measured, independently audited routing — non-breaking
+
+The 1.0 milestone. Routing quality and cost savings are no longer *assumed* — they are
+**measured by a real control-group benchmark and certified by a formal two-consecutive-audit
+process** (verdict: **RELEASE QUALIFIED** on frozen commit `7c6fdaa`). All 20 release gates
+pass. **Non-breaking** — every new routing behavior is additive or default-off, so a fresh
+install routes exactly as the audited baseline.
+
+### Highlights
+
+- **Audited savings.** Strict full-metering control-group A/B (Chuzom vs. always-GPT-4o):
+  net **+$0.027** per run at quality delta **−0.21** (within the 0.5 non-inferiority margin),
+  **0 exhaustions**, robust across 4 independent runs. This is the first release where a
+  public savings claim is evidence-backed (Gate-14 claim-evidence registry + CI validator).
+
+### Added
+
+- **Precision-tier routing.** Short prompts demanding an exact, verifiable answer
+  (arithmetic / code-output / precise count) are fronted to a reliable cheap metered model
+  (`gpt-4o-mini`, ~$0.0003) — the one regime where cheap-local-first returns confident-but-
+  **wrong** terse answers the runtime quality heuristic cannot detect. This fixed the
+  quality gate's run-to-run non-robustness.
+- **Control-group benchmark harness + savings verdict.** `bench/` runs Chuzom against a fixed
+  premium control over a prompt corpus (objective + judge grading) and emits the Gate
+  15/16/17 verdict via `evaluate_savings`. Wired to the real `chuzom.router` (the v0.0.1 stub
+  is retired).
+- **`CHUZOM_BLOCK_PROVIDERS`** — a hard provider block on *every* routing path (base chain,
+  injection, broker), distinct from the subprocess-only `CHUZOM_DISABLE_SUBPROCESS_BACKENDS`
+  so the gateway daemon keeps its free broker path.
+- **Metered mid-tier + embedding chain hygiene** — `gpt-4o-mini → gpt-4o` injected before o3
+  for premium/reasoning escalations; embedding-only models filtered out of generation chains
+  (both the discovery write and read paths).
+- **Real-token session baseline.** `summary.py` prices its "what if premium did every row"
+  counterfactual from the recorded `input_tokens`/`output_tokens` when present, falling back
+  to the latency proxy only for token-less rows (counted in `baseline_estimated_rows`) — no
+  estimate is ever presented as a measured total.
+- **Opt-in dynamic leaderboard chain ordering** (`CHUZOM_DYNAMIC_LEADERBOARD_ORDERING`,
+  **default off**) — aligns the dynamic routing table with the static path's
+  cheapest-capable-first leaderboard ordering. BUDGET chains are never reordered.
+- **Release-scale corpus** — +24 objective-heavy prompts (`moderate2` / `hard2`) for tighter
+  quality confidence, kept as separate corpora so the audited 33-prompt baseline stays
+  reproducible.
+- **Two-consecutive-audit runbook + `scripts/audit_check.sh`** — the mechanical, un-fudgeable
+  baseline half of a release audit pass.
+- **Lean, badge-rich README** + a `Docs/` reference split (ide-setup, routing, configuration,
+  troubleshooting, session-dashboard, local-inference, okf).
+
+### Fixed
+
+- **Enforcement → tool-capable door (GAP-ENF-1..4).** Execution/repo work of any task_type
+  now routes to the tool-capable `llm_act` door (never a text-only door that dead-ended the
+  moment it reached Bash); context-dependent execution is provisioned with repo state;
+  escalation is a first-class ledger event; the high-precision execution signal is honored
+  regardless of classifier wobble.
+- **Coordination `LOCAL_BASH` → `llm_act` redirect.** A substantial coordination execution
+  task's local command no longer soft-exempts to native and silently defeats the redirect;
+  trivial one-liners still run native (the cheapest capable executor).
+- **Honest accounting & dashboards.** One definition of "saved" (gross vs. realized, labelled),
+  no double-counted Codex, no fabricated tokens, explicit per-panel time-window labels, the
+  canonical price on every surface, and realization-gated savings (an unknown realization is
+  never counted as realized).
+- **Lever ① — exhaustion floor + prose-aware quality gate.** Stopped discarding valid answers
+  (9 benchmark exhaustions → 0).
+- **Flaky-test cleanup.** The aiosqlite `database is locked` Hypothesis flake (trimmed example
+  count + raised busy-timeout), the RC-0 registry-probe flake, and quarantined perf tests —
+  CI is now deterministically green.
+- **README enforce-default consistency** — documented as `smart`, matching
+  `enforce_config.DEFAULT_ENFORCE` (was contradictorily shown as `advise` in one place).
+
+### Verified
+
+- **Gate 13 mutation bar** closed on the honest, redefined standard (`gates.py` 253/255 killed;
+  every survivor an individually-registered equivalent). **Gates 18/19** — realization
+  derivation and additive-schema migration are tested. The two consecutive clean audit passes
+  are recorded in `Docs/correctness-reset/11_AUDIT_RUNBOOK.md`.
+
+### Notes
+
+- **Non-breaking.** All new routing behavior is additive or default-off; a fresh install
+  matches the audited baseline. `CHUZOM_DYNAMIC_LEADERBOARD_ORDERING` stays **off** by default —
+  turning it on as the shipped default is a post-1.0 change gated on its own re-audit.
+- **Changelog discipline going forward:** an `## [Unreleased]` section is now maintained at the
+  top of this file. Every behavior- or surface-changing PR should append a bullet there as it
+  merges, so the one-big-catch-up gap that preceded 1.0 does not recur.
+
 ## v0.10.1 — 2026-07-25 — North Star routing quality (measured, not assumed) — non-breaking
 
 Implements the "North Star" remediation: route to the cheapest **capable** model and
