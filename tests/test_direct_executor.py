@@ -335,3 +335,16 @@ class TestExecuteAgentContext:
         assert sent is not None
         assert "accumulated session context" in sent
         assert "coding assistant with access to file tools" in sent
+
+    def test_execute_agent_never_triggers_a_live_registry_probe(self):
+        """RC-0 regression: execute_agent is a hot-path caller and must consult the
+        registry in NON-probing mode (allow_probe=False). A live probe here does
+        per-model network calls (seconds each) and made the suite order-dependent
+        on the shared verdict cache — it could hang until --timeout killed it."""
+        chain = [ModelSpec("ollama", "hermes3:8b")]
+        with patch("chuzom.hooks.agent_loop.run_agent_loop", return_value="ok"), \
+             patch("chuzom.agentic_registry.get_registry", return_value={}) as mock_reg:
+            execute_agent("do something", chain)
+        assert mock_reg.called
+        assert mock_reg.call_args.kwargs.get("allow_probe") is False, \
+            "execute_agent must call get_registry(allow_probe=False) — no live probe"
