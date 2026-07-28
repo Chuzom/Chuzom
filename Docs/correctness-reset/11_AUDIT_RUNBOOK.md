@@ -92,15 +92,26 @@ honest outcome is "still NOT QUALIFIED," fix, and repeat.
 
 ## Audit log
 
-Two consecutive clean passes on frozen `7c6fdaa` ⇒ verdict **RELEASE QUALIFIED**. The earlier
-`54dba38` pass is kept to show the rule working — it caught a non-robust Gate 16 and correctly did
-**not** count.
+The reset was certified on frozen `7c6fdaa`. **v1.0.0 was then re-audited on frozen `38ccc99`**
+(the tagged release SHA = the `7c6fdaa` code + the post-audit enhancements #223/#224/#225 and the
+v1.0.0 docs/version bump) — two consecutive clean passes with the opt-in leaderboard ordering
+`CHUZOM_DYNAMIC_LEADERBOARD_ORDERING` **off** (the shipped default), so the tagged artifact is
+audited as released. The earlier `54dba38` pass is kept to show the rule working — it caught a
+non-robust Gate 16 and correctly did **not** count.
 
 | Date | Frozen SHA | Mechanical | Benchmark (strict full-metering) | Gate review | Pass? |
 |---|---|---|---|---|---|
 | 2026-07-28 | `54dba38`→`22895cd` | suite clean (rc=0, 0 FAILED) + claim validator OK | **Gate 16 FAIL**: net +$0.02814 (G15✓), 0 exhaustions, unclassified=[] (G17✓), but quality **delta −0.58 > 0.5 margin** | halted at Gate 16 | **NO** (count reset) |
 | 2026-07-28 | `7c6fdaa` (Pass 1) | suite clean (rc=0, 0 FAILED) + claim validator OK | NET **+$0.02723**; delta **−0.21**; G15/16/17 True; 0 exhaustions | no new P0/P1; all rows PASS; no not-reached | **YES** |
 | 2026-07-28 | `7c6fdaa` (Pass 2) | suite clean (rc=0, 0 FAILED) + claim validator OK | NET **+$0.02722**; delta **+0.00**; G15/16/17 True; 0 exhaustions | no new P0/P1; all rows PASS; no not-reached | **YES** |
+| 2026-07-28 | `38ccc99` **v1.0.0** (Pass 1) | suite clean (rc=0, 0 FAILED) + claim validator OK | NET **+$0.02586**; delta **−0.24**; G15/16/17 True; 0 exhaustions | no new P0/P1; all rows PASS; no not-reached | **YES** |
+| 2026-07-28 | `38ccc99` **v1.0.0** (Pass 2) | suite clean (rc=0, 0 FAILED) + claim validator OK | NET **+$0.01959**; delta **−0.18**; G15/16/17 True; 0 exhaustions | no new P0/P1; all rows PASS; no not-reached | **YES** |
+
+**v1.0.0 re-audit (`38ccc99`).** Both passes clean with the leaderboard flag off (default). Gate 16
+held robustly within margin (−0.24 / −0.18), Gate 15 net-positive both, Gate 17 clean, 0
+exhaustions — reproducing the `7c6fdaa` verdict on the release artifact that adds the coordination
+`llm_act` redirect (#223), the release-scale corpus (#224), and the opt-in leaderboard ordering
+(#225, off by default). **Tagged `v1.0.0`.**
 
 **Pass at `54dba38` — a real finding, no count started (retained for the record).** The benchmark
 measured a quality delta of **−0.58** (outside the 0.5 margin) vs −0.36 on an earlier run: Gate 16

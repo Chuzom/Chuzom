@@ -12,11 +12,18 @@ proven.
 > (precision-tier routing #220; `summary.py` real tokens #221; aiosqlite flake #220), and two
 > consecutive clean audits then ran on the re-frozen `7c6fdaa`.
 
-## Verdict: **RELEASE QUALIFIED**
+## Verdict: **RELEASE QUALIFIED** — shipped as **v1.0.0**
 
 Every mandatory gate (1–20) is proven, and the **two-consecutive-audit rule is satisfied**: two
 complete, clean audit passes ran back-to-back on the frozen commit **`7c6fdaa`** with zero new
 P0/P1 and no "not reached" section (audit log in `11_AUDIT_RUNBOOK.md`).
+
+> **v1.0.0 release (2026-07-28).** The release SHA **`38ccc99`** — the `7c6fdaa` code plus the
+> post-audit enhancements (#223 coordination→`llm_act`, #224 release-scale corpus, #225 opt-in
+> leaderboard ordering *off by default*) and the v1.0.0 docs/version bump — was **re-audited with
+> two more consecutive clean passes** (net +$0.02586 / +$0.01959; delta −0.24 / −0.18; Gates
+> 15/16/17 True; 0 exhaustions), then tagged. The shipped default keeps the leaderboard flag off,
+> so the tagged artifact is audited exactly as released.
 
 The path here was honest, not smoothed. The **first** formal audit (SHA `54dba38`, 2026-07-28)
 **ran and failed at Gate 16**: the moderate/hard quality delta measured **−0.58** (outside the
