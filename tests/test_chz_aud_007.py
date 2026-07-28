@@ -16,19 +16,26 @@ from chuzom.enforce_config import DEFAULT_ENFORCE  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
+# The full config table + enforcement ladder moved to the linked configuration
+# reference in v1.0.0 (README is the lean landing page). The honesty gate scans the
+# whole user-facing doc corpus — README plus the pages it prominently links — so the
+# default-consistency guarantee holds wherever the table canonically lives.
+_DOC_FILES = [README, REPO_ROOT / "Docs" / "configuration.md"]
+
+
+def _doc_corpus() -> str:
+    return "\n".join(p.read_text(encoding="utf-8") for p in _DOC_FILES if p.exists())
 
 
 def _readme_enforce_table_default() -> str | None:
     """Extract the value from the CHUZOM_ENFORCE row in the config reference table."""
-    text = README.read_text(encoding="utf-8")
-    match = re.search(r"\|\s*`CHUZOM_ENFORCE`\s*\|\s*`([^`]+)`\s*\|", text)
+    match = re.search(r"\|\s*`CHUZOM_ENFORCE`\s*\|\s*`([^`]+)`\s*\|", _doc_corpus())
     return match.group(1).strip() if match else None
 
 
 def _readme_enforce_mode_section_default() -> str | None:
     """Return the mode marked '(default)' in the Enforcement Modes table, if any."""
-    text = README.read_text(encoding="utf-8")
-    match = re.search(r"\|\s*`([^`]+)`\s*\(default\)", text)
+    match = re.search(r"\|\s*`([^`]+)`\s*\(\*\*?default\*\*?\)", _doc_corpus())
     return match.group(1).strip() if match else None
 
 

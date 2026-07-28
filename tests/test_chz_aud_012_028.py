@@ -18,6 +18,16 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
+# The hook-mechanism detail (enforcement ladder, direct-execution mode, push/pull
+# guarantees) moved to the linked reference docs in v1.0.0. This honesty gate scans the
+# user-facing doc corpus — README plus the pages it prominently links — so forbidden
+# "guaranteed interception" phrasing is banned across ALL of them and the required
+# clarifying language must exist somewhere a user is routed to.
+_DOC_FILES = [
+    README,
+    REPO_ROOT / "Docs" / "configuration.md",
+    REPO_ROOT / "Docs" / "ide-setup.md",
+]
 
 # ---------------------------------------------------------------------------
 # Forbidden patterns: phrases that imply guaranteed non-Claude execution on
@@ -50,7 +60,7 @@ REQUIRED_PATTERNS = [
 
 
 def _readme_text() -> str:
-    return README.read_text(encoding="utf-8")
+    return "\n".join(p.read_text(encoding="utf-8") for p in _DOC_FILES if p.exists())
 
 
 class TestHookMechanismDocumentation:

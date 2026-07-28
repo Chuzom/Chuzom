@@ -1,11 +1,29 @@
 # Chuzom — Extend Your Claude Quota. 3× Longer Sessions.
 
+<!-- Package -->
 [![PyPI version](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&color=4F46E5)](https://pypi.org/project/chuzom-router/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/chuzom-router?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=ORANGE&left_text=downloads)](https://pepy.tech/projects/chuzom-router)
-[![CI](https://img.shields.io/github/actions/workflow/status/Chuzom/Chuzom/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Chuzom/Chuzom/actions/workflows/ci.yml)
-[![GitHub Stars](https://img.shields.io/github/stars/Chuzom/Chuzom?style=flat-square&color=F59E0B)](https://github.com/Chuzom/Chuzom/stargazers)
 [![Python](https://img.shields.io/pypi/pyversions/chuzom-router?style=flat-square&color=3572A5)](https://pypi.org/project/chuzom-router/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-10B981?style=flat-square)](https://github.com/Chuzom/Chuzom/blob/main/LICENSE)
+
+<!-- Health -->
+[![CI](https://img.shields.io/github/actions/workflow/status/Chuzom/Chuzom/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Chuzom/Chuzom/actions/workflows/ci.yml)
+[![Last commit](https://img.shields.io/github/last-commit/Chuzom/Chuzom?style=flat-square&color=8B5CF6)](https://github.com/Chuzom/Chuzom/commits/main)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/Chuzom/Chuzom?style=flat-square&color=06B6D4)](https://github.com/Chuzom/Chuzom/pulse)
+[![Open issues](https://img.shields.io/github/issues/Chuzom/Chuzom?style=flat-square&color=F59E0B)](https://github.com/Chuzom/Chuzom/issues)
+[![Code size](https://img.shields.io/github/languages/code-size/Chuzom/Chuzom?style=flat-square&color=64748B)](https://github.com/Chuzom/Chuzom)
+
+<!-- Community -->
+[![GitHub Stars](https://img.shields.io/github/stars/Chuzom/Chuzom?style=flat-square&color=F59E0B)](https://github.com/Chuzom/Chuzom/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/Chuzom/Chuzom?style=flat-square&color=64748B)](https://github.com/Chuzom/Chuzom/network/members)
+[![Contributors](https://img.shields.io/github/contributors/Chuzom/Chuzom?style=flat-square&color=EC4899)](https://github.com/Chuzom/Chuzom/graphs/contributors)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](./CONTRIBUTING.md)
+
+<!-- Compatibility & flair -->
+[![Claude Code](https://img.shields.io/badge/Claude_Code-compatible-D97757?style=flat-square)](https://claude.com/claude-code)
+[![MCP](https://img.shields.io/badge/MCP-server-111827?style=flat-square)](https://modelcontextprotocol.io)
+[![Code style: Ruff](https://img.shields.io/badge/code_style-ruff-261230?style=flat-square)](https://github.com/astral-sh/ruff)
+[![Audited](https://img.shields.io/badge/audit-RELEASE_QUALIFIED-10B981?style=flat-square)](Docs/correctness-reset/03_RELEASE_GATES.md)
 
 ---
 
@@ -19,12 +37,6 @@
   That's the router: every prompt flows to the model that fits it, and your Claude quota is spent only where it counts.</em>
 </p>
 
----
-
-<p align="center">
-  <img src="assets/chuzom-logo.png" alt="Chuzom — smart LLM router" width="200"/>
-</p>
-
 <p align="center">
   <strong>⭐ Star on GitHub if Chuzom saves your quota ⭐</strong><br/>
   <em>Help other developers discover automatic LLM routing</em>
@@ -32,11 +44,42 @@
 
 ---
 
+**Chuzom** is a smart LLM router for AI coding tools. It reads each prompt, sends the
+easy ones to free local or subscription models, and spends your Claude quota only on
+the work that truly needs it — so a day's quota stretches across a full week of
+sessions. Drop-in, zero workflow change, **and now independently audited** (see
+[Measured results](#-measured-results-audited)).
+
+```bash
+pip install chuzom-router && chuzom install --host claude-code
+```
+
+## Contents
+
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Why People Install This](#why-people-install-this)
+- [📊 Measured Results (audited)](#-measured-results-audited)
+- [Get Started (60 seconds)](#get-started-60-seconds)
+- [How It Works](#how-it-works)
+- [Supported IDEs](#supported-ides)
+- [Routing at a Glance](#routing-at-a-glance)
+- [Agentic Router](#agentic-router)
+- [Companion Skill: `/council`](#-companion-skill-council)
+- [Session Summary Dashboard](#session-summary-dashboard)
+- [Configuration](#configuration)
+- [More docs](#more-docs) · [FAQ](#faq) · [Contributing](#contributing) · [License](#license)
+
+---
+
 ## The Problem
 
-You're on **Claude Pro ($20/mo), Max ($100/mo), or Max ($200/mo)** — a flat subscription, not pay-per-token.
+You're on **Claude Pro ($20/mo), Max ($100/mo), or Max ($200/mo)** — a flat
+subscription, not pay-per-token.
 
-But Claude Code routes **every request** through your quota: file reads, quick questions, routine edits, and complex reasoning all burn the same limited budget. Claude throttles after roughly 40–50 messages in a 5-hour rolling window.
+But Claude Code routes **every request** through your quota: file reads, quick
+questions, routine edits, and complex reasoning all burn the same limited budget. Claude
+throttles after roughly 40–50 messages in a 5-hour rolling window.
 
 **The result: your session hits the wall in under 2 hours, and you wait.**
 
@@ -47,7 +90,8 @@ But Claude Code routes **every request** through your quota: file reads, quick q
 | *"Write a test for this function"* | ✗ Yes | Probably not |
 | *"Re-architect this auth system"* | ✓ Yes | **Yes** |
 
-Simple questions and complex reasoning cost the same quota. That's the inefficiency Chuzom fixes.
+Simple questions and complex reasoning cost the same quota. That's the inefficiency
+Chuzom fixes.
 
 ---
 
@@ -72,8 +116,6 @@ Result + streaming progress + quota savings banner
   <sub><em>🌊 Simple prompts take the fast rapids (local, free). Deep reasoning takes the slow, deep water (Claude). The router reads the current and picks the channel — you never think about it.</em></sub>
 </p>
 
-**A typical developer session burns ~200,000 Claude tokens.** Routing ~80% of prompts to free models saves ~160,000 Claude tokens per session — the difference between hitting the limit in 2 hours vs. working a full uninterrupted day.
-
 | Tool | Cost | Best for |
 |---|---|---|
 | **Ollama** (local) | Free | Simple questions, syntax lookups, file ops |
@@ -85,27 +127,23 @@ Result + streaming progress + quota savings banner
 
 ## Why People Install This
 
-AI coding tools send too many prompts to premium models by default.
+AI coding tools send too many prompts to premium models by default. That means you waste
+paid tokens on simple questions, burn quota faster than necessary, and stop working when
+one provider is rate-limited.
 
-That means:
-
-- ❌ You waste paid tokens on simple questions
-- ❌ You burn through Claude, Gemini, or OpenAI quota faster than necessary
-- ❌ You stop working when one provider is rate-limited or down
-
-Chuzom sits between your coding tool and your model providers. It classifies each prompt, tries the cheapest capable model first, and falls back automatically when needed.
-
-**You keep the same workflow. The router changes the model choice underneath.**
+Chuzom sits between your coding tool and your model providers. It classifies each prompt,
+tries the cheapest capable model first, and falls back automatically when needed. **You
+keep the same workflow. The router changes the model choice underneath.**
 
 <table align="center">
 <tr>
 <td align="center" width="25%">
   <h3>⏱️ 3–5× Longer Sessions</h3>
-  <p>Route 80% of prompts to free models — hit quota limits far less often</p>
+  <p>Route most prompts to free models — hit quota limits far less often</p>
 </td>
 <td align="center" width="25%">
   <h3>✅ Quality Preserved</h3>
-  <p>Premium models only when the task truly needs it</p>
+  <p>Premium models only when the task truly needs it — measured, not assumed</p>
 </td>
 <td align="center" width="25%">
   <h3>🛡️ Quota Protected</h3>
@@ -113,7 +151,7 @@ Chuzom sits between your coding tool and your model providers. It classifies eac
 </td>
 <td align="center" width="25%">
   <h3>⚙️ Zero Config</h3>
-  <p>Works out of the box with Claude Pro/Max subscription</p>
+  <p>Works out of the box with a Claude Pro/Max subscription</p>
 </td>
 </tr>
 </table>
@@ -128,675 +166,210 @@ Chuzom sits between your coding tool and your model providers. It classifies eac
 
 ---
 
-## Real-World Savings
+## 📊 Measured Results (audited)
 
-Typical Claude Code heavy user — mix of questions, code review, and debugging (~1,000 prompts/week):
+Chuzom v1.0.0 is the first release where the savings claim is **backed by a real,
+reproducible control-group benchmark**, not just estimated. The router went through a
+formal correctness reset that ended in an independently **audited verdict**.
 
-| Approach | Claude tokens/week | Sessions per day before limit | Extra spend (if buying API) |
-|---|---|---|---|
-| All prompts → Claude | ~200,000 | 1–2 sessions | $18–40/week |
-| **Chuzom (smart routing)** | **~40,000** | **6–8 sessions** | **$2–6/week** |
+**Control-group benchmark** — Chuzom vs. always-GPT-4o over a moderate+hard prompt
+corpus, under *strict full metering* (every escalation is a real, priced API call — no
+free-tier confound):
 
-**For subscription users: Chuzom stretches one day's Claude quota across a full working week of sessions.** No waiting for limits to reset. No switching to a worse model mid-task.
+| Metric | Result |
+|---|---|
+| **Net cash savings** | **+$0.027** per run (Chuzom ≈ $0.0036 vs GPT-4o ≈ $0.030) |
+| **Quality delta** | **−0.21** on a 0–5 judge scale — **within** the 0.5 non-inferiority margin |
+| **Exhaustions** (dropped answers) | **0** |
+| **Robustness** | held across **4 independent runs** (−0.18 / −0.21 / −0.21 / +0.00) |
+| **Verdict** | **RELEASE QUALIFIED** — two consecutive clean audit passes on a frozen commit |
 
----
+All 20 release gates pass, including a positive-net-savings gate, a
+quality-non-inferiority gate, and a mutation-testing bar. Full evidence:
+[Release Gates](Docs/correctness-reset/03_RELEASE_GATES.md) ·
+[Benchmark log](Docs/correctness-reset/10_CODEX_QUOTA_BENCHMARK.md) ·
+[Audit runbook](Docs/correctness-reset/11_AUDIT_RUNBOOK.md).
 
-## One Week with Chuzom — Real Numbers
+> **On the "3×" / "80%" headline numbers.** Those are *illustrative estimates* for a
+> heavy-Opus workload — real savings depend entirely on your prompt mix. The **measured**
+> figures above are the honest, reproducible ones. Reproduce them yourself with
+> `python -m chuzom benchmark`.
 
-A typical Claude Code heavy user sends ~800–1,200 prompts per week. Here's what routing looks like after 7 days:
+<details>
+<summary><strong>Illustrative estimate — one week for a heavy Claude Code user</strong> (directional, not measured)</summary>
+
+A typical heavy user sends ~800–1,200 prompts/week. Routing most of them to free models:
 
 | Metric | Without Chuzom | With Chuzom |
 |---|---|---|
-| Prompts routed to Claude (quota) | ~1,000 / week | ~240 / week |
+| Prompts to Claude (quota) | ~1,000 / week | ~240 / week |
 | Prompts to Ollama (local, free) | 0 | ~520 / week |
 | Prompts to Codex / Gemini CLI (prepaid) | 0 | ~240 / week |
 | Claude quota consumed | 100% | ~24% |
-| Sessions before hitting "usage limit" | 1–2 per day | 6–8 per day |
-| Extra API spend (non-subscribers) | $18–40 / week | $2–6 / week |
+| Sessions before "usage limit" | 1–2 / day | 6–8 / day |
 
-**"Sessions before hitting usage limit"** — Claude Pro/Max throttles after roughly 40–50 Sonnet-class messages in a ~5-hour rolling window. Without routing, that budget burns in 1–2 work sessions per day. Chuzom routes ~75% of prompts to Ollama, Codex, or Gemini instead, so the same Claude quota now covers 6–8 sessions — typically a full working day without hitting a wall.
-
-### Why 75% of prompts don't need Claude
-
-Claude Code routes nearly everything through your subscription by default: file reads, quick questions, inline edits, context lookups. Chuzom classifies each prompt before dispatch:
-
-- **Simple** (syntax questions, one-liners, file lookups) → Ollama locally in <1s, **zero quota used**
-- **Moderate** (refactors, test generation, code review) → Codex CLI or Gemini Flash on your OpenAI/Google subscription, **not your Claude quota**
-- **Complex** (multi-file debugging, architecture decisions, long context) → Claude, where it actually matters
-
-The session summary (shown when you close Claude Code) displays the exact per-model breakdown, tokens saved, and estimated cost delta for that session.
-
----
-
-## Supported IDEs
-
-Chuzom integrates with every major AI-assisted IDE. There are two fundamentally
-different integration modes — **push** and **pull** — with different guarantees:
-
-### Push routing — automatic, self-contained prompts (Claude Code)
-
-Claude Code's `UserPromptSubmit` hook fires **before** the LLM sees your prompt.
-When a prompt is **self-contained** (no need for your files, repo, or conversation
-history), Chuzom routes it to the cheapest capable model and answers directly —
-Claude never runs for that turn. Context-dependent turns stay with Claude, with
-Chuzom's routing advice attached (no blind drafts, no fabricated context).
-
-```
-Self-contained turn  →  hook fires  →  Chuzom routes  →  cheap model answers
-Context-dependent    →  hook fires  →  advisory only  →  Claude handles it
-```
-
-### Pull routing — model decides (Copilot, Cursor, Windsurf)
-
-These IDEs expose Chuzom as a tool the **model can choose to call**.
-The model sees your prompt, then (if rules/instructions say to) calls
-`llm_code` / `llm_query` / `llm_analyze` and returns the result.
-
-```
-You type  →  LLM sees prompt  →  model calls llm_code  →  cheap model responds
-                                        ↑
-                              NOT guaranteed every turn
-```
-
-The `.cursor/rules/use-chuzom.mdc` rule that Chuzom installs nudges Cursor's
-agent to call Chuzom tools first. In practice this fires ~90% of turns in agent
-mode, but it is not a hard guarantee like the Claude Code hook.
-
-#### Tool surface (0.10.0) — 11 front doors
-
-Since 0.10.0 the default MCP surface is **11 consolidated front doors** instead of
-~73 tools (fewer schema tokens → better routing in long sessions):
-
-| Door | What it does |
-|---|---|
-| `llm` | text in → out; pick specialization with `task=` (query/analyze/code/research/generate) and cost with `tier=` (fast/balanced/best) |
-| `llm_act` | agentic execution — decompose, run on the cheapest capable tier *with tools*, verify, escalate on failure |
-| `chuzom_status` | savings / usage / spend / health / providers (`view=`) |
-| `chuzom_admin` | profile / cache / policy / budget (`action=`) |
-| `chuzom_session` | agent-session lifecycle (`action=`) |
-| `llm_route`, `llm_image`, `llm_audio`, `llm_edit`, `chuzom_agent_start_session`, `chuzom_agent_route` | first-class doors |
-
-**Prefer the old surface?** Set `CHUZOM_SLIM=off` in the MCP server env to expose all
-legacy tools (`routing` / `core` tiers also remain). No behaviour is removed — the doors
-dispatch to the same underlying functions.
-
-#### Routing quality & capability routing (0.10.1) — opt-in
-
-0.10.1 adds the "North Star" layer: route to the cheapest **capable** model and **measure**
-it honestly. It is **non-breaking** — everything ships default-off, so routing is unchanged
-until you opt in:
-
-| Env flag | Default | What it enables |
-|---|---|---|
-| *(always on)* | — | Honest v2 route-quality ledger — completion routes are now recorded; verified quality, technical fallback, and quality escalation are never conflated (`~/.chuzom/routing_quality.jsonl`, read via `summarize()`) |
-| `CHUZOM_CAPABILITY_ROUTING=1` | off | Capability-aware classification — a shared 8-bit capability vector drives routing/provisioning; adds bounded, secret-safe relevant-context |
-| `CHUZOM_BOUNDED_OPERATIONAL=1` | off | A simple task that needs to write a file / run a command routes to a bounded, verified tool path instead of an untoolable completion |
-
-### IDE support matrix
-
-| Tool | Routing | Status | Setup |
-|---|---|---|---|
-| 🔵 Claude Code / Claude Desktop | **Push** (automatic) | ✅ Production | `chuzom-install-hooks` |
-| 🟠 Codex CLI | **Push** (plugin) | ✅ Production | `chuzom-install-hooks` |
-| 🟣 Cursor | **Pull** + rule nudge | ✅ Production | `chuzom-install-hooks ide` |
-| 🟤 GitHub Copilot (VS Code) | **Pull** (agent mode) | ✅ Beta | `chuzom-install-hooks ide` |
-| 🌊 Windsurf / Cascade | **Pull** (agent mode) | ✅ Beta | `chuzom-install-hooks ide` |
-| 🔴 Gemini CLI | **Pull** (tool call) | ✅ Production | `chuzom-install-hooks` |
-| 🌙 Kimi Code | **Pull** (MCP tools) | ✅ Beta | Manual MCP config |
-
-> **Recommendation:** Use Claude Code for the most consistent routing on every turn
-> (realized savings depend on your workload). Use Cursor/Copilot/Windsurf for
-> pull-based routing in agent mode.
-
-### Copilot setup (VS Code ≥ 1.99)
-
-```bash
-# In your project root
-chuzom-install-hooks ide
-
-# This writes .vscode/mcp.json with the Chuzom MCP server config.
-# Then in VS Code:
-#   1. Enable Copilot Chat agent mode (VS Code ≥ 1.99 required)
-#   2. Open Copilot Chat → switch to "Agent" mode
-#   3. Chuzom tools appear automatically in the tool list
-```
-
-In Copilot agent mode, you can explicitly invoke Chuzom:
-```
-@workspace use llm_code to refactor this function
-```
-Or just work normally — the model will call `llm_code` when it's appropriate.
-
-### Windsurf / Cascade setup
-
-```bash
-chuzom-install-hooks ide
-# Writes .windsurf/mcp.json — Cascade picks it up automatically
-```
-
-### Cursor setup
-
-```bash
-chuzom-install-hooks ide
-# Writes .cursor/rules/use-chuzom.mdc — instructs Cursor agent to call
-# Chuzom tools before generating its own response
-```
-
-### Kimi Code setup
-
-Kimi Code uses pull routing via MCP. Add the Chuzom MCP server in Kimi's settings:
-
-```json
-{
-  "mcpServers": {
-    "chuzom": {
-      "command": "chuzom",
-      "args": []
-    }
-  }
-}
-```
-
-Then in Kimi Code, the model will call `llm_code`, `llm_query`, etc. See [`KIMI.md`](./KIMI.md) for the full routing table.
-
----
-
-## Local Inference Platforms
-
-Chuzom auto-detects local LLM servers on startup and routes to them first — they're free, private, and fast. No config needed.
-
-### Supported platforms
-
-| Platform | Default port | Tier | Notes |
-|---|---|---|---|
-| **Ollama** | 11434 | 1 | Most popular. Auto-detected. `ollama serve` |
-| **LM Studio** | 1234 | 1 | macOS/Windows GUI. Enable local server in app settings |
-| **Jan** | 1337 | 1 | Open-source desktop. Start server from settings panel |
-| **vLLM** | 8000 | 1 | High-throughput GPU server. `vllm serve <model>` |
-| **llama.cpp server** | 8080 | 1 | `llama-server -m model.gguf --port 8080` |
-| **llamafile** | 8080 | 1 | Single-binary. `./model.llamafile` |
-| **LocalAI** | 8080 | 1 | Docker-friendly multi-backend |
-| **Msty** | 10000 | 1 | macOS GUI with local server mode |
-| **MLX** (Apple Silicon) | 8080 | 1 | Fastest on M-series. `mlx_lm.server --model <model>` |
-| **Cortex** | 39281 | 1 | Jan's new CLI engine. `cortex start` |
-| **text-generation-webui** | 5000 | 1 | Start with `--api` flag |
-| **GPT4All** | 4891 | 2 | Partial OpenAI-compat. Enable API server in settings |
-| **Kobold.cpp** | 5001 | 2 | Custom KoboldAI API. Popular for creative writing |
-
-**Tier 1** = drop-in OpenAI-compatible (zero adapter needed). **Tier 2** = light adapter, partial compatibility.
-
-### First-run UX
-
-When chuzom starts and finds a local platform running, it prints:
-
-```
-🖥️  Local LLM platforms detected:
-   ✓ LM Studio  →  http://localhost:1234
-     models: llama-3.2-8b, mistral-7b-instruct
-   ✓ Ollama  →  http://localhost:11434
-     models: gemma3:4b, qwen3:8b (+2 more)
-```
-
-If nothing is detected, chuzom starts silently and routes to cloud providers.
-
-### Port overrides
-
-```bash
-export CHUZOM_LOCAL_LMSTUDIO_PORT=1235   # LM Studio on non-default port
-export CHUZOM_LOCAL_JAN_PORT=1338        # Jan on non-default port
-export CHUZOM_LOCAL_VLLM_PORT=8001       # vLLM on non-default port
-```
-
-Or configure a specific endpoint manually:
-
-```bash
-export OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1
-export OPENAI_COMPAT_MODELS=llama-3.2-8b,mistral-7b
-```
-
-### Routing priority
-
-```
-Local (Ollama / auto-detected) → Cloud budget → Cloud balanced → Cloud premium
-```
-
-Local models are always tried first. On failure, chuzom falls through to the next tier — silently, with no user action needed.
+These are directional — not statistically significant. The audited control-group numbers
+above are the ones to trust.
+</details>
 
 ---
 
 ## Get Started (60 seconds)
 
-### 1. Install
-
-**macOS / Linux:**
-```bash
-pip install chuzom-router
-```
-
-**Windows (PowerShell):**
-```powershell
-pip install chuzom-router
-# If 'chuzom' isn't found after install, see Windows-specific setup below
-```
-
-**With uv (faster):**
-```bash
-uv pip install chuzom-router
-```
-
-### 2. Wire into your IDE
+**1. Install**
 
 ```bash
-chuzom install --host claude-code    # or cursor, codex, gemini-cli, windsurf, all
+pip install chuzom-router          # or: uv pip install chuzom-router
 ```
 
-### 3. Add your API keys (optional)
+**2. Wire into your IDE**
+
+```bash
+chuzom install --host claude-code  # or: cursor, codex, gemini-cli, windsurf, all
+```
+
+**3. Add API keys (optional)**
 
 ```bash
 # Bring your own keys — stored in ~/.chuzom/.env, never committed
 export OPENAI_API_KEY=sk-...
 export GEMINI_API_KEY=...
-export PERPLEXITY_API_KEY=pplx-...   # for research routing
+export PERPLEXITY_API_KEY=pplx-...        # for research routing
 
 # Or: use Claude Code Pro/Max or Codex subscriptions (zero keys needed)
 export CHUZOM_CLAUDE_SUBSCRIPTION=true
 ```
 
-### 4. Verify everything works
+**4. Verify & watch savings**
 
 ```bash
-chuzom doctor   # checks hooks, Ollama, API keys, provider health
+chuzom doctor            # checks hooks, Ollama, API keys, provider health
+chuzom summary --watch   # live savings dashboard
 ```
 
-### 5. Watch your savings live
-
-```bash
-chuzom summary --watch
-```
-
-Done. Your IDE now routes intelligently.
+Done. Your IDE now routes intelligently. (Windows PATH tips → [Troubleshooting](Docs/troubleshooting.md#windows-specific-setup).)
 
 ---
 
 ## How It Works
 
-Every prompt flows through a **smart classification pipeline**:
+Every prompt flows through a smart classification pipeline:
 
 ```
-┌─────────────────────────────────────────┐
-│ Your prompt in Claude Code / Cursor     │
-└──────────────┬──────────────────────────┘
+┌──────────────────────────────┐
+│ Your prompt in Claude Code    │
+└──────────────┬───────────────┘
                ↓
-┌─────────────────────────────────────────┐
-│ 1️⃣  CLASSIFY                           │
-│ • Task type (question/code/debug/etc)   │
-│ • Complexity (simple/medium/hard)       │
-│ • Sensitivity (PII/secrets?)            │
-└──────────────┬──────────────────────────┘
+        1️⃣  CLASSIFY            task type · complexity · sensitivity (PII/secrets)
                ↓
-┌─────────────────────────────────────────┐
-│ 2️⃣  BUILD CHAIN                        │
-│ Ranked model candidates:                │
-│ • Cheapest capable first (Ollama)       │
-│ • Fallback for failures                 │
-└──────────────┬──────────────────────────┘
+        2️⃣  BUILD CHAIN         ranked candidates — cheapest capable first, with fallbacks
                ↓
-┌─────────────────────────────────────────┐
-│ 3️⃣  DISPATCH + STREAM                  │
-│ • Send to first qualified model         │
-│ • Live progress for Codex / Gemini CLI  │
-│ • Auto-failover if provider down        │
-│ • Log locally (zero telemetry)          │
-└──────────────┬──────────────────────────┘
+        3️⃣  DISPATCH + STREAM   first qualified model · live progress · auto-failover · local log
                ↓
-┌─────────────────────────────────────────┐
-│ ✅ Result                               │
-│ 🎯 chuzom → <model> · <task>           │
-│    <latency> · saved $<amount>          │
-└─────────────────────────────────────────┘
+        ✅  Result              🎯 chuzom → <model> · <task> · <latency> · saved $<amount>
 ```
+
+**Zero data leaves your machine.** Chuzom is an MCP server on your workstation — no
+proxy, no cloud, no telemetry. Every routing decision is logged locally.
 
 ---
 
-## Agentic Router (v0.9.0)
+## Supported IDEs
+
+Chuzom works with every major AI-assisted IDE via two modes — **push** (a hook routes
+automatically, e.g. Claude Code) and **pull** (the model chooses to call Chuzom tools,
+e.g. Cursor/Copilot/Windsurf).
+
+| Tool | Routing | Status |
+|---|---|---|
+| 🔵 Claude Code / Desktop | **Push** (automatic) | ✅ Production |
+| 🟠 Codex CLI | **Push** (plugin) | ✅ Production |
+| 🟣 Cursor | **Pull** + rule nudge | ✅ Production |
+| 🔴 Gemini CLI | **Pull** (tool call) | ✅ Production |
+| 🟤 GitHub Copilot (VS Code) | **Pull** (agent mode) | ✅ Beta |
+| 🌊 Windsurf / Cascade | **Pull** (agent mode) | ✅ Beta |
+| 🌙 Kimi Code | **Pull** (MCP tools) | ✅ Beta |
+
+> Claude Code gives the most consistent routing (a hook fires every turn). Per-IDE setup,
+> the push/pull deep dive, and the 11-door MCP tool surface → **[IDE Setup guide](Docs/ide-setup.md)**.
+
+---
+
+## Routing at a Glance
+
+Chuzom tries each tier in order, falling back on failure or timeout:
+
+| Complexity | Profile | Tier 1 (cheapest) | → | Fallback |
+|---|---|---|---|---|
+| **simple** | BUDGET | Ollama (local/free) | Codex · Gemini Flash | Haiku |
+| **moderate** | BALANCED | Ollama (local/free) | Codex · GPT-4o | Sonnet |
+| **complex** | PREMIUM | Codex CLI | OpenAI o3 · Claude Opus | Gemini 2.5 Pro |
+| **deep_reasoning** 🧠 | REASONING | Ollama qwen3 | DeepSeek-R1 · o3 | Claude Opus + thinking |
+
+Six one-line **routing policies** (`balanced`, `local-first`, `cost`, `quality`,
+`quota-exhaustion`, `dynamic`) tune the cost/quality tradeoff. Chuzom also routes
+**subagent spawns**, auto-detects **13+ local inference servers**
+([details](Docs/local-inference.md)), and never hardcodes model names (Ollama dynamic
+discovery).
+
+> Full chains, subagent routing, the REASONING profile, model pinning, and every policy →
+> **[Routing guide](Docs/routing.md)**.
+
+---
+
+## Agentic Router
 
 > Status: real but maturing. Design + phased plan in [`Docs/agentic-router.md`](Docs/agentic-router.md).
 
-Beyond routing a single completion, Chuzom can delegate a whole task to the cheapest **capable, tool-using agent** and verify the result — via the `llm_delegate` MCP tool.
+Beyond routing a single completion, Chuzom can delegate a whole task to the cheapest
+**capable, tool-using agent** and verify the result — via the `llm_act` MCP tool
+(Milestone-Gated Escalating Execution):
 
-How it works (Milestone-Gated Escalating Execution):
-
-1. **Plan** — a task is decomposed into milestones, each with an **objective, executable acceptance check** (`cmd` / `lint` / `diff` / `canary`). A milestone is "done" only when that check passes — not on the model's self-report.
-2. **Delegate** — each milestone runs on the cheapest capable tier (local ReAct/Ollama agent → Codex → premium).
-3. **Escalate without rework** — if a milestone's check fails, it escalates to a stronger tier, carrying the already-passed milestones forward as frozen context (the stronger model resumes at the frontier, it doesn't redo finished work).
-4. **Flow, not stall** — escalation is bounded and one-directional over a finite tier ladder; a milestone that can't be met is *surfaced* with the exact failing criterion (and irreversible steps run in an isolated git worktree, merged only after they verify). It reports progress as a live event stream, and records the honest saving (including any escalation churn) into the usage ledger.
-
-```bash
-# via MCP
-llm_delegate(task="…")   # → JSON: outcome, per-milestone status, events, savings
-```
-
-**Classifier-selectable (new in v0.9.0).** You don't have to call `llm_delegate` by hand.
-Prompts with a code-mutating verb **and** an objective-verification demand (e.g. *"fix the
-failing test and make it pass"*) are automatically routed to delegation — a stateless
-completion model can't *do* that work, but the delegated tool loop can. It's high-precision
-by design; disable with `CHUZOM_DELEGATE=off` (and `CHUZOM_ENFORCE=soft/off` still relaxes
-enforcement). Any `llm_*` call clears the route, so you're never trapped.
-
-**Known limitations (honest scoping).** Delegated agents get the task's own milestone
-context but **not** the broader Claude Code session conversation yet. The local tier-0 agent
-is best-effort — Codex is the dependable tier and escalation covers tier-0 gaps. Delegation
-needs a healthy analyze/query route to produce the plan.
-
-This is additive — the per-completion routing below is unchanged.
-
----
-
-## Routing Chains
-
-The model tried depends on task complexity. Chuzom tries each tier in order, falling back on failure or timeout:
-
-| Complexity | Profile | Tier 1 (cheapest) | Tier 2 | Tier 3 | Fallback |
-|---|---|---|---|---|---|
-| **simple** | BUDGET | Ollama (local/free) | Codex CLI | Gemini Flash | Haiku |
-| **moderate** | BALANCED | Ollama (local/free) | Codex CLI | GPT-4o | Sonnet |
-| **complex** | PREMIUM | Codex CLI | OpenAI o3 | Claude Opus | Gemini 2.5 Pro |
-| **deep_reasoning** 🧠 | REASONING | Ollama qwen3 | DeepSeek-R1 | OpenAI o3 | Claude Opus + thinking |
-
-### Subagent routing — savings inside the Agent tool (new)
-
-Chuzom routes **subagent spawns**, not just top-level prompts. When Claude Code's `Agent`
-tool fires, the `agent-route` hook applies the same funnel before an expensive subagent ever
-starts:
-
-| Tier | What happens |
-|---|---|
-| **DIRECT** | simple/moderate subagents run on free-local (Ollama) or a cheap chain — the result is handed back, no Opus spawn |
-| **CLI delegation** | tool-heavy / complex subagents delegate to **Codex / Gemini CLI** (external subscriptions, real toolchains) |
-| **Model-pin** | lightweight Explore / retrieval spawns are pinned to **Haiku** instead of inherited Opus |
-| **Governance** | every routed run is recorded as a budgeted session in `~/.chuzom/sessions.db` (cap vs consumed) |
-| fall-through | anything that genuinely needs the full harness still spawns normally — never trapped |
-
-Subagent savings are tracked under their own hosts (`claude_code_subagent`,
-`claude_code_subagent_cli`), so they show up in your dashboard alongside main-session
-routing. Full design: [Docs/subagent-routing.md](Docs/subagent-routing.md).
-
-### The REASONING profile (new in v0.5.0)
-
-When Chuzom detects a prompt that requires extended chain-of-thought reasoning — formal proofs, first-principles derivations, multi-step deductive chains, or explicit "think step-by-step" requests — it routes to the dedicated **REASONING profile** instead of the generic PREMIUM chain.
-
-What makes REASONING different:
-- **DeepSeek-R1** (`deepseek-reasoner`) leads the chain — it costs **$0.0014/1K tokens** (28× cheaper than o3) and matches frontier reasoning quality on math and logic benchmarks
-- **Extended thinking** is activated for every model that supports it: Gemini 2.5 Pro receives `thinkingConfig: {thinkingBudget: 8192}` and Claude Opus receives `thinking: {type: enabled, budget_tokens: 16000}`
-- **OpenAI o3** handles problems R1 can't solve at R1's budget
-
-**Trigger patterns** (auto-detected — no configuration needed):
-```
-Prove that...        →  🧠 deep_reasoning → DeepSeek-R1
-Step by step...      →  🧠 deep_reasoning → DeepSeek-R1
-Think through...     →  🧠 deep_reasoning → DeepSeek-R1
-Walk me through...   →  🧠 deep_reasoning → DeepSeek-R1
-Root cause analysis  →  🧠 deep_reasoning → DeepSeek-R1
-```
-
-Or call `llm_reason` directly from any MCP-compatible IDE:
-```
-llm_reason("Why does Dijkstra's algorithm fail with negative weights? Walk me through it.")
-```
-
-### Ollama Dynamic Discovery
-
-Chuzom never uses hardcoded model names. It discovers your installed Ollama models in this priority order:
-
-1. `CHUZOM_OLLAMA_MODEL` env var (single model override)
-2. `OLLAMA_BUDGET_MODELS` env var (comma-separated list)
-3. `OLLAMA_MODELS` env var (comma-separated list)
-4. `~/.chuzom/discovery.json` (auto-populated by `chuzom doctor`)
-5. Safe default: `qwen3.5:latest`
+1. **Plan** — decompose the task into milestones, each with an *objective, executable*
+   acceptance check (`cmd` / `lint` / `diff` / `canary`). "Done" means the check passed,
+   not the model's self-report.
+2. **Delegate** — each milestone runs on the cheapest capable tier (local agent → Codex → premium).
+3. **Escalate without rework** — a failed check escalates to a stronger tier, carrying
+   already-passed milestones forward as frozen context.
+4. **Flow, not stall** — escalation is bounded; irreversible steps run in an isolated git
+   worktree, merged only after they verify.
 
 ```bash
-# Use your own model
-export CHUZOM_OLLAMA_MODEL=llama3.2:latest
-
-# Or let chuzom discover what's running
-chuzom doctor    # populates ~/.chuzom/discovery.json
+llm_act(task="…")   # → JSON: outcome, per-milestone status, events, savings
 ```
 
-### Agentic model pinning (v0.5.5)
-
-Prefer a specific model for **agentic / tool-reasoning** tasks — `analyze`, `generate`, `query`,
-and `research` — while keeping dedicated coders for `code`. When set, the agentic model is pinned
-at the **absolute front** of the routing chain for those task types, ahead of the generic Ollama
-injection and every other reorder. This is ideal for a strong tool-calling model (e.g. Hermes)
-leading your agent work:
-
-```bash
-# Env var (highest precedence)
-export CHUZOM_AGENTIC_MODEL=ollama/hermes3:8b
-```
-
-```yaml
-# Or in ~/.chuzom/routing.yaml (env > repo > user)
-agentic_model: ollama/hermes3:8b
-```
-
-`code` tasks are intentionally excluded, so a coder pin (e.g. `routing.code.model: ollama/qwen3-coder:30b`)
-still wins coding work. The `agent-route` hook surfaces the pinned model in its route indicator.
-
----
-
-## Routing Policies
-
-Chuzom v0.5.0 introduces **user-selectable routing policies** so you can tune the cost/quality/freedom tradeoff to match how you work. Set once via env var and forget:
-
-```bash
-export CHUZOM_ROUTING_POLICY=local-first   # in ~/.zshrc / ~/.bashrc
-```
-
-Or add it to your `.env`:
-
-```
-CHUZOM_ROUTING_POLICY=cost
-```
-
-### Available policies
-
-| Policy | Purpose | Best for |
-|---|---|---|
-| `balanced` | **Default.** Standard chain order — cost/quality sweet spot | Most users; no change from prior behavior |
-| `local-first` | Prefer free local providers first: Ollama → Codex → Gemini CLI → paid APIs | Offline-first workflows; maximize zero-cost ratio |
-| `cost` | Cheapest available model first, using live per-token pricing | Budget-constrained teams; billing-sensitive projects |
-| `quality` | Highest benchmark score for the task type first (see [artificialanalysis.ai](https://artificialanalysis.ai/leaderboards/models)) | Best-output scenarios: docs, complex analysis, code review |
-| `quota-exhaustion` | Route away from providers whose quota is > 85% consumed | End-of-month crunch; uneven quota distribution across providers |
-| `dynamic` | Round-robin across providers within ±10% quota usage of each other | Long sessions; balancing load across Ollama, Codex, and Gemini CLI equally |
-
-### How policies work
-
-Policies are applied **after** the full routing chain is built (after Ollama discovery, Codex injection, Gemini CLI injection). Each policy sees the complete candidate list and reorders it — it does not filter models out, so fallback always works.
-
-```
-Built chain:  [claude-sonnet-4, codex/gpt-5.5, gpt-4o, gemini-2.5-flash]
-Policy cost:  [codex/gpt-5.5, gemini-2.5-flash, gpt-4o, claude-sonnet-4]
-                ^free (prepaid)    ^cheaper API       ^mid       ^most expensive
-```
-
-### Quality scores (artificialanalysis.ai)
-
-The `quality` policy uses benchmark scores per task type (`code`, `query`, `analyze`, `generate`, `research`) cached in `data/benchmarks.json`. Scores are sourced from [artificialanalysis.ai](https://artificialanalysis.ai/leaderboards/models) — a third-party leaderboard that re-runs independent evaluations across providers.
-
-### Session summary policy indicator
-
-The active policy is shown in the session summary dashboard alongside quota bars:
-
-```
-  Zero-cost: ━━━━━━━━━─── 82%
-  Policy 🏠 local-first
-```
-
-### Policy reference
-
-| Policy | Symbol | What it does |
-|---|---|---|
-| `balanced` | ⚖️ | **Default.** Best cost/quality trade-off — cheap models first, Claude only when complexity demands it. |
-| `local-first` | 🏠 | Always try local Ollama models before any cloud provider, even for complex tasks. Ideal for offline or air-gapped work. |
-| `cost` | 💰 | Ruthlessly picks the cheapest capable model for every request — ignores latency and quality differences between similarly-priced tiers. |
-| `quality` | 🏆 | Routes to the highest-quality available model regardless of cost — skips cheaper tiers even when they could handle the task. |
-| `quota-exhaustion` | 📊 | Avoids any provider whose quota is above 85% consumed, automatically shifting load to providers with headroom. Good for end-of-billing-cycle crunches. |
-| `dynamic` | 🔀 | Round-robins across providers that are within ±10% of each other in quota usage — balances load evenly over long sessions. |
+Prompts with a code-mutating verb **and** an objective-verification demand (e.g. *"fix
+the failing test and make it pass"*) route to delegation automatically. Disable with
+`CHUZOM_DELEGATE=off`; any `llm_*` call clears the route, so you're never trapped.
 
 ---
 
 ## 🧠 Companion Skill: `/council`
 
-Chuzom is optimized for cost: it routes each prompt to the cheapest model that can handle it well. `/council` is the quality-maximizing counterpart.
-
-Where Chuzom picks one capable model, `/council` convenes a small committee of the strongest available models for genuinely hard problems. It runs a structured loop:
-
-```
-propose → critique → synthesize
-```
-
-Across multiple model families — Claude Opus, Codex/GPT-5.x via subscription CLI, and optional Gemini via Antigravity — each seat argues independently before a synthesis pass fuses the result.
-
-Use `/council` when the cost of being wrong is higher than the cost of asking twice.
-
-| Tier | Committee | Cost posture |
-|---|---|---|
-| `max` | Claude + Codex + Claude | All subscription/native — no API cost |
-| `balanced` | Strong primary + independent critique | Quality-focused, lower overhead |
-| `budget` | Lightweight second opinion via chuzom | Minimal extra spend |
-
-**Typical use cases:** architecture decisions · hard research questions · theory building · high-consequence technical or strategic choices · any prompt where you want explicit disagreement, not just confidence.
-
-The final output includes both a **fused answer** and an **explicit dissent section** — minority views are preserved instead of averaged away.
+Where Chuzom picks the *cheapest* capable model, `/council` is the *quality-maximizing*
+counterpart: it convenes a small committee of the strongest available models for
+genuinely hard problems and runs `propose → critique → synthesize` across model families
+(Claude Opus, Codex/GPT-5.x, optional Gemini). The output includes a fused answer **and an
+explicit dissent section** — minority views are preserved, not averaged away.
 
 ```bash
 /council Should we migrate this service to event sourcing?
 /council --tier=max Evaluate this architecture decision thoroughly.
 ```
 
-**Trigger methods:**
-- Explicit `/council` command
-- Claude proactively offers it when a problem looks high-stakes
-- Advisory hook nudges on risky prompts (`~/.claude/hooks/council-advisor.mjs`)
-- Phrase triggers: *"second opinion"*, *"be thorough"*, *"are you sure?"*, *"what am I missing?"*
-
-**Install:**
-
-```
-~/.claude/skills/council/           ← skill runtime + eval harness
-~/.claude/hooks/council-advisor.mjs ← zero-cost advisory hook
-```
-
-`/council` is complementary to Chuzom, not a replacement. Chuzom handles ~95% of prompts cheaply and quickly. `/council` is for the 5% where quality, robustness, and dissent matter more than cost. It never auto-fires — the human always confirms before any multi-model run.
-
----
-
-## Real-Time Streaming Progress
-
-In v0.4.0, long-running model calls stream live progress into Claude Code. You'll see what's happening inside Codex and Gemini CLI instead of staring at a blank spinner.
-
-### Codex streaming (JSONL events)
-
-Codex CLI emits structured JSONL events line-by-line. Chuzom forwards them as MCP notifications:
-
-```
-⏺ Calling chuzom…
-  ✅ thread.started
-  ✅ turn.started
-  ⚡ item.completed  — Analyzing the error stack...
-  ⚡ item.completed  — The root cause is a missing null check in line 42
-  ✅ turn.completed  — done — 1024 tokens
-```
-
-No more 80-second silent waits. You'll know within seconds if Codex is processing or overloaded.
-
-### Gemini CLI streaming (line-by-line)
-
-Gemini CLI output streams line-by-line:
-
-```
-⏺ Calling chuzom…
-  ⚡ line  — The function signature should be...
-  ⚡ line  — Here's the corrected version:
-  ⚡ line  — def process(data: list[str]) -> dict:
-```
-
-### Heartbeat notifications
-
-For all models, Chuzom sends periodic heartbeat notifications during long waits:
-
-```
-⏺ Calling chuzom…
-  ⚠️  gpt-5.4 (codex) still waiting... 30s
-  ⚠️  gpt-5.4 (codex) still waiting... 60s — may be overloaded, will auto-fallback on timeout
-```
+Use it when the cost of being wrong is higher than the cost of asking twice. It never
+auto-fires — the human always confirms before any multi-model run.
 
 ---
 
 ## Session Summary Dashboard
 
-At the end of every Claude Code session, Chuzom prints a full-color session summary in the terminal. The dashboard uses the **Tokyo Night** color palette for readability.
+At the end of every session, Chuzom prints a full-color **Tokyo Night** dashboard: the
+routing method breakdown, per-window savings, live Claude quota bars, per-model costs, a
+14-day activity chart, and a per-tier routing summary (Free local / Free subscription /
+Paid API).
 
 ```
-╭────────────────────────────────────────────────────────────────────╮
-│                                                                    │
-│  ROUTING  today  181 decisions          SAVINGS  all sessions      │
-│                                                                    │
-│    ⚡ heuristic     94   52%              $37.70    1.2M tok       │
-│    🔨 build-fast    36   20%            lifetime                   │
-│    🔄 fallback      24   13%              $11.04    382.1k tok     │
-│    🔗 ctx-inherit   10    6%            today                      │
-│    📝 content-gen    2    1%              $36.15    1.1M tok       │
-│    🔍 introspect     1    1%            week                       │
-│                                                                    │
-│    Zero-cost: ━━━━━━━━━━── 87%            ⚡ $0.10/hr              │
-│                                           ~$0.76/active-day        │
-│    Policy ⚖️  balanced                                             │
-│    Effective: ━━━━━━━━━━━━ 88%                                     │
-│    Escalated 21 (100%)                                             │
-│    vs typical ↓↓ 0.1× cost                                         │
-│                                                                    │
-│    QUOTA  Claude Subscription  live                                │
-│     5h  ━───────────────  7%                                       │
-│    resets in 4h 49m (1:59am local)                                 │
-│     weekly ━━━━━───────────  35%                                   │
-│    resets Monday                                                   │
-│                                                                    │
-│    MODELS  this session                                            │
-│    gemini-2.5-flash       3×   32.6k  $0.09                        │
-│    gemini-2.5-pro         2×   47.0k  $0.16                        │
-│    total                  5×   79.6k  $0.26   saved $0.00          │
-│                                                                    │
-╰────────────────────────────────────────────────────────────────────╯
-
-╭─ 14-DAY ACTIVITY ────────────────────────────────────────────────────────────────────────────────╮
-│ calls/day                       savings/day                     tokens saved/day                 │
-│ 571 ┤        █                    $9.68 ┤       █ █             183.9k ┤         █               │
-│ 489 ┤        █▁                   $8.30 ┤       █▆█             157.6k ┤       ▃ █               │
-│ 408 ┤        ██                   $6.91 ┤       ███             131.4k ┤       █▄█               │
-│ 326 ┤    ▆   ██                   $5.53 ┤       ███             105.1k ┤       ███               │
-│ 244 ┤   ▃█▆  ██                   $4.15 ┤       ███              78.8k ┤       ███               │
-│ 163 ┤ ▇▂███▅ ██                   $2.77 ┤       ███              52.5k ┤       ███               │
-│  81 ┤ ██████▆██                   $1.38 ┤   ▂   ███              26.3k ┤ ▁ ▄   ███               │
-│   0 ┤ █████████                      $0 ┤ ▇▃█▇▇▄███                  0 ┤ █▁█▄▄▁███               │
-│       └─────────                          └─────────                     └─────────              │
-│       6/6 10 14                           6/6 10 14                      6/6 10 14               │
-│                                                                                                  │
-│   2,891 calls · 1.2M tok · $37.70 lifetime                                                       │
-│   avg 321/day · avg $4.19/day saved                                                              │
-│                                                                                                  │
-│ p95 latency: 8.1s (gemini-2.5-flash) · 27.2s (gemini-2.5-pro)                                  │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-🎨  Full colored summary: cat ~/.chuzom/last_summary.ansi  (or: chuzom summary)
-
-  Quota Preserved  ━━━━━━━━━━━━━━━───── 78%
-  15K tokens reclaimed · +260min runway
-  Opus would cost:  $0.8662
-  Actually spent:   $0.1895
-  Net preserved:    $0.6767
-
   🧮 Routing Summary — this session
   Tier              | Calls | Tokens |   Actual |  Baseline |    Saved
   ──────────────────────────────────────────────────────────────────
@@ -805,241 +378,89 @@ At the end of every Claude Code session, Chuzom prints a full-color session summ
   Paid API          |    27 |  13421 | $ 0.1735 | $  0.0725 | $ 0.0000
   ──────────────────────────────────────────────────────────────────
   TOTAL             |    48 |  17177 | $ 0.1735 | $  0.0928 | $ 0.0203
-  Effective savings ratio: 0.53×
-  ════════════════════════════════════════════════
 ```
 
-### Dashboard panels
-
-| Panel | What it shows |
-|---|---|
-| **ROUTING** (left, cyan) | Decision method breakdown with count + %; zero-cost bar; policy; effectiveness score; escalation/fallback rate; cost vs. typical session |
-| **SAVINGS** (right, green) | Savings in USD + tokens per window (label on second line due to narrow column); burn rate ($/hr) and ~8h active-day forecast |
-| **QUOTA** (amber, inside main panel) | Claude 5h + weekly quota bars with reset countdown; shown only when subscription is active |
-| **MODELS** (inside main panel) | Per-model call count, tokens, and cost for this session |
-| **14-DAY ACTIVITY** | Three side-by-side bar charts: **calls/day**, **savings/day**, **tokens saved/day**; 8-row bars; real date x-axis; footer with totals, averages, and p95 latency |
-| **Routing Summary** (plaintext after panels) | Per-tier breakdown (Free local / Free subscription / Paid API) — calls, tokens, actual cost, Opus baseline, and net saved |
-
-#### Reading the SAVINGS column
-
-The right column is narrow (~28 chars), so each savings entry spans two lines — amount + tokens first, then the time-window label:
-
-```
-$37.70    1.2M tok
-lifetime
-$11.04    382.1k tok
-today
-```
-
-- **`⚡ $0.10/hr`** — session burn rate (amber = moderate, red = >$1/hr)
-- **`~$0.76/active-day`** — projected daily cost at ~8 active hours/day (not 24/7)
-
-#### Reading the 14-DAY ACTIVITY charts
-
-Eight-row bar charts share the same 14-day x-axis. Block characters (`█▆▄▂▁`) are proportional to that day's value. The x-axis shows three date markers (start, mid, today) in `D/M` format.
-
-- **calls/day** — total routed LLM calls; spikes reveal heavy coding sessions
-- **savings/day** — dollars saved vs. always-Opus baseline that day
-- **tokens saved/day** — tokens handled by cheap providers (Ollama/Gemini/Codex/openai_compat), not burned on premium quota
-
-#### Reading the Routing Summary table
-
-Printed in plaintext after the panels. Three tiers:
-
-| Tier | What's counted |
-|---|---|
-| **Free local** | Ollama, llama.cpp, vLLM, LM Studio (`openai_compat`) |
-| **Free subscription** | Codex (OpenAI Max), Gemini CLI (Google One), Claude Code |
-| **Paid API** | Cloud APIs billed per-token (OpenAI, Anthropic, Gemini API, etc.) |
-
-**Baseline** = what those tokens would cost at Claude Sonnet rates. **Saved** = baseline − actual (zero for Paid API rows where actual exceeds the baseline).
-
----
-
-## Architecture
-
-Chuzom is an **MCP (Model Context Protocol) server** running on your workstation. It:
-
-1. **Intercepts** model requests from your IDE
-2. **Analyzes** the prompt (task, complexity, sensitivity)
-3. **Routes** to the best-fit model (cheapest first)
-4. **Streams** live progress events back to the IDE
-5. **Logs** the decision locally
-6. **Returns** your answer + savings metadata
-
-**Zero data leaves your machine.** No proxy. No cloud. No telemetry.
-
----
-
-## Open Knowledge Format (OKF) Integration
-
-Chuzom integrates with the [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) — a vendor-neutral standard for representing knowledge as plain markdown files with YAML frontmatter. Your local bundle lives at `~/.chuzom/knowledge/` and grows automatically as you work.
-
-### How it works
-
-Three features work together:
-
-#### 1. Context injection
-
-Before routing any task, chuzom scans `~/.chuzom/knowledge/` for concept docs whose content overlaps with your prompt (keyword scoring). The top matches are prepended as a `<knowledge_context>` block. A prompt asking about `router.py` routing logic will arrive at Gemini Flash pre-loaded with the relevant module doc — no extra cost, no manual work.
-
-#### 2. Model Capability Catalog
-
-`~/.chuzom/knowledge/models/*.md` holds one OKF concept per model, describing strengths, weaknesses, p50 latency, and fallback hints. Seeded automatically on first run:
-
-| File | Model |
-|---|---|
-| `gemini-2.5-flash.md` | Fast/cheap; best for refactoring and summarization |
-| `gemini-2.5-pro.md` | Higher quality; use for architecture and complex analysis |
-| `gpt-5.5.md` | Codex CLI; strong at multi-step reasoning |
-| `gpt-5.4.md` | Premium Codex; deepest reasoning, highest latency |
-
-Edit any file to tune how models describe themselves to each other. Add a new file to introduce a new model — no code change required.
-
-#### 3. Side-effect enrichment
-
-After every successful routing call, a background task extracts file paths and function/class names from the prompt and response, then writes a `SourceFile` concept doc:
-
-```
-~/.chuzom/knowledge/source/src/chuzom/router.py.md
-  type: SourceFile
-  key_symbols: [route_and_call, _dispatch_model_loop]
-  last_model: gemini-2.5-flash
-```
-
-The first call that touches a file records what it learned. Every subsequent call on that file gets that knowledge injected — for free.
-
-### The compounding loop
-
-```
-routing call → enrich (write SourceFile doc)
-             → next call finds it → inject as context
-             → cheap model succeeds → fewer fallbacks
-             → saves more → next call enriches more
-```
-
-The bundle builds itself. The more chuzom is used on a codebase, the less it needs to escalate to expensive models.
-
-### Extending the bundle
-
-Any markdown file with YAML frontmatter dropped into `~/.chuzom/knowledge/` is automatically indexed:
-
-```markdown
----
-type: TeamConvention
-title: Error handling policy
-tags: [errors, python, conventions]
-description: How this codebase handles exceptions
----
-
-All errors must be caught at route boundaries. Never use bare `except Exception`.
-Custom exceptions inherit from `DomainError`.
-```
-
-Chuzom refreshes the bundle every 60 seconds, so new files are picked up without a restart.
-
-### Bundle structure
-
-```
-~/.chuzom/knowledge/
-├── models/                     # Model Capability Catalog (auto-seeded)
-│   ├── gemini-2.5-flash.md
-│   ├── gemini-2.5-pro.md
-│   ├── gpt-5.5.md
-│   └── gpt-5.4.md
-├── source/                     # SourceFile concepts (auto-written)
-│   └── src/chuzom/
-│       ├── router.py.md
-│       └── okf.py.md
-└── <your-concepts>/            # Anything you add manually
-    ├── team-conventions.md
-    └── architecture.md
-```
-
----
-
-## CLI Reference
-
-```bash
-chuzom install [--host claude-code|cursor|codex|gemini-cli|all]
-                                     # Wire into your IDE(s)
-
-chuzom doctor                        # Verify hooks, MCP server, provider keys
-
-chuzom summary [--watch]             # Cost dashboard (live or one-time snapshot)
-
-chuzom --version                     # Show installed version
-```
+Long model calls also **stream live progress** (Codex JSONL events, Gemini lines,
+heartbeats) — no silent 80-second waits. Full dashboard walkthrough →
+**[Session Dashboard guide](Docs/session-dashboard.md)**.
 
 ---
 
 ## Configuration
 
-See the [full configuration reference](#full-configuration-reference) below for all environment variables.
-
-Common one-liners:
+Everything works out of the box. Common one-liners:
 
 ```bash
-# Use a specific Ollama model
-export CHUZOM_OLLAMA_MODEL=qwen2.5-coder:7b
-
-# Claude Pro/Max subscription (enables quota tracking)
-export CHUZOM_CLAUDE_SUBSCRIPTION=true
-
-# Change routing policy
-export CHUZOM_ROUTING_POLICY=local-first   # or: cost, quality, balanced, dynamic
-
-# Maximum enforcement (block all direct Claude answers for Q&A tasks)
-# NOTE: `hard` is opt-in. The shipped default is `advise` — it routes on every
-# turn but does not block a tool call. Only `hard` actually blocks; `soft`/`off`
-# relax further. See "Enforcement Modes" for the full ladder.
-export CHUZOM_ENFORCE=hard
-
-# All settings can live in ~/.chuzom/.env — loaded automatically
+export CHUZOM_CLAUDE_SUBSCRIPTION=true          # enable Claude quota tracking
+export CHUZOM_ROUTING_POLICY=local-first        # or: cost, quality, balanced, dynamic
+export CHUZOM_OLLAMA_MODEL=qwen2.5-coder:7b     # pin a local model
+export CHUZOM_ENFORCE=smart                     # default — see the enforcement ladder
 ```
+
+All settings can live in `~/.chuzom/.env` (loaded automatically). The full env-var
+matrix, enforcement modes (`smart` / `soft` / `hard` / `strict` / `advise` / `off`), and
+advanced options (direct execution, session context, subscription mode) →
+**[Configuration reference](Docs/configuration.md)**.
 
 ---
 
-## What You Get
+## More docs
 
-✅ **Drop-in for your dev tool** — no workflow changes  
-✅ **Automatic model selection** — based on task complexity  
-✅ **Cost savings** — routes offloadable work to cheaper models; the magnitude depends on your workload mix (see Benchmarks — a reproducible control-group figure is tracked in the claim-evidence registry)  
-✅ **Local decision logging** — every choice stays on your machine (no telemetry)  
-✅ **Live savings dashboard** — `chuzom summary --watch` shows real-time spending  
-✅ **Session summary** — full-color Tokyo Night dashboard at session end  
-✅ **Intelligent failover** — if a provider is down, tries the next model  
-✅ **Streaming progress** — Codex and Gemini CLI stream events live; no silent waits  
-✅ **Ollama dynamic discovery** — no hardcoded models; uses what you have installed  
-✅ **PII detection** — sensitive prompts route to local models only  
-✅ **Per-reply savings banner** — see which model ran and how much you saved  
-✅ **Routing policies** — 6 policies (local-first, cost, quality, quota-exhaustion, dynamic, balanced) for one-line tradeoff control  
+| Guide | What's in it |
+|---|---|
+| [IDE Setup](Docs/ide-setup.md) | Per-IDE setup, push vs pull, the 11-door MCP tool surface |
+| [Routing](Docs/routing.md) | Chains, subagent routing, REASONING profile, policies, model pinning |
+| [Local Inference](Docs/local-inference.md) | 13+ auto-detected local LLM servers + port overrides |
+| [Configuration](Docs/configuration.md) | Full env matrix, enforcement modes, advanced config, CLI |
+| [Session Dashboard](Docs/session-dashboard.md) | Dashboard panels + live streaming progress |
+| [OKF Integration](Docs/okf.md) | Self-building local knowledge bundle that compounds savings |
+| [Agentic Router](Docs/agentic-router.md) | Milestone-Gated Escalating Execution design |
+| [Troubleshooting](Docs/troubleshooting.md) | Command-not-found, hooks, Ollama, Windows setup |
+| [Correctness Reset](Docs/correctness-reset/03_RELEASE_GATES.md) | The audit: gates, benchmark, verdict |
 
 ---
 
 ## Benchmarks
 
-Directional measurements on the built-in smoke corpus of 77 prompts
-(easy.jsonl × 20, hard.jsonl × 16, moderate.jsonl × 17, plus the objective-heavy
-extension moderate2.jsonl × 12 and hard2.jsonl × 12).  The audited release benchmark
-uses the moderate + hard baseline (33 prompts); the extension sharpens the quality
-estimate. These numbers are illustrative — not statistically significant at this
-corpus size.
+The **audited** control-group figures are in [Measured Results](#-measured-results-audited)
+(the numbers to trust). Chuzom also ships a built-in smoke corpus of 77 prompts
+(`easy` × 20, `hard` × 16, `moderate` × 17, plus objective-heavy `moderate2` × 12 and
+`hard2` × 12) for quick local checks — the audited release benchmark uses the
+moderate + hard baseline (33 prompts); the extension sharpens the estimate. A
+production-scale corpus (thousands of prompts) has not been published yet.
 
-```
-Model Selection Strategy          Accuracy    Cost/1K    Quality
-─────────────────────────────────────────────────────────────
-Always Haiku (cheapest)           directional  directional  🔴
-Always Opus (premium)             directional  directional  🟢
-Random selection                  directional  directional  🟡
-Chuzom (smart routing)            directional  directional  🟢
+```bash
+python -m chuzom benchmark   # run your own
 ```
 
-> **Note:** A production-scale corpus (thousands of prompts) has not been
-> published yet.  The table above will be updated with real numbers once that
-> evaluation is complete.
+---
 
-Run your own: `python -m chuzom benchmark`
+## FAQ
+
+**Do I need to bring API keys?** No — not if you use Claude Code Pro/Max or Codex
+subscriptions. Optional for other providers.
+
+**What data does Chuzom collect?** None. Everything stays on your machine — no telemetry,
+no cloud calls.
+
+**How much can I actually save?** It depends entirely on your prompt mix. The honest,
+reproducible number is the audited **+$0.027/run net at −0.21 quality** control-group
+result above. Heavy-Opus workloads see the largest gains; light users see less.
+
+**Which models does it support?** 20+ providers: OpenAI, Anthropic, Google, Ollama, 13+
+local servers, and more.
+
+**Does Chuzom work without Ollama?** Yes — Ollama is optional. Without it, prompts route
+to Codex CLI, Gemini CLI, or API providers. Install Ollama for free local routing.
+
+**Can I use it on Windows?** Yes. `pip install chuzom-router` then `chuzom install`. PATH
+and PowerShell tips → [Troubleshooting](Docs/troubleshooting.md#windows-specific-setup).
+
+**How do I stop it blocking a tool call?** Relax with `CHUZOM_ENFORCE=soft` (log only) or
+`off`. For a single turn, prefix your prompt with `claude:`. See
+[enforcement modes](Docs/configuration.md#enforcement-modes).
+
+More Q&A in the [Troubleshooting guide](Docs/troubleshooting.md).
 
 ---
 
@@ -1049,420 +470,13 @@ Full test suite runs on every push (Python 3.10+). Contributions welcome!
 
 - 🐛 [Report bugs](https://github.com/Chuzom/Chuzom/issues)
 - 💡 [Start discussions](https://github.com/Chuzom/Chuzom/discussions)
-- 🔧 [View `CONTRIBUTING.md`](./CONTRIBUTING.md)
+- 🔧 [Read `CONTRIBUTING.md`](./CONTRIBUTING.md)
 
----
-
-## FAQ
-
-**Q: Do I need to bring API keys?**  
-A: Not required if you use Claude Code Pro/Max or Codex subscriptions. Optional for other providers.
-
-**Q: What data does Chuzom collect?**  
-A: None. Everything stays on your machine. No telemetry, no cloud calls.
-
-**Q: Which models does it support?**  
-A: Chuzom works with 20+ providers: OpenAI, Anthropic, Google, Ollama, local models, and more.
-
-**Q: How much can I actually save?**  
-A: Depends on your usage. Heavy Opus users see 70–80% savings. Mixed users see 35–50%. Most save $200–800/year.
-
-**Q: Why don't I see Ollama being used even though it's running?**  
-A: Chuzom uses 5-level dynamic discovery to find your installed models. Run `chuzom doctor` to populate `~/.chuzom/discovery.json`, or set `CHUZOM_OLLAMA_MODEL=your-model:tag` directly.
-
-**Q: Codex was taking 80+ seconds with no feedback — is that fixed?**  
-A: Yes. v0.4.0 streams Codex JSONL events in real time. You'll see `thread.started`, `item.completed`, and `turn.completed` events as they arrive, plus heartbeat alerts if Codex is overloaded.
-
-**Q: What's the difference between push and pull routing?**  
-A: Push routing (Claude Code, Codex) fires a `UserPromptSubmit` hook before the LLM sees your prompt. For **self-contained prompts** (no reference to your files or prior turns), the hook answers directly and Claude is never invoked — savings are real and guaranteed. For **context-dependent prompts**, the hook emits an advisory hint only; Claude still runs the turn (though it may follow the hint and call an `llm_*` tool). Pull routing (Cursor, Windsurf, Copilot) relies on the model reading instructions and choosing to call Chuzom tools — it fires ~90% of turns in agent mode but is not a hard guarantee. See [Direct execution mode](#direct-execution-mode-chuzom_direct_execution) for the full breakdown.
-
-**Q: Does Chuzom work without Ollama?**  
-A: Yes. Ollama is optional. Without it, prompts route to Codex CLI, Gemini CLI, or API providers (Gemini, OpenAI, Perplexity). Install Ollama to enable free local routing with zero API cost.
-
-**Q: Can I use Chuzom on Windows?**  
-A: Yes. Install via `pip install chuzom-router`, then `chuzom install`. See the [Windows-specific setup](#windows-specific-setup) section for PATH configuration and PowerShell tips. The status-bar script requires Git Bash or WSL; all routing hooks work natively.
-
-**Q: Why did Chuzom answer a research question with old information?**  
-A: Research prompts (news, "latest X", current events) always route to `llm_research` (Perplexity) — Ollama is intentionally bypassed because it has a training cutoff and cannot fetch live data. If the answer was stale, `PERPLEXITY_API_KEY` may be missing. Run `chuzom doctor` to check.
-
-**Q: What is `CHUZOM_DIRECT_EXECUTION` and should I change it?**  
-A: When `true` (default), the hook answers prompts directly from the hook process — Claude never invokes, zero quota consumed. Set to `false` to use MCP-tool mode where Claude calls `llm_query` etc. Most users should leave it at `true`. See [Direct execution mode](#direct-execution-mode-chuzom_direct_execution).
-
-**Q: How do I stop Chuzom from blocking certain tool calls?**  
-A: Enforcement can be relaxed with `CHUZOM_ENFORCE=soft` (log only, never block) or `CHUZOM_ENFORCE=off` (completely disabled). For a single turn, prefix your prompt with `claude:` to bypass routing entirely. See [Enforcement Modes](#enforcement-modes).
-
-**Q: My hooks stopped working after a pip upgrade — how do I fix it?**  
-A: Run `chuzom install --force` to re-register hooks with the current interpreter path. The hook self-checks its version on each run and warns if the installed copy is older than the package version.
-
----
-
-## Codex Plugin
-
-Chuzom ships as a Codex plugin — manifest at [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json)
-(name `chuzom`, category *Developer Tools*). It's eligible for the
-[awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins) list; a ready-to-submit entry
-lives at [`.codex-plugin/awesome-ai-plugins-entry.md`](.codex-plugin/awesome-ai-plugins-entry.md)
-(tracked in issue #103).
-
----
-
-## Troubleshooting
-
-### `chuzom` command not found
-
-**macOS / Linux:**
-```bash
-# Confirm the binary is in your PATH
-which chuzom || echo "not on PATH"
-
-# If installed via pip into a venv, activate it first:
-source .venv/bin/activate
-chuzom --version
-
-# Or run directly:
-python -m chuzom --version   # works if __main__ is present
-~/.local/bin/chuzom --version  # pip --user installs go here
-
-# Permanently add pip's user bin to PATH (add to ~/.zshrc or ~/.bashrc):
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-**Windows (PowerShell):**
-```powershell
-# Locate the chuzom binary installed by pip
-python -m pip show chuzom-router | Select-String Location
-# Add the Scripts\ subdirectory to your PATH:
-$env:PATH += ";C:\Users\YOU\AppData\Roaming\Python\Python311\Scripts"
-# Or persistently via System Properties → Environment Variables → PATH
-```
-
----
-
-### Hooks not firing (Claude Code)
-
-```bash
-# Check hook registration
-chuzom doctor
-
-# Manually inspect ~/.claude/settings.json
-cat ~/.claude/settings.json | python -m json.tool | grep -A5 hook
-
-# Re-install if missing
-chuzom install
-
-# Force overwrite existing hooks
-chuzom install --force
-```
-
-The hook file lives at `~/.claude/hooks/chuzom-auto-route.py`. If it's missing after install, check that `~/.claude/` is writable and retry.
-
----
-
-### Routing not working — Ollama not used
-
-1. Confirm Ollama is running: `ollama list` should show your models
-2. Run `chuzom doctor` — it runs a live health check and populates `~/.chuzom/discovery.json`
-3. Set a model explicitly if auto-discovery fails:
-   ```bash
-   export CHUZOM_OLLAMA_MODEL=llama3.2:latest   # or whichever model you have
-   ```
-4. Check the Ollama URL if you run it on a non-default port:
-   ```bash
-   export OLLAMA_BASE_URL=http://localhost:11435
-   ```
-
----
-
-### Research prompts answering from Ollama (stale data)
-
-Research tasks (news, "latest X", current events) always bypass Ollama and route to `llm_research` (Perplexity). Ollama has a training cutoff and cannot fetch live web data. If you see stale answers on research prompts, check that `PERPLEXITY_API_KEY` is set in `~/.chuzom/.env`:
-
-```bash
-chuzom doctor   # will warn if PERPLEXITY_API_KEY is missing
-```
-
----
-
-### Cursor / Windsurf rules not applying
-
-Pull-routing IDEs require the rule file to be present in the project root. If Chuzom tools aren't being called:
-
-```bash
-# Re-install IDE configs into the current project
-chuzom install --host cursor      # or windsurf
-# or
-chuzom-install-hooks ide
-
-# Verify the file exists
-ls .cursor/rules/use-chuzom.mdc
-ls .windsurf/rules/use-chuzom.md
-```
-
-If the rule file exists but the model still doesn't call Chuzom tools, ensure you're in **agent mode** (not chat mode). Pull routing only fires in agent/composer mode where the model can call tools.
-
----
-
-### Windows-specific setup
-
-**Installation:**
-```powershell
-# Install (PowerShell as regular user — no admin needed)
-pip install chuzom-router
-
-# Verify
-chuzom --version
-```
-
-If `chuzom` isn't found after install, add Python's Scripts directory to PATH:
-```powershell
-# Find where pip installed it
-pip show chuzom-router
-
-# Add to PATH in current session
-$env:PATH += ";$env:APPDATA\Python\Python311\Scripts"
-
-# Or permanently — open System Properties → Advanced → Environment Variables
-# and append the Scripts path to the user PATH variable
-```
-
-**Claude Desktop config** (Windows path):
-```
-%APPDATA%\Claude\claude_desktop_config.json
-```
-
-**VS Code / Copilot MCP config** (Windows path):
-```
-%APPDATA%\Code\User\mcp.json
-```
-
-**Environment variables on Windows:**
-
-Set them permanently via PowerShell (runs at any privilege level):
-```powershell
-[System.Environment]::SetEnvironmentVariable("OLLAMA_BASE_URL","http://localhost:11434","User")
-[System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY","your-key","User")
-```
-
-Or add to your PowerShell profile (`$PROFILE`):
-```powershell
-$env:GEMINI_API_KEY = "your-key"
-$env:CHUZOM_CLAUDE_SUBSCRIPTION = "true"
-```
-
-**Ollama on Windows:**
-Download from [ollama.com](https://ollama.com) — the Windows installer sets up the service automatically. Chuzom auto-discovers it at `http://localhost:11434`.
-
-**Hook installation on Windows:**
-```powershell
-chuzom install
-# If Git Bash / WSL is not available, the status-bar script is skipped
-# automatically (requires bash). All routing hooks install normally.
-```
-
----
-
-### GitHub Copilot not calling Chuzom tools
-
-1. Ensure VS Code ≥ 1.99 (agent mode required)
-2. Switch Copilot Chat to **Agent** mode (not "Ask" or "Edit")
-3. Verify `.github/copilot-instructions.md` and `.vscode/mcp.json` exist:
-   ```bash
-   chuzom-install-hooks ide
-   ls .vscode/mcp.json
-   ls .github/copilot-instructions.md
-   ```
-4. Restart VS Code — MCP servers load on startup
-
----
-
-### `chuzom doctor` — what it checks
-
-```bash
-chuzom doctor
-```
-
-Verifies and reports on:
-- Hook registration in `~/.claude/settings.json`
-- Python interpreter path validity (warns if stale venv)
-- Ollama reachability and installed models
-- API key presence (Gemini, OpenAI, Perplexity, Anthropic)
-- `~/.chuzom/` directory initialization
-- Provider health (live ping to each configured provider)
-
-If a check fails, `doctor` prints a specific fix command.
-
----
-
-## Enforcement Modes
-
-Chuzom's enforcement hook (`enforce-route.py`) fires before every tool call when a routing directive is active. It controls whether Claude can bypass routing and answer directly.
-
-Set via environment variable or `~/.chuzom/routing.yaml`:
-
-```bash
-# Environment variable (takes precedence) — default is 'smart'
-export CHUZOM_ENFORCE=soft    # relax to advisory-only (logs, never blocks)
-
-# Or in ~/.chuzom/routing.yaml
-enforce: hard
-```
-
-| Mode | Behavior | Best for |
-|---|---|---|
-| `smart` (default) | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze) until routed, so offloadable work goes to cheaper models. Allows file tools for code tasks. Auto-downgrades after 2 violations to prevent stuck sessions. | The default — enforce routing out of the box |
-| `soft` | Logs routing misses but **never blocks** any tool call. Route hints appear in context; the model can follow them voluntarily. Zero risk of stuck sessions, but **saves nothing unless the model volunteers**. | Teams that want advisory-only routing |
-| `hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called. Maximum quota enforcement. | Power users who want maximum routing enforcement |
-| `strict` | Like `hard` with all escape valves disabled (no auto-pivot, no read-only Bash exception). Sessions can deadlock. | Compliance environments |
-| `advise` | Routes prompts to cheap models, but the enforcement hook **never blocks any tool**. Zero friction. | Testing / evaluation |
-| `off` | Enforcement completely disabled. Routing directives still appear in context. | Debugging routing |
-
-**Auto-pivot:** In `smart` and `hard` modes, two mechanisms prevent stuck sessions:
-- **Per-turn trap** — 2 blocks of the *same tool* within a single user turn trigger an immediate auto-pivot for that turn.
-- **Session counter** — each blocked tool call increments a session-wide counter; at 3 violations you get an escalation warning, and at 4 enforcement auto-downgrades to `soft` for the rest of the session.
-
-Both escape valves are disabled under `strict`. An investigation-loop detector (same tool blocked 3+ times in 2 minutes) also releases the lock in non-strict modes.
-
-**Escape valve:** Prefix any prompt with `claude:` to bypass routing entirely for that turn:
-```
-claude: explain this function to me
-```
-
----
-
-## Advanced Configuration
-
-### Direct execution mode (`CHUZOM_DIRECT_EXECUTION`)
-
-By default (`CHUZOM_DIRECT_EXECUTION=true`), the `UserPromptSubmit` hook executes simple prompts directly from the hook process. What happens next depends on `CHUZOM_RENDER_MODE` (default `auto`):
-
-- **Self-contained prompts** (no reference to your files, code, or earlier turns) are rendered in `block` mode — the turn is answered entirely from the hook, Claude is never invoked, and zero subscription tokens are consumed.
-- **Context-dependent prompts** are rendered in `echo` mode — the hook's result is passed to Claude as an unverified draft, and Claude still runs the turn (a normal Claude turn is consumed). Only `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` prevents a Claude turn entirely. <!-- claim-ok: block / zero-Claude preventing a Claude turn is verified by tests/test_zero_claude_bypass.py + test_zero_claude_sidecar_bypass.py (CHZ-AUD-005) -->
-
-If direct execution fails (Ollama unreachable, all providers fail), the hook falls through and injects a `⚡ MANDATORY ROUTE:` directive instead, so an MCP tool handles it.
-
-```bash
-# Default — answer directly from hook (Claude skipped only for self-contained prompts in auto mode)
-export CHUZOM_DIRECT_EXECUTION=true
-
-# MCP-tool mode — hook injects a routing directive, Claude calls the MCP tool
-export CHUZOM_DIRECT_EXECUTION=false
-```
-
-**When to set `false`:** If you're on a subscription plan without API keys and want the model to handle all responses (pure pull routing via MCP tools), set `CHUZOM_DIRECT_EXECUTION=false`. This uses more Claude turns but keeps all responses through the standard conversational flow.
-
-### Session-context accumulator (`CHUZOM_SESSION_CONTEXT`)
-
-Routed models (local Ollama/Codex, Claude subscription, and external OpenAI/Gemini
-APIs) answer stateless by default — a cheap drafted answer can't see the session's
-files, decisions, or prior turns. Chuzom accumulates session events (prompts, tool
-results, decisions) into a durable per-session store at
-`~/.chuzom/session_context_<sid>.jsonl` and injects a token-budgeted context block
-into every provider path so routed calls get real context without spending extra
-Claude turns.
-
-```bash
-# Default — full session context sent to every provider, including external APIs
-export CHUZOM_SESSION_CONTEXT=all
-
-# Context still built and sent to local/subscription providers, but stripped
-# before prompts go to external openai/gemini targets
-export CHUZOM_SESSION_CONTEXT=local
-
-# Disable the accumulator entirely — routed calls stay stateless
-export CHUZOM_SESSION_CONTEXT=off
-```
-
-**Fail-open:** any store or config failure falls back to routing without context —
-the accumulator never blocks or skips a routed call. Session stores are deleted at
-session end and pruned after 7 days.
-
-### Subscription mode (`CHUZOM_CLAUDE_SUBSCRIPTION`)
-
-When you have **Claude Pro or Max** (a subscription, not API keys), set:
-
-```bash
-export CHUZOM_CLAUDE_SUBSCRIPTION=true
-# or add to ~/.chuzom/.env
-```
-
-This enables:
-- OAuth-based quota tracking (reads live usage from Claude Code's Keychain token)
-- Pressure-aware routing (routes more aggressively when your 5-hour or weekly quota is high)
-- Session summary shows "Free subscription" tier for Codex / Gemini CLI usage
-
-Without this flag, Chuzom treats Claude as a paid-API provider and tracks cost in dollars rather than quota pressure.
-
-### Classifier behavior (`CHUZOM_CLASSIFY_LOCAL_ONLY`)
-
-By default, Chuzom classifies prompts using local methods only (heuristic + Ollama). This protects privacy — your prompts never leave your machine for classification.
-
-```bash
-# Default — heuristic + Ollama only (privacy-first)
-export CHUZOM_CLASSIFY_LOCAL_ONLY=true
-
-# Allow API classifiers when Ollama is absent but API keys are present
-export CHUZOM_CLASSIFY_LOCAL_ONLY=false
-```
-
-**Auto-detection:** If you don't set this variable, Chuzom auto-detects: if Ollama is unreachable but you have API keys (`GEMINI_API_KEY` or `OPENAI_API_KEY`), it enables API classifiers automatically so routing accuracy doesn't silently degrade.
-
-### Full configuration reference
-
-| Env var | Default | Description |
-|---|---|---|
-| `CHUZOM_OLLAMA_MODEL` | auto-discovered | Override the primary Ollama model |
-| `OLLAMA_BUDGET_MODELS` | auto-discovered | Comma-separated budget model list |
-| `OLLAMA_MODELS` | auto-discovered | Comma-separated full model list |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `CHUZOM_OLLAMA_TIMEOUT` | `4` | Per-call Ollama timeout in seconds |
-| `CHUZOM_AGENTIC_MODEL` | _(unset)_ | Preferred model for agentic tasks (analyze/generate/query/research) |
-| `CHUZOM_CODEX_MODELS` | `gpt-5.5,gpt-5.4` | Codex model fallback chain |
-| `CHUZOM_CODEX_TIMEOUT` | `300` | Codex CLI timeout in seconds |
-| `CHUZOM_CLAUDE_SUBSCRIPTION` | `false` | Enable subscription quota tracking mode |
-| `CHUZOM_DIRECT_EXECUTION` | `true` | Answer prompts directly from hook; Claude is skipped only when the render mode resolves to `block` |
-| `CHUZOM_ENFORCE` | `smart` | Enforcement mode: `smart`, `soft`, `hard`, `strict`, `advise`, `off` |
-| `CHUZOM_CLASSIFY_LOCAL_ONLY` | auto | Restrict classification to local models only (privacy) |
-| `CHUZOM_ROUTING_POLICY` | `balanced` | Routing policy: `balanced`, `local-first`, `cost`, `quality`, `quota-exhaustion`, `dynamic` |
-| `CHUZOM_ROUTE_BANNER` | `on` | Show `🎯 Chuzom routed →` banner in terminal (`off` to hide) |
-| `CHUZOM_ZERO_CLAUDE` | `false` | Zero-Claude mode: block native Claude turns; external route or block |
-| `CHUZOM_SESSION_CONTEXT` | `all` | Session-context accumulator: `all` (send everywhere), `local` (strip from external APIs), `off` |
-| `PERPLEXITY_API_KEY` | _(unset)_ | API key for research routing via Perplexity |
-| `GEMINI_API_KEY` | _(unset)_ | API key for Gemini Flash / Pro |
-| `OPENAI_API_KEY` | _(unset)_ | API key for GPT-4o / o3 |
-| `ANTHROPIC_API_KEY` | _(unset)_ | API key for direct Claude API (not subscription) |
-
-All variables can also be set in `~/.chuzom/.env` (loaded automatically by hooks).
-
----
-
-## Kimi Code Integration
-
-[Kimi Code](https://kimi.moonshot.cn/code) supports pull routing via MCP:
-
-```bash
-# Install Chuzom MCP server config for Kimi
-chuzom-install-hooks ide
-```
-
-Then configure Kimi Code's MCP settings to point to the Chuzom server. In Kimi Code's settings, add:
-
-```json
-{
-  "mcpServers": {
-    "chuzom": {
-      "command": "chuzom",
-      "args": []
-    }
-  }
-}
-```
-
-Kimi Code uses pull routing — see [`KIMI.md`](./KIMI.md) for the tool routing table. The model must call `llm_code`, `llm_query`, etc. before generating its own response.
+Chuzom also ships as a [Codex plugin](.codex-plugin/plugin.json) (category *Developer
+Tools*).
 
 ---
 
 ## License
 
 MIT © [The Chuzom Contributors](https://github.com/Chuzom/Chuzom/graphs/contributors)
-
----
