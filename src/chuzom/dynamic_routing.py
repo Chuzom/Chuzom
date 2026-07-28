@@ -202,47 +202,82 @@ def _reorder_by_quota_pressure(
     return normal + high_pressure
 
 
+def _dynamic_leaderboard_ordering_enabled() -> bool:
+    """#26: opt-in leaderboard ordering for the DYNAMIC routing table.
+
+    The STATIC path (``profiles.get_model_chain``) already reorders non-BUDGET
+    chains by live-leaderboard quality (cheapest-capable-first) via
+    ``apply_benchmark_ordering``; the dynamic table historically did not, so when
+    discovery is active BALANCED/PREMIUM chains fell back to raw static preference
+    order. This flag closes that gap by applying the SAME ordering here.
+
+    Default OFF so the audited/QUALIFIED default behaviour is preserved byte-for-
+    byte; enabling it aligns the dynamic path with the static path (and shipping it
+    as the default warrants a re-audit). BUDGET is never reordered in either path —
+    its cheap-first static order is the cost-saving behaviour."""
+    import os
+    return os.environ.get("CHUZOM_DYNAMIC_LEADERBOARD_ORDERING", "").strip().lower() in (
+        "1", "on", "true", "yes"
+    )
+
+
 def build_dynamic_routing_table(
     available_providers: set[str] | None = None,
 ) -> dict[tuple[RoutingProfile, TaskType], list[str]]:
     """Build custom routing tables based on discovered providers and quota status.
-    
+
     Takes the static routing table from profiles.py and:
       1. Filters each chain to only include available providers
-      2. Reorders models to deprioritize quota-depleted services
-    
+      2. (opt-in, #26) reorders non-BUDGET chains by live-leaderboard quality
+         (cheapest-capable-first), matching the static path
+      3. Reorders models to deprioritize quota-depleted services
+
     The filtering and reordering preserves the preference order — high-priority
     models stay first as long as their provider is available and not depleted.
-    
+
     Args:
         available_providers: Set of available provider names. If None, discovers automatically.
-    
+
     Returns:
         Custom routing table with unavailable and quota-depleted providers deprioritized.
     """
     if available_providers is None:
         available_providers = get_available_providers()
-    
+
     # Always allow codex and ollama (they're local/special and handled separately)
     available_providers = available_providers | {"codex", "ollama", "gemini_cli"}
-    
+
     # Get quota pressure information
     quota_pressure = _get_quota_pressure()
-    
+    _leaderboard_ordering = _dynamic_leaderboard_ordering_enabled()
+
     dynamic_table: dict[tuple[RoutingProfile, TaskType], list[str]] = {}
-    
+
     for (profile, task_type), chain in ROUTING_TABLE.items():
         # Step 1: Filter chain to only available providers
         filtered_chain = [
             model for model in chain
             if provider_from_model(model) in available_providers
         ]
-        
-        # Step 2: Reorder by quota pressure (move depleted services to end)
+
+        # Step 2 (#26, opt-in): apply live-leaderboard ordering for non-BUDGET
+        # profiles, exactly as the static path does. BUDGET keeps its cheap-first
+        # static order (the cost-saving behaviour). Fails open — apply_benchmark_
+        # ordering returns the chain unchanged when no benchmark data is present.
+        if _leaderboard_ordering and profile != RoutingProfile.BUDGET:
+            try:
+                from chuzom.benchmarks import apply_benchmark_ordering
+                filtered_chain = apply_benchmark_ordering(
+                    filtered_chain, task_type, profile
+                )
+            except Exception as _e:  # noqa: BLE001 — never break table building
+                log.warning("Dynamic leaderboard ordering failed — static order: %s", _e)
+
+        # Step 3: Reorder by quota pressure (move depleted services to end)
         reordered = _reorder_by_quota_pressure(filtered_chain, quota_pressure)
-        
+
         dynamic_table[(profile, task_type)] = reordered
-    
+
     return dynamic_table
 
 
