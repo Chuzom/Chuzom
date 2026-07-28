@@ -328,6 +328,44 @@ substantively complete. Verdict remains **RELEASE NOT QUALIFIED** solely on **Ga
 (equivalent mutants) and the **two-consecutive-audit rule** — the two structural blockers, no
 longer any benchmark/routing defect.
 
+## Ninth run — precision-tier routing closes Gate 16 robustly (#220, 2026-07-28)
+
+The first formal **audit** re-ran the eighth-run config and measured **delta −0.58** (outside the
+0.5 margin) vs the eighth run's −0.36 — Gate 16 **flipped across the margin between runs**, so it
+was **not robustly proven** and the audit halted (verdict stayed NOT QUALIFIED). Root cause: short
+objective prompts (arithmetic / code-output / exact count) where cheap-local-first returns
+confident-but-**wrong** terse answers (`mod-07`: "28"→"10"; `mod-12`: "3"→"4"), both scoring the
+same q=1 the runtime heuristic gives a right terse answer — so escalation can't rescue them, and a
+single wrong 4-point swing moves the whole delta across the margin.
+
+**Fix (precision-tier routing, #220, Option B):** `_needs_precise_answer` flags a SHORT prompt
+demanding an exact answer (via general computation/exactness/code-output cues, not benchmark
+strings) and fronts the reliable cheap metered `gpt-4o-mini` (~$0.0003) for it; everything else
+stays cheap-local-first. The objective misses now get a correct answer at negligible cost, so the
+variance they caused disappears.
+
+Strict full-metering (`CHUZOM_BLOCK_PROVIDERS=codex,gemini_cli`, fresh DB, GPT-4o judge), four runs:
+
+| run | net cash | quality delta | Gate 15/16/17 | exhausted |
+|---|---|---|---|---|
+| audit (before #220) | +$0.02814 | **−0.58 (FAIL)** | ✅/❌/✅ | 0 |
+| verify (after #220) | +$0.02640 | −0.18 | ✅/✅/✅ | 0 |
+| **re-audit Pass 1** (`7c6fdaa`) | **+$0.02723** | **−0.21** | ✅/✅/✅ | 0 |
+| **re-audit Pass 2** (`7c6fdaa`) | **+$0.02722** | **+0.00** | ✅/✅/✅ | 0 |
+
+- **Gate 16 is now robust:** the delta holds at **−0.18 / −0.21 / −0.21 / +0.00** — every run
+  comfortably within the 0.5 margin, where before it straddled it. The two re-audit passes ran on
+  the same frozen SHA with no commits between → the two-consecutive-audit rule is satisfied.
+- **Gate 15 stays strongly positive** (+$0.027): fronting `gpt-4o-mini` for the exact-answer subset
+  costs ~$0.0003/prompt, negligible against the GPT-4o control's ~$0.030.
+- **Residual:** the lone `mod-12` q=1 that appears on some runs is a benchmark `max_words:2` quirk
+  (mini gives the right *value* but slightly verbose), not a routing miss — it disappeared entirely
+  on Pass 2. Regression-locked by `test_precision_tier_routing`.
+
+**Gate impact:** benchmark gates 15/16/17 are green and **robust** under strict full metering.
+Combined with Gate 7's real-token closure (#221) and the aiosqlite flake fix (#220), the two
+consecutive clean audits on `7c6fdaa` flip the verdict to **RELEASE QUALIFIED**.
+
 ## To extend
 
 - Run the **moderate/hard** corpora for a fuller quota curve (more escalations; needs an

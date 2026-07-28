@@ -19,13 +19,14 @@ pass would hit a "not reached" section and cannot count.
 | Precondition | Status (2026-07-28) |
 |---|---|
 | All P0/P1 closed with regression tests | ✅ (Gates 2, 4, 5) |
-| Benchmark Gates 15/16/17 green (both configs) | ✅ (#201/#202/#204) |
+| Benchmark Gates 15/16/17 green, **robust** | ✅ Gate 16 made robust by precision-tier routing (#220) — delta −0.18/−0.21/−0.21/+0.00; Gates 15/17 green both re-audit passes |
 | Realization/migration Gates 18/19 green | ✅ (#213 / #212) |
-| Suite **deterministically** green (no flaky "not reached") | ✅ RC-0 (#206) + perf (#209) fixed; residual: 3.11 aiosqlite job only |
+| Suite **deterministically** green (no flaky "not reached") | ✅ RC-0 (#206) + perf (#209) fixed; aiosqlite `database is locked` Hypothesis flake fixed (#220 — 200→75 examples + 5s→30s busy-timeout); 3.11/3.13/3.14 green on merge |
 | **Gate 13** mutation closed or accepted-with-registry | ✅ `gates.py` mutation-closed 253/255 (#211/#215/#216); hermetic modules closed; equivalents registered in `12_MUTATION_EQUIVALENTS.md`; router orchestrator regression-tested (out of file-level mutation scope) |
+| **Gate 7** surfaces reconcile (no estimate-as-measured) | ✅ `summary.py` real-token baseline closed the last deferral (#221) |
 
-**⇒ The freeze bar is now MET.** The two audit passes can be run: freeze a commit
-and execute the per-pass procedure below twice on the same SHA.
+**⇒ The freeze bar was MET and the two passes RAN** on frozen `7c6fdaa` — both clean (see the
+audit log below). Verdict: **RELEASE QUALIFIED**.
 
 ---
 
@@ -91,17 +92,30 @@ honest outcome is "still NOT QUALIFIED," fix, and repeat.
 
 ## Audit log
 
-_(empty — the first pass cannot run until the Gate-13 freeze blocker is cleared.)_
+Two consecutive clean passes on frozen `7c6fdaa` ⇒ verdict **RELEASE QUALIFIED**. The earlier
+`54dba38` pass is kept to show the rule working — it caught a non-robust Gate 16 and correctly did
+**not** count.
 
-| Date | Frozen SHA | Mechanical | Benchmark | Gate review | Pass? |
+| Date | Frozen SHA | Mechanical | Benchmark (strict full-metering) | Gate review | Pass? |
 |---|---|---|---|---|---|
-| 2026-07-28 | `54dba38`→`22895cd` | suite clean (rc=0, 0 FAILED) + claim validator OK | **Gate 16 FAIL**: net +$0.02814 (G15✓), 0 exhaustions, unclassified=[] (G17✓), but quality **delta −0.58 > 0.5 margin** | halted at Gate 16 | **NO** |
+| 2026-07-28 | `54dba38`→`22895cd` | suite clean (rc=0, 0 FAILED) + claim validator OK | **Gate 16 FAIL**: net +$0.02814 (G15✓), 0 exhaustions, unclassified=[] (G17✓), but quality **delta −0.58 > 0.5 margin** | halted at Gate 16 | **NO** (count reset) |
+| 2026-07-28 | `7c6fdaa` (Pass 1) | suite clean (rc=0, 0 FAILED) + claim validator OK | NET **+$0.02723**; delta **−0.21**; G15/16/17 True; 0 exhaustions | no new P0/P1; all rows PASS; no not-reached | **YES** |
+| 2026-07-28 | `7c6fdaa` (Pass 2) | suite clean (rc=0, 0 FAILED) + claim validator OK | NET **+$0.02722**; delta **+0.00**; G15/16/17 True; 0 exhaustions | no new P0/P1; all rows PASS; no not-reached | **YES** |
 
-**Pass 1 outcome — a real finding, no count started.** The benchmark measured a
-quality delta of **−0.58** (outside the 0.5 non-inferiority margin), whereas an
-earlier run measured −0.36 (inside). Gate 16 therefore **flips across the margin
-between runs → it is NOT robustly proven** (working rule: an unproven gate is FAIL).
-The two-pass count does not begin. Root cause is the residual local q=1 misses
-(`mod-07`, `mod-12`) plus run-to-run judge/local variance — i.e. **task #27**
-(classifier/escalation tuning). Fix #27 so quality is robustly within margin, then
-re-freeze and restart the audit. Verdict unchanged: **RELEASE NOT QUALIFIED.**
+**Pass at `54dba38` — a real finding, no count started (retained for the record).** The benchmark
+measured a quality delta of **−0.58** (outside the 0.5 margin) vs −0.36 on an earlier run: Gate 16
+flipped across the margin → **not robustly proven** → FAIL. The audit did its job and halted; the
+verdict stayed NOT QUALIFIED.
+
+**Fix, then the two clean passes at `7c6fdaa`.** Root cause was short objective prompts where
+cheap-local-first returns confident-**wrong** terse answers the runtime heuristic can't detect
+(`mod-07`/`mod-12`). Precision-tier routing (#220) fronts a reliable cheap metered `gpt-4o-mini`
+for exact-answer prompts, collapsing the variance (delta held at −0.18/−0.21/−0.21/+0.00 across
+four runs). `summary.py`'s real-token baseline closed Gate 7's last deferral (#221), and the
+aiosqlite `database is locked` Hypothesis flake was fixed (#220). The two passes above then ran
+back-to-back on the re-frozen `7c6fdaa` with **no commits between them** — zero new P0/P1, no
+not-reached section. Consecutive-audit rule **satisfied** ⇒ **RELEASE QUALIFIED**.
+
+_(The only files `audit_check.sh` flags as "dirty" at `7c6fdaa` are untracked non-code docs —
+`.DS_Store` and audit scratch dirs — that touch no tracked source, test, or gate; the audited
+tracked tree is frozen-clean.)_

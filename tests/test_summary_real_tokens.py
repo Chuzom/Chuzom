@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import time
 
-from chuzom import summary
 from chuzom.summary import (
     _BASELINE_PER_1K_INPUT,
     _BASELINE_PER_1K_OUTPUT,
