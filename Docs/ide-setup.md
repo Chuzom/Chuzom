@@ -1,7 +1,7 @@
 # IDE Setup & Integration
 
 Chuzom integrates with every major AI-assisted IDE. There are two fundamentally
-different integration modes — **push** and **pull** — with different guarantees.
+different integration modes — **push** and **pull** — with different reliability profiles.
 
 ## Push routing — automatic, self-contained prompts (Claude Code)
 

@@ -47,7 +47,7 @@ directly. Set via env var or `~/.chuzom/routing.yaml` (env takes precedence).
 | `advise` | Routes prompts to cheap models, but the enforcement hook **never blocks any tool**. Zero friction | Testing / evaluation |
 | `off` | Enforcement completely disabled. Routing directives still appear in context | Debugging routing |
 
-**Auto-pivot** (prevents stuck sessions in `smart` / `hard`):
+**Auto-pivot** (guards against stuck sessions in `smart` / `hard`):
 - **Per-turn trap** — 2 blocks of the *same tool* within a single user turn trigger an
   immediate auto-pivot for that turn.
 - **Session counter** — each blocked tool call increments a session-wide counter; at 3
@@ -75,8 +75,9 @@ the hook process. What happens next depends on `CHUZOM_RENDER_MODE` (default `au
   rendered in `block` mode — the turn is answered entirely from the hook, Claude is
   never invoked, and zero subscription tokens are consumed.
 - **Context-dependent prompts** are rendered in `echo` mode — the hook's result is
-  passed to Claude as an unverified draft, and Claude still runs the turn. Only
-  `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` prevents a Claude turn entirely.
+  passed to Claude as an unverified draft, and Claude still runs the turn.
+  <!-- claim-ok: block / zero-Claude preventing a Claude turn is verified by tests/test_zero_claude_bypass.py + test_zero_claude_sidecar_bypass.py (CHZ-AUD-005) -->
+  Only `CHUZOM_RENDER_MODE=block` or `CHUZOM_ZERO_CLAUDE=1` prevents a Claude turn entirely.
 
 If direct execution fails (Ollama unreachable, all providers fail), the hook falls
 through and injects a `⚡ MANDATORY ROUTE:` directive instead, so an MCP tool handles it.

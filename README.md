@@ -184,7 +184,7 @@ free-tier confound):
 | **Robustness** | held across **4 independent runs** (−0.18 / −0.21 / −0.21 / +0.00) |
 | **Verdict** | **RELEASE QUALIFIED** — two consecutive clean audit passes on a frozen commit |
 
-All 20 release gates are proven, including a positive-net-savings gate, a
+All 20 release gates pass, including a positive-net-savings gate, a
 quality-non-inferiority gate, and a mutation-testing bar. Full evidence:
 [Release Gates](Docs/correctness-reset/03_RELEASE_GATES.md) ·
 [Benchmark log](Docs/correctness-reset/10_CODEX_QUOTA_BENCHMARK.md) ·
