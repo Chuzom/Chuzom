@@ -256,6 +256,16 @@ class Accounting:
     hook_output_tokens: int = 0
     terminal_states: dict[str, int] = field(default_factory=dict)
     cost_unknown_attempts: int = 0              # billable attempts with measured_cost=None
+    # ── Realization (Gate 18) ────────────────────────────────────────────────
+    # A route's potential saving (baseline_equivalent − actual) is only REALIZED
+    # if the routed result was verifiably used by the host. Routes whose
+    # realization is `verified_overridden` (host went its own way) or `unknown`
+    # (couldn't verify) must NOT be counted as realized savings.
+    realized_routes: int = 0                     # realization_status == verified_used
+    overridden_routes: int = 0                   # verified_overridden
+    realization_unknown_routes: int = 0          # unknown (or never verified)
+    potential_savings_usd: float = 0.0           # Σ max(0, baseline_eq − actual) over ALL routes
+    realized_savings_usd: float = 0.0            # Σ that saving ONLY on verified_used routes
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -263,8 +273,14 @@ class Accounting:
 
 def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Accounting:
     acc = Accounting(scope=scope, scope_id=scope_id)
+    # Gate 18: potential saving is per-ROUTE (baseline_eq − actual), and it's only
+    # REALIZED when that route's realization is verified_used. Accumulate per route
+    # so a single unknown/overridden route can't inflate the realized total.
+    route_potential: dict[str, float] = {}       # route_id → Σ(baseline_eq − actual)
+    route_realization: dict[str, str] = {}       # route_id → last realization_status seen
     for r in rows:
         et = r["event_type"]
+        rid = r.get("route_id") or ""
         if et in _BILLABLE_EVENTS:
             acc.attempt_count += 1
             acc.billable_attempt_count += 1
@@ -277,9 +293,18 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
                 acc.cost_unknown_attempts += 1
             else:
                 acc.actual_cost_usd += float(cost)
+                route_potential[rid] = route_potential.get(rid, 0.0) - float(cost)
             base = r.get("baseline_equivalent_cost_usd")
             if base is not None:
                 acc.baseline_equivalent_cost_usd += float(base)
+                route_potential[rid] = route_potential.get(rid, 0.0) + float(base)
+        # Realization tracking: the explicit status field wins; the
+        # `realization_unknown` event type is a fallback signal for unknown.
+        rs = r.get("realization_status")
+        if rs:
+            route_realization[rid] = rs
+        elif et == "realization_unknown":
+            route_realization.setdefault(rid, "unknown")
         if r.get("hook_input_tokens"):
             acc.hook_input_tokens += int(r["hook_input_tokens"])
         if r.get("hook_output_tokens"):
@@ -289,6 +314,25 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
             acc.terminal_states[ts] = acc.terminal_states.get(ts, 0) + 1
     acc.actual_cost_usd = round(acc.actual_cost_usd, 6)
     acc.baseline_equivalent_cost_usd = round(acc.baseline_equivalent_cost_usd, 6)
+
+    # ── Realization-gated savings (Gate 18) ──────────────────────────────────
+    # potential = every route's positive saving; realized = ONLY verified_used
+    # routes. A route with realization `unknown` or `verified_overridden` — or no
+    # realization event at all — contributes to potential but NEVER to realized,
+    # so an unverified saving can never be reported as realized.
+    for rid, delta in route_potential.items():
+        acc.potential_savings_usd += max(0.0, delta)
+        if route_realization.get(rid) == "verified_used":
+            acc.realized_savings_usd += max(0.0, delta)
+    for rs in route_realization.values():
+        if rs == "verified_used":
+            acc.realized_routes += 1
+        elif rs == "verified_overridden":
+            acc.overridden_routes += 1
+        elif rs == "unknown":
+            acc.realization_unknown_routes += 1
+    acc.potential_savings_usd = round(acc.potential_savings_usd, 6)
+    acc.realized_savings_usd = round(acc.realized_savings_usd, 6)
     return acc
 
 
