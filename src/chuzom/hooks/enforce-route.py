@@ -241,6 +241,34 @@ def _delegate_route_enabled() -> bool:
     return os.environ.get("CHUZOM_DELEGATE", "").strip().lower() not in ("off", "0", "false", "no")
 
 
+def _delegate_redirect_fires(prompt: str, complexity: str) -> bool:
+    """True when the operational→llm_act redirect below WILL fire for this prompt —
+    i.e. delegation is on, the task is substantial (moderate/complex, or a
+    simple+bounded-operational task), and the operational OR the high-precision
+    execution signal fires. The local-tool exemptions (#29) consult this so they
+    don't soft-exempt a command to native and silently defeat the redirect that
+    would route the same execution work to the tool-capable door. Fail-open (False)
+    so a missing module never blocks. Mirrors the firing logic at the redirect site
+    exactly — keep them in sync."""
+    if not _delegate_route_enabled():
+        return False
+    delegate_ok = complexity in ("moderate", "complex")
+    bounded_ok = False
+    if complexity == "simple":
+        try:
+            from chuzom.bounded_operational import should_route_bounded
+            bounded_ok = should_route_bounded(prompt, complexity)
+        except Exception:  # noqa: BLE001 — decision failure → no bounded route
+            bounded_ok = False
+    if not (delegate_ok or bounded_ok):
+        return False
+    op = _detect_operational(prompt)
+    if op is not None and op.fires:
+        return True
+    ex = _detect_execution(prompt)
+    return ex is not None and ex.fires
+
+
 # 1.0 cutover step 2: map a legacy tool name to its consolidated front door.
 _OLD_TOOL_TO_DOOR = {
     "llm_query": "llm", "llm_analyze": "llm", "llm_code": "llm",
@@ -858,7 +886,18 @@ def main() -> None:
             and tool_name == "Bash"):
         _lb_task = pending.get("task_type", "")
         _bash_cmd = hook_input.get("tool_input", {}).get("command", "")
+        # #29: when the operational/execution redirect WILL route this prompt to the
+        # tool-capable llm_act door (a substantial coordination task whose execution
+        # signal fires — e.g. "run the test suite and commit"), don't soft-exempt its
+        # local command to native: that would silently defeat the redirect and let
+        # Claude run the shell work instead of the cheap delegated agent. A trivial
+        # one-line command (simple, no bounded route) still exempts to native — the
+        # cheapest capable executor, nothing for a tool loop to add.
+        _lb_redirect = _delegate_redirect_fires(
+            pending.get("original_prompt", ""), pending.get("complexity", "simple")
+        )
         if (_lb_task not in _QA_TASK_TYPES and _lb_task != "code"
+                and not _lb_redirect
                 and _is_local_only_bash(_bash_cmd)):
             enforce = "soft"
             try:
