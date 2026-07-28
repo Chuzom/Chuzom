@@ -1111,6 +1111,40 @@ def _blocked_providers() -> frozenset[str]:
     return frozenset(item.strip().lower() for item in raw.split(",") if item.strip())
 
 
+# #27 / Option B — precision-tier routing cues. A SHORT prompt that demands an
+# exact, verifiable answer (arithmetic, a code-output value, a precise count) is the
+# one regime where a cheap local model gives confident-but-WRONG terse answers that
+# the runtime quality heuristic cannot catch (a wrong "10" scores like a right "28").
+# For those, correctness is worth ~$0.0003 on a reliable metered model. The cues are
+# GENERAL (computation / exactness / code-output), not tied to any benchmark string.
+_PRECISION_CUES: tuple[str, ...] = (
+    "answer with only", "exactly", "how many", "sum of", "product of",
+    "what is the value", "what does this print", "what will this print",
+    "what does this code print", "output of", "evaluate the", "compute ",
+    "calculate ", "count the", "number of",
+)
+
+
+def _needs_precise_answer(prompt: str) -> bool:
+    """True for a SHORT prompt that demands an exact, verifiable answer.
+
+    Conservative — requires a short prompt AND a computation/exactness/code-output
+    signal — so ordinary prose is unaffected. This is where cheap-local-first
+    routing is least reliable (confident terse-wrong answers), so such prompts are
+    steered to a reliable cheap metered model at negligible cost (#27 / Option B).
+    """
+    if not prompt or len(prompt) > 400:  # long prompts aren't the terse-precision regime
+        return False
+    low = prompt.lower()
+    if any(cue in low for cue in _PRECISION_CUES):
+        return True
+    if "print(" in low:  # a code-output question
+        return True
+    if re.search(r"\d+\s*[-+*/%]\s*\d+", prompt):  # a bare arithmetic expression
+        return True
+    return False
+
+
 async def _maybe_broker_dispatch(
     provider: str, model_name: str, prompt: str, *, timeout: float = 300.0
 ) -> "LLMResponse | None":
@@ -3307,6 +3341,23 @@ async def route_and_call(
         models_to_try = await _build_and_filter_chain(
             task_type, profile, model_override, complexity_hint, c, config
         )
+
+        # #27 / Option B — precision-tier routing. A short prompt demanding an exact,
+        # verifiable answer (arithmetic / code output / precise count) is the regime
+        # where cheap local models give confident-but-WRONG terse answers with no
+        # runtime signal to catch them (the Gate-16 non-robustness root cause). Front
+        # the reliable cheap metered model (gpt-4o-mini, ~$0.0003) for these so
+        # correctness is robust at negligible cost. Guarded by availability, not
+        # blocked, and no explicit override. Everything else stays cheap-local-first.
+        if (
+            models_to_try and not model_override
+            and _needs_precise_answer(prompt)
+            and "openai" in getattr(config, "available_providers", set())
+            and "openai" not in _blocked_providers()
+        ):
+            _ptier = "openai/gpt-4o-mini"
+            models_to_try = [_ptier] + [m for m in models_to_try if m != _ptier]
+            log.debug("Precision-tier: fronting %s for an exact-answer prompt", _ptier)
 
         # Subject specialist override (Plan 07 Phase 3 B.2b).
         # If the active routing policy declares a specialist for the
