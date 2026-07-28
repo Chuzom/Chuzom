@@ -46,6 +46,7 @@ $(find "$d" -type f -name '*.md' \
     -not -path '*/correctness-reset/*' \
     -not -path '*/self-audit-loop/*' \
     -not -path '*/routing-audit-agent/*' \
+    -not -path '*/archive/*' \
     -not -name 'AUDIT_PROMPT*')
 EOF
 done

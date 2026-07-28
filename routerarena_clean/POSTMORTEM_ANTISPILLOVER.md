@@ -56,7 +56,7 @@ The dangerous artifact is the **per-dataset accuracy breakdown** we now hold (e.
 2. **RA gold is ephemeral — let it die.** The downloaded parquet/label files live in session scratchpads and vanish on cleanup. Do **not** copy them into the repo. If any did, delete them.
 3. **No design against per-dataset results.** The per-dataset table informs *understanding* (why 0.75 is unreachable), never *mechanism*. Any future router change must be justifiable **without** reference to which RA datasets scored low.
 4. **All future RA measurement goes through the seal.** Use `sandbox/measure_ra_once.py` (auditable ledger, `assert_evaluator_unmodified`); one cold pass; never re-run to chase a number.
-5. **Firewall v2 governs what *may* inform parameters** (see `ROUTERARENA_CLEAN_075_PLAN.md` §2): self-generated synthetic, hash-audited benchmark *train* splits, public model metadata, live per-query behavior. **RA eval outputs are not on that list.**
+5. **Firewall v2 governs what *may* inform parameters** (see `Docs/archive/ROUTERARENA_CLEAN_075_PLAN.md` §2): self-generated synthetic, hash-audited benchmark *train* splits, public model metadata, live per-query behavior. **RA eval outputs are not on that list.**
 6. **CI guards:**
    - `ci_template_guard.sh --strict` (already extended to the new source files) — no RA-template literal in any router/param code.
    - Add a guard: no file under `src/chuzom/` or the submission router imports/reads the quarantine path or any `*_sub10_result.json`.

@@ -21,7 +21,7 @@ This module replaces the *decision* with embedding geometry: a prompt is
 embedded once, compared to per-class **prototype** vectors, and assigned the
 nearest class with a **calibrated** confidence. Prototypes are learned offline
 from Firewall-v2-clean data (self-generated synthetic + hash-audited benchmark
-*train* splits — see ``Docs/ROUTERARENA_CLEAN_075_PLAN.md`` §2). Because the
+*train* splits — see ``Docs/archive/ROUTERARENA_CLEAN_075_PLAN.md`` §2). Because the
 classifier operates purely on embedding distance, it *structurally cannot*
 template-match RA: there is no literal string in this file to key on. A CI
 guard (§5.3 of the plan) asserts no RA-template literal ever appears here.
