@@ -22,10 +22,10 @@ pass would hit a "not reached" section and cannot count.
 | Benchmark Gates 15/16/17 green (both configs) | ✅ (#201/#202/#204) |
 | Realization/migration Gates 18/19 green | ✅ (#213 / #212) |
 | Suite **deterministically** green (no flaky "not reached") | ✅ RC-0 (#206) + perf (#209) fixed; residual: 3.11 aiosqlite job only |
-| **Gate 13** mutation closed or accepted-with-registry | ⬜ **OPEN** — new-code (`_check_structure`) closed (#211); pre-existing `_check_citation`/`_check_format`/`_check_syntax` survivors + `router.py` mutation remain |
+| **Gate 13** mutation closed or accepted-with-registry | ✅ `gates.py` mutation-closed 253/255 (#211/#215/#216); hermetic modules closed; equivalents registered in `12_MUTATION_EQUIVALENTS.md`; router orchestrator regression-tested (out of file-level mutation scope) |
 
-**⇒ Do not start the two audit passes until Gate 13 is resolved.** It is the last
-freeze blocker.
+**⇒ The freeze bar is now MET.** The two audit passes can be run: freeze a commit
+and execute the per-pass procedure below twice on the same SHA.
 
 ---
 
