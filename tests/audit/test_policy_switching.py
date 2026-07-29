@@ -259,40 +259,49 @@ def routed_runtime(monkeypatch, temp_db):
 
 
 @pytest.mark.asyncio
-async def test_routing_yaml_daily_caps_and_enforce_have_no_runtime_effect_BUG(
+async def test_routing_yaml_daily_caps_are_wired_and_downgrade(
     routed_runtime, monkeypatch
 ):
-    """BUG (see REPORT_A.md): routing.yaml's `daily_caps` + `enforce` fields
-    are dead for the live routing path. Even with an absurdly low cap and
-    `enforce: hard`, and a task-daily-spend already far above it, the call
-    proceeds and succeeds — because route_and_call never consults
-    RepoConfig.daily_cap_for() / effective_enforce() at all.
+    """routing.yaml `daily_caps` ARE consulted by the live routing path
+    (was CHZ-TQ-007). This test patches the real loader (`effective_config`) —
+    the earlier `_BUG` version patched only the config *object* and never
+    `effective_config`, so route_and_call never saw the cap and the test
+    "passed" for the wrong reason, masking that caps were in fact wired.
+
+    TQ-007 behavior: an exceeded routing.yaml daily cap DOWNGRADES to free-local;
+    against the paid-only routed_runtime chain with enforce=hard there is no free
+    fallback, so it hard-blocks with BudgetExceededError.
     """
+    repo_cfg = _dict_to_config(
+        {"daily_caps": {"code": 0.0001}, "enforce": "hard"}, "test"
+    )
+    assert repo_cfg.daily_cap_for("code") == 0.0001
+
     with patch(
+        "chuzom.repo_config.effective_config", return_value=repo_cfg,
+    ), patch(
         "chuzom.router.cost.get_daily_spend_by_task_type",
         new_callable=AsyncMock,
-        return_value=9_999.0,  # already "way over" any plausible cap
+        return_value=9_999.0,  # already "way over" the cap
     ), patch("chuzom.policy.load_org_policy", return_value=None):
-        repo_cfg = _dict_to_config(
-            {"daily_caps": {"code": 0.0001}, "enforce": "hard"}, "test"
-        )
-        assert repo_cfg.daily_cap_for("code") == 0.0001
-        assert repo_cfg.effective_enforce() == "hard"
-
-        # Despite the above, route_and_call has no wiring to this object at
-        # all — it succeeds normally.
-        response = await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
-        assert response.model == "openai/gpt-4o"
+        with pytest.raises(BudgetExceededError, match="Task-type daily limit|Daily spend"):
+            await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
 
 
 @pytest.mark.asyncio
 async def test_org_policy_task_cap_is_the_mechanism_that_actually_enforces(
-    routed_runtime,
+    routed_runtime, monkeypatch,
 ):
     """The REAL per-task daily cap mechanism: ~/.chuzom/org-policy.yaml's
     `task_caps`, loaded via chuzom.policy.load_org_policy() / get_task_cap().
-    A low cap here DOES block the call with BudgetExceededError."""
+
+    TQ-007: an exceeded cap DOWNGRADES to free-local providers rather than
+    hard-blocking. The routed_runtime chain is paid-only (openai) — no free
+    fallback — so with enforce=hard the cap hard-blocks (the enforcing case
+    verified here). In smart mode it would instead fall through to Claude.
+    """
     from chuzom.policy import OrgPolicy
+    monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
 
     with patch(
         "chuzom.router.cost.get_daily_spend_by_task_type",
@@ -307,7 +316,7 @@ async def test_org_policy_task_cap_is_the_mechanism_that_actually_enforces(
 
 
 @pytest.mark.asyncio
-async def test_task_caps_are_interpreted_as_cents_not_dollars(routed_runtime):
+async def test_task_caps_are_interpreted_as_cents_not_dollars(routed_runtime, monkeypatch):
     """Regression test for the cents/dollars unit bug: OrgPolicy.task_caps is
     documented (policy.py) and displayed (policy.py:569's `${v/100:.2f}`) as
     CENTS, but route_and_call used to compare the raw cents integer directly
@@ -315,9 +324,12 @@ async def test_task_caps_are_interpreted_as_cents_not_dollars(routed_runtime):
     $50/day cap) was enforced as a $5000/day cap, 100x too permissive.
 
     task_caps={"code": 5000} means a $50.00/day cap. $40 spent must NOT block
-    (under cap); $60 spent must block (over cap, correctly converted).
+    (under cap); $60 spent must block (over cap, correctly converted). enforce=hard
+    so the over-cap case blocks against the paid-only chain (TQ-007 downgrade has
+    no free fallback here).
     """
     from chuzom.policy import OrgPolicy
+    monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
 
     with patch(
         "chuzom.router.cost.get_daily_spend_by_task_type",

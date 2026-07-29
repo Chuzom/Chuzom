@@ -3214,12 +3214,17 @@ async def route_and_call(
         # see the full committed + pending total (prevents TOCTOU overrun).
         global _pending_spend
         _reservation: float = 0.0
+        # TQ-007: DAILY spend caps do NOT hard-block here. When a daily cap is
+        # exceeded we record the reason and, after the model chain is built,
+        # DOWNGRADE to free-local providers (Ollama/Codex/Gemini-CLI) so work
+        # keeps flowing at $0. Only if no free-local provider is available does
+        # enforce mode decide: `hard` blocks, `smart`/`soft` fall through to
+        # Claude. Caps apply whenever configured, independent of enforce mode
+        # (enforce mode only governs the no-free-fallback branch). The MONTHLY
+        # budget below is a separate, harder ceiling and still hard-blocks.
+        _enforce_mode = "smart"
+        _daily_cap_exc: BudgetExceededError | None = None
         async with _budget_lock():
-            # routing.yaml's daily_caps/enforce used to be dead code: read only
-            # by the `chuzom config` display command, never by live routing
-            # here. Both are now real. `enforce: soft` downgrades every raise
-            # below to a warning instead of blocking the call — "hard" (the
-            # default) keeps the original blocking behaviour.
             from chuzom.repo_config import effective_config as _get_repo_config_for_budget
             _repo_cfg_budget = _get_repo_config_for_budget()
             _enforce_mode = _repo_cfg_budget.effective_enforce()
@@ -3242,13 +3247,14 @@ async def route_and_call(
             if _daily_limit > 0:
                 daily_spend = await cost.get_daily_spend()
                 if daily_spend + _pending_spend >= _daily_limit:
-                    _enforce_or_warn(BudgetExceededError(
+                    # TQ-007: record for downgrade instead of blocking here.
+                    _daily_cap_exc = BudgetExceededError(
                         f"Daily spend limit of ${_daily_limit:.2f} exceeded "
                         f"(spent: ${daily_spend:.4f} today UTC). "
                         "Resets at midnight UTC. "
                         "To raise the limit: set CHUZOM_DAILY_SPEND_LIMIT env var "
                         "or routing.yaml's daily_caps._total."
-                    ))
+                    )
 
             # Per-task daily cap enforcement — two sources: org-policy.yaml
             # (cents, org-wide) and routing.yaml's daily_caps (dollars,
@@ -3270,13 +3276,16 @@ async def route_and_call(
             if task_cap > 0:
                 task_daily_spend = await cost.get_daily_spend_by_task_type(task_type.value)
                 if task_daily_spend + _pending_spend >= task_cap:
-                    _enforce_or_warn(BudgetExceededError(
+                    # TQ-007: record for downgrade instead of blocking here. A
+                    # per-task cap is the tighter signal, so it wins over a
+                    # not-yet-hit total cap; if both are hit, either exc is fine.
+                    _daily_cap_exc = BudgetExceededError(
                         f"Task-type daily limit for {task_type.value} (${task_cap:.2f}) exceeded "
                         f"(spent: ${task_daily_spend:.4f} today UTC). "
                         f"Resets at midnight UTC. "
                         f"To raise the limit: update ~/.chuzom/org-policy.yaml task_caps "
                         f"or routing.yaml's daily_caps.{task_type.value}."
-                    ))
+                    )
 
             if config.chuzom_monthly_budget > 0:
                 monthly_spend = await cost.get_monthly_spend()
@@ -3341,6 +3350,35 @@ async def route_and_call(
         models_to_try = await _build_and_filter_chain(
             task_type, profile, model_override, complexity_hint, c, config
         )
+
+        # TQ-007: a daily spend cap was exceeded → downgrade to free-local
+        # providers rather than block. Drop every paid model from the chain,
+        # keeping only Ollama/Codex/Gemini-CLI (all $0). If at least one survives,
+        # the turn runs free. If none is available, enforce mode decides: `hard`
+        # blocks (raise the captured cap error, caller pays nothing); `smart`/
+        # `soft` fall through to Claude on the original chain. Caps thus apply
+        # whenever configured; enforce mode only governs this no-free branch.
+        if _daily_cap_exc is not None:
+            _FREE_LOCAL_PROVIDERS = {"ollama", "codex", "gemini_cli"}
+            _free_chain = [
+                m for m in models_to_try
+                if provider_from_model(m) in _FREE_LOCAL_PROVIDERS
+            ]
+            if _free_chain:
+                route_log.warning(
+                    "Daily cap exceeded — downgrading to free-local providers "
+                    "(%d model(s), $0). %s",
+                    len(_free_chain), _daily_cap_exc,
+                )
+                models_to_try = _free_chain
+            elif _enforce_mode == "hard":
+                raise _daily_cap_exc
+            else:
+                route_log.warning(
+                    "Daily cap exceeded and no free-local provider available — "
+                    "falling through to Claude (enforce=%s): %s",
+                    _enforce_mode, _daily_cap_exc,
+                )
 
         # #27 / Option B — precision-tier routing. A short prompt demanding an exact,
         # verifiable answer (arithmetic / code output / precise count) is the regime

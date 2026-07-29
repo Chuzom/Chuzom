@@ -135,6 +135,18 @@ user-facing surface, then move it under the next version heading at release time
   Origin, so they are unaffected; operators fronting the server behind a proxy can allow their
   host via `CHUZOM_ALLOWED_HOSTS`. Regression: `tests/test_sec04_local_server_origin_guard.py`.
 
+- **Change: daily spend caps DOWNGRADE to free-local instead of hard-blocking (CHZ-TQ-007).**
+  routing.yaml `daily_caps` + org-policy `task_caps` were already wired (they blocked); they now
+  follow the signed-off graceful behavior: an exceeded daily cap drops paid providers and routes
+  to free-local (Ollama/Codex/Gemini-CLI) at $0. If no free-local provider is available, enforce
+  mode decides — `hard` blocks, `smart`/`soft` fall through to Claude. Caps apply whenever
+  configured, independent of enforce mode (enforce mode only governs the no-free branch). The
+  monthly budget remains a hard block. Rewrote the stale `_BUG` test (which passed for the wrong
+  reason — it patched the config object but never `effective_config`, masking that caps were
+  wired) into a correct positive test. Regression: `tests/test_tq007_daily_cap_downgrade.py`
+  (downgrade / hard-block / smart-fallthrough / no-cap / total-cap) + updated
+  `tests/audit/test_policy_switching.py`.
+
 ## v1.0.0 — 2026-07-28 — First stable release: measured, independently audited routing — non-breaking
 
 The 1.0 milestone. Routing quality and cost savings are no longer *assumed* — they are
