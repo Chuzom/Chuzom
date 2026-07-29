@@ -55,6 +55,8 @@ jobs:
       - run: uv sync --extra dev
       - name: "G2: multi-turn soak — routing must not decay (CHZ-EXT-201)"
         run: uv run pytest -q -o addopts="" tests/test_g2_soak_no_decay.py
+      - name: "G3: realization telemetry complete end-to-end (CHZ-EXT-204)"
+        run: uv run pytest -q tests/test_g3_realization_soak.py
       - name: "G4: test-hygiene ratchet (no new can't-fail tests)"
         run: bash scripts/quality_gate_test_hygiene.sh
       - name: "G5: audit regression suite (the six fixed criticals + follow-ons)"

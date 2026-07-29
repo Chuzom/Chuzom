@@ -104,8 +104,12 @@ user-facing surface, then move it under the next version heading at release time
   hook across 4 sessions × 15 turns, interleaving code edits with self-contained questions, and
   asserts self-contained prompts are routed *fresh* (never inherit `code`) at every turn position
   including turn 10+ — the historically-dead zone. Runs in the `quality-gates` CI job (~8s). This
-  is the gate a single-turn test structurally cannot be. _Still deferred:_ G3 (telemetry
-  completeness under a direct-execution soak) needs the fake-provider HTTP harness vendored.
+  is the gate a single-turn test structurally cannot be.
+- **CI: G3 realization-telemetry gate (CHZ-EXT-204).** `tests/test_g3_realization_soak.py` drives
+  the *real* hooks — `enforce-route.py` on a routed tool call (honor → `verified_used`) and
+  `stop-enforce.py` on a plain-text turn (override → `verified_overridden`) — and asserts the
+  `execution_events` ledger has zero NULL realization rows, a computable bypass rate, and a
+  session_id on every row. Runs in the `quality-gates` CI job.
 - **Fix: aiosqlite hang-at-exit at all call sites (CHZ-PY-004).** The daemon-thread fix reached
   only 1 of the `aiosqlite.connect()` sites; a dropped connection at loop shutdown left a
   non-daemon worker keeping the interpreter alive. Extracted the marker to a single shared
