@@ -53,6 +53,8 @@ jobs:
           enable-cache: false
       - run: uv python install 3.11
       - run: uv sync --extra dev
+      - name: "G2: multi-turn soak — routing must not decay (CHZ-EXT-201)"
+        run: uv run pytest -q -o addopts="" tests/test_g2_soak_no_decay.py
       - name: "G4: test-hygiene ratchet (no new can't-fail tests)"
         run: bash scripts/quality_gate_test_hygiene.sh
       - name: "G5: audit regression suite (the six fixed criticals + follow-ons)"
@@ -69,6 +71,7 @@ jobs:
           tests/test_pkg_python_and_install.py
           tests/test_py004_aiosqlite_daemon.py
           tests/test_sec05_dashboard_token.py
+          tests/test_sec04_local_server_origin_guard.py
       - name: "G6: no fabricated marketing claims (pyproject + README)"
         run: uv run pytest -q tests/test_claims_no_fabricated_magnitudes.py
 

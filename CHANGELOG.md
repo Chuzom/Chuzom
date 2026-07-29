@@ -99,7 +99,13 @@ user-facing surface, then move it under the next version heading at release time
   added above the frozen baseline (33). G5 — a dedicated `quality-gates` CI job runs the full
   audit regression suite for the six fixed criticals. G6 — the fabricated-claims guard runs in
   CI. _Deferred:_ G2 (multi-turn canary soak) and G3 (telemetry-completeness in CI) require
-  vendoring the fake-provider harness into the repo.
+  vendoring the fake-provider harness into the repo. **G2 now shipped** — see below.
+- **CI: G2 multi-turn soak gate (CHZ-EXT-201).** `tests/test_g2_soak_no_decay.py` drives the real
+  hook across 4 sessions × 15 turns, interleaving code edits with self-contained questions, and
+  asserts self-contained prompts are routed *fresh* (never inherit `code`) at every turn position
+  including turn 10+ — the historically-dead zone. Runs in the `quality-gates` CI job (~8s). This
+  is the gate a single-turn test structurally cannot be. _Still deferred:_ G3 (telemetry
+  completeness under a direct-execution soak) needs the fake-provider HTTP harness vendored.
 - **Fix: aiosqlite hang-at-exit at all call sites (CHZ-PY-004).** The daemon-thread fix reached
   only 1 of the `aiosqlite.connect()` sites; a dropped connection at loop shutdown left a
   non-daemon worker keeping the interpreter alive. Extracted the marker to a single shared
