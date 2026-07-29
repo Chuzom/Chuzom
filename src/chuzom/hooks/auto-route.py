@@ -838,7 +838,7 @@ def _is_build_task(prompt: str) -> bool:
 # "coding", enforce-route.py skips all enforcement for the rest of the session.
 
 def _session_type_path(session_id: str) -> "Path":
-    return _ROUTER_DIR / f"session_{session_id}.json"
+    return _ROUTER_DIR / f"session_{_safe_sid(session_id)}.json"
 
 
 def _write_json_atomic(path: Path, data: dict) -> None:
@@ -1668,6 +1668,19 @@ TOOL_MAP = {
 
 _ROUTER_DIR = Path.home() / ".chuzom"
 _ENFORCEMENT_LOG_PATH = _ROUTER_DIR / "enforcement.log"
+
+
+def _safe_sid(session_id: str) -> str:
+    """CHZ-ST-001/CHZ-SEC-08: neutralize path traversal in a session_id.
+
+    Every per-session state file is named ``<prefix>_{session_id}.<ext>`` under
+    ``~/.chuzom``. An unsanitized session_id like ``../../../tmp/evil`` escaped
+    the state dir and enabled an arbitrary file write. This mirrors
+    ``session_store._sanitize`` (a single shared rule): keep only
+    ``[A-Za-z0-9._-]`` — crucially mapping ``/`` to ``_`` — so no path
+    separator survives into the filename.
+    """
+    return re.sub(r"[^A-Za-z0-9._-]", "_", session_id or "") or "unknown"
 _PENDING_ROUTE_TTL_SEC = 3600  # 1h TTL — survives context compaction; auto-route resets on each new prompt
 
 # A strict mode for users protecting Claude Code subscription quota. In this
@@ -1737,6 +1750,42 @@ _NEGATIVE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# CHZ-EXT-201 fix: a short prompt after a code turn only inherits the `code`
+# context when it actually reads as a *follow-up* to that code — not merely
+# because it is short. Word-count-only inheritance was the routing latch: any
+# self-contained ≤15-word question ("what is a monad", "reverse a list in rust")
+# inherited `code`, had direct execution disabled, never routed, and pinned
+# last_route to `code` forever (measured: 2.32% sustained external execution,
+# 0% from per-session turn 10). A follow-up is signalled by one of:
+#   • anaphora / deixis pointing at prior work — "fix it", "why does that fail",
+#     "the test is red", "explain why the dashboard doesn't update";
+#   • an imperative edit/iterate verb that presumes an existing artifact —
+#     "refactor this", "add a test", "revert that", "run it again";
+#   • a discourse-marker prefix (handled via _SHORT_FOLLOWUP_PREFIX below).
+# Self-contained factual/generative prompts match none of these and route.
+_CODE_FOLLOWUP_SIGNAL_RE = re.compile(
+    r"(?:"
+    # anaphora / deixis as standalone tokens — point at prior work
+    r"\b(?:it|its|it's|that|this|these|those|them|they|there|again|the\s+same)\b"
+    r"|"
+    # definite reference to a code artifact (allow one adjective: "the unused
+    # import", "the failing test"); the *definite article* is the signal that it
+    # refers to something already in play, unlike "remove duplicates" (indefinite)
+    r"\bthe\s+(?:\w+\s+)?(?:test|tests|code|function|func|method|class|file|files|"
+    r"bug|error|exception|stack\s*trace|traceback|build|compile|dashboard|diff|pr|"
+    r"patch|commit|change|changes|refactor|import|imports|type|types|lint|ci)\b"
+    r"|"
+    # inherently-referential verbs: they only make sense against a prior action.
+    # (Generic edit verbs like add/remove/fix are ambiguous — "remove duplicates
+    # from a list" is self-contained — so they are NOT here; they route unless
+    # paired with an anaphor/definite reference above.)
+    r"^\s*(?:revert|undo|redo|re-?run|re-?try|re-?apply|rollback|roll\s+back)\b"
+    r"|"
+    r"\btry\s+again\b"
+    r")",
+    re.IGNORECASE,
+)
+
 # v6.12: Display/read-intent override. Short prompts that explicitly ask to
 # *see* something must not inherit a `code` classification from prior context.
 # Without this guard, "show me the report" after a code-heavy turn gets
@@ -1759,7 +1808,7 @@ _DISPLAY_INTENT_RE = re.compile(
 
 
 def _pending_state_path(session_id: str) -> Path:
-    return _ROUTER_DIR / f"pending_route_{session_id}.json"
+    return _ROUTER_DIR / f"pending_route_{_safe_sid(session_id)}.json"
 
 
 def _read_pending_state(session_id: str) -> dict | None:
@@ -1804,11 +1853,40 @@ def _consume_unresolved_pending(session_id: str) -> dict | None:
 
 
 def _last_route_path(session_id: str) -> Path:
-    return _ROUTER_DIR / f"last_route_{session_id}.json"
+    return _ROUTER_DIR / f"last_route_{_safe_sid(session_id)}.json"
 
 
 def _transcript_shard_path(session_id: str) -> Path:
-    return _ROUTER_DIR / f"transcript_{session_id}.jsonl"
+    return _ROUTER_DIR / f"transcript_{_safe_sid(session_id)}.jsonl"
+
+
+# CHZ-SEC-01/09: fallback secret patterns used only if the canonical
+# secret_scrubber import is unavailable in an early-boot hook environment. Kept
+# in sync with secret_scrubber.SECRET_PATTERNS (the single source of truth).
+_FALLBACK_SECRET_RES = [
+    re.compile(r"sk-ant-[a-zA-Z0-9_-]{20,}"),
+    re.compile(r"sk-(?:proj-)?[a-zA-Z0-9_-]{20,}"),
+    re.compile(r"AIza[a-zA-Z0-9\-_]{35,}"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    re.compile(r"bearer\s+[a-zA-Z0-9._\-]+", re.IGNORECASE),
+    re.compile(r"password[\"']?\s*[:=]\s*[\"']?[^\"'\s:;,]+", re.IGNORECASE),
+    re.compile(r"secret[\"']?\s*[:=]\s*[\"']?[^\"'\s:;,]+", re.IGNORECASE),
+    re.compile(r"api[_-]?key[\"']?\s*[:=]\s*[\"']?[a-zA-Z0-9]{20,}", re.IGNORECASE),
+]
+
+
+def _scrub_secrets_text(text: str) -> str:
+    """Redact secrets from free text before persisting (delegates to canonical)."""
+    if not text:
+        return text
+    try:
+        from chuzom.secret_scrubber import scrub_text
+        return scrub_text(text)
+    except Exception:
+        for _re in _FALLBACK_SECRET_RES:
+            text = _re.sub("[REDACTED]", text)
+        return text
 
 
 def _append_transcript_shard(session_id: str, prompt: str, draft: str) -> None:
@@ -1820,9 +1898,19 @@ def _append_transcript_shard(session_id: str, prompt: str, draft: str) -> None:
         return
     try:
         _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
-        with open(_transcript_shard_path(session_id), "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"role": "user", "content": prompt.strip()}) + "\n")
-            fh.write(json.dumps({"role": "assistant", "content": draft.strip()}) + "\n")
+        # CHZ-SEC-01: scrub secrets from BOTH the prompt and the delivered draft
+        # before persisting, using the canonical shared scrubber, and write at
+        # 0600 (was full text at 0644).
+        user_content = _scrub_secrets_text(prompt.strip())
+        asst_content = _scrub_secrets_text(draft.strip())
+        path = _transcript_shard_path(session_id)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"role": "user", "content": user_content}) + "\n")
+            fh.write(json.dumps({"role": "assistant", "content": asst_content}) + "\n")
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
     except Exception:
         pass
 
@@ -2176,19 +2264,36 @@ def _is_context_dependent(prompt: str) -> bool:
 
 
 def _is_short_code_followup(prompt: str, last_route: dict | None) -> bool:
-    """Return True if prompt is a short follow-up after a code task.
+    """Return True if prompt is a short follow-up *to* a prior code task.
 
     Short prompts (≤15 words) after a code classification inherit the code
     context rather than being re-classified as generate/query via the fallback.
     Example: "explain why the dashboard doesn't update" (7 words) after editing
     code would otherwise score 0 on heuristics and fall through to query/generate.
+
+    CHZ-EXT-201: inheritance now requires an actual follow-up *signal*, not just
+    a low word count. Word-count-only inheritance was the routing latch — every
+    self-contained short question inherited `code`, disabled direct execution,
+    and pinned last_route to `code` permanently (2.32% sustained routing; 0%
+    from turn 10). A prompt counts as a follow-up when it carries anaphora/deixis
+    or an imperative edit verb (_CODE_FOLLOWUP_SIGNAL_RE) or a discourse-marker
+    prefix (_SHORT_FOLLOWUP_PREFIX). Self-contained prompts match none of these,
+    fall through to fresh classification, route, and save a non-code task_type —
+    which breaks the latch.
     """
     if last_route is None:
         return False
     if last_route.get("task_type") != "code":
         return False
-    words = prompt.strip().split()
-    return 1 <= len(words) <= 15
+    stripped = prompt.strip()
+    words = stripped.split()
+    if not (1 <= len(words) <= 15):
+        return False
+    return bool(
+        _CODE_FOLLOWUP_SIGNAL_RE.search(stripped)
+        or _SHORT_FOLLOWUP_PREFIX.match(stripped)
+        or _CONTINUATION_RE.match(stripped)
+    )
 
 
 def _estimate_cost(task_type: str, complexity: str) -> dict:
@@ -3336,8 +3441,8 @@ def main() -> None:
     # enforcement is fresh per-turn (not permanently degraded by earlier turns).
     if session_id:
         try:
-            (_ROUTER_DIR / f"violations_{session_id}.json").unlink(missing_ok=True)
-            (_ROUTER_DIR / f"session_{session_id}.json").unlink(missing_ok=True)
+            (_ROUTER_DIR / f"violations_{_safe_sid(session_id)}.json").unlink(missing_ok=True)
+            (_ROUTER_DIR / f"session_{_safe_sid(session_id)}.json").unlink(missing_ok=True)
         except OSError:
             pass
 
@@ -3366,7 +3471,10 @@ def main() -> None:
                     # an Edit task regardless of the classifier's verdict).
                     # Capped at 4 KB so a pasted dump doesn't bloat the
                     # pending file — the shape check only needs the lead-in.
-                    "original_prompt": prompt[:4096],
+                    # CHZ-ST-006: scrub secrets — this file stores the raw prompt
+                    # and may linger (not always GC'd), so it must never hold a
+                    # credential in plaintext.
+                    "original_prompt": _scrub_secrets_text(prompt[:4096]),
                     "issued_at": _now,
                     "expires_at": _now + _PENDING_ROUTE_TTL_SEC,
                     "turn_id": int(_now),  # proxy for turn — clears when next prompt arrives
@@ -3400,7 +3508,7 @@ def main() -> None:
     if session_id:
         try:
             _write_json_atomic(
-                _ROUTER_DIR / f"last_classification_{session_id}.json",
+                _ROUTER_DIR / f"last_classification_{_safe_sid(session_id)}.json",
                 {
                     "task_type": task_type,
                     "complexity": complexity,
@@ -3474,4 +3582,19 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # CHZ-ST-003: a UserPromptSubmit hook sits in front of every turn — it must
+    # FAIL OPEN, never crash. Any unexpected error (e.g. a read-only ~/.chuzom
+    # raising PermissionError mid-write) previously exited non-zero, surfacing as
+    # a broken turn. Swallow it and exit 0 with no routing decision so the host
+    # model answers normally. SystemExit (incl. main()'s own sys.exit) passes
+    # through unchanged.
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException:  # noqa: BLE001 — fail-open is the whole point here
+        try:
+            _debug_log("fail-open: unhandled exception in main(); exiting 0")
+        except Exception:
+            pass
+        sys.exit(0)

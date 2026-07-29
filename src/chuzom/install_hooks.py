@@ -249,9 +249,31 @@ def _load_settings() -> dict:
 
 
 def _save_settings(settings: dict) -> None:
-    """Write settings.json atomically."""
+    """Write settings.json atomically, backing up an unparseable existing file.
+
+    CHZ-PKG-008: ``_load_settings`` silently returns ``{}`` when the existing
+    settings.json can't be parsed, so a malformed-but-user-authored file was
+    then overwritten and lost with no backup. Before overwriting, if the current
+    file exists and does NOT parse as JSON, copy it to a timestamped ``.bak`` so
+    the user can recover it. The write itself is atomic (tmp + os.replace).
+    """
+    import time
+
     _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _SETTINGS_PATH.write_text(json.dumps(settings, indent=2) + "\n")
+    if _SETTINGS_PATH.exists():
+        try:
+            json.loads(_SETTINGS_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            try:
+                backup = _SETTINGS_PATH.with_name(
+                    f"settings.json.corrupt.{int(time.time())}.bak"
+                )
+                backup.write_bytes(_SETTINGS_PATH.read_bytes())
+            except OSError:
+                pass
+    tmp = _SETTINGS_PATH.with_name("settings.json.tmp")
+    tmp.write_text(json.dumps(settings, indent=2) + "\n")
+    os.replace(tmp, _SETTINGS_PATH)
 
 
 def _legacy_alias_path(hooks_dir: Path, src_name: str, dst_name: str) -> Path | None:

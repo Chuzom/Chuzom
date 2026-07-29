@@ -927,8 +927,12 @@ def main() -> None:
         from chuzom.commands.replay import main as _replay_main
         _replay_main(args[1:])
     elif args and args[0] == "verify":
+        # CHZ-PKG-005: propagate verify's exit code. main() returns 1 when any
+        # health check fails; discarding it made `chuzom verify` always exit 0,
+        # so a CI/install gate keying on the exit code treated a broken install
+        # as healthy.
         from chuzom.commands.verify import main as _verify_main
-        _verify_main(args[1:])
+        sys.exit(_verify_main(args[1:]))
     elif args and args[0] == "audit":
         from chuzom.commands.audit import main as _audit_main
         sys.exit(_audit_main(args[1:]))

@@ -30,6 +30,14 @@ SECRET_PATTERNS = {
     "token": re.compile(r"['\"]?token['\"]?\s*[:=]\s*['\"]?[a-zA-Z0-9._\-]{20,}['\"]?", re.IGNORECASE),
     "password": re.compile(r"password[\"']?\s*[:=]\s*[\"']?[^\"'\s:;,]+[\"']?", re.IGNORECASE),
     "secret": re.compile(r"secret[\"']?\s*[:=]\s*[\"']?[^\"'\s:;,]+[\"']?", re.IGNORECASE),
+    # Merged from session_store (CHZ-SEC-01: unify the drifted scrubbers so this
+    # module is the single superset). GitHub tokens, generic UPPER_KEY=value
+    # assignments, and PEM private-key blocks.
+    "github_token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    "env_key_assignment": re.compile(r"\b[A-Z][A-Z0-9_]*_(?:API_)?KEY\s*[=:]\s*\S+"),
+    "private_key": re.compile(
+        r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"
+    ),
 }
 
 # Field names that should never be logged
@@ -97,6 +105,23 @@ def _should_scrub_field(field_name: str) -> bool:
             return True
     
     return False
+
+
+def scrub_text(text: str) -> str:
+    """Canonical text scrubber (CHZ-SEC-01/02/09): redact secret *substrings*.
+
+    Unlike ``_scrub_value`` (which replaces an entire field value when any
+    pattern hits — right for structured log fields), this substitutes only the
+    matched credential inside a larger body of text, so a transcript line or an
+    error string keeps its non-secret content. This is the single source of
+    truth every content store should call, replacing the three drifted
+    per-module scrubbers (secret_scrubber / session_store / error_sanitization).
+    """
+    if not text or not isinstance(text, str):
+        return text
+    for pattern_name, pattern in SECRET_PATTERNS.items():
+        text = pattern.sub(f"[REDACTED-{pattern_name.upper()}]", text)
+    return text
 
 
 def _scrub_value(value: Any) -> Any:

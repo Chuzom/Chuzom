@@ -472,6 +472,32 @@ def _clear_pending(session_id: str) -> None:
     _pending_path(session_id).unlink(missing_ok=True)
 
 
+def _record_realization_used(session_id: str, pending: dict | None) -> None:
+    """CHZ-EXT-204: record that a routed directive was HONORED by the host.
+
+    Parity with stop-enforce._record_override (which writes verified_overridden
+    when the host answers in plain text). Without this positive counterpart,
+    every execution_events row stayed realization_status=NULL, so a run where
+    97.7% of directives were bypassed looked identical in telemetry to a perfect
+    one — the product could not measure its own bypass rate. Fully fail-open.
+    """
+    try:
+        pending = pending or {}
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        record_event(LedgerEvent(
+            session_id=session_id,
+            route_id=pending.get("route_id"),
+            turn_id=pending.get("turn_id"),
+            event_type="route_realized",
+            task_type=pending.get("task_type"),
+            realization_status="verified_used",
+            used_by_host=True,
+            accepted=True,
+        ))
+    except Exception:  # noqa: BLE001 — realization accounting must never break routing
+        pass
+
+
 def _log_violation(
     session_id: str,
     tool: str,
@@ -1075,12 +1101,14 @@ def main() -> None:
 
     # 1. Any llm_* tool honors routing (llm_code, llm_query, llm_route, etc.)
     if bare_name.startswith("llm_"):
+        _record_realization_used(session_id, pending)  # CHZ-EXT-204
         _clear_pending(session_id)
         _clear_violation_count(session_id)  # Reset violations on successful routing
         sys.exit(0)
 
     # 2. Exact match on the expected tool (e.g. mcp__obsidian__create_note)
     if tool_name == expected_tool or bare_name == expected_tool.split("__")[-1]:
+        _record_realization_used(session_id, pending)  # CHZ-EXT-204
         _clear_pending(session_id)
         _clear_violation_count(session_id)  # Reset violations on successful routing
         sys.exit(0)
@@ -1088,6 +1116,7 @@ def main() -> None:
     # 3. MCP server routing: any tool from the expected server satisfies the directive
     #    e.g. expected_server="obsidian" → mcp__obsidian__search clears state
     if expected_server and tool_name.startswith(f"mcp__{expected_server}__"):
+        _record_realization_used(session_id, pending)  # CHZ-EXT-204
         _clear_pending(session_id)
         _clear_violation_count(session_id)  # Reset violations on successful routing
         sys.exit(0)

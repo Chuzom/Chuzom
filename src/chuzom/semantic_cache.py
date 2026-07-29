@@ -19,6 +19,7 @@ Only active when ``ollama_base_url`` is set — zero overhead otherwise.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -47,6 +48,7 @@ CREATE_SEMANTIC_CACHE_TABLE = """
 CREATE TABLE IF NOT EXISTS semantic_cache (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_type TEXT NOT NULL,
+    project_scope TEXT NOT NULL DEFAULT '',
     embedding TEXT NOT NULL,
     response_content TEXT NOT NULL,
     response_model TEXT NOT NULL,
@@ -54,6 +56,39 @@ CREATE TABLE IF NOT EXISTS semantic_cache (
     created_at TEXT DEFAULT (datetime('now'))
 )
 """
+
+
+def _project_scope() -> str:
+    """CHZ-ST-004: isolate cache entries by the project they were produced in.
+
+    The semantic cache previously had *no* project column, so a query in
+    project B could return project A's cached response verbatim (observed at
+    similarity=1.000, leaking a secret across projects on the same machine).
+    The scope key is a hash of the project root (cwd, or CHUZOM_PROJECT_DIR),
+    matching how result_cache.py derives its project hash. Entries only match
+    within the same project; the raw path is never stored.
+    """
+    root = os.environ.get("CHUZOM_PROJECT_DIR") or os.getcwd()
+    return hashlib.sha256(root.encode()).hexdigest()[:16]
+
+
+async def _ensure_project_scope_column(db) -> None:
+    """Idempotently add project_scope to a pre-existing (unscoped) table.
+
+    Old DBs created before CHZ-ST-004 lack the column; ``CREATE TABLE IF NOT
+    EXISTS`` won't add it. Legacy rows keep project_scope='' and therefore never
+    match a real (non-empty) project scope — they simply age out via TTL.
+    """
+    try:
+        cur = await db.execute("PRAGMA table_info(semantic_cache)")
+        cols = {row[1] for row in await cur.fetchall()}
+        if "project_scope" not in cols:
+            await db.execute(
+                "ALTER TABLE semantic_cache ADD COLUMN project_scope TEXT NOT NULL DEFAULT ''"
+            )
+            await db.commit()
+    except Exception as exc:  # noqa: BLE001 — migration failure must not break routing
+        log.debug("semantic_cache project_scope migration skipped: %s", exc)
 
 CREATE_SEMANTIC_CACHE_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_semantic_cache_type_time
@@ -143,17 +178,20 @@ async def check(
         from chuzom.cost import _get_db
         db = await _get_db()
         try:
-            # Fetch the most recent entries within TTL for this task type
+            await _ensure_project_scope_column(db)
+            # Fetch the most recent entries within TTL for this task type AND
+            # this project (CHZ-ST-004: never match another project's entries).
             cursor = await db.execute(
                 """
                 SELECT embedding, response_content, response_model, response_cost_usd
                 FROM semantic_cache
                 WHERE task_type = ?
+                  AND project_scope = ?
                   AND created_at >= datetime('now', ?)
                 ORDER BY created_at DESC
                 LIMIT ?
                 """,
-                (task_type.value, f"-{_TTL_SECONDS} seconds", _MAX_SCAN),
+                (task_type.value, _project_scope(), f"-{_TTL_SECONDS} seconds", _MAX_SCAN),
             )
             rows = await cursor.fetchall()
         finally:
@@ -228,14 +266,17 @@ async def store(
         from chuzom.cost import _get_db
         db = await _get_db()
         try:
+            await _ensure_project_scope_column(db)
             await db.execute(
                 """
                 INSERT INTO semantic_cache
-                    (task_type, embedding, response_content, response_model, response_cost_usd)
-                VALUES (?, ?, ?, ?, ?)
+                    (task_type, project_scope, embedding, response_content,
+                     response_model, response_cost_usd)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_type.value,
+                    _project_scope(),
                     json.dumps(embedding),
                     response.content,
                     response.model,

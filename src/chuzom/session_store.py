@@ -84,7 +84,19 @@ _SECRET_PATTERNS = [
 
 
 def _scrub_secrets(text: str) -> str:
-    """Redact credential patterns from event content before persistence."""
+    """Redact credential patterns from event content before persistence.
+
+    CHZ-SEC-01: delegates to the canonical ``secret_scrubber.scrub_text`` (the
+    single superset), falling back to the local patterns only if that import is
+    unavailable. Previously this was a *third* independent scrubber that had
+    drifted (it missed ``password:``); the union now lives in one place.
+    """
+    try:
+        from chuzom.secret_scrubber import scrub_text
+        text = scrub_text(text)
+    except Exception:
+        pass
+    # Belt-and-suspenders: local patterns (PEM etc.) as a fallback / extra pass.
     for pat in _SECRET_PATTERNS:
         text = pat.sub("[REDACTED]", text)
     return text

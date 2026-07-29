@@ -50,8 +50,26 @@ def _fail(label: str, fix: str | None = None) -> str:
 
 # ── Command entry point ────────────────────────────────────────────────────────
 
+_INSTALL_HELP = """\
+chuzom install — install Chuzom routing into a host
+
+Usage:
+  chuzom install                     Install for Claude Code (hooks + rules + MCP)
+  chuzom install --host <name>       Install/print config for a specific host
+                                     (claude-code, claude-desktop, cursor, copilot,
+                                     windsurf, gemini-cli, codex, …)
+  chuzom install --mode <mode>       Install mode (auto | gateway)
+  chuzom install --help, -h          Show this help and exit (no changes made)
+"""
+
+
 def cmd_install(args: list[str]) -> int:
     """Entry point for install command."""
+    # CHZ-PKG-007: `--help`/`-h` must be inert — previously it fell straight
+    # through to a real install (file modifications) instead of printing usage.
+    if any(a in ("--help", "-h", "help") for a in args):
+        print(_INSTALL_HELP)
+        return 0
     _run_install(args)
     return 0
 
