@@ -8,7 +8,7 @@ against control-plane audit rows — the control-plane audit log records *policy
 events, not budget spend, so that half requires budget-spend events to be
 audited first (a live-routing-path prerequisite, gated with the rest of G-009's
 live-path work against the real identity model, #21/#22). See
-`docs-private/audit/post-remediation/DESIGN_BUDGET_LINEAGE.md` §4.
+the internal budget-lineage design doc §4.
 
 ## The invariant
 
