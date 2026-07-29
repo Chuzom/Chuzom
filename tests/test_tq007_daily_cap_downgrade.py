@@ -14,6 +14,7 @@ BudgetExceededError (warn only if enforce=soft).
 
 from __future__ import annotations
 
+import os
 from contextlib import ExitStack
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -72,6 +73,10 @@ async def _run(chain, *, task_cap=None, total_cap=None, spend=9999.0, enforce="h
 
     with ExitStack() as es:
         p = es.enter_context
+        # effective_enforce() reads CHUZOM_ENFORCE from the env BEFORE repo config,
+        # so pin it here — otherwise an ambient CHUZOM_ENFORCE (set by the dev's
+        # chuzom hooks or a sibling test) leaks in and flips the no-free branch.
+        p(patch.dict(os.environ, {"CHUZOM_ENFORCE": enforce}))
         p(patch("chuzom.router.get_config", return_value=_Cfg()))
         p(patch("chuzom.router.get_tracker", return_value=tracker))
         p(patch("chuzom.router.log", mock_log))

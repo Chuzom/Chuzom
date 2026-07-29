@@ -272,6 +272,9 @@ async def test_routing_yaml_daily_caps_are_wired_and_downgrade(
     against the paid-only routed_runtime chain with enforce=hard there is no free
     fallback, so it hard-blocks with BudgetExceededError.
     """
+    # effective_enforce() reads CHUZOM_ENFORCE from env first; pin it so an
+    # ambient value doesn't flip the no-free-fallback branch to smart.
+    monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
     repo_cfg = _dict_to_config(
         {"daily_caps": {"code": 0.0001}, "enforce": "hard"}, "test"
     )

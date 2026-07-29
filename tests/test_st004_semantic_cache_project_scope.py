@@ -13,7 +13,6 @@ similarity is exactly 1.0 — the worst case) and prove:
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import aiosqlite
 import pytest
@@ -36,7 +35,7 @@ def wired(tmp_path, monkeypatch):
         await conn.commit()
         await conn.close()
 
-    asyncio.get_event_loop().run_until_complete(_init())
+    asyncio.run(_init())
 
     # Deterministic embedding → cosine similarity is exactly 1.0 (worst case).
     monkeypatch.setattr(semantic_cache, "_get_embedding", lambda text, url: list(FIXED_EMBEDDING))
@@ -75,11 +74,11 @@ async def _check():
 def test_no_cross_project_hit(wired, monkeypatch) -> None:
     # Project A stores the secret.
     _set_project(monkeypatch, "/work/project-A")
-    asyncio.get_event_loop().run_until_complete(_store_secret())
+    asyncio.run(_store_secret())
 
     # Project B asks the identical question (embedding identical → sim 1.0).
     _set_project(monkeypatch, "/work/project-B")
-    hit = asyncio.get_event_loop().run_until_complete(_check())
+    hit = asyncio.run(_check())
     assert hit is None, (
         "CHZ-ST-004 regression: project B received project A's cached secret "
         "(cross-project semantic cache leak)"
@@ -88,8 +87,8 @@ def test_no_cross_project_hit(wired, monkeypatch) -> None:
 
 def test_same_project_still_hits(wired, monkeypatch) -> None:
     _set_project(monkeypatch, "/work/project-A")
-    asyncio.get_event_loop().run_until_complete(_store_secret())
-    hit = asyncio.get_event_loop().run_until_complete(_check())
+    asyncio.run(_store_secret())
+    hit = asyncio.run(_check())
     assert hit is not None and hit.content == SECRET, (
         "within-project semantic cache must still hit — scoping over-corrected"
     )
