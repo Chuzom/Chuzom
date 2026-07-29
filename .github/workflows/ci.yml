@@ -67,6 +67,8 @@ jobs:
           tests/test_sec03_env_allowlist.py
           tests/test_sec06_ollama_url_ssrf.py
           tests/test_pkg_python_and_install.py
+          tests/test_py004_aiosqlite_daemon.py
+          tests/test_sec05_dashboard_token.py
       - name: "G6: no fabricated marketing claims (pyproject + README)"
         run: uv run pytest -q tests/test_claims_no_fabricated_magnitudes.py
 
