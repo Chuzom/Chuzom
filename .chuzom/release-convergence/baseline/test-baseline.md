@@ -24,3 +24,11 @@ None indicate a product-code defect; all are test-robustness or version-sync con
   HOME at a fresh temp dir (hermetic). Stable 3×.
 
 ## Baseline verdict: GREEN after repairs (0 product-code defects among the 13 non-passing).
+
+## FINAL baseline (post-repair) — confirmed GREEN
+```
+6364 passed, 174 skipped, 30 deselected, 1 xfailed, 13 warnings in 177.21s (0:02:57)
+```
+- FAILED/ERROR: 0
+- Repairs committed: 7397700, 34be388, 3d01869 (+ TQ-007 8fd4af1)
+- Gate B (automated correctness): PASS on baseline
