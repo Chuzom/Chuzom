@@ -1,7 +1,7 @@
 """Chuzom control plane — canonical policy authority + distribution.
 
-See docs-private/audit/post-remediation/CONTROL_PLANE_ARCHITECTURE.md (#40)
-and CONTROL_PLANE_BUILD_PLAN.md for the design and the iteration plan.
+See the internal control-plane architecture + build-plan design docs (#40)
+for the design and the iteration plan.
 
 This package is the central control plane that owns canonical, versioned
 per-tenant policy and distributes signed policy bundles to per-tenant

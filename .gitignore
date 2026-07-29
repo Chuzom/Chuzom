@@ -147,3 +147,6 @@ Docs/AUDIT_PROMPT_*.md
 
 # Re-ignore OS junk under Docs/ — the earlier `!docs/**` negation un-ignores it
 **/.DS_Store
+
+# Internal business/enterprise-evaluation docs — never publish to the public repo
+docs-private/
