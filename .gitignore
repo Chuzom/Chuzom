@@ -139,3 +139,11 @@ routerarena_clean/sandbox/memorytree/memory_meta.json
 mutants/
 .mutmut-cache
 html/
+
+# Local audit / self-review working artifacts — generated on-machine, never committed
+Docs/routing-audit-agent/
+Docs/self-audit-loop/
+Docs/AUDIT_PROMPT_*.md
+
+# Re-ignore OS junk under Docs/ — the earlier `!docs/**` negation un-ignores it
+**/.DS_Store
