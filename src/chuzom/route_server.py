@@ -137,6 +137,42 @@ def _log_route_savings(resp, task_type: str, complexity: str, host: str) -> None
         pass
 
 
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def is_forbidden_cross_origin(headers) -> bool:
+    """CHZ-SEC-04: block browser CSRF / DNS-rebinding on this loopback API.
+
+    DNS-rebinding makes a browser resolve attacker.com -> 127.0.0.1 but still
+    send ``Host: attacker.com``; requiring a loopback Host defeats it.
+    Cross-site browser requests also carry ``Origin``/``Referer`` to another
+    host. Legitimate CLI/SDK clients (curl, openai SDK) send a loopback Host and
+    no browser Origin, so they are unaffected. ``headers`` is any mapping with a
+    case-insensitive ``.get`` (http.client.HTTPMessage, dict, Starlette Headers).
+    """
+    import os
+    from urllib.parse import urlparse
+
+    # Operators who front the loopback server behind a reverse proxy / custom
+    # hostname can opt that host in via CHUZOM_ALLOWED_HOSTS (comma-separated).
+    allowed = set(_LOCAL_HOSTS)
+    extra = os.environ.get("CHUZOM_ALLOWED_HOSTS", "")
+    if extra:
+        allowed |= {h.strip().lower() for h in extra.split(",") if h.strip()}
+
+    host = (headers.get("Host") or headers.get("host") or "")
+    host = host.rsplit(":", 1)[0].strip("[]").lower()
+    if host and host not in allowed:
+        return True
+    for h in ("Origin", "Referer", "origin", "referer"):
+        v = headers.get(h)
+        if v:
+            oh = (urlparse(v).hostname or "").lower()
+            if oh and oh not in allowed:
+                return True
+    return False
+
+
 def make_handler():
     class _Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, obj: dict) -> None:
@@ -150,6 +186,9 @@ def make_handler():
             except BrokenPipeError:
                 pass
 
+        def _forbidden_cross_origin(self) -> bool:
+            return is_forbidden_cross_origin(self.headers)
+
         def do_GET(self):
             if self.path == "/health":
                 self._send(200, {"ok": True})
@@ -157,6 +196,8 @@ def make_handler():
                 self._send(404, {"error": "not found"})
 
         def do_POST(self):
+            if self._forbidden_cross_origin():
+                return self._send(403, {"error": "forbidden: cross-origin request rejected"})
             if self.path not in ("/route", "/feedback"):
                 return self._send(404, {"error": "not found"})
             try:

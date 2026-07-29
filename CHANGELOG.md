@@ -114,10 +114,16 @@ user-facing surface, then move it under the next version heading at release time
   exemption is removed (token compared with `secrets.compare_digest`); the launcher already logs
   the tokenized URL, so a legitimate user still gets in and an unauthenticated `GET /` now
   returns 401 with no token. Regression: `tests/test_sec05_dashboard_token.py` (live server on a
-  random port). _Deferred:_ CHZ-SEC-04 — the loopback-bound model-call servers (`route_server`
-  127.0.0.1:7338, `gateway` 127.0.0.1:17900) need Origin/Host validation against browser-based
-  CSRF/DNS-rebinding, designed so the gateway's OpenAI/Anthropic drop-in compatibility isn't
-  broken; tracked for a follow-up.
+  random port).
+- **Fix: CSRF / DNS-rebinding guard on the loopback model-call servers (CHZ-SEC-04).** Every POST
+  to `route_server` (127.0.0.1:7338) and the `gateway` (127.0.0.1:17900) can trigger a real,
+  possibly paid, model call, but there was no defense against a browser reaching them via CSRF or
+  DNS-rebinding. A single shared `route_server.is_forbidden_cross_origin` (also used by a FastAPI
+  middleware on the gateway) rejects requests whose `Host` is not loopback (defeats rebinding —
+  the browser still sends `Host: attacker.com`) or that carry a cross-site `Origin`/`Referer`.
+  CLI/SDK clients (`OPENAI_BASE_URL`/`ANTHROPIC_BASE_URL`) send a loopback Host and no browser
+  Origin, so they are unaffected; operators fronting the server behind a proxy can allow their
+  host via `CHUZOM_ALLOWED_HOSTS`. Regression: `tests/test_sec04_local_server_origin_guard.py`.
 
 ## v1.0.0 — 2026-07-28 — First stable release: measured, independently audited routing — non-breaking
 

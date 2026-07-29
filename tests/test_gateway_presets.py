@@ -49,7 +49,7 @@ def test_all_endpoints_route_through_route_payload(monkeypatch):
     monkeypatch.setattr(rs, "route_payload_async", _fake_payload)
 
     from fastapi.testclient import TestClient
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
 
     # native /route
     r = client.post("/route", json={"prompt": "hi"})
@@ -94,7 +94,7 @@ def test_responses_input_shapes_route_through_route_payload(monkeypatch):
                 "cost_usd": 0.0, "input_tokens": 3, "output_tokens": 1, "complexity": "simple"}
 
     monkeypatch.setattr(rs, "route_payload_async", _fake_payload)
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     r = client.post("/v1/responses", json={
         "model": "auto",
         "instructions": "be terse",
@@ -115,7 +115,7 @@ def test_responses_input_shapes_route_through_route_payload(monkeypatch):
 def test_route_endpoint_missing_prompt_is_400(monkeypatch):
     from chuzom.gateway import app
     from fastapi.testclient import TestClient
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     r = client.post("/route", json={"prompt": "   "})
     assert r.status_code == 400
 
