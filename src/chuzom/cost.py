@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import threading
 from pathlib import Path
 
 import aiosqlite
@@ -520,14 +519,10 @@ def _mark_worker_daemon(conn: "aiosqlite.Connection") -> None:
     Setting ``daemon`` on an already-started thread raises RuntimeError; that
     is fine — a started worker was already daemon-marked pre-await.
     """
-    worker = getattr(conn, "_thread", conn)
-    if not isinstance(worker, threading.Thread):
-        return
-    try:
-        worker.daemon = True
-    except RuntimeError:
-        # Thread already started — it was daemon-marked before it started.
-        pass
+    # CHZ-PY-004: delegate to the single shared implementation so every
+    # aiosqlite.connect() site marks its worker identically (no per-file drift).
+    from chuzom.aiosqlite_util import mark_worker_daemon
+    mark_worker_daemon(conn)
 
 
 async def _get_db() -> aiosqlite.Connection:

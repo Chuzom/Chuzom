@@ -100,6 +100,14 @@ user-facing surface, then move it under the next version heading at release time
   audit regression suite for the six fixed criticals. G6 — the fabricated-claims guard runs in
   CI. _Deferred:_ G2 (multi-turn canary soak) and G3 (telemetry-completeness in CI) require
   vendoring the fake-provider harness into the repo.
+- **Fix: aiosqlite hang-at-exit at all call sites (CHZ-PY-004).** The daemon-thread fix reached
+  only 1 of the `aiosqlite.connect()` sites; a dropped connection at loop shutdown left a
+  non-daemon worker keeping the interpreter alive. Extracted the marker to a single shared
+  `chuzom/aiosqlite_util.mark_worker_daemon` and applied it — crucially *before* the connection
+  is awaited (marking a started worker is a no-op) — at every site (budget, provider_budget,
+  receipt_store, quota_tracker, litellm_budget ×2); `cost.py` delegates to the shared helper.
+  Regression: `tests/test_py004_aiosqlite_daemon.py` — mechanism (daemon set before await) +
+  a subprocess that drops a connection and must exit cleanly within 15s.
 
 ## v1.0.0 — 2026-07-28 — First stable release: measured, independently audited routing — non-breaking
 

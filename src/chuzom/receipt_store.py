@@ -162,7 +162,10 @@ async def get_session_receipts(since_timestamp: float) -> list[dict]:
     try:
         if not _DB_PATH.exists():
             return []
-        async with aiosqlite.connect(str(_DB_PATH)) as db:
+        from chuzom.aiosqlite_util import mark_worker_daemon
+        _conn = aiosqlite.connect(str(_DB_PATH))
+        mark_worker_daemon(_conn)  # CHZ-PY-004: before __aenter__ starts the worker
+        async with _conn as db:
             await db.execute(_CREATE_TABLE)
             cursor = await db.execute(
                 """SELECT contract_id, task_type, complexity, model,

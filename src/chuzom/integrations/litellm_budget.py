@@ -92,7 +92,10 @@ async def get_litellm_spend(provider: str | None = None) -> dict[str, float]:
 
         query += " GROUP BY provider_key"
 
-        async with aiosqlite.connect(db_path) as db:
+        from chuzom.aiosqlite_util import mark_worker_daemon
+        _conn = aiosqlite.connect(db_path)
+        mark_worker_daemon(_conn)  # CHZ-PY-004: before __aenter__ starts the worker
+        async with _conn as db:
             cursor = await db.execute(query, params)
             rows = await cursor.fetchall()
 
@@ -138,7 +141,10 @@ async def get_litellm_budget_cap(provider: str, user: str | None = None) -> floa
 
     try:
         import aiosqlite
-        async with aiosqlite.connect(db_path) as db:
+        from chuzom.aiosqlite_util import mark_worker_daemon
+        _conn = aiosqlite.connect(db_path)
+        mark_worker_daemon(_conn)  # CHZ-PY-004: before __aenter__ starts the worker
+        async with _conn as db:
             if user:
                 cursor = await db.execute(
                     "SELECT max_budget FROM budget_limits WHERE user_id = ? LIMIT 1",

@@ -413,7 +413,10 @@ async def _get_provider_monthly_spend(provider: str) -> float:
         exists = await asyncio.to_thread(Path(db_path).exists)
         if not exists:
             return 0.0
-        async with aiosqlite.connect(db_path) as db:
+        from chuzom.aiosqlite_util import mark_worker_daemon
+        _conn = aiosqlite.connect(db_path)
+        mark_worker_daemon(_conn)  # CHZ-PY-004: before __aenter__ starts the worker
+        async with _conn as db:
             cursor = await db.execute(
                 "SELECT COALESCE(SUM(cost_usd), 0) FROM usage "
                 "WHERE provider = ? AND timestamp >= datetime('now', 'start of month')",
