@@ -196,9 +196,22 @@ quality-non-inferiority gate, and a mutation-testing bar. Full evidence:
 > `python -m chuzom benchmark`.
 
 <details>
-<summary><strong>Illustrative estimate — one week for a heavy Claude Code user</strong> (directional, not measured)</summary>
+<summary><strong>Estimated savings by workload</strong> (illustrative — directional, not measured)</summary>
 
-A typical heavy user sends ~800–1,200 prompts/week. Routing most of them to free models:
+The audited benchmark showed Chuzom spending **~12% of the always-premium cost at
+non-inferior quality** (≈88% of the routed-workload cost avoided). Applying that ratio to
+three typical workloads gives a **rough** sense of scale. The numbers below are *estimates*
+— your prompt mix and volume decide the real figure. On a **Claude Pro/Max subscription the
+value is quota runway** (more sessions before the wall), **not cash**; the money column
+applies only if you'd otherwise pay per-token at GPT-4o rates.
+
+| Workload | Typical volume | Routed to free tier | Claude quota preserved | Session runway | Est. cash (pay-per-token only) |
+|---|---|---|---|---|---|
+| **Individual developer** — mixed Q&A, edits, small refactors | ~100 prompts/day | ~60–70% | ~60–70% | ~2–3× more sessions/day | ~$20–35 / month |
+| **Agentic workloads** — `llm_act` tool loops, many execute/verify sub-steps | high (each task fans out) | ~80–90% | ~80–90% | ~4–5× | ~$50–150 / month |
+| **Heavy Claude Code user** — ~1,000 prompts/week | ~1,000 / week | ~75% | ~76% | ~4× (1–2 → 6–8 / day) | ~$16–34 / week (~$70–150 / mo) |
+
+The heavy-user row expands to:
 
 | Metric | Without Chuzom | With Chuzom |
 |---|---|---|
@@ -208,8 +221,12 @@ A typical heavy user sends ~800–1,200 prompts/week. Routing most of them to fr
 | Claude quota consumed | 100% | ~24% |
 | Sessions before "usage limit" | 1–2 / day | 6–8 / day |
 
-These are directional — not statistically significant. The audited control-group numbers
-above are the ones to trust.
+**Why agentic saves the most:** a single `llm_act` task fans out into many execute/verify
+sub-steps, and Chuzom also routes **subagent spawns** — most of that work is offloadable to
+local/free tiers, so a larger share of the run never touches Claude quota.
+
+These rows are directional estimates, not statistically significant. The audited
+control-group figures above are the ones to trust; reproduce them with `python -m chuzom benchmark`.
 </details>
 
 ---
