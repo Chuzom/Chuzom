@@ -11,7 +11,6 @@ the real writers and assert 0 unredacted occurrences + 0600 perms.
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import stat
 from pathlib import Path

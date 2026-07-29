@@ -19,7 +19,6 @@ import importlib.util
 import sqlite3
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 ENFORCE_HOOK = ROOT / "src" / "chuzom" / "hooks" / "enforce-route.py"

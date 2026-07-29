@@ -17,7 +17,6 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 import pytest
 

@@ -4,7 +4,6 @@ The blocklist missed AWS_ACCESS_KEY_ID, GH_PAT and DATABASE_URL (none end in
 _API_KEY/_TOKEN or contain SECRET), so they reached spawned codex/gemini/claude
 CLI subprocesses. The blocklist is now broadened to the credential classes.
 """
-import pytest
 from chuzom.safe_subprocess import get_safe_env
 
 SECRETS = {

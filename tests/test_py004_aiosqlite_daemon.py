@@ -19,7 +19,6 @@ import subprocess
 import sys
 import textwrap
 
-import pytest
 
 
 def test_mark_before_await_sets_daemon():
