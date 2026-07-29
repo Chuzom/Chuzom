@@ -167,10 +167,19 @@ class TestPersistentSummaries:
 
 class TestBuildContextMessages:
     @pytest.fixture
-    def reset_session_buffer(self):
-        """Reset the global session buffer before each test."""
+    def reset_session_buffer(self, tmp_path_factory, monkeypatch):
+        """Reset the global session buffer AND isolate ~/.chuzom before each test.
+
+        build_context_messages() also reads the durable session-context
+        accumulator via chuzom.session_store, which lives under ~/.chuzom. Without
+        isolating HOME the test read the developer's LIVE session accumulator
+        (populated by the active chuzom hooks) and non-deterministically saw
+        context where the test expects none. Pointing HOME at a fresh temp dir
+        makes the accumulator empty and the test hermetic.
+        """
         import chuzom.context as context_module
         context_module._session_buffer = None
+        monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("chz-home")))
         yield
         context_module._session_buffer = None
 
