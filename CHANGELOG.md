@@ -108,6 +108,16 @@ user-facing surface, then move it under the next version heading at release time
   receipt_store, quota_tracker, litellm_budget ×2); `cost.py` delegates to the shared helper.
   Regression: `tests/test_py004_aiosqlite_daemon.py` — mechanism (daemon set before await) +
   a subprocess that drops a connection and must exit cleanly within 15s.
+- **Fix: dashboard token leak on the unauth index (CHZ-SEC-05).** `auth_middleware` exempted
+  `/` from auth, and the index injects the dashboard token into the page — so any
+  unauthenticated request to the port received the token and could then call every API. The
+  exemption is removed (token compared with `secrets.compare_digest`); the launcher already logs
+  the tokenized URL, so a legitimate user still gets in and an unauthenticated `GET /` now
+  returns 401 with no token. Regression: `tests/test_sec05_dashboard_token.py` (live server on a
+  random port). _Deferred:_ CHZ-SEC-04 — the loopback-bound model-call servers (`route_server`
+  127.0.0.1:7338, `gateway` 127.0.0.1:17900) need Origin/Host validation against browser-based
+  CSRF/DNS-rebinding, designed so the gateway's OpenAI/Anthropic drop-in compatibility isn't
+  broken; tracked for a follow-up.
 
 ## v1.0.0 — 2026-07-28 — First stable release: measured, independently audited routing — non-breaking
 
