@@ -82,3 +82,25 @@ def test_no_rejected_attempts_is_unchanged(isolated_db):
 
     total = asyncio.run(go())
     assert abs(total - 0.20) < 1e-9, f"with no rejected attempts, spend must equal usage: {total}"
+
+
+def test_monthly_spend_also_counts_rejected_attempts(isolated_db, monkeypatch):
+    """RED1-2-01: get_monthly_spend must include rejected-attempt spend, like daily."""
+    import asyncio
+    import time as _time
+
+    async def go():
+        await _seed_usage_winner(isolated_db, 0.10, "code")
+        record_event(LedgerEvent(
+            ts=_time.time(), event_type="route_attempt", task_type="code",
+            provider="openai", model="openai/gpt-4o",
+            measured_cost_usd=50.0, rejected=True, accepted=False,
+        ))
+        return await cost.get_daily_spend(), await cost.get_monthly_spend()
+
+    daily, monthly = asyncio.run(go())
+    # Both ceilings must see the $50 rejected attempt (+ $0.10 winner).
+    assert monthly >= 50.0, f"RED1-2-01: monthly cap blind to rejected spend (monthly={monthly})"
+    assert abs(daily - monthly) < 1e-9, (
+        f"daily and monthly must agree on rejected spend: daily={daily} monthly={monthly}"
+    )

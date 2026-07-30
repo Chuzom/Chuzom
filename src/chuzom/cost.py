@@ -832,28 +832,40 @@ async def get_monthly_spend() -> float:
             "strftime('%Y-%m', 'now', 'localtime')"
         )
         row = await cursor.fetchone()
-        return float(row[0]) if row else 0.0
+        winning = float(row[0]) if row else 0.0
+        # RED1-2-01: include this month's billable-but-rejected attempts, so the
+        # monthly hard-block ceiling sees the same real spend the daily cap does.
+        return winning + await _rejected_attempt_spend(db, "month")
     finally:
         await db.close()
 
 
-async def _rejected_attempt_spend_today(db, task_type: str | None = None) -> float:
-    """RED1-08: sum today's billable-but-REJECTED provider attempts.
+async def _rejected_attempt_spend(db, period: str = "day", task_type: str | None = None) -> float:
+    """RED1-08/RED1-2-01: sum billable-but-REJECTED provider attempts for a period.
 
     ``cost.log_usage`` only records the WINNING attempt to the ``usage`` table,
     so a paid model that was tried, billed, then rejected (by a contract gate or
-    quality escalation) is invisible to the cap-check that reads ``usage``. The
+    quality escalation) is invisible to the cap-checks that read ``usage``. The
     execution ledger records every attempt with ``rejected`` + ``measured_cost_usd``,
     and the winning attempt is separately marked ``accepted`` — so summing only
     ``rejected=1`` rows gives exactly the extra cost missing from ``usage``, with
-    no double-count. Fail-open: any error (missing table on an old DB, etc.)
-    returns 0.0 so the cap-check degrades to the previous under-count rather than
-    breaking routing.
+    no double-count.
+
+    ``period`` is "day" (local calendar day) or "month" (local calendar month),
+    matching the frames of get_daily_spend*/get_monthly_spend respectively.
+    Fail-open: any error returns 0.0 so the cap-check degrades to the previous
+    under-count rather than breaking routing.
     """
     try:
+        if period == "month":
+            time_pred = (
+                "strftime('%Y-%m', ts, 'unixepoch', 'localtime') = "
+                "strftime('%Y-%m', 'now', 'localtime')"
+            )
+        else:  # day
+            time_pred = "date(ts, 'unixepoch', 'localtime') = date('now','localtime')"
         where = (
-            "rejected = 1 AND COALESCE(measured_cost_usd, 0) > 0 "
-            "AND date(ts, 'unixepoch', 'localtime') = date('now','localtime')"
+            f"rejected = 1 AND COALESCE(measured_cost_usd, 0) > 0 AND {time_pred}"
         )
         params: tuple = ()
         if task_type is not None:
@@ -867,6 +879,11 @@ async def _rejected_attempt_spend_today(db, task_type: str | None = None) -> flo
         return float(row[0]) if row else 0.0
     except Exception:  # noqa: BLE001 — cap-check must never break on ledger read
         return 0.0
+
+
+async def _rejected_attempt_spend_today(db, task_type: str | None = None) -> float:
+    """Back-compat shim: today's rejected-attempt spend (delegates to _rejected_attempt_spend)."""
+    return await _rejected_attempt_spend(db, "day", task_type)
 
 
 async def get_daily_spend() -> float:
