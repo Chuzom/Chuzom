@@ -69,9 +69,19 @@ def _run_uninstall(flags: list[str] | None = None) -> None:
         actions.extend(uninstall_ide_configs())
     except Exception as e:
         actions.append(f"IDE-config cleanup skipped: {e}")
-    # RED2-8-01: remove the home-scoped MCP registrations written by
-    # `chuzom install --host <codex|cursor|gemini-cli|vscode|copilot-cli|…>`,
-    # so uninstall doesn't leave live/dangling chuzom entries in those tools.
+    # RED2-9-*: replay the install manifest — every artifact a write recorded is
+    # reversed here (JSON MCP entries, TOML tables, appended blocks, created
+    # files, copied hook scripts, dirs). This is the authoritative, coverage-safe
+    # path for anything installed since the manifest landed; new host surfaces are
+    # cleaned automatically as long as their write records.
+    try:
+        from chuzom import install_manifest
+        actions.extend(install_manifest.apply_uninstall())
+    except Exception as e:
+        actions.append(f"manifest cleanup skipped: {e}")
+    # RED2-8-01: enumerated host cleanup — a legacy fallback for installs that
+    # predate the manifest (no records to replay). Idempotent with the manifest
+    # replay above (both no-op once an entry is gone).
     try:
         from chuzom.commands.install import uninstall_host_integrations
         actions.extend(uninstall_host_integrations())

@@ -758,6 +758,13 @@ def install(force: bool = False) -> list[str]:
             except OSError:
                 pass
 
+        # RED1-9-01: back up a hand-edited managed hook before install overwrites
+        # it, so a user's local change is recoverable (parity with the auto-update
+        # path). Only when the installed file differs from what we're about to write.
+        if dst.exists() and _files_differ(src, dst):
+            _b = _backup_before_overwrite(dst)
+            if _b is not None:
+                actions.append(f"Backed up existing {dst_name} → {_b.name}")
         shutil.copy2(src, dst)
         if sys.platform != "win32":
             dst.chmod(0o755)
@@ -1284,6 +1291,11 @@ def uninstall_ide_configs(project_dir: Path | None = None) -> list[str]:
         root / ".windsurf" / "mcp.json",
         root / ".cursor" / "rules" / "use-chuzom.mdc",
     ]
+    # RED2-9-03: the project-scoped .github/copilot-instructions.md and Trae .rules
+    # are written via _append_routing_rules, which records to the install manifest
+    # (created-vs-appended aware) — the manifest replay removes them correctly and
+    # safely (a file chuzom only APPENDED to is stripped, not deleted wholesale).
+    # They are deliberately NOT force-unlinked here to avoid destroying user content.
 
     for path in targets:
         if path.exists():

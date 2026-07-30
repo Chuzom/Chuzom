@@ -524,6 +524,12 @@ def _refresh_claude_usage() -> str:
                 "sonnet_pct": result["sonnet_pct"],
                 "highest_pressure": result["highest_pressure"],
                 "updated_at": time.time(),
+                # RED2-9-04: the SUCCESS path must set is_fallback explicitly.
+                # Omitting it made the banner reader `get("is_fallback", True)`
+                # default to True, so a successful subscription refresh was
+                # mis-read as a fallback and the banner box showed the wrong mode
+                # for every session after the first.
+                "is_fallback": False,
             }
             
             try:
