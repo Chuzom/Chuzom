@@ -3223,7 +3223,14 @@ def main() -> None:
                 # CHZ-DRAFT-01 / RED2-01: block mode (turn replacement) only in
                 # zero-Claude; otherwise advisory echo. See _resolve_auto_render_mode.
                 _render_mode = _resolve_auto_render_mode(_render_mode, zero_claude)
-                _turn_blocked = not (_render_mode == "echo" and not zero_claude)
+                # RED1-5-03: derive blocking PURELY from the already-resolved mode.
+                # _resolve_auto_render_mode has already applied the zero_claude gate
+                # (auto → block only when zero_claude; explicit echo/block honored
+                # unchanged). Re-testing zero_claude here force-blocked an operator's
+                # explicit CHUZOM_RENDER_MODE=echo whenever CHUZOM_ZERO_CLAUDE was
+                # also set — bypassing Claude with an unverified draft in exactly the
+                # advisory-only config the operator opted into. "echo" never blocks.
+                _turn_blocked = _render_mode != "echo"
                 # Persist into usage + routing_decisions ONLY for turns that
                 # actually bypass Claude (audit P1): an echo turn still consumes
                 # a full Claude turn, so counting it as a "saving" inflates the

@@ -86,6 +86,61 @@ def test_no_fabricated_magnitude_claims_anywhere_in_src():
     )
 
 
+# RED2-5-04: the README is the single most user-facing surface, yet the guard
+# only scanned its first 60 lines (FORBIDDEN phrases) and never ran the generic
+# NN×/NN-NN× MAGNITUDE_FORBIDDEN patterns against it at all — so an unqualified
+# hero multiplier ("3–5× Longer Sessions") shipped un-guarded. This scans the
+# WHOLE README with the magnitude patterns. The one explicitly-disclaimed
+# "Estimated savings by workload" block (illustrative/directional estimates with
+# an audited-ratio methodology) is carved out — but ONLY when its disclaimer is
+# actually present, so the carve-out can't be abused to smuggle in a bare claim.
+_ESTIMATES_DISCLAIMER = "illustrative estimates — directional, not measured"
+
+
+def _readme_scannable_text() -> str:
+    lines = (ROOT / "README.md").read_text().splitlines()
+    heading = next(
+        (i for i, ln in enumerate(lines) if ln.strip().startswith("### Estimated savings by workload")),
+        None,
+    )
+    if heading is None:
+        return "\n".join(lines)
+    # End of the section = next h2/h3 heading after it, else EOF.
+    end = next(
+        (j for j in range(heading + 1, len(lines))
+         if lines[j].startswith("## ") or lines[j].startswith("### ")),
+        len(lines),
+    )
+    section = "\n".join(lines[heading:end])
+    if _ESTIMATES_DISCLAIMER in section:
+        # Qualified block — exclude it from the strict scan.
+        return "\n".join(lines[:heading] + lines[end:])
+    # Disclaimer missing → the block is no longer qualified; scan everything.
+    return "\n".join(lines)
+
+
+def test_readme_full_has_no_unqualified_magnitude_claims():
+    text = _readme_scannable_text()
+    offenders = []
+    for pat in MAGNITUDE_FORBIDDEN:
+        for m in pat.finditer(text):
+            offenders.append(f"{pat.pattern} :: ...{text[max(0, m.start()-30):m.end()+10]!r}")
+    assert not offenders, (
+        "RED2-5-04: unqualified magnitude claim(s) in README outside the "
+        "disclaimed estimates block: " + "; ".join(offenders)
+    )
+
+
+def test_readme_estimates_carveout_requires_its_disclaimer():
+    """The carve-out is only valid while the disclaimer is present — guard the guard."""
+    readme = (ROOT / "README.md").read_text()
+    if "### Estimated savings by workload" in readme:
+        assert _ESTIMATES_DISCLAIMER in readme, (
+            "the Estimated-savings block must keep its 'illustrative estimates — "
+            "directional, not measured' disclaimer, or its magnitude figures are unqualified"
+        )
+
+
 def test_rules_version_bumped_when_content_changes():
     """RED2-4-02: chuzom.md content changes must bump chuzom-rules-version so
     check_and_update_rules() actually propagates them to installed users."""

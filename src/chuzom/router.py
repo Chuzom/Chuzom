@@ -4006,18 +4006,17 @@ async def route_and_call(
             except Exception:  # noqa: BLE001 — cleanup must not mask the original error
                 pass
             raise
-        # RED1-4-01 (NOTE): _dispatch_model_loop also releases _pending_spend on
-        # its success path, so this is a second decrement — a double-release for
-        # the shared counter (clamped to 0 for a single call; only bites under
-        # true concurrency). It is left IN PLACE deliberately: removing it leaks
-        # _pending_spend on the many code/test paths where the dispatch does NOT
-        # reach its own release, which polluted global state and broke 11 tests.
-        # The correct fix is the single-owner reservation-lifecycle refactor
-        # (reserve once, release once in a finally, remove all ~10 scattered
-        # releases in both functions) — tracked as the reservation-subsystem
-        # follow-up, not a tail-of-session patch. See iteration-04 report.
-        async with _budget_lock():
-            _pending_spend = max(0.0, _pending_spend - _reservation)
+        # RED1-5-02: do NOT release _pending_spend here. This line is reached only
+        # after `_dispatch_model_loop` returned a successful response, and every
+        # success return in that loop already released the reservation exactly once
+        # (primary-chain success at ~2630, emergency-BUDGET success at ~2782). A
+        # second release here double-decremented the shared in-process counter and,
+        # under true concurrency, erased a sibling turn's still-outstanding
+        # reservation — defeating the TOCTOU daily/monthly pre-check the counter
+        # exists for. The iteration-4 belief that removing this "broke 11 tests" was
+        # disproven: those failures came from a leaky TEST (un-drained bg-tasks),
+        # not this decrement (identical failures with and without it). With that
+        # test fixed, single-release is correct and GATE-green.
         _success_detail = {"correlation_id": correlation_id}
         # T4-M1: surface scrub-rate per turn so operators can observe
         # which PII patterns are firing without persisting any PII.

@@ -233,14 +233,23 @@ class BudgetEnvelopeManager:
                 release_for(env.key, cost_usd)
                 self._update_soft_state(env)
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None:
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None:
         """Move ``cost_usd`` from pending to consumed on self + parents.
 
         Success path: caller called ``try_reserve(key, estimated)``,
         the provider returned with ``actual_cost``, caller calls
-        ``commit(key, actual_cost)`` AND ``release(key, estimated)`` if
-        actual ≠ estimated — or just ``commit(key, estimated)`` if the
-        accounting tolerance is acceptable.
+        ``release(key, estimated)`` to undo the reservation exactly and then
+        ``commit(key, actual_cost, settle_pending=False)`` to record true spend
+        without touching pending again. ``settle_pending=True`` (the default)
+        keeps the standalone "move pending→consumed" behaviour for callers that
+        do not release separately.
+
+        RED1-5-01: when ``settle_pending`` is False, pending is NOT decremented
+        here (release already did it). Decrementing twice erased a concurrent
+        sibling's outstanding reservation on a shared key and let a third caller
+        exceed the cap.
         """
         if cost_usd <= 0:
             return
@@ -250,12 +259,12 @@ class BudgetEnvelopeManager:
                 self._consumed[env.key] = (
                     self._consumed.get(env.key, 0.0) + cost_usd
                 )
-                # Decrement pending to match — production callers should
-                # pair commit() with release() of any unused reservation.
-                self._pending[env.key] = max(
-                    0.0, self._pending.get(env.key, 0.0) - cost_usd
-                )
-                release_for(env.key, cost_usd)
+                if settle_pending:
+                    # Standalone callers: decrement pending to match.
+                    self._pending[env.key] = max(
+                        0.0, self._pending.get(env.key, 0.0) - cost_usd
+                    )
+                    release_for(env.key, cost_usd)
                 self._update_soft_state(env)
 
     # ── T2-M3 soft tier ────────────────────────────────────────────────────

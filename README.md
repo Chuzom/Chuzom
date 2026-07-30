@@ -138,8 +138,8 @@ keep the same workflow. The router changes the model choice underneath.**
 <table align="center">
 <tr>
 <td align="center" width="25%">
-  <h3>⏱️ 3–5× Longer Sessions</h3>
-  <p>Route most prompts to free models — hit quota limits far less often</p>
+  <h3>⏱️ Fewer Quota Walls</h3>
+  <p>Route most prompts to free/local models — hit quota limits far less often</p>
 </td>
 <td align="center" width="25%">
   <h3>✅ Quality Preserved</h3>

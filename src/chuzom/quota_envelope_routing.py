@@ -101,8 +101,13 @@ async def commit_envelope(
         return
     b = backend or _get_backend()
     try:
+        # RED1-5-01: release(est) undoes the reservation in pending_usd exactly;
+        # commit records the ACTUAL spend into consumed_usd only. Passing
+        # settle_pending=False stops commit from decrementing pending a second
+        # time — a double-decrement that, on a shared key, erased a concurrent
+        # sibling's outstanding reservation and let a later caller breach the cap.
         await b.release(key, float(est_cost_usd or 0.0))
-        await b.commit(key, float(actual_cost_usd or 0.0))
+        await b.commit(key, float(actual_cost_usd or 0.0), settle_pending=False)
     except Exception as exc:
         log.warning("envelope_commit_failed", error=str(exc))
 

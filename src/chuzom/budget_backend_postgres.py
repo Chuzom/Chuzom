@@ -324,23 +324,40 @@ class PostgresBudgetBackend:
                 pass
             raise
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None:
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None:
         if cost_usd <= 0:
             return
         async with self._lock:
-            await asyncio.to_thread(self._commit_sync, key, cost_usd)
+            await asyncio.to_thread(self._commit_sync, key, cost_usd, settle_pending)
 
-    def _commit_sync(self, key: BudgetKey, cost_usd: float) -> None:
+    def _commit_sync(
+        self, key: BudgetKey, cost_usd: float, settle_pending: bool = True
+    ) -> None:
+        # RED1-5-01: see SqliteBudgetBackend — when the reservation was already
+        # released via release(est), do not decrement pending_usd again (it would
+        # erase a concurrent sibling's outstanding reservation on a shared key).
         try:
             with self._conn.cursor() as cur:
                 chain_keys = self._chain_keys(cur, key)
+                _pending_sql = (
+                    ", pending_usd = GREATEST(0.0, pending_usd - %s)"
+                    if settle_pending
+                    else ""
+                )
                 for env_key in chain_keys:
+                    _params = (
+                        (cost_usd, cost_usd, _serialise_key(env_key))
+                        if settle_pending
+                        else (cost_usd, _serialise_key(env_key))
+                    )
                     cur.execute(
                         "UPDATE chuzom_envelopes "
-                        "SET consumed_usd = consumed_usd + %s, "
-                        "pending_usd = GREATEST(0.0, pending_usd - %s) "
-                        "WHERE key_blob = %s",
-                        (cost_usd, cost_usd, _serialise_key(env_key)),
+                        "SET consumed_usd = consumed_usd + %s"
+                        + _pending_sql
+                        + " WHERE key_blob = %s",
+                        _params,
                     )
             self._conn.commit()
             for env_key in chain_keys:

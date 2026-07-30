@@ -861,6 +861,38 @@ def uninstall() -> list[str]:
             except OSError:
                 pass
 
+    # RED2-5-01: remove the statusLine script + its settings.json registration.
+    # install() copies chuzom-statusline.sh and registers a `bash <path>`
+    # statusLine command; uninstall previously left both, so Claude Code kept
+    # executing the chuzom script on every render after the user uninstalled.
+    statusline_dst = _HOOKS_DST / "chuzom-statusline.sh"
+    if statusline_dst.exists():
+        try:
+            statusline_dst.unlink()
+            actions.append(f"Removed {statusline_dst}")
+        except OSError:
+            pass
+    settings_sl = _load_settings()
+    current_sl = settings_sl.get("statusLine")
+    if isinstance(current_sl, dict) and "chuzom-statusline.sh" in str(
+        current_sl.get("command", "")
+    ):
+        del settings_sl["statusLine"]
+        _save_settings(settings_sl)
+        actions.append("Removed statusLine command from ~/.claude/settings.json")
+
+    # RED2-5-02: remove the sidecar helper scripts install() copied into the
+    # hooks dir. They carry no event/matcher so the _HOOK_DEFS removal loop above
+    # never touched them, leaving them orphaned on disk after uninstall.
+    for _name in _SIDECAR_SCRIPTS:
+        _sidecar = _HOOKS_DST / _name
+        if _sidecar.exists():
+            try:
+                _sidecar.unlink()
+                actions.append(f"Removed sidecar script {_sidecar}")
+            except OSError:
+                pass
+
     # Remove from Claude Desktop
     actions.extend(_uninstall_claude_desktop())
 
@@ -1016,6 +1048,31 @@ def uninstall_claw_code() -> list[str]:
     if "chuzom" in mcp_servers:
         del mcp_servers["chuzom"]
         actions.append("Removed chuzom MCP server from claw-code")
+
+    # RED2-5-02: remove the sidecar helper scripts install_claw_code() copied in.
+    for _name in _SIDECAR_SCRIPTS:
+        _sidecar = hooks_dst / _name
+        if _sidecar.exists():
+            try:
+                _sidecar.unlink()
+                actions.append(f"Removed sidecar script {_sidecar}")
+            except OSError:
+                pass
+
+    # RED2-5-02: strip the CHUZOM_CLAW_CODE=true marker install_claw_code() wrote
+    # into ~/.claw-code/.env, so the claw-code host stops believing chuzom is
+    # active after uninstall. Parse-and-rewrite, dropping only that line.
+    env_path = cc_dir / ".env"
+    if env_path.exists():
+        try:
+            _lines = env_path.read_text(encoding="utf-8").splitlines()
+            _kept = [ln for ln in _lines if not ln.strip().startswith("CHUZOM_CLAW_CODE")]
+            if len(_kept) != len(_lines):
+                _body = "\n".join(_kept)
+                env_path.write_text(_body + ("\n" if _body else ""), encoding="utf-8")
+                actions.append(f"Removed CHUZOM_CLAW_CODE flag from {env_path}")
+        except OSError:
+            pass
 
     if settings_path.exists():
         settings_path.write_text(json.dumps(settings, indent=2) + "\n")

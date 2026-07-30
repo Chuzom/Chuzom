@@ -104,7 +104,9 @@ class BudgetBackend(Protocol):
 
     async def release(self, key: BudgetKey, cost_usd: float) -> None: ...
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None: ...
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None: ...
 
     def tier_state(self, key: BudgetKey) -> dict[str, float | bool | None]: ...
 
@@ -496,24 +498,40 @@ class SqliteBudgetBackend:
             self._conn.execute("ROLLBACK")
             raise
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None:
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None:
         if cost_usd <= 0:
             return
         async with self._lock:
-            await asyncio.to_thread(self._commit_sync, key, cost_usd)
+            await asyncio.to_thread(self._commit_sync, key, cost_usd, settle_pending)
 
-    def _commit_sync(self, key: BudgetKey, cost_usd: float) -> None:
+    def _commit_sync(
+        self, key: BudgetKey, cost_usd: float, settle_pending: bool = True
+    ) -> None:
+        # RED1-5-01: when settle_pending is False the caller (commit_envelope)
+        # has ALREADY released the reservation from pending_usd via release(est).
+        # Decrementing pending_usd a second time here erased a concurrent
+        # sibling's still-outstanding reservation on a shared key, letting a
+        # third caller be admitted past the hard cap. With settle_pending=False
+        # commit becomes a pure "record consumed" ledger write.
         self._begin_immediate_with_retry()
         try:
             chain = self._chain_rows(key)
             now = time.time()
+            _pending_sql = (
+                ", pending_usd = max(0.0, pending_usd - ?)" if settle_pending else ""
+            )
+            _params = (
+                (cost_usd, cost_usd) if settle_pending else (cost_usd,)
+            )
             for env_key, _ in chain:
                 self._conn.execute(
                     "UPDATE envelopes SET "
-                    "consumed_usd = consumed_usd + ?, "
-                    "pending_usd = max(0.0, pending_usd - ?) "
-                    "WHERE key_blob = ?",
-                    (cost_usd, cost_usd, _serialise_key(env_key)),
+                    "consumed_usd = consumed_usd + ?"
+                    + _pending_sql
+                    + " WHERE key_blob = ?",
+                    (*_params, _serialise_key(env_key)),
                 )
                 # T2-L2: record spend event under the same transaction so
                 # the burn-rate query observes consistent committed totals.

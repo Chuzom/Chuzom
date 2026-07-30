@@ -728,23 +728,27 @@ def _preflight_check() -> str:
     Runs silently (never raises) so it cannot block session start.
     Only emits output when something needs attention.
     """
-    issues = []
-    ok = []
+    # RED2-5-03: a missing OPTIONAL provider is not a defect. Chuzom routes over
+    # whatever is available (any cloud key OR reachable Ollama OR Claude
+    # subscription). Distinguish "you have ZERO usable routing paths" (genuinely
+    # actionable — emit the imperative) from "one of several optional providers is
+    # unconfigured" (informational — never tell the agent to 'fix' it, which could
+    # push it to prompt for a credential that isn't needed).
+    paths: list[str] = []          # usable routing paths (at least one → we're fine)
+    optional_missing: list[str] = []
 
-    # API keys
     for key, label in [
         ("OPENAI_API_KEY", "OpenAI"),
         ("GEMINI_API_KEY", "Gemini"),
         ("ANTHROPIC_API_KEY", "Anthropic"),
     ]:
         if os.environ.get(key, "").strip():
-            ok.append(label)
+            paths.append(label)
         elif key == "ANTHROPIC_API_KEY" and _CC_MODE:
-            # Claude arrives via the Pro/Max subscription in CC mode — no API key
-            # needed, so a missing ANTHROPIC_API_KEY is expected, not a problem.
-            ok.append("Anthropic (subscription)")
+            # Claude arrives via the Pro/Max subscription in CC mode — a usable path.
+            paths.append("Anthropic (subscription)")
         else:
-            issues.append(f"{key} missing")
+            optional_missing.append(label)
 
     # Ollama
     try:
@@ -753,28 +757,33 @@ def _preflight_check() -> str:
             ["ollama", "list"], capture_output=True, timeout=subprocess_timeout()
         )
         if result.returncode == 0:
-            ok.append("Ollama")
+            paths.append("Ollama")
         else:
-            issues.append("Ollama not running")
+            optional_missing.append("Ollama (not running)")
     except Exception:
-        issues.append("Ollama not found")
+        optional_missing.append("Ollama (not found)")
 
-    # Enforce-route mode
     enforce = os.environ.get("CHUZOM_ENFORCE", "smart")
+
+    lines: list[str] = []
+
+    if not paths:
+        # Genuinely actionable: nothing can route. This is the only case that
+        # warrants the imperative.
+        lines.append("\n⚠️  No routing paths available — Chuzom cannot route.")
+        lines.append("  Set an API key (OpenAI/Gemini/Anthropic) or start Ollama before starting.")
+    elif optional_missing:
+        # Informational only — routing works; these are extra optional providers.
+        lines.append(
+            "\nℹ️  Optional providers not configured: "
+            + ", ".join(optional_missing)
+            + " — routing works via " + ", ".join(paths) + "."
+        )
+
+    # Enforce mode is a heads-up, not a defect — keep it out of the 'fix' bucket.
     if enforce == "hard":
-        issues.append("CHUZOM_ENFORCE=hard (may block tools — use smart or off to debug)")
-    elif enforce == "off":
-        ok.append("enforce=off")
-    else:
-        ok.append(f"enforce={enforce}")
+        lines.append("  ℹ️  CHUZOM_ENFORCE=hard may block tools when no route is available — use smart/off to debug.")
 
-    if not issues:
-        return ""  # All good — stay silent
-
-    lines = ["\n⚠️  Pre-flight issues:"]
-    for issue in issues:
-        lines.append(f"  ✗ {issue}")
-    lines.append("  Fix before starting implementation.")
     return "\n".join(lines)
 
 
