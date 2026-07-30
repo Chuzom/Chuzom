@@ -57,7 +57,7 @@ from chuzom.streaming_types import RouterStreamEvent
 from chuzom.compaction import compact_structural
 from chuzom.config import get_config
 from chuzom.repo_config import effective_config as get_repo_config
-from chuzom.context import build_context_messages, get_session_buffer
+from chuzom.context import _resolve_context_identity, build_context_messages, get_session_buffer
 from chuzom.health import get_tracker
 from chuzom.profiles import get_model_chain, provider_from_model
 from chuzom.receipt_store import compute_receipt, store_receipt
@@ -2451,8 +2451,14 @@ async def _dispatch_model_loop(
                 except Exception as _ledger_err:  # noqa: BLE001 — telemetry never breaks routing
                     log.debug("route ledger emit skipped (non-fatal): %s", _ledger_err)
 
-            # Record exchange in session buffer for future context injection
-            buf = get_session_buffer()
+            # Record exchange in session buffer for future context injection.
+            # CHZ-AUD-B-04: resolve (project_id, session_id) ONCE, fail-open,
+            # and reuse it for both the in-process buffer and the durable
+            # session_store mirror below so they stay scoped to the same
+            # identity (the buffer is no longer a single process-wide
+            # singleton — it is keyed by this identity in a bounded registry).
+            _rt_pid, _rt_sid = _resolve_context_identity(None, None)
+            buf = get_session_buffer(_rt_pid, _rt_sid)
             buf.record("user", prompt, task_type=task_type.value)
             buf.record("assistant", response.content, task_type=task_type.value)
 
@@ -2462,7 +2468,7 @@ async def _dispatch_model_loop(
             # Fully independent of the in-process buffer above; fails open.
             try:
                 from chuzom import session_store as _session_store
-                _sid = _session_store.resolve_session_id()
+                _sid = _rt_sid
                 if _sid:
                     _session_store.record_event(
                         _sid, "user_prompt", prompt,

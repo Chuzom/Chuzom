@@ -8,6 +8,8 @@ import pytest
 
 from chuzom.context import (
     SessionBuffer,
+    _reset_session_buffers_for_test,
+    _resolve_context_identity,
     _strip_injected_context,
     auto_summarize_session,
     build_context_messages,
@@ -17,6 +19,16 @@ from chuzom.context import (
     save_session_summary,
 )
 from chuzom.types import LLMResponse
+
+
+def _ambient_identity():
+    """(project_id, session_id) that build_context_messages()/auto_summarize_session()
+    resolve to internally when called with no explicit identity args (CHZ-AUD-B-04).
+    Test bodies that pre-populate a SessionBuffer directly via get_session_buffer()
+    must use this same key so the buffer they write to is the one those functions
+    read from — get_session_buffer() no longer has a zero-arg process-wide singleton.
+    """
+    return _resolve_context_identity(None, None)
 
 
 class TestSessionBuffer:
@@ -89,9 +101,21 @@ class TestSessionBuffer:
 
 class TestSessionBufferSingleton:
     def test_returns_same_instance(self):
-        buf1 = get_session_buffer()
-        buf2 = get_session_buffer()
+        _reset_session_buffers_for_test()
+        buf1 = get_session_buffer("proj-a", "sess-1")
+        buf2 = get_session_buffer("proj-a", "sess-1")
         assert buf1 is buf2
+
+    def test_different_keys_get_different_instances(self):
+        """CHZ-AUD-B-04: the registry must not collapse distinct
+        (project_id, session_id) identities into one shared buffer."""
+        _reset_session_buffers_for_test()
+        buf_a = get_session_buffer("proj-a", "sess-1")
+        buf_b = get_session_buffer("proj-b", "sess-1")
+        buf_c = get_session_buffer("proj-a", "sess-2")
+        assert buf_a is not buf_b
+        assert buf_a is not buf_c
+        assert buf_b is not buf_c
 
 
 class TestFormatSessionSummaries:
@@ -178,10 +202,10 @@ class TestBuildContextMessages:
         makes the accumulator empty and the test hermetic.
         """
         import chuzom.context as context_module
-        context_module._session_buffer = None
+        context_module._reset_session_buffers_for_test()
         monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("chz-home")))
         yield
-        context_module._session_buffer = None
+        context_module._reset_session_buffers_for_test()
 
     @pytest.mark.asyncio
     async def test_no_context_returns_empty(self, tmp_path, reset_session_buffer):
@@ -194,7 +218,8 @@ class TestBuildContextMessages:
     async def test_with_session_buffer_only(self, tmp_path, reset_session_buffer):
         db_path = tmp_path / "empty.db"
         with patch("chuzom.context._get_db_path", return_value=db_path):
-            buf = get_session_buffer()
+            pid, sid = _ambient_identity()
+            buf = get_session_buffer(pid, sid)
             buf.record("user", "What is FastAPI?", task_type="query")
             buf.record("assistant", "FastAPI is a web framework.", task_type="query")
 
@@ -226,7 +251,7 @@ class TestBuildContextMessages:
             await save_session_summary("Worked on auth", 3, ["code"])
 
             # Add current session messages
-            buf = get_session_buffer()
+            buf = get_session_buffer(*_ambient_identity())
             buf.record("user", "Now working on context", task_type="code")
 
             # Build context
@@ -246,7 +271,7 @@ class TestBuildContextMessages:
         db_path = tmp_path / "empty.db"
         with patch("chuzom.context._get_db_path", return_value=db_path):
             # Fill buffer with lots of content
-            buf = get_session_buffer()
+            buf = get_session_buffer(*_ambient_identity())
             for i in range(10):
                 buf.record("user", f"Message {i}: {'x' * 500}", task_type="query")
 
@@ -274,9 +299,9 @@ class TestBuildContextMessagesLayer2b:
     @pytest.fixture
     def reset_session_buffer(self):
         import chuzom.context as context_module
-        context_module._session_buffer = None
+        context_module._reset_session_buffers_for_test()
         yield
-        context_module._session_buffer = None
+        context_module._reset_session_buffers_for_test()
 
     @pytest.mark.asyncio
     async def test_no_resolved_session_id_contributes_nothing(
@@ -550,16 +575,16 @@ class TestAutoSummarize:
 
     @pytest.fixture
     def reset_session_buffer(self):
-        """Reset the global session buffer before each test."""
+        """Reset the global session buffer registry before each test."""
         import chuzom.context as context_module
-        context_module._session_buffer = None
+        context_module._reset_session_buffers_for_test()
         yield
-        context_module._session_buffer = None
+        context_module._reset_session_buffers_for_test()
 
     @pytest.mark.asyncio
     async def test_skips_short_sessions(self, db_path, reset_session_buffer):
         with patch("chuzom.context._get_db_path", return_value=db_path):
-            buf = get_session_buffer()
+            buf = get_session_buffer(*_ambient_identity())
             buf.record("user", "hello")
             result = await auto_summarize_session(min_messages=3)
             assert result is None
@@ -577,7 +602,7 @@ class TestAutoSummarize:
         )
 
         with patch("chuzom.context._get_db_path", return_value=db_path):
-            buf = get_session_buffer()
+            buf = get_session_buffer(*_ambient_identity())
             buf.record("user", "What is FastAPI?", task_type="query")
             buf.record("assistant", "FastAPI is a modern web framework.", task_type="query")
             buf.record("user", "How do I install it?", task_type="query")
@@ -598,7 +623,7 @@ class TestAutoSummarize:
     @pytest.mark.asyncio
     async def test_falls_back_on_llm_failure(self, db_path):
         with patch("chuzom.context._get_db_path", return_value=db_path):
-            buf = get_session_buffer()
+            buf = get_session_buffer(*_ambient_identity())
             buf.record("user", "Build a REST API", task_type="code")
             buf.record("assistant", "Here's the code...", task_type="code")
             buf.record("user", "Add auth", task_type="code")
@@ -620,7 +645,7 @@ class TestAutoSummarize:
         )
 
         with patch("chuzom.context._get_db_path", return_value=db_path):
-            buf = get_session_buffer()
+            buf = get_session_buffer(*_ambient_identity())
             buf.record("user", "Research caching", task_type="research")
             buf.record("assistant", "Redis is popular", task_type="research")
             buf.record("user", "Write cache code", task_type="code")
@@ -701,9 +726,9 @@ class TestInjectedContextStripping:
 
         import chuzom.context as context_module
         from chuzom.context import SessionMessage
-        context_module._session_buffer = None
+        context_module._reset_session_buffers_for_test()
 
-        buf = get_session_buffer()
+        buf = get_session_buffer(*_ambient_identity())
         # append directly via the dataclass, bypassing record()'s own guard,
         # to simulate content buffered by an older build before this fix
         buf._buffer.append(SessionMessage(

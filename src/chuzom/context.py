@@ -103,6 +103,8 @@ class SessionBuffer:
     def __init__(self, max_messages: int = 10) -> None:
         self._buffer: deque[SessionMessage] = deque(maxlen=max_messages)
         self._session_start: float = time.time()
+        # CHZ-AUD-B-04: tracked so the registry below can evict idle buffers.
+        self.last_access: float = time.time()
 
     def record(self, role: str, content: str, task_type: str = "") -> None:
         """Add a message to the session buffer.
@@ -157,16 +159,104 @@ class SessionBuffer:
         return "\n".join(lines)
 
 
-# Module-level singleton
-_session_buffer: SessionBuffer | None = None
+# CHZ-AUD-B-04: bounded, evictable registry of per-(project, session)
+# SessionBuffers.
+#
+# Previously this module kept ONE process-wide singleton SessionBuffer
+# (`_session_buffer`), and `get_session_buffer()` took no arguments. In a
+# long-lived MCP server process handling multiple projects/sessions, every
+# caller shared that single buffer: recent conversation content from one
+# project/session was injected into prompts for a completely different
+# project/session (see build_context_messages()'s former Layer 2, which
+# ignored its own `session_id` parameter entirely). This registry scopes each
+# buffer to its (project_id, session_id) key, mirroring the identity model
+# `session_store` already uses for its durable, cross-process session
+# storage — so the in-process buffer and the durable accumulator are now
+# consistently scoped to the same identity.
+#
+# `get_session_buffer()` REQUIRES an explicit `project_id` on purpose: this
+# keeps the registry a pure function of its inputs, with no hidden coupling
+# to env vars / cwd / the filesystem inside the buffer-access primitive
+# itself. Callers that need "the current project/session" resolve that
+# identity themselves (via `session_store._project_id()` /
+# `resolve_session_id()`, both fail-open) and pass it in explicitly — see
+# `build_context_messages()`, `auto_summarize_session()`, and
+# `router.route_and_call()`'s primary success path.
+_MAX_BUFFERS = 200
+_BUFFER_IDLE_EVICT_SECONDS = 6 * 3600  # mirrors session_store's pointer TTL
+
+_buffers: dict[tuple[str, str], SessionBuffer] = {}
 
 
-def get_session_buffer() -> SessionBuffer:
-    """Return the singleton session buffer."""
-    global _session_buffer
-    if _session_buffer is None:
-        _session_buffer = SessionBuffer()
-    return _session_buffer
+def get_session_buffer(project_id: str, session_id: str | None = None) -> SessionBuffer:
+    """Return the SessionBuffer scoped to (project_id, session_id).
+
+    Creates a new, empty buffer on first access for a given key. Evicts
+    idle-too-long buffers opportunistically, and — if the registry is at
+    capacity — the least-recently-accessed buffer, so a long-lived process
+    handling many short-lived projects/sessions cannot grow this registry
+    without bound.
+    """
+    key = (project_id or "_no_project", session_id or "_no_session")
+    now = time.time()
+
+    if _buffers:
+        stale = [
+            k for k, buf in _buffers.items()
+            if now - buf.last_access > _BUFFER_IDLE_EVICT_SECONDS
+        ]
+        for k in stale:
+            del _buffers[k]
+
+    buf = _buffers.get(key)
+    if buf is None:
+        if len(_buffers) >= _MAX_BUFFERS:
+            lru_key = min(_buffers, key=lambda k: _buffers[k].last_access)
+            del _buffers[lru_key]
+        buf = SessionBuffer()
+        _buffers[key] = buf
+    buf.last_access = now
+    return buf
+
+
+def _reset_session_buffers_for_test() -> None:
+    """Test-only: clear the entire buffer registry.
+
+    Hermetic tests must call this (rather than poking a module-level
+    singleton, which no longer exists) between test cases that populate
+    SessionBuffers, to avoid cross-test leakage through the registry.
+    """
+    _buffers.clear()
+
+
+def _resolve_context_identity(
+    project_id: str | None, session_id: str | None,
+) -> tuple[str, str | None]:
+    """Resolve (project_id, session_id) identity for the SessionBuffer registry.
+
+    An explicit `project_id` wins outright (there is no parameterized
+    "resolve project id, but override with X" primitive in `session_store`,
+    unlike session_id). `session_id` is always run through
+    `session_store.resolve_session_id(session_id)` — matching the durable
+    Session Context Accumulator's existing precedence (explicit → env →
+    pointer file) — so the in-process buffer and the durable store stay
+    consistently scoped to the same identity.
+
+    Fails open: any error resolving project_id/session_id (missing
+    session_store, corrupt env, etc.) degrades to a best-effort identity
+    rather than raising — callers must never lose context injection or
+    session recording entirely just because identity resolution hiccuped.
+    """
+    resolved_pid = project_id
+    resolved_sid: str | None = None
+    try:
+        from chuzom import session_store
+        if not resolved_pid:
+            resolved_pid = session_store._project_id()
+        resolved_sid = session_store.resolve_session_id(session_id)
+    except Exception:
+        pass
+    return resolved_pid or "_unknown", resolved_sid
 
 
 # ── Persistent Session Summaries (SQLite) ────────────────────────────────────
@@ -201,7 +291,14 @@ def _ensure_session_table(db_path: Path) -> None:
         conn.close()
 
 
-async def save_session_summary(summary: str, message_count: int, task_types: list[str]) -> None:
+async def save_session_summary(
+    summary: str,
+    message_count: int,
+    task_types: list[str],
+    *,
+    project_id: str | None = None,
+    session_id: str | None = None,
+) -> None:
     """Persist a session summary to SQLite for cross-session context.
 
     Called when a session ends (or periodically) to capture what happened.
@@ -210,6 +307,10 @@ async def save_session_summary(summary: str, message_count: int, task_types: lis
         summary: Compact text summary of the session's work.
         message_count: How many exchanges occurred in the session.
         task_types: List of task types used during the session.
+        project_id: Scopes which SessionBuffer's `_session_start` is read
+            (CHZ-AUD-B-04). Optional — resolved via `session_store` when
+            omitted, so existing callers are unaffected.
+        session_id: Same scoping, for session identity.
     """
     import sqlite3
     from datetime import datetime, timezone
@@ -217,7 +318,8 @@ async def save_session_summary(summary: str, message_count: int, task_types: lis
     db_path = _get_db_path()
     _ensure_session_table(db_path)
 
-    buf = get_session_buffer()
+    _pid, _sid = _resolve_context_identity(project_id, session_id)
+    buf = get_session_buffer(_pid, _sid)
 
     session_start = datetime.fromtimestamp(
         buf._session_start, tz=timezone.utc,
@@ -239,7 +341,12 @@ async def save_session_summary(summary: str, message_count: int, task_types: lis
     log.info("Saved session summary (%d messages, types: %s)", message_count, task_types)
 
 
-async def auto_summarize_session(min_messages: int = 3) -> str | None:
+async def auto_summarize_session(
+    min_messages: int = 3,
+    *,
+    project_id: str | None = None,
+    session_id: str | None = None,
+) -> str | None:
     """Generate and persist a session summary using a cheap LLM.
 
     Collects the session buffer, sends it to the cheapest available model
@@ -248,11 +355,18 @@ async def auto_summarize_session(min_messages: int = 3) -> str | None:
 
     Args:
         min_messages: Minimum number of messages before summarization triggers.
+        project_id: Scopes which SessionBuffer is read (CHZ-AUD-B-04).
+            Optional — resolved via `session_store` when omitted.
+        session_id: Same scoping, for session identity. Resolved once here
+            and forwarded to `save_session_summary()` so both reads/writes
+            in a single summarization pass see the exact same identity,
+            even if the ambient session pointer changes mid-call.
 
     Returns:
         The generated summary string, or None if skipped.
     """
-    buf = get_session_buffer()
+    _pid, _sid = _resolve_context_identity(project_id, session_id)
+    buf = get_session_buffer(_pid, _sid)
     messages = buf.get_recent(buf.message_count)
 
     if len(messages) < min_messages:
@@ -308,6 +422,8 @@ async def auto_summarize_session(min_messages: int = 3) -> str | None:
         summary=summary,
         message_count=len(messages),
         task_types=sorted(task_types_seen),
+        project_id=_pid,
+        session_id=_sid,
     )
 
     log.info("Auto-summarized session: %s", summary[:100])
@@ -395,6 +511,7 @@ async def build_context_messages(
     max_context_tokens: int = 1500,
     is_free_model: bool = False,
     session_id: str | None = None,
+    project_id: str | None = None,
     target_provider: str | None = None,
 ) -> list[dict[str, str]]:
     """Assemble context messages for injection into LLM calls.
@@ -419,6 +536,10 @@ async def build_context_messages(
             omitted). When ``None`` and no session can be resolved, layer 2b
             contributes nothing — behavior is unchanged from before this
             layer existed.
+        project_id: Optional explicit project id for scoping the in-process
+            SessionBuffer (CHZ-AUD-B-04). Falls back to
+            ``session_store._project_id()`` resolution when omitted — same
+            fail-open precedence as ``session_id`` below.
         target_provider: Optional provider name (e.g. "openai", "gemini",
             "ollama") the assembled context is destined for. Used only to
             enforce the accumulator's privacy mode (``local`` blocks paid
@@ -430,6 +551,19 @@ async def build_context_messages(
     """
     global _last_optimization
     parts: list[str] = []
+
+    # CHZ-AUD-B-04: resolve (project_id, session_id) identity ONCE, up front,
+    # so the in-process SessionBuffer (layer 2) and the durable Session
+    # Context Accumulator (layer 2b) are scoped to the EXACT same identity.
+    # Previously layer 2 called get_session_buffer() with no arguments at
+    # all (a single process-wide singleton shared across every
+    # project/session), while layer 2b independently resolved session_id via
+    # session_store — so a long-lived process serving multiple
+    # projects/sessions could inject one project's recent conversation
+    # content into a completely different project's prompt.
+    _ctx_project_id, _resolved_session_id = _resolve_context_identity(
+        project_id, session_id,
+    )
 
     # Resolve the session-context privacy mode once, up front, so EVERY context
     # layer (not just the Session Context Accumulator in layer 2b) honors it.
@@ -470,7 +604,7 @@ async def build_context_messages(
     # in-process buffer is verbatim session content and must not leak to
     # external paid APIs under 'local', nor be sent at all under 'off'.
     if not _context_suppressed:
-        buf = get_session_buffer()
+        buf = get_session_buffer(_ctx_project_id, _resolved_session_id)
         current_context = buf.format_for_injection(n=max_session_messages)
         if current_context:
             parts.append(current_context)
@@ -486,14 +620,13 @@ async def build_context_messages(
         from chuzom import session_store
         from chuzom.config import get_config
 
-        resolved_sid = session_store.resolve_session_id(session_id)
-        if resolved_sid:
+        if _resolved_session_id:
             try:
                 mcp_budget = get_config().session_context_max_tokens_mcp
             except Exception:
                 mcp_budget = 1500
             durable_context = session_store.build_session_context(
-                resolved_sid,
+                _resolved_session_id,
                 max_tokens=mcp_budget,
                 query=caller_context,
                 target_provider=target_provider,
