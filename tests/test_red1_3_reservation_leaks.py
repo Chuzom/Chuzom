@@ -97,3 +97,39 @@ async def test_no_double_decrement_on_success():
         f"RED1-4-01: _pending_spend not conserved after 8 successful turns: "
         f"{before} -> {router._pending_spend}"
     )
+
+
+@pytest.mark.asyncio
+async def test_envelope_released_on_all_models_failed():
+    """RED1-4-02: strict-mode envelope must be released when all models fail."""
+    released = {"env": False}
+
+    async def fake_release(key, amt):
+        released["env"] = True
+
+    with ExitStack() as es:
+        p = es.enter_context
+        p(patch.dict(os.environ, {"CHUZOM_ENFORCE": "smart"}))
+        p(patch("chuzom.router.get_config", return_value=t._Cfg()))
+        tr = MagicMock(); tr.is_healthy.return_value = True
+        p(patch("chuzom.router.get_tracker", return_value=tr))
+        ml = MagicMock(); ml.bind.return_value = MagicMock()
+        p(patch("chuzom.router.log", ml))
+        p(patch("chuzom.router._native_notify", lambda *a, **k: None))
+        p(patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0))
+        p(patch("chuzom.router.cost.get_daily_spend", new_callable=AsyncMock, return_value=0.0))
+        p(patch("chuzom.router.cost.get_daily_spend_by_task_type", new_callable=AsyncMock, return_value=0.0))
+        p(patch("chuzom.policy.load_org_policy", return_value=None))
+        p(patch("chuzom.policy.get_active_policy", return_value=None))
+        p(patch("chuzom.router.reserve_envelope", new_callable=AsyncMock, return_value=("strict", True, "envkey")))
+        p(patch("chuzom.router.release_envelope", side_effect=fake_release))
+        p(patch("chuzom.router.commit_envelope", new_callable=AsyncMock))
+        p(patch("chuzom.semantic_cache.check", new_callable=AsyncMock, return_value=None))
+        p(patch("chuzom.semantic_cache.store", new_callable=AsyncMock))
+        p(patch("chuzom.router._build_and_filter_chain", new_callable=AsyncMock, return_value=["openai/gpt-4o"]))
+        p(patch("chuzom.router.providers.call_llm", new_callable=AsyncMock, side_effect=RuntimeError("boom")))
+        p(patch("chuzom.router.cost.log_usage", new_callable=AsyncMock))
+        from chuzom.router import route_and_call
+        with pytest.raises(Exception):
+            await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
+    assert released["env"], "RED1-4-02: envelope not released when all models failed"

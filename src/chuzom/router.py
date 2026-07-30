@@ -3992,6 +3992,20 @@ async def route_and_call(
                 cap_seconds=max_wall_clock_seconds,
                 elapsed_seconds=elapsed,
             ) from _to_err
+        except Exception:
+            # RED1-4-02: _dispatch_model_loop releases _pending_spend on its
+            # all-models-failed tail (RuntimeError) but never the distributed
+            # budget envelope, and route_and_call only caught Cancelled/Timeout —
+            # so in strict-envelope mode the backend hold leaked on every
+            # all-failed turn. Release ONLY the envelope here (the dispatch already
+            # released _pending_spend on this path; releasing it again would
+            # re-introduce the RED1-4-01 double-decrement) and re-raise.
+            # release_envelope(None, ...) is a safe no-op in off-mode.
+            try:
+                await release_envelope(_env_key, _reservation)
+            except Exception:  # noqa: BLE001 — cleanup must not mask the original error
+                pass
+            raise
         # RED1-4-01: do NOT release _pending_spend here. This line is reached only
         # after `await _dispatch_coro` returned normally, and _dispatch_model_loop
         # already released the reservation on its success path (its own budget-lock
