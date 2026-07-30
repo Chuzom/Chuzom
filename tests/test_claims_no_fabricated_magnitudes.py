@@ -59,19 +59,40 @@ MAGNITUDE_FORBIDDEN = [
 
 
 def test_no_fabricated_magnitude_claims_anywhere_in_src():
-    src = ROOT / "src" / "chuzom"
     offenders = []
-    # Scan shipped code AND the rules/docs the product writes to a user's machine.
-    for pattern in ("*.py", "rules/*.md", "**/*.mdc"):
-        for path in src.rglob(pattern) if "**" in pattern else src.glob(f"**/{pattern}"):
-            try:
-                text = path.read_text()
-            except OSError:
-                continue
-            for pat in MAGNITUDE_FORBIDDEN:
-                if pat.search(text):
-                    offenders.append(f"{path.relative_to(ROOT)} :: {pat.pattern}")
+    # Scan shipped code AND every surface the product ships to a user: src code,
+    # bundled rules, and the repo-root skills/ dir (RED2-4-03 — a skill file had a
+    # live "50× cheaper" claim the src-only scan missed).
+    roots_and_globs = [
+        (ROOT / "src" / "chuzom", ("**/*.py", "**/*.md", "**/*.mdc")),
+        (ROOT / "skills", ("**/*.md", "**/*.mdc")),
+    ]
+    for base, globs in roots_and_globs:
+        if not base.exists():
+            continue
+        for g in globs:
+            for path in base.rglob(g.replace("**/", "")):
+                # skip training-data JSONL and binary
+                try:
+                    text = path.read_text()
+                except OSError:
+                    continue
+                for pat in MAGNITUDE_FORBIDDEN:
+                    if pat.search(text):
+                        offenders.append(f"{path.relative_to(ROOT)} :: {pat.pattern}")
     assert not offenders, (
-        "fabricated magnitude claim(s) in shipped source (RED2-05/RED2-3-02): "
+        "fabricated magnitude claim(s) in shipped source (RED2-05/RED2-3-02/RED2-4-03): "
         + "; ".join(offenders)
+    )
+
+
+def test_rules_version_bumped_when_content_changes():
+    """RED2-4-02: chuzom.md content changes must bump chuzom-rules-version so
+    check_and_update_rules() actually propagates them to installed users."""
+    import re as _re
+    rules = (ROOT / "src" / "chuzom" / "rules" / "chuzom.md").read_text()
+    m = _re.search(r"chuzom-rules-version:\s*(\d+)", rules)
+    assert m and int(m.group(1)) >= 7, (
+        "rules-version must be >=7 after the iteration-3/4 content reword "
+        "(RED2-4-02: a content change without a version bump does not auto-update)"
     )

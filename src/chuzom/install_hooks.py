@@ -50,6 +50,32 @@ _RULES_DST = _CLAUDE_DIR / "rules"
 _SETTINGS_PATH = _CLAUDE_DIR / "settings.json"
 
 
+def _legacy_llm_router_paths() -> list[Path]:
+    """RED2-4-01: pre-rebrand 'llm-router' artifacts that shipped before the
+    Chuzom rename. The orphaned rules file contradicts the current advise-mode
+    chuzom.md (it declares routing a HARD CONSTRAINT / forbids using your own
+    tools), so it must be removed on install (migration) and uninstall. Never
+    referenced by the current codebase; safe to delete."""
+    paths = [_RULES_DST / "llm-router.md"]
+    hooks_dir = _HOOKS_DST
+    if hooks_dir.exists():
+        paths.extend(sorted(hooks_dir.glob("llm-router-*.py")))
+    return paths
+
+
+def _migrate_remove_legacy_llm_router() -> list[str]:
+    """Remove the conflicting pre-rebrand llm-router.md/hooks on install/upgrade."""
+    actions: list[str] = []
+    for p in _legacy_llm_router_paths():
+        if p.exists():
+            try:
+                p.unlink()
+                actions.append(f"Removed conflicting legacy artifact {p}")
+            except OSError:
+                pass
+    return actions
+
+
 def _claw_code_dir() -> Path | None:
     """Return the claw-code config directory, or None if not detected.
 
@@ -716,6 +742,12 @@ def install(force: bool = False) -> list[str]:
     else:
         actions.append(f"SKIP rules: source not found at {rules_src}")
 
+    # RED2-4-01: heal the pre-rebrand conflict on every install/upgrade — remove
+    # the orphaned llm-router.md (which declares routing a HARD CONSTRAINT and
+    # contradicts the advise-mode chuzom.md just written above) and its dormant
+    # llm-router-*.py hooks.
+    actions.extend(_migrate_remove_legacy_llm_router())
+
     # ── Install statusLine command ──────────────────────────────────────
     statusline_src = _HOOKS_SRC / "statusline-command.sh"
     statusline_dst = _HOOKS_DST / "chuzom-statusline.sh"
@@ -813,6 +845,21 @@ def uninstall() -> list[str]:
     if rules_dst.exists():
         rules_dst.unlink()
         actions.append(f"Removed {rules_dst}")
+
+    # RED2-4-01: also remove PRE-REBRAND "llm-router" artifacts that earlier
+    # versions installed under the old identity. They are never referenced by the
+    # current codebase, so uninstall previously left them behind forever — and the
+    # orphaned llm-router.md rules file actively contradicts the current advise-mode
+    # chuzom.md (it declares routing a HARD CONSTRAINT), silently overriding intent
+    # in every session. Clean them up on uninstall, and on install (see
+    # _migrate_remove_legacy_llm_router below) so an upgrade heals the conflict.
+    for _legacy in _legacy_llm_router_paths():
+        if _legacy.exists():
+            try:
+                _legacy.unlink()
+                actions.append(f"Removed legacy pre-rebrand artifact {_legacy}")
+            except OSError:
+                pass
 
     # Remove from Claude Desktop
     actions.extend(_uninstall_claude_desktop())

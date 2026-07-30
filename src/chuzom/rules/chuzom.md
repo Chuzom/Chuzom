@@ -1,4 +1,4 @@
-<!-- chuzom-rules-version: 6 -->
+<!-- chuzom-rules-version: 7 -->
 # Chuzom — Global Routing Rules (advise mode: route everywhere, never block)
 
 > Installed by chuzom. These rules help you route each task to the cheapest capable
