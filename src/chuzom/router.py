@@ -3349,6 +3349,33 @@ async def route_and_call(
             # symmetrically per attempt (was: two hardcoded
             # reserve_tokens("anthropic", 500) here, asymmetrically released).
 
+        # RED1-3-01/02/03 + RED1-2-02: single idempotent reservation release.
+        # route_and_call has no top-level try/finally and its many early exits
+        # (empty-chain ValueError, semantic-cache-hit return, reserve_envelope
+        # failure, and the TQ-007 cap raises) each ran BEFORE _dispatch_model_loop
+        # — the only place that released the reservation — so _pending_spend (and,
+        # once reserved, the distributed envelope) leaked, biasing every later cap
+        # check. This helper releases both exactly once; the guard flag makes it
+        # safe to call at every early-exit path without double-decrementing.
+        # _env_key is None until reserve_envelope runs, so early exits release only
+        # _pending_spend.
+        _env_key = None
+        _reservation_released = False
+
+        async def _release_reservation_if_held() -> None:
+            nonlocal _reservation_released, _env_key
+            global _pending_spend
+            if _reservation_released:
+                return
+            _reservation_released = True
+            async with _budget_lock():
+                _pending_spend = max(0.0, _pending_spend - _reservation)
+            if _env_key is not None:
+                try:
+                    await release_envelope(_env_key, _reservation)
+                except Exception:  # noqa: BLE001 — release must never break the exit path
+                    pass
+
         # Structural compaction — shrink prompt before sending to external LLMs
         # Guard: compaction_mode/threshold may be MagicMock in test mocks
         compaction_mode = getattr(config, "compaction_mode", "structural")
@@ -3468,20 +3495,6 @@ async def route_and_call(
                 if provider_from_model(m) in _FREE_LOCAL_PROVIDERS
             ]
 
-            async def _release_cap_reservation() -> None:
-                # Q-RESLEAK (RED1-2-02): a cap-block raise exits route_and_call
-                # BEFORE _dispatch_model_loop (the only place that releases the
-                # reservation), so the estimate added to _pending_spend would leak
-                # forever and bias every future cap check. Release it here on every
-                # raising exit. Guarded so a later dispatch-loop release can't
-                # double-decrement.
-                nonlocal _reservation
-                if _reservation:
-                    async with _budget_lock():
-                        global _pending_spend
-                        _pending_spend -= _reservation
-                    _reservation = 0.0
-
             if _free_chain:
                 route_log.warning(
                     "Daily cap exceeded — downgrading to free-local providers "
@@ -3514,7 +3527,7 @@ async def route_and_call(
                     # hard, OR smart/soft with no Claude to fall through to →
                     # block. Any remaining candidate is a metered paid provider
                     # the cap forbids.
-                    await _release_cap_reservation()
+                    await _release_reservation_if_held()
                     raise _daily_cap_exc
 
         if not models_to_try:
@@ -3527,6 +3540,7 @@ async def route_and_call(
             # _blocked_providers) and the chain came out empty, surface the block
             # as a likely cause — otherwise the generic "install Ollama / set a key"
             # message is misleading (the fix may just be to unblock a provider).
+            await _release_reservation_if_held()  # RED1-3-01: don't leak on empty-chain
             _blocked = _blocked_providers()
             if _blocked:
                 raise ValueError(
@@ -3575,6 +3589,7 @@ async def route_and_call(
                     )
                     # AC-6/INV-ROUTE-005: semantic-cache hit is a bypassed terminal state.
                     _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
+                    await _release_reservation_if_held()  # RED1-3-02: cache-hit fast path
                     return cached
             except Exception as _sc_err:
                 log.debug("Semantic cache check failed (continuing): %s", _sc_err)
@@ -3740,6 +3755,11 @@ async def route_and_call(
                 )
             except Exception as _audit_err:
                 log.warning("audit_envelope_write_failed", error=str(_audit_err))
+            # RED1-3-03: the envelope was NOT reserved (not _env_ok), so release
+            # only the in-process _pending_spend reservation — null _env_key first
+            # so the helper does not try to release an envelope that never held.
+            _env_key = None
+            await _release_reservation_if_held()
             raise BudgetExceededError(
                 "Routed turn refused: budget envelope exhausted for this "
                 "identity's org/user rollup (CHUZOM_ENVELOPE_MODE=strict)."
