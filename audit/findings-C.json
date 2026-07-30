@@ -1,0 +1,121 @@
+[
+  {
+    "id": "CHZ-AUD-C-01",
+    "title": "session_store.record_event() loses writes under real concurrent multi-process access (inode-orphaning race in _maybe_compact())",
+    "severity": "HIGH",
+    "confidence": "HIGH (execution-confirmed, freshly re-run this segment)",
+    "component": "src/chuzom/session_store.py",
+    "claim_affected": "Session/interaction history recorded via record_event() is durable and complete for a given session_id.",
+    "evidence": [
+      "test_session_store_concurrency.py: 6 real OS processes x 200 unique-content writes each = 1200 total writes to the same session_id, production compaction thresholds left at default (_MAX_RECORDS=300, _COMPACT_TO=150) so multiple organic compaction cycles occur mid-run.",
+      "Fresh run this segment, hermetic HOME=/var/folders/.../chuzom-audit-c-home-n4k25glc: 22/1200 (1.83%) writes lost -- e.g. proc 1 lost 5/200 at seqs [113,142,168,169,197], proc 2 lost 5/200 at seqs [51,78,105,154,155].",
+      "final_line_count=253 corrupt_lines=0 -- every surviving line is well-formed JSON, ruling out torn/interleaved writes as the mechanism.",
+      "record_event() calls _maybe_compact() inline after every append; compaction rewrites to a tempfile and os.replace()s it over the session path, with no explicit lock (file lock, asyncio.Lock, or OS advisory lock) coordinating concurrent writers against that replace.",
+      "Losses are silent: record_event() raised no exception to any of the 22 lost calls; loss was only detected by the test harness's independent post-write readback of the file."
+    ],
+    "reproduction": [
+      "cd /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/audit-C",
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python test_session_store_concurrency.py",
+      "Observe per-process LOST counts and final RESULT: FAIL when total_lost_via_readback > 0."
+    ],
+    "expected": "All 1200 record_event() calls across 6 concurrent processes are present in the final session file, or a call that will not persist raises an exception to its caller.",
+    "actual": "22/1200 calls (1.83%) returned normally (no exception) but are absent from the final file; 0 corrupt lines, consistent with an inode-orphaning race between a writer's open file handle and a concurrent os.replace() during compaction.",
+    "impact": "Any deployment where multiple processes/agents can append to the same session_id concurrently (e.g. multiple MCP server workers, multi-agent fan-out sharing a session) will silently lose a small but consistent fraction of recorded events, with no error surfaced to callers and no way to detect the loss after the fact short of independent auditing.",
+    "root_cause": "record_event() appends without holding any lock around the read-modify-compact-replace cycle in _maybe_compact(); a writer that has an open handle/fd against the pre-compaction file (or that resolves the path just before a concurrent os.replace() swaps the inode) can have its write land on an orphaned inode that is no longer reachable via the session's canonical path.",
+    "recommended_fix": "Serialize record_event()/_maybe_compact() per session_id with an OS-level advisory lock (e.g. fcntl.flock on a sidecar lock file) or a single-writer queue/actor per session_id; alternatively, switch the session store to an append-only, lock-free-safe backend (e.g. SQLite WAL, as already used successfully by budget_backend.py) instead of tempfile+os.replace() JSONL compaction under concurrent writers.",
+    "regression_test": "Extend test_session_store_concurrency.py (or port it into the project's pytest suite) to run as a marked slow/integration test: N processes x M unique writes to one session_id, assert total_lost_via_readback == 0 and corrupt_lines == 0 after the run, with production _MAX_RECORDS/_COMPACT_TO thresholds so compaction fires organically during the test."
+  },
+  {
+    "id": "CHZ-AUD-C-02",
+    "title": "model_override is silently overridden by the process-global quality-feedback circuit breaker once a model's rolling quality average degrades",
+    "severity": "HIGH",
+    "confidence": "HIGH (source-confirmed root cause + execution-confirmed at soak scale + exact quantitative cross-validation)",
+    "component": "src/chuzom/router.py (_build_and_filter_chain, per-model dispatch loop), src/chuzom/quality_feedback.py",
+    "claim_affected": "Passing model_override to route_and_call() guarantees that exact model is used ('If set, use only this model' per _build_and_filter_chain's own docstring).",
+    "evidence": [
+      "soak_driver.py: 5418 sequential route_and_call() calls with model_override='openai/gpt-4o-mini' against a monkeypatched _call_text. First 3 iterations dispatch to openai/gpt-4o-mini as requested; starting at iteration 4, 5415/5418 (99.94%) instead log 'Skipping low-quality model for generate/moderate: openai/gpt-4o-mini' -> 'Primary balanced chain exhausted, attempting BUDGET emergency fallback' -> fallback_model=ollama/qwen2.5-coder:7b, with no exception raised.",
+      "src/chuzom/router.py _build_and_filter_chain(), docstring line 342: 'model_override: If set, use only this model (with subscription validation).' Implementation, line 387: 'return [model_override]' -- a single-element candidate chain.",
+      "src/chuzom/router.py lines 1993-2003 (per-model dispatch loop): unconditional call to quality_feedback.should_skip_model(model, task_type.value, c.value); if True, logs 'model_quality_skip' and `continue`s -- applied identically whether models_to_try came from a dynamic multi-model chain or a single-element model_override chain; no bypass/exemption exists for the override case.",
+      "src/chuzom/quality_feedback.py: _quality_store is a process-global, in-memory dict keyed by (model, task_type, complexity) with no session/caller scoping (line ~81); _MIN_CALLS_FOR_SIGNAL=3 (line ~84) and QUALITY_THRESHOLD=0.4 (line ~87) exactly match the soak observation (skip begins at the 4th call); should_skip_model() returns True once call_count>=3 and avg_quality<0.4.",
+      "Hand-verified score_response() rubric against the soak's exact fake content for task_type='generate': 0.1 (non-empty) + 0.2 (no refusal phrases) with no length/structure/punctuation bonus = 0.3 exactly, matching the soak log's observed avg=0.3 and confirming the mechanism is deterministic and fully characterized, not merely correlated."
+    ],
+    "reproduction": [
+      "cd /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/audit-C",
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python soak_driver.py  # SOAK_SECONDS=210 by default",
+      "grep -c model_quality_skip soak_full_run.log  # 5415",
+      "grep -c emergency_fallback_success soak_full_run.log  # 5415, all fallback_model=ollama/qwen2.5-coder:7b",
+      "Cross-check source: grep -n 'return \\[model_override\\]' src/chuzom/router.py; sed -n '1985,2005p' src/chuzom/router.py; sed -n '1,100p' src/chuzom/quality_feedback.py"
+    ],
+    "expected": "route_and_call(..., model_override='openai/gpt-4o-mini') dispatches to openai/gpt-4o-mini for every call, or raises/signals clearly to the caller if it cannot (e.g. subscription-mode block, which router.py DOES already handle explicitly with a logged warning and explicit fallback-chain substitution).",
+    "actual": "After 3 calls to a given (model, task_type, complexity) triple score an average quality below 0.4, every subsequent call using model_override for that exact triple is silently redirected to a different model/provider (observed: ollama/qwen2.5-coder:7b) for the remaining lifetime of the process, with resp.model/resp.provider reflecting the substitute and no caller-visible error, warning, or flag.",
+    "impact": "Breaks the documented 'use only this model' contract for model_override. Any caller relying on explicit model selection for reproducibility, cost control, provider-compliance routing, or A/B/benchmark comparison gets silently wrong results. Because _quality_store is process-global and unscoped by caller/session/agent, one caller's poor-quality traffic for a given (model, task_type, complexity) can silently redirect ALL other callers in the same long-lived process (e.g. a shared MCP server) who explicitly request that exact model for that same task_type/complexity -- a cross-caller isolation violation, not just a single-session quirk.",
+    "root_cause": "The per-model quality-feedback skip check in the router's dispatch loop is applied unconditionally to every candidate in models_to_try, including the single-element list produced when model_override is set, with no code path exempting an explicit override from the quality gate.",
+    "recommended_fix": "Add an explicit bypass: when the current model came from model_override (not a dynamically-built fallback chain), skip the should_skip_model() gate entirely, OR raise a clear, typed exception (e.g. ModelQualityDegradedError) to the caller instead of silently substituting, so the caller can decide whether to accept the fallback. Additionally, scope _quality_store per-session/per-caller (or at minimum expose an opt-out flag on route_and_call, e.g. respect_override_strictly=True) to eliminate the cross-caller poisoning vector.",
+    "regression_test": "Unit test: seed quality_feedback._quality_store with 3+ low-quality (<0.4) records for (model='x', task_type='generate', complexity='moderate'); call route_and_call(..., model_override='x', ...) and assert resp.model == 'x' (not silently substituted), or assert a typed exception/flag is raised instead of a silent substitution."
+  },
+  {
+    "id": "CHZ-AUD-C-03",
+    "title": "Router's output-length gate rejects short responses and silently double-dispatches via 'BUDGET emergency fallback' with no caller-visible signal",
+    "severity": "MEDIUM",
+    "confidence": "MEDIUM (source-class-confirmed; directly observed only in test-harness iteration, not independently reproduced against production traffic this segment)",
+    "component": "src/chuzom/router.py (post-dispatch response-length gate, shared 'BUDGET emergency fallback' path also used by CHZ-AUD-C-02)",
+    "claim_affected": "A single route_and_call() invocation results in at most one underlying model dispatch per attempted model in its chain, and any response substitution is either an explicit error or clearly attributable in the response.",
+    "evidence": [
+      "soak_driver.py docstring (lines 12-17), itself written from a direct empirical observation while developing the soak harness: the first run of soak_smoke.py, before its fake response content was lengthened to pass the router's minimum output-length check, produced 10 _call_text invocations for 5 iterations (a 2x ratio) -- i.e. a response shorter than the length floor is rejected post-dispatch and triggers a second, silent dispatch via the same 'BUDGET emergency fallback' path used by CHZ-AUD-C-02, without raising to the caller.",
+      "soak_smoke.py's fake_call_text was subsequently fixed to return a >=20-char content string specifically to avoid this gate, and the corrected version produces exactly 1 invocation per iteration (confirmed both in soak_smoke.py's 5-iteration run and soak_driver.py's 5418-iteration full soak: fake_call_text_invocations=5418 == N exactly)."
+    ],
+    "reproduction": [
+      "Not independently re-executed against a fresh short-content fake this segment (the finding is preserved from the harness-development record rather than freshly re-run). To reproduce: revert soak_smoke.py's fake_call_text content to a string under the router's length floor and re-run; compare _call_count to iteration count."
+    ],
+    "expected": "A single route_and_call() invocation results in exactly one dispatch per model actually needed, and any automatic quality-driven re-dispatch is either surfaced to the caller or at minimum distinguishable via response metadata.",
+    "actual": "A response shorter than the router's minimum output-length floor triggers a second, silent dispatch through the same emergency-fallback mechanism used by the quality-feedback skip (CHZ-AUD-C-02), invisible to the caller beyond the final substituted response.",
+    "impact": "Same class of caller-invisible substitution as CHZ-AUD-C-02, triggered by a different gate (raw response length rather than rolling quality average); also means short-but-correct responses (e.g. 'OK', a valid single-word answer) can trigger an unnecessary second, slower/costlier dispatch -- a concern independently flagged in the router's own source comments near the escalation logic ('escalating a short-but-correct answer... into a slow reasoning model').",
+    "root_cause": "The output-length gate and the quality-feedback skip both funnel into the same undifferentiated 'BUDGET emergency fallback' path with no caller-visible distinction between 'the requested model failed/was unavailable' and 'the requested model succeeded but was judged too short/low-quality after the fact.'",
+    "recommended_fix": "Surface which gate triggered a fallback (length vs. quality vs. availability) in response metadata or structured logs at a level the caller can act on; consider allow-listing legitimately short valid responses (e.g. yes/no, single-token) via a task-type-aware minimum-length threshold rather than a fixed floor.",
+    "regression_test": "Unit test: monkeypatch _call_text to return a response just under the length floor for a task_type where short answers are valid (e.g. a yes/no classification task); assert the router either accepts it without a second dispatch, or clearly flags the substitution to the caller."
+  },
+  {
+    "id": "CHZ-AUD-C-04",
+    "title": "chuzom verify's hook health check covers only 3 of the 13 hooks actually installed by install_hooks.py",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed, fresh read this segment)",
+    "component": "src/chuzom/commands/verify.py (check_hooks), src/chuzom/install_hooks.py",
+    "claim_affected": "`chuzom verify` accurately reports the health of the installed hook set (especially meaningful now that CHZ-PKG-005's exit-code propagation fix makes verify's pass/fail result load-bearing for CI/install gates).",
+    "evidence": [
+      "src/chuzom/commands/verify.py lines 158-183: check_hooks() hardcodes hook_names = ['chuzom-auto-route.py', 'chuzom-session-end.py', 'chuzom-enforce-route.py'] -- exactly 3 entries.",
+      "src/chuzom/install_hooks.py, hook manifest tuples around lines 309-350: install at least 13 distinct hooks, including chuzom-session-start.py, chuzom-status-bar.py (and/or chuzom-status-bar-clawcode.py), chuzom-agent-route.py, chuzom-subagent-start.py, chuzom-usage-refresh.py, chuzom-cc-usage-track.py, chuzom-agent-depth-release.py, chuzom-playwright-compress.py, chuzom-bash-compress.py, chuzom-context-capture.py, in addition to the 3 that verify.py does check.",
+      "10 of the 13 installed hooks (session-start, status-bar, agent-route, subagent-start, usage-refresh, cc-usage-track, agent-depth-release, playwright-compress, bash-compress, context-capture) are never checked by check_hooks() at all -- a missing, corrupted, or non-executable copy of any of these 10 is invisible to `chuzom verify`, silent or not."
+    ],
+    "reproduction": [
+      "grep -n 'hook_names' /Users/yaliandrona/Projects/Chuzom/src/chuzom/commands/verify.py",
+      "grep -n 'chuzom-.*\\.py' /Users/yaliandrona/Projects/Chuzom/src/chuzom/install_hooks.py | sort -u"
+    ],
+    "expected": "chuzom verify's hook check enumerates (or otherwise validates coverage against) the same set of hooks that install_hooks.py actually installs.",
+    "actual": "check_hooks() checks a fixed list of 3 hook filenames, a strict subset of the 13 the installer deploys; 10 installed hooks have no corresponding health check.",
+    "impact": "Now that CHZ-PKG-005 (verify's exit-code discard) is fixed and `chuzom verify`'s exit code is meaningfully used by CI/install gates, a correct exit code is only as trustworthy as the completeness of the checks behind it -- a broken/missing install of ~77% of the actually-installed hooks (10/13) would still report a clean/passing verify result.",
+    "root_cause": "check_hooks()'s hook_names list was hardcoded at some point and not kept in sync with install_hooks.py's manifest as new hooks were added.",
+    "recommended_fix": "Derive check_hooks()'s expected hook list from the same source of truth as install_hooks.py (e.g. a shared constant/manifest) instead of a separately hardcoded literal, so new hooks are automatically covered by verify.",
+    "regression_test": "Add a test asserting set(verify.check_hooks.__globals__['hook_names']) (or the refactored equivalent) is a superset of every hook filename referenced in install_hooks.py's install manifests, failing the build if a new hook is added to the installer without a corresponding verify check."
+  },
+  {
+    "id": "CHZ-AUD-C-05",
+    "title": "IDE workspace-config writers (mcp.json, KIMI.md, .github) resolve paths via Path.cwd(), risking writes into the real Chuzom repo checkout",
+    "severity": "LOW",
+    "confidence": "HIGH (source-confirmed, fresh grep this segment)",
+    "component": "src/chuzom/cli.py",
+    "claim_affected": "chuzom install/setup writes IDE integration files only into the intended target project, not into whatever directory the command happens to be run from.",
+    "evidence": [
+      "grep -n 'Path.cwd()' src/chuzom/cli.py (fresh this segment): line 233 (.vscode/mcp.json), line 245 (.github), line 406 (.windsurf/mcp.json), line 418 (.github), line 463 (.kimi/mcp.json), line 475 (KIMI.md) -- six distinct writers all resolving relative to the process's current working directory rather than an explicit target-path argument."
+    ],
+    "reproduction": [
+      "grep -n 'Path.cwd()' /Users/yaliandrona/Projects/Chuzom/src/chuzom/cli.py",
+      "(Not executed against the real repo to avoid mutating it, per hermeticity constraints -- the risk is demonstrated by direct source inspection, not by reproducing the mutation.)"
+    ],
+    "expected": "IDE workspace-config writers operate against an explicitly specified or safely-detected target project directory, independent of the invoking shell's current working directory.",
+    "actual": "All six writers use Path.cwd() directly; running an install/setup subcommand while cd'd into the actual Chuzom repo checkout (a realistic scenario for a Chuzom contributor, or any user who cd's into a git repo before installing) will read/write .vscode/mcp.json, .windsurf/mcp.json, .kimi/mcp.json, .github/, and KIMI.md inside that real repo/project rather than a sandboxed or explicitly-chosen location.",
+    "impact": "A developer working inside the Chuzom repo itself (or any other git checkout) who runs an install/setup command without first cd'ing elsewhere risks unintended, uncommitted modifications to real project files -- low severity because it requires the operator to be inside a specific directory at invocation time, but the failure mode (silent file writes into version-controlled project files) is the kind of thing that produces confusing diffs and accidental commits.",
+    "root_cause": "Path.cwd() is used directly at each of the 6 call sites instead of threading through an explicit target-directory parameter validated/confirmed against user intent.",
+    "recommended_fix": "Require an explicit --target/--project-dir argument (or interactively confirm the resolved cwd-based path with the user before writing) for all workspace-config-writing subcommands; consider warning/refusing when cwd itself looks like the Chuzom project's own source checkout.",
+    "regression_test": "Test that invoking the relevant install/setup subcommand with cwd pointed at a throwaway tmp dir writes files only under that tmp dir, and add an assertion/guard test that cwd resolution is never silently used when a target path is available from configuration or arguments."
+  }
+]

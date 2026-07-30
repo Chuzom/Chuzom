@@ -1,0 +1,39 @@
+{
+  "audited_commit": "f5bf55c2a6e532229979ed90d376557f33698f57",
+  "current_head": "f5bf55c2a6e532229979ed90d376557f33698f57",
+  "drift": false,
+  "total_findings": 26,
+  "release_target_count": 20,
+  "release_target": [
+    "CHZ-AUD-D-01",
+    "CHZ-AUD-D-02",
+    "CHZ-AUD-D-04",
+    "CHZ-AUD-B-02",
+    "CHZ-AUD-B-03",
+    "CHZ-AUD-B-04",
+    "CHZ-AUD-A-03",
+    "CHZ-AUD-A-04",
+    "CHZ-AUD-A-05",
+    "CHZ-AUD-A-06",
+    "CHZ-AUD-D-05",
+    "CHZ-AUD-A-01",
+    "CHZ-AUD-A-02",
+    "CHZ-AUD-B-05",
+    "CHZ-AUD-C-03",
+    "CHZ-AUD-B-01",
+    "CHZ-AUD-B-07",
+    "CHZ-AUD-C-01",
+    "CHZ-AUD-C-02",
+    "CHZ-AUD-C-04"
+  ],
+  "release_target_all_present": true,
+  "missing_from_findings": [],
+  "severity_counts": {
+    "CRITICAL": 2,
+    "HIGH": 7,
+    "MEDIUM-HIGH": 1,
+    "MEDIUM": 10,
+    "LOW": 4,
+    "INFO": 2
+  }
+}

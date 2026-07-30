@@ -1,0 +1,185 @@
+[
+  {
+    "id": "CHZ-AUD-B-01",
+    "title": "Durable keyword-relevance context fallback is structurally dead code — caller_context is never wired to the live prompt by any real caller",
+    "severity": "Medium",
+    "confidence": "Confirmed",
+    "component": "chuzom/session_store.py:build_session_context() (query_words path), chuzom/context.py:build_context_messages() (caller_context param), chuzom/router.py (route_and_call/route_and_stream caller_context passthrough)",
+    "claim_affected": "Chuzom preserves conversational context across turns within a session, including facts from earlier in the conversation",
+    "evidence": [
+      "session_store.py:463-518 build_session_context(): keeps the 3 newest durable events unconditionally, plus any OLDER event only if task_type matches OR `query_words & _keywords(rec['content'])` is non-empty; query_words is built from the `query` kwarg only, and is an empty set whenever query is None/empty (line 493: `query_words = _keywords(query) if query else set()`).",
+      "context.py:495-500: build_context_messages() calls `session_store.build_session_context(resolved_sid, ..., query=caller_context, ...)` — the ONLY place `query` is ever populated, and it is populated exclusively from the `caller_context` parameter, never from the live user prompt/task text.",
+      "grep across the entire src/chuzom package: `caller_context` is referenced ONLY inside context.py and router.py. No MCP tool-definition, CLI entry point, or server-facing call site (llm_query/llm_analyze/llm_code/llm_research/llm_act/etc.) ever supplies a value for it — router.py's `route_and_call(..., caller_context: str | None = None, ...)` signature defaults it to None for every real invocation.",
+      "Live execution proof (audit/scripts/phase7_cross_provider.py + phase7b_buffer_eviction_and_restart.py): turn 1 states a secret (\"The secret code is ORANGE-742\") via ollama; 4 unrelated filler turns follow (fresh process, fresh SessionBuffer, same session_id/project via durable store only); a final turn that shares the keyword \"code\" with the original message and asks \"what was that secret code again?\" does NOT surface ORANGE-742 in the outgoing payload (`orange_742_present_in_final_payload: false` in the phase7b JSON output) despite the durable JSONL still containing the original record and the query literally sharing the keyword \"code\" — because build_context_messages() never passed the live prompt text as `query`, so `query_words` was always empty and the keyword-overlap branch could never activate."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7_cross_provider.py  # writes 3 turns (incl. 'ORANGE-742') to a fresh hermetic HOME, prints tmp_home path",
+      ".venv/bin/python audit/scripts/phase7b_buffer_eviction_and_restart.py <tmp_home_from_previous_step>  # fresh process, 4 filler turns, then a final turn asking about the secret using the shared keyword 'code'",
+      "Inspect the printed `orange_742_present_in_final_payload` field — it is false."
+    ],
+    "expected": "The durable session_store's keyword-relevance fallback should resurface an older, contextually relevant record (sharing a keyword with the current query) once it has aged out of the '3 most recent' unconditional window, per the documented design in build_session_context()'s own docstring.",
+    "actual": "The fallback never activates in any real invocation because the `query` parameter it depends on is only ever populated from `caller_context`, which no real caller (MCP tool surface, CLI, router internals) ever sets to the live prompt text.",
+    "impact": "Silent fact-loss in any conversation longer than ~3-4 exchanges once a fact ages out of the unconditional recency window, even when the current question shares an exact keyword with the earlier fact and the underlying data is still present on disk. This is a functional/quality gap, not a security leak — no data crosses an isolation boundary, it is simply not retrieved for the user who owns it.",
+    "root_cause": "build_context_messages()'s `caller_context` parameter was designed as an explicit MCP-caller-supplied string, but router.py's `route_and_call()`/`route_and_stream()` never default it to the actual task prompt before invoking build_context_messages() at any of their internal call sites (router.py:1594-1595, 4173-4174, 4486). The keyword-relevance code path in session_store.py is fully implemented and correct in isolation, but structurally unreachable in every live code path.",
+    "recommended_fix": "At the router.py call sites of build_context_messages() (router.py ~1594, ~4173), pass `caller_context=caller_context or prompt` (or, more precisely, always pass the live task prompt as an additional/explicit `query=` value threaded through to build_session_context(), decoupled from the caller_context concept) so the keyword-relevance fallback can actually engage using the current turn's text.",
+    "regression_test": "Automated version of the phase7 + phase7b reproduction above, asserting `orange_742_present_in_final_payload == True` after the fix, run in a hermetic HOME with mocked providers."
+  },
+  {
+    "id": "CHZ-AUD-B-02",
+    "title": "Durable session_store persists full, verbatim, plaintext prompt/response content indefinitely on local disk",
+    "severity": "High",
+    "confidence": "Confirmed",
+    "component": "chuzom/session_store.py:record_event(), _session_path(), build_session_context()",
+    "claim_affected": "Implicit claim of the 'Session Context Accumulator' design (context.py comments) that persisted context is a lightweight aid, not a full transcript archive; also bears on any data-retention/privacy posture the project states",
+    "evidence": [
+      "router.py primary success path (lines ~2459-2476, established pre-compaction and re-read this session) calls `_session_store.record_event(..., kind='user_prompt', content=prompt, ...)` and again with `kind='routed_qa', content=response.content, ...)` for every successful primary-chain call, storing the FULL prompt and FULL response text (after only the narrow _scrub_secrets() pass — see CHZ-AUD-B-03) as JSONL records under `~/.chuzom/projects/<project_id>/session_context_<session_id>.jsonl`.",
+      "Live execution (phase7_cross_provider.py): after running, the on-disk JSONL under the hermetic tmp HOME contains the literal string \"ORANGE-742\" (the test's synthetic secret) verbatim, unredacted, in plaintext — confirmed by direct inspection of the written file.",
+      "session_store.py has no TTL/expiry logic visible in the reviewed code — _compact_if_needed() (lines ~370-407) only caps file size by keeping the newest _COMPACT_TO records when the file grows past a threshold; it does not delete or age out old records on any wall-clock basis. Content persists until the file is compacted away by sheer volume or the project/session directory is manually removed."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7_cross_provider.py",
+      "cat <tmp_home_printed>/.chuzom/projects/audit-b-phase7-project/session_context_audit-b-p7-session-1.jsonl | grep ORANGE-742  # matches, proving verbatim on-disk plaintext persistence"
+    ],
+    "expected": "Persisted cross-session context should either be summarized/abstracted rather than verbatim, or should have effective redaction of sensitive content, or both, given it lives indefinitely in plaintext on local disk and is later re-injected into prompts sent to third-party model providers.",
+    "actual": "Full verbatim prompt and response text is written to disk in plaintext, retained indefinitely (no TTL), and is later read back and injected into outbound payloads to whichever provider handles a future turn — including external paid providers, subject only to the `local`/`off` privacy-mode gate in build_session_context() (which most users leave at the default `all`).",
+    "impact": "Any sensitive information a user pastes into any routed prompt (credentials that don't match the narrow regex set, PII, proprietary code, business secrets) is durably stored in plaintext under the user's home directory and will be replayed to future LLM providers (potentially different/external ones) in later turns, for as long as the JSONL file exists.",
+    "root_cause": "Design choice — session_store.py's Session Context Accumulator was built to store raw event content (kind: user_prompt / routed_qa / tool_call / assistant) rather than summaries, with redaction as the sole content-safety control (see CHZ-AUD-B-03 for why that control's coverage is narrow).",
+    "recommended_fix": "Either (a) add a documented, user-configurable TTL/retention policy with default expiry for durable session_context records, (b) broaden redaction coverage (see CHZ-AUD-B-03) and/or add an explicit opt-in before verbatim content is persisted, or (c) clearly document in user-facing docs that this store is a full local transcript archive with no default expiry, so users can make an informed retention/privacy decision.",
+    "regression_test": "Write a session record containing a known synthetic secret string that is NOT of a recognized credential shape (e.g. a business-context phrase), assert it IS found byte-for-byte in the on-disk JSONL today (documenting current behavior), then re-run after any fix and assert the new expected behavior (redacted/expired/absent) instead."
+  },
+  {
+    "id": "CHZ-AUD-B-03",
+    "title": "Secret-scrubbing regexes only match key=value/key: value assignment syntax — prose-phrased secrets bypass redaction entirely",
+    "severity": "Medium",
+    "confidence": "Confirmed",
+    "component": "chuzom/secret_scrubber.py:SECRET_PATTERNS/scrub_text(), chuzom/session_store.py:_SECRET_PATTERNS/_scrub_secrets()",
+    "claim_affected": "session_store.py's own docstring/comment: 'Credential patterns scrubbed from event content before it is persisted' (line 70-73)",
+    "evidence": [
+      "secret_scrubber.py:13-38 SECRET_PATTERNS: vendor-prefix patterns (sk-ant-, sk-/sk-proj-, AIza..., AKIA..., gh[pousr]_...) match regardless of surrounding syntax, but the generic categories ('api_key', 'token', 'password', 'secret') are ALL anchored on an explicit `[:=]` separator, e.g. `secret[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s:;,]+[\"']?` (line 32) and `password[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s:;,]+[\"']?` (line 31) — both REQUIRE a literal ':' or '=' between the keyword and the value.",
+      "session_store.py:74-83 _SECRET_PATTERNS (the local fallback layer) is similarly syntax-anchored: `_(?:API_)?KEY\\s*[=:]\\s*\\S+`, `Bearer\\s+...`, vendor prefixes, and a PEM block matcher — none of it matches natural-language phrasing.",
+      "Live execution (phase8_leakage_and_failopen.py): the prompt \"Project ALPHA secret is PURPLE-999. Remember it.\" — phrased as prose (\"secret is X\", not \"secret: X\" or \"secret=X\") — was persisted and re-surfaced completely unredacted; \"PURPLE-999\" appears verbatim in a later payload with no [REDACTED] substitution anywhere."
+    ],
+    "reproduction": [
+      ".venv/bin/python audit/scripts/phase8_leakage_and_failopen.py  # 'PURPLE-999' appears unredacted in cross_project_same_session_id.project_beta_payload"
+    ],
+    "expected": "A credential/secret-scrubbing pass intended to protect sensitive values before durable persistence should catch commonly-phrased secret disclosures, not only rigid key=value assignment syntax.",
+    "actual": "Only key=value/key: value-style assignments and known vendor token prefixes are redacted; any secret stated in prose (\"the secret is X\", \"my password is X\", \"remember this code: <newline> X\") passes through unmodified into the durable, indefinitely-retained plaintext store (see CHZ-AUD-B-02) and can be replayed to external providers in later turns.",
+    "root_cause": "All four generic SECRET_PATTERNS categories in secret_scrubber.py, and all of session_store.py's local _SECRET_PATTERNS, are built around a `[:=]` separator requirement; none use an NLP/heuristic value-adjacent-to-keyword approach that would catch prose phrasing.",
+    "recommended_fix": "Either broaden the generic patterns to also match common prose connectors (\"is\", \"was\", \"=\") between a sensitive keyword and a plausible token-shaped value, or — more robustly — treat the scrubber as necessarily incomplete and prioritize CHZ-AUD-B-02's retention/consent recommendations instead of relying on scrubbing as the primary safeguard.",
+    "regression_test": "Unit test feeding `_scrub_secrets(\"the api key is abc123def456ghi789\")` (prose form) and asserting it currently is NOT redacted (documents the gap); after a fix, assert it IS redacted."
+  },
+  {
+    "id": "CHZ-AUD-B-04",
+    "title": "In-process SessionBuffer singleton is not scoped by project — cross-project content leak within a single process/session lifetime",
+    "severity": "Critical",
+    "confidence": "Confirmed",
+    "component": "chuzom/context.py:SessionBuffer, get_session_buffer() (module-level singleton, lines 96-169), build_context_messages() layer 2 (lines 472-476)",
+    "claim_affected": "Cross-project isolation of conversational context (an implicit but load-bearing security property for any multi-project/multi-tenant use of a single chuzom process, e.g. one long-running MCP server instance serving multiple repos/projects)",
+    "evidence": [
+      "context.py:161-169: `_session_buffer: SessionBuffer | None = None` is a SINGLE module-level global; `get_session_buffer()` lazily constructs it ONCE per process and returns the same instance on every call, with no parameterization by `CHUZOM_PROJECT_ID`, `session_id`, or any other scope key anywhere in its construction or lookup.",
+      "SessionBuffer.record()/format_for_injection() (context.py ~104-160) operate purely on an internal `deque(maxlen=max_messages)` shared process-wide — confirmed by direct read of the class body: no project_id or session_id field is stored per-message or checked on read.",
+      "Live execution proof (phase8_leakage_and_failopen.py, Test A): within ONE process, `CHUZOM_PROJECT_ID=project-alpha` is used to send \"Project ALPHA secret is PURPLE-999. Remember it.\"; `CHUZOM_PROJECT_ID` is then changed to `project-beta` (same process, same CLAUDE_SESSION_ID) and a follow-up prompt is sent. Result: `cross_project_same_session_id.project_alpha_secret_leaked_into_project_beta_payload: true` — \"PURPLE-999\" appears verbatim inside the `[Recent conversation context]` block (the SessionBuffer's injection marker, per context.py's `format_for_injection()`) of project-beta's outgoing payload to the LLM provider.",
+      "The SAME test run confirms the DURABLE layer remains correctly isolated: `project_alpha_dir_exists: true` and `project_beta_dir_exists: true`, each with its OWN separate on-disk JSONL file under its own `projects/<id>/` directory, and the leak is demonstrably NOT present in the durable per-project files themselves — it occurs exclusively via the in-process SessionBuffer's shared, unscoped deque."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase8_leakage_and_failopen.py",
+      "Inspect the printed JSON: `cross_project_same_session_id.project_alpha_secret_leaked_into_project_beta_payload` is `true`, and `project_beta_payload` contains a message whose content includes `[Recent conversation context]` followed by the literal text \"PURPLE-999\"."
+    ],
+    "expected": "Content scoped to one project (as identified by `CHUZOM_PROJECT_ID`, the same identifier the durable session_store layer uses for isolation) must never appear in the outbound payload for a different project, matching the isolation guarantee the durable layer already provides.",
+    "actual": "The in-process SessionBuffer is a single unscoped global; any change of `CHUZOM_PROJECT_ID` (or, more realistically, any single long-running chuzom process — e.g. an MCP server — that serves multiple projects/repos over its lifetime, or multiple concurrent Claude Code sessions across different repositories sharing one router process) will have its recent conversational content, including secrets/PII stated in one project's turns, injected verbatim into prompts sent to a provider on behalf of a completely different project.",
+    "impact": "Direct cross-project data leak of conversational content (not just metadata) to external LLM providers, with no configuration or code path currently available to prevent it short of process isolation per project. This is the most severe finding of the Phase 7-9 investigation because it is live/reachable code (unlike the dead streaming-path bugs, CHZ-AUD-B-07/08) and directly contradicts the durable layer's demonstrated project-scoping design intent.",
+    "root_cause": "SessionBuffer/get_session_buffer() was implemented as a simple process-wide singleton (likely under the assumption that one chuzom process == one project/session), with no scoping key threaded through from CHUZOM_PROJECT_ID or session_id, unlike session_store.py's `_project_dir()`/`_session_path()` which correctly incorporate `_project_id()` into the file path.",
+    "recommended_fix": "Key `_session_buffer` by `(project_id, session_id)` (e.g. a dict of SessionBuffer instances keyed on `session_store._project_id() + ':' + session_store.resolve_session_id()`, mirroring the durable layer's existing, already-correct scoping logic) instead of a single global instance; evict/cap the number of concurrently-tracked (project, session) buffers to bound memory.",
+    "regression_test": "Automated version of the phase8 Test A reproduction above, asserting `project_alpha_secret_leaked_into_project_beta_payload == False` after the fix, run in a hermetic HOME with mocked providers, within a single process."
+  },
+  {
+    "id": "CHZ-AUD-B-05",
+    "title": "Emergency BUDGET fallback success path skips session_spend, routing_quality ledger, SessionBuffer, and durable session_store recording",
+    "severity": "High",
+    "confidence": "Confirmed",
+    "component": "chuzom/router.py:route_and_call() — primary success path (~2380-2643) vs. emergency BUDGET fallback success path (~2705-2797)",
+    "claim_affected": "That every successful routed call becomes part of subsequent context (both in-process and durable) and is fully accounted for in cost/quality ledgers — an implicit but load-bearing assumption for both the context-preservation claims (Phase 7/8) and the cost-accounting claims (Phase 9's 'is cost/quota double-counted' question)",
+    "evidence": [
+      "Direct read of router.py lines 2380-2799 (this session): the PRIMARY chain's success return (via `_enrich_response(...)` at line 2639, inside the main try block) performs, in order: session_spend recording (2380-2396), routing_quality ledger `record_route(RouteLedgerRecord(...))` (2407-2452, computing `actual_cost_usd` including `failed_attempt_cost_usd`), in-process `buf.record('user', prompt, ...)` / `buf.record('assistant', response.content, ...)` (2454-2457), and durable `_session_store.record_event()` for both `user_prompt` and `routed_qa` kinds (2459-2476, wrapped in try/except that fails open to a debug log).",
+      "The SEPARATE emergency BUDGET fallback block (a structurally distinct `if profile != RoutingProfile.BUDGET ...:` branch starting at line 2705, entered only when the primary chain is exhausted — e.g. every candidate fails the dispatch quality/length gate, or is rate-limited/unhealthy) performs, on success, ONLY: `tracker.record_success(provider)`, `await cost.log_usage(...)`, `_emit_ledger_attempt(...)`, `_emit_ledger_terminal(...)`, a `route_log.info('emergency_fallback_success', ...)` structured-log line, and a notify call — then returns `_enrich_response(...)` directly at line 2793, WITHOUT executing any of the session_spend recording, routing_quality `record_route()` ledger call, `buf.record()` calls, or `_session_store.record_event()` calls that the primary path performs.",
+      "Live execution proof: the FIRST run of phase8_leakage_and_failopen.py used a 3-character fake response ('ack'), which failed the dispatch quality/length gate ('length: too short: 3 < 20 chars') for every call, silently diverting every test call through the emergency BUDGET fallback path. Inspecting the resulting hermetic tmp HOME afterward showed NO project directories were created for project-alpha/project-beta/project-gamma at all under `~/.chuzom/projects/` — proving that the durable session_store recording genuinely did not occur for any of those emergency-fallback-routed calls, exactly as the source-level analysis predicts."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python -c \"import sys; sys.path.insert(0,'src')\" # (illustrative — see script)",
+      "Force every candidate response below the ~20-char dispatch gate threshold (e.g. return content='ack' from a monkeypatched providers.call_llm) while calling router.route_and_call() with model_override set; observe 'Gate verification failed ... trying next model' followed by 'emergency_fallback_success' in logs, then inspect `~/.chuzom/projects/<project_id>/` under the test's hermetic HOME afterward — it will not exist despite `route_and_call()` having returned a normal, successful LLMResponse to the caller."
+    ],
+    "expected": "Any turn that returns a successful response to the caller should be uniformly recorded into session_spend, the routing_quality ledger, the in-process SessionBuffer, and the durable session_store — regardless of which internal code path produced the success — so subsequent turns/sessions have access to it and cost/quality analytics remain complete.",
+    "actual": "Successful turns routed via the emergency BUDGET fallback path are completely invisible to both context-injection layers (SessionBuffer and durable session_store) and to the routing_quality ledger and session_spend tracker, even though `cost.log_usage()` IS still called (so `usage.db`'s basic usage table is populated) and the caller receives an ordinary, successful-looking response with no error or warning.",
+    "impact": "(1) Context-preservation gap: any fact stated in a turn that happens to route via emergency fallback (e.g. because the primary chain's response was rejected by the quality/length gate) silently vanishes from all future context — the user has no way to know this turn 'didn't count' for context purposes. (2) Analytics gap: the routing_quality ledger's cost-double-counting/failed-attempt-cost analysis (which computes `actual_cost_usd` including `failed_attempt_cost_usd` on the primary path) is entirely blind to emergency-fallback successes, understating true cost-of-routing-attempts for that subset of calls, though basic per-call cost in usage.db is still recorded so there is no double-billing, only an analytics blind spot.",
+    "root_cause": "The emergency BUDGET fallback was implemented as a structurally separate code block from the primary chain's success path rather than funneling through a single shared 'on success, record everything' helper — likely because it was added later as a last-resort safety net and the context/ledger recording calls were not backported into it.",
+    "recommended_fix": "Extract the primary path's recording block (session_spend, routing_quality ledger, buf.record(), _session_store.record_event()) into a single shared helper function, and call it from both the primary success return and the emergency BUDGET fallback success return, so no successful code path can silently skip recording.",
+    "regression_test": "Force every primary-chain candidate to fail the dispatch quality gate (short canned response) so the call is routed via emergency fallback, then assert the durable session_store DOES contain a record for that turn's project/session directory after the fix (currently it does not — see reproduction)."
+  },
+  {
+    "id": "CHZ-AUD-B-06",
+    "title": "usage.db project_id resolution is entirely independent from and inconsistent with the durable session_store's project scoping",
+    "severity": "Low",
+    "confidence": "Confirmed",
+    "component": "chuzom/team.py:get_project_id(), chuzom/cost.py:_get_team_identity()/log_usage() (INSERT INTO usage ... project_id), chuzom/session_store.py:_project_id()",
+    "claim_affected": "Consistency of 'project' as a scoping/filtering concept across chuzom's different persisted stores (usage.db supports filtering usage/cost reports by project_id, per cost.py line ~2901-2934)",
+    "evidence": [
+      "cost.py:643-659, 697: `log_usage()` calls `_get_team_identity()` which imports and calls `chuzom.team.get_project_id()` to populate the `usage.project_id` column on every INSERT INTO usage (cost.py line ~718-734).",
+      "team.py:53-71 `get_project_id()`: resolves project identity via (1) `git remote get-url origin`, normalized via regex to `owner/repo` form, or (2) falling back to `os.path.basename(os.getcwd())` if no git remote is found. It does NOT read `$CHUZOM_PROJECT_ID` at all.",
+      "session_store.py's `_project_id()` (the function that scopes the durable Session Context Accumulator, established pre-compaction) resolves via `$CHUZOM_PROJECT_ID` env var (sanitized, truncated to 64 chars) first, falling back to `sha1(cwd)[:16]` only if that env var is unset — a completely different precedence order and a completely different value space (e.g. 'project-alpha' vs. 'Chuzom/Chuzom') from team.get_project_id().",
+      "Observed empirically (pre-compaction, re-confirmed by this source read): `usage.db`'s recorded `project_id` value was `'Chuzom/Chuzom'` (matching this repo's `git remote get-url origin` → owner/repo normalization) regardless of any `$CHUZOM_PROJECT_ID` value set for a given call, while session_store.py's on-disk directory structure DID correctly follow `$CHUZOM_PROJECT_ID`."
+    ],
+    "reproduction": [
+      "grep -n 'def get_project_id' /Users/yaliandrona/Projects/Chuzom/src/chuzom/team.py  # shows git-remote/cwd-basename resolution, no env var read",
+      "grep -n 'def _project_id' /Users/yaliandrona/Projects/Chuzom/src/chuzom/session_store.py  # shows $CHUZOM_PROJECT_ID-first resolution",
+      "Set CHUZOM_PROJECT_ID=some-custom-id, run any routed call, then compare the resulting usage.db row's project_id column (will show the git-remote-derived value, ignoring the env var) against the session_context_*.jsonl file's parent directory name (will correctly show 'some-custom-id')."
+    ],
+    "expected": "A single, consistent project-identity resolution function used by every store that persists a `project_id` field, so that filtering/reporting by project (e.g. cost.py's `get_usage(project_id=...)` at line 2901) actually lines up with the same project boundaries the context-isolation layer (session_store.py) enforces.",
+    "actual": "Two independent, differently-precedenced project-identity resolvers exist in the codebase: `chuzom.team.get_project_id()` (git-remote/cwd-basename based, used by usage.db) and `chuzom.session_store._project_id()` ($CHUZOM_PROJECT_ID-env-based, used by the Session Context Accumulator). Setting `$CHUZOM_PROJECT_ID` to scope/separate context does not affect which 'project' a given call's cost is attributed to in usage.db.",
+    "impact": "Cost/usage reporting filtered by project_id (cost.py's project_id parameter) will not correctly separate spend for use cases that rely on `$CHUZOM_PROJECT_ID` for logical project separation (e.g. multiple logical projects sharing one git repo/cwd, or automation setting a custom project id) — a reporting/attribution accuracy issue, not a content-security leak, since usage.db does not store prompt/response content, only cost/token/model metadata.",
+    "root_cause": "Two separate project-identity concepts were implemented independently at different times/for different subsystems (team/billing attribution vs. session-context isolation) without being unified into one shared resolver.",
+    "recommended_fix": "Either make `chuzom.team.get_project_id()` check `$CHUZOM_PROJECT_ID` first (mirroring session_store.py's precedence) before falling back to git-remote/cwd-basename, or clearly document that these are two intentionally-different concepts (billing/team project vs. context-isolation project) with different names to avoid the implied consistency.",
+    "regression_test": "Set CHUZOM_PROJECT_ID to a custom value, make a routed call, assert the usage.db row's project_id equals the custom value (currently fails — shows git-remote-derived value instead)."
+  },
+  {
+    "id": "CHZ-AUD-B-07",
+    "title": "Streaming context injection call is a synchronous positional call against an async keyword-only function — always raises TypeError (dead code)",
+    "severity": "Medium",
+    "confidence": "Confirmed",
+    "component": "chuzom/router.py:route_and_stream() (~line 4486), chuzom/context.py:build_context_messages()",
+    "claim_affected": "That the streaming route (route_and_stream) also benefits from context injection like the non-streaming route_and_call() does",
+    "evidence": [
+      "router.py line 4486: `messages=build_context_messages(prompt, system_prompt, caller_context)` — build_context_messages() is declared `async def build_context_messages(*, caller_context=None, ...)` (context.py line 390), i.e. keyword-only arguments and a coroutine function; the call at 4486 passes three POSITIONAL arguments and is not awaited.",
+      "Live execution (phase7c_streaming_context_bug.py) against route_and_stream() with a monkeypatched providers.call_llm_stream_events, forcing model_override so routing reaches the context-injection call site: raised `TypeError` at that call, confirmed via the script's captured `error_type`/`traceback` output (positional-argument-against-keyword-only-signature error, exactly as predicted from the source alone)."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7c_streaming_context_bug.py",
+      "Inspect the printed JSON `error_type`/`traceback` — shows a TypeError raised from the build_context_messages(...) call inside route_and_stream()."
+    ],
+    "expected": "route_and_stream() should call `await build_context_messages(caller_context=caller_context, ...)` (or equivalent correct async/keyword usage) so streaming calls receive the same context injection as non-streaming calls.",
+    "actual": "The call raises TypeError immediately whenever this code path is reached, meaning context injection (and, depending on exception handling further up the call stack, potentially the entire streaming call) fails.",
+    "impact": "No live-entry-point impact: `route_and_stream()` was confirmed pre-compaction to be unreachable from any current CLI command, MCP tool, or dashboard invocation — this is dead code today. It is flagged as Medium rather than Low because it represents a latent landmine that would immediately break in production the moment any future feature wires a live caller to route_and_stream(), and because it demonstrates the streaming path has not been exercised/tested in a way that would have caught this.",
+    "root_cause": "Apparent copy/paste or incomplete refactor: build_context_messages() was made async and keyword-only (matching its usage in route_and_call()) without updating this one remaining call site in route_and_stream().",
+    "recommended_fix": "Change router.py:4486 to `messages = await build_context_messages(caller_context=caller_context, session_id=session_id, target_provider=target_provider, ...)` matching the pattern used in route_and_call(); add a test that actually exercises route_and_stream() end-to-end so this class of bug is caught by CI.",
+    "regression_test": "Automated version of phase7c_streaming_context_bug.py, asserting no TypeError is raised and that events are yielded successfully, run in CI once/if route_and_stream() becomes reachable from a live entry point."
+  },
+  {
+    "id": "CHZ-AUD-B-08",
+    "title": "Uncaught ValueError ('Unknown media task type') causes streaming QUERY calls to hard-fail after chain exhaustion",
+    "severity": "Low",
+    "confidence": "Confirmed",
+    "component": "chuzom/router.py:route_and_stream()",
+    "claim_affected": "Fail-open / graceful-degradation behavior for the streaming route, analogous to route_and_call()'s emergency BUDGET fallback",
+    "evidence": [
+      "Live execution (phase7c_streaming_context_bug.py): after route_and_stream() exhausts its candidate chain (or fails earlier, e.g. due to CHZ-AUD-B-07's TypeError depending on exception ordering), a subsequent code path raises an uncaught `ValueError: Unknown media task type` rather than degrading gracefully or falling back the way route_and_call()'s emergency BUDGET path does."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7c_streaming_context_bug.py  # traceback field shows the ValueError"
+    ],
+    "expected": "Streaming QUERY-type calls should either succeed via a fallback path or fail with an error message describing the actual problem, not a generic/misleading 'Unknown media task type' error unrelated to the task type actually being routed (QUERY).",
+    "actual": "An uncaught ValueError with a message that does not match the actual failure condition (task type IS known — it's TaskType.QUERY) propagates to the caller.",
+    "impact": "Same dead-code caveat as CHZ-AUD-B-07 — route_and_stream() is unreachable from any current live entry point, so there is no current user-facing impact. Documented for completeness and because it compounds CHZ-AUD-B-07: the streaming path has at least two independent, never-exercised bugs stacked on top of each other.",
+    "root_cause": "Not fully traced within this audit's remaining scope — likely a media/task-type dispatch branch in route_and_stream() that was written assuming a different task-type enumeration or an internal media-specific streaming helper that QUERY-type calls should never reach in the first place.",
+    "recommended_fix": "Trace the exact raise site (not completed in this audit pass) and either fix the dispatch condition so QUERY-type streaming calls don't hit the media-only branch, or fix CHZ-AUD-B-07 first and re-test, since the two bugs may be masking each other's exact behavior.",
+    "regression_test": "Same as CHZ-AUD-B-07's regression test — once that TypeError is fixed, re-run and confirm whether this ValueError still reproduces; add a targeted test either way."
+  }
+]
