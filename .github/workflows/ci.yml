@@ -85,6 +85,8 @@ jobs:
           tests/test_red2_03_shell_installer_backup.py
           tests/test_red1_2_03_routeid_nonce.py
           tests/test_red2_2_02_downgrade_rendered.py
+          tests/test_iter3_tier_a.py
+          tests/test_red1_3_reservation_leaks.py
       - name: "G6: no fabricated marketing claims (pyproject + README)"
         run: uv run pytest -q tests/test_claims_no_fabricated_magnitudes.py
 
