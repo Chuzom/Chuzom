@@ -204,7 +204,11 @@ class TestBuildContextMessages:
             assert "FastAPI" in msgs[0]["content"]
 
     @pytest.mark.asyncio
-    async def test_with_caller_context(self, tmp_path):
+    async def test_with_caller_context(self, tmp_path, reset_session_buffer):
+        # reset_session_buffer isolates HOME so build_context_messages() does not
+        # read the developer's LIVE ~/.chuzom session accumulator (its siblings
+        # above already require this fixture; this test omitted it and so read
+        # real captured session context, making it flaky under a long session).
         db_path = tmp_path / "empty.db"
         with patch("chuzom.context._get_db_path", return_value=db_path):
             msgs = await build_context_messages(

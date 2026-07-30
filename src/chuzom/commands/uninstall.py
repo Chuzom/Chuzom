@@ -47,10 +47,28 @@ def _run_uninstall(flags: list[str] | None = None) -> None:
     import shutil
 
     purge = "--purge" in (flags or [])
-    from chuzom.install_hooks import uninstall
+    from chuzom.install_hooks import (
+        uninstall,
+        uninstall_claw_code,
+        uninstall_ide_configs,
+    )
 
     print(f"\n{_bold('Uninstalling Chuzom...')}\n")
     actions = uninstall()
+    # RED2-6-02: uninstall must clean up everything install could have created,
+    # not only the primary Claude Code surfaces. install auto-detects claw-code
+    # and IDE integrations; uninstall previously never called their removers, so a
+    # full parallel claw-code install (hooks + sidecars + a live MCP registration +
+    # the CHUZOM_CLAW_CODE flag) and project IDE configs survived the documented
+    # `chuzom uninstall`. Both removers are no-ops when nothing was installed.
+    try:
+        actions.extend(uninstall_claw_code())
+    except Exception as e:  # never let cleanup of an optional surface abort uninstall
+        actions.append(f"claw-code cleanup skipped: {e}")
+    try:
+        actions.extend(uninstall_ide_configs())
+    except Exception as e:
+        actions.append(f"IDE-config cleanup skipped: {e}")
     for a in actions:
         print(f"  {a}")
 

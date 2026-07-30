@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 17
+# chuzom-hook-version: 18
 """SessionStart hook — inject routing banner, start Ollama, refresh Claude usage.
 
 Fires once when a new Claude Code session begins. Four jobs:

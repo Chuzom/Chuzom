@@ -370,24 +370,32 @@ class PostgresBudgetBackend:
             raise
 
     def _chain_keys(self, cur: "psycopg.Cursor", key: BudgetKey) -> list[BudgetKey]:
-        """Lock the leaf row + each registered parent, return their keys."""
-        cur.execute(
-            "SELECT parents_json FROM chuzom_envelopes "
-            "WHERE key_blob = %s FOR UPDATE",
-            (_serialise_key(key),),
-        )
-        row = cur.fetchone()
-        if row is None:
-            return []
-        chain: list[BudgetKey] = [key]
-        for parent_key in _deserialise_parents(row[0]):
+        """Lock the leaf row + every registered ancestor, return their keys.
+
+        RED1-6-01: walks the parent chain TRANSITIVELY (breadth-first with a
+        cycle guard), following each registered row's own ``parents_json`` — a
+        cap 2+ levels up (org → user → agent) previously never locked/settled."""
+        chain: list[BudgetKey] = []
+        seen: set = set()
+        queue: list[BudgetKey] = [key]
+        while queue:
+            k = queue.pop(0)
+            sk = _serialise_key(k)
+            if sk in seen:
+                continue
+            seen.add(sk)
             cur.execute(
-                "SELECT 1 FROM chuzom_envelopes "
+                "SELECT parents_json FROM chuzom_envelopes "
                 "WHERE key_blob = %s FOR UPDATE",
-                (_serialise_key(parent_key),),
+                (sk,),
             )
-            if cur.fetchone() is not None:
-                chain.append(parent_key)
+            row = cur.fetchone()
+            if row is None:
+                continue
+            chain.append(k)
+            for parent_key in _deserialise_parents(row[0]):
+                if _serialise_key(parent_key) not in seen:
+                    queue.append(parent_key)
         return chain
 
     # ── Soft tier ─────────────────────────────────────────────────────────

@@ -58,3 +58,22 @@ def test_explicit_echo_not_blocked_under_zero_claude():
     assert _turn_blocked(mod, "echo", True) is False, (
         "RED1-5-03: explicit CHUZOM_RENDER_MODE=echo force-blocked under zero_claude"
     )
+
+
+@pytest.mark.parametrize("bad", ["eco", "", "  ", "off", "warn", "disabled", "ECHOO", "blck"])
+def test_unrecognized_render_mode_fails_safe_to_echo(bad):
+    """RED1-6-02: any unrecognized CHUZOM_RENDER_MODE must fail SAFE to echo
+    (advisory), never escalate to turn-blocking (which would replace the user's
+    turn with an unverified draft on a config typo)."""
+    mod = _load()
+    assert mod._resolve_auto_render_mode(bad, False) == "echo"
+    assert mod._resolve_auto_render_mode(bad, True) == "echo"
+    assert _turn_blocked(mod, bad, False) is False, f"{bad!r} escalated to block"
+    assert _turn_blocked(mod, bad, True) is False, f"{bad!r} escalated to block under zero_claude"
+
+
+def test_case_and_whitespace_normalized():
+    mod = _load()
+    assert mod._resolve_auto_render_mode(" ECHO ", False) == "echo"
+    assert mod._resolve_auto_render_mode("Block", False) == "block"
+    assert mod._resolve_auto_render_mode(" AUTO ", True) == "block"

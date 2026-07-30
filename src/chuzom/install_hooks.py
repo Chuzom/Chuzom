@@ -137,6 +137,19 @@ def _hook_version(path: Path) -> int:
         return 0
 
 
+def _files_differ(src: Path, dst: Path) -> bool:
+    """True if the two files' contents differ (byte comparison).
+
+    Used by the content-aware update path (RED2-6-01) to detect a hook/rules
+    file whose behaviour drifted from the bundled copy without a version bump.
+    On any read error, report 'differ' so the safer action (re-copy) is taken.
+    """
+    try:
+        return src.read_bytes() != dst.read_bytes()
+    except OSError:
+        return True
+
+
 def _command_script_path(command: str) -> Path | None:
     """Extract the script path from a Python hook command, if present."""
     try:
@@ -178,12 +191,23 @@ def check_and_update_hooks() -> list[str]:
                 updates.append(f"Failed to restore {dst_name}: {e}")
         else:
             dst_v = _hook_version(dst)
-            if src_v > dst_v:
+            # RED2-6-01: the update decision must be CONTENT-aware, not purely
+            # version-stamp-gated. A hook whose behaviour changed without a
+            # stamp bump (a real, repeated slip that silently stranded security
+            # fixes on installed machines) must still propagate. Re-copy when the
+            # bundled stamp is newer OR the stamps match but the installed bytes
+            # differ from the bundled file. We never downgrade (src_v < dst_v is
+            # left alone), so a genuinely newer installed hook is preserved.
+            _drifted = src_v == dst_v and _files_differ(src, dst)
+            if src_v > dst_v or _drifted:
                 try:
                     shutil.copy2(src, dst)
                     if sys.platform != "win32":
                         dst.chmod(0o755)
-                    updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}")
+                    if _drifted:
+                        updates.append(f"Refreshed {dst_name} (content drift at v{src_v})")
+                    else:
+                        updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}")
                 except OSError as e:
                     updates.append(f"Failed to update {dst_name}: {e}")
 
@@ -209,11 +233,20 @@ def check_and_update_rules() -> str | None:
     src_version = _rules_version(rules_src)
     dst_version = _rules_version(rules_dst)
 
-    if src_version <= dst_version:
+    # RED2-6-03: content-aware, same as check_and_update_hooks. Re-copy when the
+    # bundled version is newer OR the versions match but the installed rules drifted
+    # from bundled (a content change that forgot to bump the version stamp). Never
+    # downgrade. Without this, a reworded rules file silently never reaches users.
+    if src_version < dst_version:
+        return None
+    _drifted = src_version == dst_version and _files_differ(rules_src, rules_dst)
+    if src_version == dst_version and not _drifted:
         return None
 
     _RULES_DST.mkdir(parents=True, exist_ok=True)
     shutil.copy2(rules_src, rules_dst)
+    if _drifted:
+        return f"Refreshed routing rules (content drift at v{src_version})"
     return f"Updated routing rules v{dst_version} → v{src_version}"
 
 

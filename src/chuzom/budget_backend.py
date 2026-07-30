@@ -390,16 +390,30 @@ class SqliteBudgetBackend:
     def _chain_rows(self, key: BudgetKey) -> list[tuple[BudgetKey, _EnvelopeRow]]:
         """Return [(key, row), (parent_key, parent_row), ...] for every
         registered envelope in the chain. Unregistered parents are
-        silently skipped — parity with the in-process manager."""
+        silently skipped — parity with the in-process manager.
+
+        RED1-6-01: walks the parent chain TRANSITIVELY (each registered row's
+        own ``parents`` are followed in turn, breadth-first with a cycle guard),
+        not just one hop. A cap registered 2+ levels above a reservation key
+        (e.g. org → user → agent, each pointing only at its immediate parent —
+        the shape ``BudgetKey.rolls_up_to`` builds) previously never saw the
+        spend and was silently unenforceable."""
         out: list[tuple[BudgetKey, _EnvelopeRow]] = []
-        row = self._load(key)
-        if row is None:
-            return out
-        out.append((key, row))
-        for parent_key in row.parents:
-            parent_row = self._load(parent_key)
-            if parent_row is not None:
-                out.append((parent_key, parent_row))
+        seen: set = set()
+        queue: list[BudgetKey] = [key]
+        while queue:
+            k = queue.pop(0)
+            sk = _serialise_key(k)
+            if sk in seen:
+                continue
+            seen.add(sk)
+            row = self._load(k)
+            if row is None:
+                continue
+            out.append((k, row))
+            for parent_key in row.parents:
+                if _serialise_key(parent_key) not in seen:
+                    queue.append(parent_key)
         return out
 
     async def try_reserve(self, key: BudgetKey, cost_usd: float) -> bool:

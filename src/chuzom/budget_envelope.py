@@ -175,18 +175,28 @@ class BudgetEnvelopeManager:
         )
 
     def _chain(self, key: BudgetKey) -> list[BudgetEnvelope]:
-        """Return [self_env, *parent_envs] for the registered envelopes
+        """Return [self_env, *ancestor_envs] for the registered envelopes
         in the parent chain. Unregistered parents are silently
-        skipped — caller knows what envelopes it registered."""
+        skipped — caller knows what envelopes it registered.
+
+        RED1-6-01: walks the chain TRANSITIVELY (breadth-first with a cycle
+        guard) so a cap 2+ levels up (org → user → agent) is settled/enforced,
+        not just the leaf's immediate parents."""
         out: list[BudgetEnvelope] = []
-        env = self._envelopes.get(key)
-        if env is None:
-            return out
-        out.append(env)
-        for parent_key in env.parents:
-            parent = self._envelopes.get(parent_key)
-            if parent is not None:
-                out.append(parent)
+        seen: set = set()
+        queue: list[BudgetKey] = [key]
+        while queue:
+            k = queue.pop(0)
+            if k in seen:
+                continue
+            seen.add(k)
+            env = self._envelopes.get(k)
+            if env is None:
+                continue
+            out.append(env)
+            for parent_key in env.parents:
+                if parent_key not in seen:
+                    queue.append(parent_key)
         return out
 
     async def try_reserve(self, key: BudgetKey, cost_usd: float) -> bool:

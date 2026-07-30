@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 26
+# chuzom-hook-version: 27
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -87,7 +87,7 @@ except ImportError:
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 26"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 27"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -2250,10 +2250,21 @@ def _resolve_auto_render_mode(render_mode: str, zero_claude: bool) -> str:
     that replaces the turn. This makes _is_context_dependent's ~60% false-negative
     rate irrelevant to the fabrication risk. An explicit CHUZOM_RENDER_MODE of
     "block"/"echo" is honored unchanged (only "auto" is resolved here).
+
+    RED1-6-02: fail SAFE. The call site derives turn-blocking as
+    ``mode != "echo"``, so any UNRECOGNIZED value (a typo like "eco", an empty
+    CHUZOM_RENDER_MODE=, "off"/"disabled"/"warn") would silently escalate to
+    turn-blocking — replacing the user's turn with an unverified draft they never
+    opted into. Only "echo" and "block" are valid; anything else (including a
+    normalized-but-unknown string) falls back to the safe advisory "echo".
     """
-    if render_mode != "auto":
-        return render_mode
-    return "block" if zero_claude else "echo"
+    mode = (render_mode or "").strip().lower()
+    if mode == "auto":
+        return "block" if zero_claude else "echo"
+    if mode in ("echo", "block"):
+        return mode
+    # Unrecognized/invalid → safe advisory default (never turn-blocking).
+    return "echo"
 
 
 def _is_context_dependent(prompt: str) -> bool:
