@@ -39,3 +39,32 @@ def test_readme_headline_has_no_fabricated_claims():
     head = "\n".join((ROOT / "README.md").read_text().splitlines()[:60])
     for pat in FORBIDDEN:
         assert not pat.search(head), f"fabricated claim in README hero: {pat.pattern}"
+
+
+# RED2-05: the magnitude claim ("60-90%") was still baked into IDE-config
+# templates in install_hooks.py, which the two hand-picked scans above never saw.
+# The MAGNITUDE claims must not appear ANYWHERE the product writes to a user's
+# machine. We scan all shipped source (.py templates + generated .md/.json), not
+# just marketing surfaces. (Absolutes like "no cloud" are context-dependent and
+# stay scoped to the marketing surfaces above.)
+MAGNITUDE_FORBIDDEN = [
+    re.compile(r"3[×x]\s*longer", re.I),
+    re.compile(r"60[–-]?90\s*%", re.I),
+]
+
+
+def test_no_fabricated_magnitude_claims_anywhere_in_src():
+    src = ROOT / "src" / "chuzom"
+    offenders = []
+    for path in src.rglob("*.py"):
+        try:
+            text = path.read_text()
+        except OSError:
+            continue
+        for pat in MAGNITUDE_FORBIDDEN:
+            if pat.search(text):
+                offenders.append(f"{path.relative_to(ROOT)} :: {pat.pattern}")
+    assert not offenders, (
+        "fabricated magnitude claim(s) in shipped source (RED2-05): "
+        + "; ".join(offenders)
+    )

@@ -190,7 +190,7 @@ then relay the routed result to the user. Do NOT generate your own answer first.
 | Deep reasoning, proofs, root cause | `llm_reason` |
 
 Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable
-model (Ollama → Flash → GPT-4o-mini → Claude), saving 60–90% of premium quota.
+model (Ollama → Flash → GPT-4o-mini → Claude), conserving premium quota.
 """
 
 
@@ -453,7 +453,7 @@ def _install_kimi_files() -> list[str]:
             "chuzom",
             {"command": "chuzom", "args": [], "description": (
                 "Chuzom smart LLM router — routes tasks to the cheapest capable model. "
-                "Call before answering to save 60–90% of token cost."
+                "Call before answering to route to a cheaper capable model."
             )},
             root_key="mcpServers",
         )
@@ -492,7 +492,7 @@ Call the relevant tool BEFORE generating your own answer — relay the routed re
 | Prose, docs, email | `llm_generate` |
 | Deep reasoning, proofs, root cause | `llm_reason` |
 
-Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable model, saving 60–90%.
+Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable model.
 """
     if kimi_md.exists():
         content = kimi_md.read_text()

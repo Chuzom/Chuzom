@@ -985,7 +985,7 @@ _VSCODE_MCP_CONTENT = """\
       "type": "stdio",
       "command": "chuzom",
       "args": [],
-      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call saves 60-90% vs sending directly to Claude."
+      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call routes to a cheaper capable model before using Claude quota."
     }
   }
 }
@@ -997,7 +997,7 @@ _WINDSURF_MCP_CONTENT = """\
     "chuzom": {
       "command": "chuzom",
       "args": [],
-      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call saves 60-90% vs sending directly to Claude."
+      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call routes to a cheaper capable model before using Claude quota."
     }
   }
 }
@@ -1013,7 +1013,8 @@ alwaysApply: true
 # Chuzom routing — use MCP tools before answering directly
 
 Chuzom MCP tools route each task to the cheapest model that can handle it.
-Calling them before generating your own answer saves 60–90% of token cost.
+Calling them before generating your own answer routes to a cheaper capable model,
+conserving Claude quota.
 
 > **Important — pull routing:** Unlike Claude Code (which intercepts prompts
 > automatically via hooks), Cursor uses pull routing: YOU must call the tool.
