@@ -185,12 +185,20 @@ _WELCOME_DIVIDER = "─" * 60
 
 
 def _mode_label(is_subscription: bool) -> str:
-    """One-word mode label for the welcome line: zero-claude / subscription / api-keys."""
+    """One-word mode label for the welcome line: zero-claude / subscription /
+    api-keys / local.
+
+    RED2-11-03: must have a "local" branch so the welcome mode line agrees with
+    the banner box (BANNER_LOCAL) when no cloud keys are configured — previously
+    it always claimed "api-keys" even with zero keys, contradicting the box.
+    """
     if _zero_claude_enabled():
         return "zero-claude (strict — external routes or block)"
     if is_subscription or _CC_MODE:
         return "subscription (Claude OAuth pressure cascade)"
-    return "api-keys (Ollama → Codex → paid providers)"
+    if _any_cloud_key():
+        return "api-keys (Ollama → Codex → paid providers)"
+    return "local (Ollama / Codex — no cloud keys set)"
 
 
 def _enforce_label() -> str:

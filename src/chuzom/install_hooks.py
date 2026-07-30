@@ -758,13 +758,18 @@ def install(force: bool = False) -> list[str]:
             except OSError:
                 pass
 
-        # RED1-9-01: back up a hand-edited managed hook before install overwrites
-        # it, so a user's local change is recoverable (parity with the auto-update
-        # path). Only when the installed file differs from what we're about to write.
+        # RED1-9-01 / RED1-11-02: back up a hand-edited managed hook before install
+        # overwrites it, and if the backup CANNOT be written, SKIP the overwrite —
+        # never destroy a user's edit with no recovery path (parity with the
+        # auto-update path). Only when the installed file differs from bundled.
         if dst.exists() and _files_differ(src, dst):
             _b = _backup_before_overwrite(dst)
-            if _b is not None:
-                actions.append(f"Backed up existing {dst_name} → {_b.name}")
+            if _b is None:
+                actions.append(
+                    f"SKIPPED {src_name}: could not back up existing file — not overwritten"
+                )
+                continue
+            actions.append(f"Backed up existing {dst_name} → {_b.name}")
         shutil.copy2(src, dst)
         if sys.platform != "win32":
             dst.chmod(0o755)
@@ -831,8 +836,22 @@ def install(force: bool = False) -> list[str]:
     rules_dst = _RULES_DST / "chuzom.md"
 
     if rules_src.exists():
-        shutil.copy2(rules_src, rules_dst)
-        actions.append(f"Installed routing rules → {rules_dst}")
+        # RED1-11-01: back up a hand-edited rules file before overwriting; if the
+        # backup can't be written, skip the overwrite (never destroy user content
+        # with no recovery path) — parity with the auto-update path.
+        if rules_dst.exists() and _files_differ(rules_src, rules_dst):
+            _rb = _backup_before_overwrite(rules_dst)
+            if _rb is None:
+                actions.append(
+                    "SKIPPED routing rules: could not back up existing file — not overwritten"
+                )
+            else:
+                actions.append(f"Backed up existing chuzom.md → {_rb.name}")
+                shutil.copy2(rules_src, rules_dst)
+                actions.append(f"Installed routing rules → {rules_dst}")
+        else:
+            shutil.copy2(rules_src, rules_dst)
+            actions.append(f"Installed routing rules → {rules_dst}")
     else:
         actions.append(f"SKIP rules: source not found at {rules_src}")
 
@@ -1282,25 +1301,34 @@ def install_ide_configs(project_dir: Path | None = None) -> list[str]:
 
 
 def uninstall_ide_configs(project_dir: Path | None = None) -> list[str]:
-    """Remove Chuzom-managed IDE config files from the given project directory."""
+    """Remove Chuzom-managed IDE config from the given project directory.
+
+    RED2-11-01/02: ``.vscode/mcp.json`` and ``.windsurf/mcp.json`` are SHARED
+    config files — a user keeps their own MCP servers there. Wholesale-unlinking
+    them (the previous behaviour) destroyed unrelated user config. Remove ONLY the
+    chuzom entry surgically. Only a dedicated chuzom-authored file
+    (``.cursor/rules/use-chuzom.mdc``) is safe to delete outright.
+
+    RED2-9-03: the project-scoped .github/copilot-instructions.md and Trae .rules
+    are written via _append_routing_rules → recorded in the install manifest
+    (created-vs-appended aware), so the manifest replay removes them correctly.
+    """
     root = Path(project_dir) if project_dir else Path.cwd()
     actions: list[str] = []
+    from chuzom import install_manifest as _im
 
-    targets = [
-        root / ".vscode" / "mcp.json",
-        root / ".windsurf" / "mcp.json",
-        root / ".cursor" / "rules" / "use-chuzom.mdc",
-    ]
-    # RED2-9-03: the project-scoped .github/copilot-instructions.md and Trae .rules
-    # are written via _append_routing_rules, which records to the install manifest
-    # (created-vs-appended aware) — the manifest replay removes them correctly and
-    # safely (a file chuzom only APPENDED to is stripped, not deleted wholesale).
-    # They are deliberately NOT force-unlinked here to avoid destroying user content.
+    # Shared MCP config — surgical removal of the chuzom entry only.
+    actions += _im._remove_json_key(root / ".vscode" / "mcp.json", "servers", "chuzom")
+    actions += _im._remove_json_key(root / ".windsurf" / "mcp.json", "mcpServers", "chuzom")
 
-    for path in targets:
-        if path.exists():
-            path.unlink()
-            actions.append(f"Removed {path}")
+    # Dedicated chuzom-authored rule file — safe to remove entirely.
+    mdc = root / ".cursor" / "rules" / "use-chuzom.mdc"
+    if mdc.exists():
+        try:
+            mdc.unlink()
+            actions.append(f"Removed {mdc}")
+        except OSError:
+            pass
 
     return actions
 
@@ -1412,9 +1440,10 @@ WHAT GETS INSTALLED
 
 PUSH vs PULL — THE KEY DIFFERENCE
 
-  Push (Claude Code):  Chuzom intercepts the prompt BEFORE the LLM sees it.
-    Every prompt is auto-routed. Zero extra effort from the model or user.
-    Savings are guaranteed on every turn.
+  Push (Claude Code):  Chuzom suggests a route on every prompt BEFORE the LLM
+    sees it, with no extra effort from you. In advise mode nothing is ever
+    blocked — Claude keeps the final call — so how much you save depends on
+    your task mix, not a guarantee.
 
   Pull (Copilot/Cursor/Windsurf):  The LLM sees the prompt, then DECIDES
     whether to call a Chuzom tool. The Cursor .mdc rule makes this more
