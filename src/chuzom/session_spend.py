@@ -62,7 +62,9 @@ def _current_session_key() -> str:
 
 
 def _current_chuzom_version() -> str:
-    """The running chuzom-router version, used to version-scope the drift ledger."""
+    """Running chuzom version — stamped on each durable row so base-drift can be
+    scoped per release (behaviour carried from an older version must not
+    contaminate the current version's trend)."""
     try:
         from chuzom import __version__
 
