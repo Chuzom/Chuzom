@@ -74,6 +74,17 @@ jobs:
           tests/test_py004_aiosqlite_daemon.py
           tests/test_sec05_dashboard_token.py
           tests/test_sec04_local_server_origin_guard.py
+          tests/test_tq007_daily_cap_downgrade.py
+          tests/test_draft01_no_block_outside_zero_claude.py
+          tests/test_red2_04_privacy_local_blocks_all_external.py
+          tests/test_red1_09_budget_lock_cross_thread.py
+          tests/test_red1_0506_routeid_and_dedup.py
+          tests/test_red1_08_cap_sees_rejected_attempts.py
+          tests/test_red1_07_spend_boundary_consistency.py
+          tests/test_red2_02_downgrade_observable.py
+          tests/test_red2_03_shell_installer_backup.py
+          tests/test_red1_2_03_routeid_nonce.py
+          tests/test_red2_2_02_downgrade_rendered.py
       - name: "G6: no fabricated marketing claims (pyproject + README)"
         run: uv run pytest -q tests/test_claims_no_fabricated_magnitudes.py
 
