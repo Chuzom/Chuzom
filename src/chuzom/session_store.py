@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from chuzom.compaction import collapse_whitespace, dedup_sections
+from chuzom.file_lock import exclusive_lock
 from chuzom.token_budget import truncate_to_budget
 
 # ── Self-injection guard ─────────────────────────────────────────────────────
@@ -145,6 +146,19 @@ def _sanitize(session_id: str) -> str:
 
 def _session_path(session_id: str) -> Path:
     return _project_dir() / f"session_context_{_sanitize(session_id)}.jsonl"
+
+
+def _lock_path(path: Path) -> Path:
+    """Sibling lock file for *path* (a JSONL data file).
+
+    Deliberately a *different* file from the data file itself: compaction
+    swaps the data file's inode via ``os.replace()``, and locking that inode
+    directly would leave a stale/orphaned lock on the replaced-away copy.
+    The lock file's own identity is never swapped, so it stays a stable
+    synchronization point across the whole append-then-maybe-compact
+    critical section (CHZ-AUD-C-01).
+    """
+    return path.with_name(path.name + ".lock")
 
 
 def _pointer_path() -> Path:
@@ -325,36 +339,48 @@ def record_event(
 
         content_hash = _content_hash(text)
         path = _session_path(session_id)
-
-        prev = _last_record(path)
-        if prev and prev.get("h") == content_hash:
-            return  # consecutive-duplicate dedupe
-
-        record = {
-            "ts": time.time(),
-            "kind": kind,
-            "role": role,
-            "task_type": task_type or "",
-            "tool": tool,
-            "model": model,
-            "content": text,
-            "h": content_hash,
-        }
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            # NB: `text` is secret-scrubbed by _scrub_secrets() above (~L309) and
-            # the file is chmod 0600 / local-only. Storing scrubbed session
-            # context in clear text is the accumulator's purpose (routed models
-            # read it back). The CodeQL py/clear-text-storage-sensitive-data alert
-            # here is a reviewed false positive (dismissed) — the regex scrubber
-            # just isn't modelled as a sanitizer by CodeQL.
-            fh.write(json.dumps(record) + "\n")
-        try:
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
 
-        _maybe_compact(path)
+        # CHZ-AUD-C-01: the append (dedupe-check + write) and any triggered
+        # compaction must run as one atomic unit across processes. Without
+        # this lock, a concurrent process's compaction can read a stale
+        # snapshot of the file (taken before this process's append lands),
+        # then os.replace() the file with that stale snapshot — silently
+        # dropping this process's just-written record even though the write
+        # itself succeeded. Held for the duration of both the append and any
+        # compaction it triggers; a sibling `.lock` file is used rather than
+        # locking the JSONL itself, so compaction's os.replace() swap of the
+        # data file's inode never disturbs the lock's identity.
+        with exclusive_lock(_lock_path(path)):
+            prev = _last_record(path)
+            if prev and prev.get("h") == content_hash:
+                return  # consecutive-duplicate dedupe
+
+            record = {
+                "ts": time.time(),
+                "kind": kind,
+                "role": role,
+                "task_type": task_type or "",
+                "tool": tool,
+                "model": model,
+                "content": text,
+                "h": content_hash,
+            }
+            with path.open("a", encoding="utf-8") as fh:
+                # NB: `text` is secret-scrubbed by _scrub_secrets() above
+                # (~L309) and the file is chmod 0600 / local-only. Storing
+                # scrubbed session context in clear text is the
+                # accumulator's purpose (routed models read it back). The
+                # CodeQL py/clear-text-storage-sensitive-data alert here is
+                # a reviewed false positive (dismissed) — the regex
+                # scrubber just isn't modelled as a sanitizer by CodeQL.
+                fh.write(json.dumps(record) + "\n")
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+
+            _maybe_compact(path)
     except Exception:
         pass
 
