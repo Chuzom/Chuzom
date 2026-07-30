@@ -837,8 +837,44 @@ async def get_monthly_spend() -> float:
         await db.close()
 
 
+async def _rejected_attempt_spend_today(db, task_type: str | None = None) -> float:
+    """RED1-08: sum today's billable-but-REJECTED provider attempts.
+
+    ``cost.log_usage`` only records the WINNING attempt to the ``usage`` table,
+    so a paid model that was tried, billed, then rejected (by a contract gate or
+    quality escalation) is invisible to the cap-check that reads ``usage``. The
+    execution ledger records every attempt with ``rejected`` + ``measured_cost_usd``,
+    and the winning attempt is separately marked ``accepted`` — so summing only
+    ``rejected=1`` rows gives exactly the extra cost missing from ``usage``, with
+    no double-count. Fail-open: any error (missing table on an old DB, etc.)
+    returns 0.0 so the cap-check degrades to the previous under-count rather than
+    breaking routing.
+    """
+    try:
+        where = (
+            "rejected = 1 AND COALESCE(measured_cost_usd, 0) > 0 "
+            "AND date(ts, 'unixepoch', 'localtime') = date('now','localtime')"
+        )
+        params: tuple = ()
+        if task_type is not None:
+            where += " AND task_type = ?"
+            params = (task_type,)
+        cursor = await db.execute(
+            f"SELECT COALESCE(SUM(measured_cost_usd), 0) FROM execution_events WHERE {where}",
+            params,
+        )
+        row = await cursor.fetchone()
+        return float(row[0]) if row else 0.0
+    except Exception:  # noqa: BLE001 — cap-check must never break on ledger read
+        return 0.0
+
+
 async def get_daily_spend() -> float:
     """Get total USD spent on external LLMs today (local calendar day).
+
+    Includes both winning calls (``usage`` table) and billable-but-rejected
+    provider attempts (execution ledger, RED1-08), so the cap-check sees the real
+    cumulative spend — not just the spend of calls that happened to be accepted.
 
     Returns:
         Total spend as a float. Returns 0.0 if no usage data exists.
@@ -850,7 +886,8 @@ async def get_daily_spend() -> float:
             "WHERE date(timestamp,'localtime') = date('now','localtime')"
         )
         row = await cursor.fetchone()
-        return float(row[0]) if row else 0.0
+        winning = float(row[0]) if row else 0.0
+        return winning + await _rejected_attempt_spend_today(db)
     finally:
         await db.close()
 
@@ -872,7 +909,9 @@ async def get_daily_spend_by_task_type(task_type: str) -> float:
             (task_type,),
         )
         row = await cursor.fetchone()
-        return float(row[0]) if row else 0.0
+        winning = float(row[0]) if row else 0.0
+        # RED1-08: include rejected billable attempts for this task type.
+        return winning + await _rejected_attempt_spend_today(db, task_type)
     finally:
         await db.close()
 
