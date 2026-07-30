@@ -483,10 +483,19 @@ def _record_realization_used(session_id: str, pending: dict | None) -> None:
     """
     try:
         pending = pending or {}
+        import hashlib
         from chuzom.execution_ledger import LedgerEvent, record_event
+        # RED1-05: content-stable event_id so a retried PreToolUse hook honoring
+        # the same route dedups under INSERT OR IGNORE (uuid4 default made dedup
+        # unreachable). RED1-06: route_id now actually present in the pending JSON.
+        _route_id = pending.get("route_id")
+        _eid = hashlib.sha256(
+            f"{session_id}|{_route_id or ''}|route_realized".encode()
+        ).hexdigest()[:32]
         record_event(LedgerEvent(
+            event_id=_eid,
             session_id=session_id,
-            route_id=pending.get("route_id"),
+            route_id=_route_id,
             turn_id=pending.get("turn_id"),
             event_type="route_realized",
             task_type=pending.get("task_type"),

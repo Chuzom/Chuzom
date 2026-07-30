@@ -3492,6 +3492,15 @@ def main() -> None:
                     "expires_at": _now + _PENDING_ROUTE_TTL_SEC,
                     "turn_id": int(_now),  # proxy for turn — clears when next prompt arrives
                     "session_id": session_id,
+                    # RED1-06: a stable per-routing-decision id so the execution
+                    # ledger can attribute each realization/override to the
+                    # specific route it corresponds to. Previously absent, so
+                    # enforce-route.py's pending.get("route_id") was always None
+                    # and every route in a session collapsed into one accounting
+                    # bucket. Composed from session + turn + expected tool so it
+                    # is unique per decision and stable across the pending →
+                    # ledger handoff.
+                    "route_id": f"{_safe_sid(session_id)}:{int(_now)}:{tool}",
                 },
             )
         except OSError:

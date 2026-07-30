@@ -101,7 +101,18 @@ def _log_direct_answer(session_id: str, expected_tool: str, strikes: int) -> Non
         pass
 
 
-def _record_override(session_id: str, task_type: str) -> None:
+def _stable_event_id(session_id: str, route_id: str | None, event_type: str) -> str:
+    """RED1-05: content-stable ledger event_id so a retried hook invocation
+    recording the *same* logical event dedups under INSERT OR IGNORE instead of
+    minting a fresh uuid4 every time (which made the dedup structurally
+    unreachable). Keyed on (session, route, event_type): the same override or
+    realization for the same route collapses to one row."""
+    import hashlib
+    key = f"{session_id}|{route_id or ''}|{event_type}"
+    return hashlib.sha256(key.encode()).hexdigest()[:32]
+
+
+def _record_override(session_id: str, task_type: str, pending: dict | None = None) -> None:
     """Feed a detected plain-text override into realization accounting (B7).
 
     Parity with the tool-call override path: increments session_spend.overridden_turns
@@ -117,8 +128,17 @@ def _record_override(session_id: str, task_type: str) -> None:
         pass
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
+        # RED1-06: thread route_id/turn_id from the pending directive so each
+        # override attributes to the specific route it overrode (was always
+        # None → all overrides collapsed into one bucket). RED1-05: stable
+        # event_id so a retried Stop hook doesn't double-count.
+        _route_id = (pending or {}).get("route_id")
+        _turn_id = (pending or {}).get("turn_id")
         record_event(LedgerEvent(
+            event_id=_stable_event_id(session_id, _route_id, "plain_text_override"),
             session_id=session_id,
+            route_id=_route_id,
+            turn_id=_turn_id,
             event_type="plain_text_override",
             task_type=task_type,
             override_type="plain_text",
@@ -164,7 +184,7 @@ def main() -> None:
     # PreToolUse path (enforce-route.py → mark_overridden) decremented realized
     # savings; plain-text answers were logged as a strike only, so
     # realized_savings_usd systematically overcounted. Both fail-open.
-    _record_override(session_id, task_type)
+    _record_override(session_id, task_type, pending)
 
     # Clear pending — don't double-penalise on the next turn's auto-route consume
     _pending_path(session_id).unlink(missing_ok=True)
