@@ -72,3 +72,28 @@ async def test_no_leak_on_cache_hit_fast_path():
         assert abs(router._pending_spend - before) < 1e-9, (
             f"RED1-3-02: reservation leaked on cache-hit fast path: {before}->{router._pending_spend}"
         )
+
+
+@pytest.mark.asyncio
+async def test_no_double_decrement_on_success():
+    """RED1-4-01: a successful turn must decrement _pending_spend exactly once.
+
+    _dispatch_model_loop releases on success; route_and_call must NOT release
+    again. Driven concurrently: run N successful calls and assert _pending_spend
+    returns to baseline (a double-decrement would drive it negative-then-clamped,
+    and under overlap would erase in-flight siblings' reservations).
+    """
+    import asyncio as _a
+    before = router._pending_spend
+
+    async def one():
+        return await _drive(
+            reserve_envelope={"new_callable": AsyncMock, "return_value": (None, True, "k")},
+            _build_and_filter_chain={"new_callable": AsyncMock, "return_value": ["openai/gpt-4o"]},
+        )
+
+    await _a.gather(*[one() for _ in range(8)])
+    assert abs(router._pending_spend - before) < 1e-9, (
+        f"RED1-4-01: _pending_spend not conserved after 8 successful turns: "
+        f"{before} -> {router._pending_spend}"
+    )

@@ -3992,8 +3992,15 @@ async def route_and_call(
                 cap_seconds=max_wall_clock_seconds,
                 elapsed_seconds=elapsed,
             ) from _to_err
-        async with _budget_lock():
-            _pending_spend = max(0.0, _pending_spend - _reservation)
+        # RED1-4-01: do NOT release _pending_spend here. This line is reached only
+        # after `await _dispatch_coro` returned normally, and _dispatch_model_loop
+        # already released the reservation on its success path (its own budget-lock
+        # decrement before returning). Releasing again double-decremented the
+        # shared counter on EVERY successful turn — clamped to 0 for a single call,
+        # but under concurrency it erased a still-in-flight sibling's reservation,
+        # defeating the TOCTOU protection the reservation exists for. The
+        # cancel/timeout handlers above keep their own releases: those paths
+        # interrupt _dispatch_model_loop before it releases.
         _success_detail = {"correlation_id": correlation_id}
         # T4-M1: surface scrub-rate per turn so operators can observe
         # which PII patterns are firing without persisting any PII.
