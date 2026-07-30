@@ -162,14 +162,32 @@ def _command_script_path(command: str) -> Path | None:
     return None
 
 
+def _backup_before_overwrite(dst: Path) -> Path | None:
+    """RED1-7-02: preserve the file about to be overwritten, so a hand-edited
+    managed hook/rules file is never SILENTLY and PERMANENTLY destroyed. Returns
+    the backup path (``<dst>.bak``) or None if the backup could not be written."""
+    try:
+        backup = dst.with_suffix(dst.suffix + ".bak")
+        shutil.copy2(dst, backup)
+        return backup
+    except OSError:
+        return None
+
+
 def check_and_update_hooks() -> list[str]:
     """Re-copy bundled hooks to ~/.claude/hooks/ if the installed versions are stale.
 
     Returns a list of human-readable update messages (one per updated hook).
     Called automatically on MCP server startup so existing users get hook updates
     after ``pip install --upgrade chuzom-router`` without re-running install.
-    Missing managed hooks are also restored. Existing files are only overwritten
-    when the bundled version is newer, to avoid clobbering user-managed scripts.
+    Missing managed hooks are also restored.
+
+    Existing files are overwritten when the bundled version is newer OR when the
+    version stamps match but the installed bytes have drifted from the bundled
+    copy (RED2-6-01: content changes without a stamp bump must still propagate).
+    Before ANY such overwrite, the existing file is backed up to ``<name>.bak``
+    and the backup path is reported (RED1-7-02: a user who hand-edited a managed
+    hook must never silently lose that edit — it is recoverable and announced).
     """
     updates: list[str] = []
     settings = _load_settings()
@@ -191,23 +209,20 @@ def check_and_update_hooks() -> list[str]:
                 updates.append(f"Failed to restore {dst_name}: {e}")
         else:
             dst_v = _hook_version(dst)
-            # RED2-6-01: the update decision must be CONTENT-aware, not purely
-            # version-stamp-gated. A hook whose behaviour changed without a
-            # stamp bump (a real, repeated slip that silently stranded security
-            # fixes on installed machines) must still propagate. Re-copy when the
-            # bundled stamp is newer OR the stamps match but the installed bytes
-            # differ from the bundled file. We never downgrade (src_v < dst_v is
-            # left alone), so a genuinely newer installed hook is preserved.
+            # RED2-6-01: content-aware, not purely version-stamp-gated. We never
+            # downgrade (src_v < dst_v is left alone).
             _drifted = src_v == dst_v and _files_differ(src, dst)
             if src_v > dst_v or _drifted:
                 try:
+                    backup = _backup_before_overwrite(dst)  # RED1-7-02
                     shutil.copy2(src, dst)
                     if sys.platform != "win32":
                         dst.chmod(0o755)
+                    _where = f" (previous saved to {backup.name})" if backup else ""
                     if _drifted:
-                        updates.append(f"Refreshed {dst_name} (content drift at v{src_v})")
+                        updates.append(f"Refreshed {dst_name} (content drift at v{src_v}){_where}")
                     else:
-                        updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}")
+                        updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}{_where}")
                 except OSError as e:
                     updates.append(f"Failed to update {dst_name}: {e}")
 
@@ -244,10 +259,13 @@ def check_and_update_rules() -> str | None:
         return None
 
     _RULES_DST.mkdir(parents=True, exist_ok=True)
+    # RED1-7-02: back up a possibly hand-edited rules file before overwriting.
+    backup = _backup_before_overwrite(rules_dst) if rules_dst.exists() else None
     shutil.copy2(rules_src, rules_dst)
+    _where = f" (previous saved to {backup.name})" if backup else ""
     if _drifted:
-        return f"Refreshed routing rules (content drift at v{src_version})"
-    return f"Updated routing rules v{dst_version} → v{src_version}"
+        return f"Refreshed routing rules (content drift at v{src_version}){_where}"
+    return f"Updated routing rules v{dst_version} → v{src_version}{_where}"
 
 
 # Hook definitions: (source_filename, dest_filename, event, matcher)
@@ -1246,11 +1264,13 @@ def main() -> None:
     cmd = args[0] if args else "install"
 
     if cmd == "uninstall":
-        print("\nUninstalling Chuzom hooks...\n")
-        actions = uninstall()
-        for a in actions:
-            print(f"  {a}")
-        print("\nDone. Restart Claude Code to apply changes.\n")
+        # RED2-7-01: delegate to the single uninstall implementation so this
+        # frozen public entry point (`chuzom-install-hooks uninstall`) cleans up
+        # everything install could have created — claw-code + IDE configs
+        # included — exactly like `chuzom uninstall`. Previously main() called
+        # only uninstall(), leaving a full parallel claw-code install behind.
+        from chuzom.commands.uninstall import _run_uninstall
+        _run_uninstall(args[1:])
         return
 
     if cmd == "ide":

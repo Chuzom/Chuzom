@@ -38,6 +38,41 @@ def test_content_drift_at_same_version_refreshes(tmp_path, monkeypatch):
     assert any("Refreshed" in m and "drift" in m for m in msgs), msgs
 
 
+def test_drift_backs_up_the_previous_file(tmp_path, monkeypatch):
+    """RED1-7-02: a hand-edited managed hook must be backed up (not silently
+    destroyed) before a content-drift overwrite, and the backup named in output."""
+    src, dst = _setup(tmp_path, monkeypatch)
+    src.write_text("# chuzom-hook-version: 5\nbundled\n")
+    user_edit = "# chuzom-hook-version: 5\nUSER CUSTOMIZATION\n"
+    dst.write_text(user_edit)
+
+    msgs = ih.check_and_update_hooks()
+
+    bak = dst.with_suffix(dst.suffix + ".bak")
+    assert bak.exists(), "RED1-7-02: no backup made before overwrite"
+    assert bak.read_text() == user_edit, "backup does not contain the user's edit"
+    assert dst.read_text() == src.read_text(), "file not refreshed to bundled"
+    assert any(".bak" in m for m in msgs), f"backup not surfaced in output: {msgs}"
+
+
+def test_rules_drift_backs_up_previous(tmp_path, monkeypatch):
+    rsrc = tmp_path / "rsrc"
+    rdst = tmp_path / "rdst"
+    rsrc.mkdir()
+    rdst.mkdir()
+    monkeypatch.setattr(ih, "_RULES_SRC", rsrc)
+    monkeypatch.setattr(ih, "_RULES_DST", rdst)
+    (rsrc / "chuzom.md").write_text("<!-- chuzom-rules-version: 7 -->\nbundled\n")
+    user_edit = "<!-- chuzom-rules-version: 7 -->\nMY ORG RULES\n"
+    (rdst / "chuzom.md").write_text(user_edit)
+
+    msg = ih.check_and_update_rules()
+
+    bak = (rdst / "chuzom.md").with_suffix(".md.bak")
+    assert bak.exists() and bak.read_text() == user_edit, "rules edit not backed up"
+    assert ".bak" in (msg or "")
+
+
 def test_identical_content_is_a_noop(tmp_path, monkeypatch):
     src, dst = _setup(tmp_path, monkeypatch)
     body = "# chuzom-hook-version: 5\nsame\n"

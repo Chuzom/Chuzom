@@ -97,8 +97,8 @@ def test_no_fabricated_magnitude_claims_anywhere_in_src():
 _ESTIMATES_DISCLAIMER = "illustrative estimates — directional, not measured"
 
 
-def _readme_scannable_text() -> str:
-    lines = (ROOT / "README.md").read_text().splitlines()
+def _scannable_from_lines(lines: list[str]) -> str:
+    """Pure carve-out logic (testable without touching the real README)."""
     heading = next(
         (i for i, ln in enumerate(lines) if ln.strip().startswith("### Estimated savings by workload")),
         None,
@@ -111,12 +111,21 @@ def _readme_scannable_text() -> str:
          if lines[j].startswith("## ") or lines[j].startswith("### ")),
         len(lines),
     )
-    section = "\n".join(lines[heading:end])
-    if _ESTIMATES_DISCLAIMER in section:
-        # Qualified block — exclude it from the strict scan.
-        return "\n".join(lines[:heading] + lines[end:])
+    section = lines[heading:end]
+    if _ESTIMATES_DISCLAIMER in "\n".join(section):
+        # RED2-7-02: exempt ONLY the disclaimed table-DATA rows (Markdown `|`
+        # lines) — the specific illustrative figures the disclaimer qualifies —
+        # NOT arbitrary prose. A section-wide carve-out let an unrelated,
+        # unqualified prose claim be smuggled in next to the real disclaimer and
+        # pass the guard. Prose lines in the block are still scanned.
+        kept_section = [ln for ln in section if not ln.lstrip().startswith("|")]
+        return "\n".join(lines[:heading] + kept_section + lines[end:])
     # Disclaimer missing → the block is no longer qualified; scan everything.
     return "\n".join(lines)
+
+
+def _readme_scannable_text() -> str:
+    return _scannable_from_lines((ROOT / "README.md").read_text().splitlines())
 
 
 def test_readme_full_has_no_unqualified_magnitude_claims():
@@ -129,6 +138,28 @@ def test_readme_full_has_no_unqualified_magnitude_claims():
         "RED2-5-04: unqualified magnitude claim(s) in README outside the "
         "disclaimed estimates block: " + "; ".join(offenders)
     )
+
+
+def test_readme_carveout_does_not_exempt_prose_in_the_disclaimed_block():
+    """RED2-7-02: the carve-out must exempt only the disclaimed table-DATA rows,
+    not arbitrary prose. A fabricated prose claim inserted into the disclaimed
+    block must still be caught (tested via the pure helper, no file mutation)."""
+    synthetic = [
+        "# README",
+        "### Estimated savings by workload",
+        "> These are illustrative estimates — directional, not measured.",
+        "Independent benchmarks show Chuzom is 100x cheaper in every case.",  # smuggled prose
+        "| Workload | runway |",
+        "| dev | ~2–3× more |",  # a legit disclaimed table figure
+        "## Next section",
+    ]
+    scannable = _scannable_from_lines(synthetic)
+    # The smuggled prose claim must survive into the scannable text and be caught…
+    assert any(p.search(scannable) for p in MAGNITUDE_FORBIDDEN), (
+        "RED2-7-02: prose claim smuggled into the disclaimed block was NOT caught"
+    )
+    # …while the legit table figure on a `|` row is exempted (not in scannable text).
+    assert "~2–3× more" not in scannable, "disclaimed table figure should stay exempt"
 
 
 def test_readme_estimates_carveout_requires_its_disclaimer():

@@ -108,6 +108,10 @@ class BudgetBackend(Protocol):
         self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
     ) -> None: ...
 
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None: ...
+
     def tier_state(self, key: BudgetKey) -> dict[str, float | bool | None]: ...
 
 
@@ -558,6 +562,51 @@ class SqliteBudgetBackend:
                         "(key_blob, amount_usd, committed_at) "
                         "VALUES (?, ?, ?)",
                         (_serialise_key(env_key), cost_usd, now),
+                    )
+            self._conn.execute("COMMIT")
+            for env_key, _ in chain:
+                self._maybe_flip_soft_state(env_key)
+        except Exception:
+            self._conn.execute("ROLLBACK")
+            raise
+
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None:
+        """RED1-7-01: atomically undo the reservation (pending -= est) AND record
+        the real spend (consumed += actual) in ONE lock-hold / ONE transaction.
+
+        commit_envelope previously did release(est) then commit(actual) as two
+        separate awaited, separately-transacted calls; a concurrent try_reserve
+        landing in the gap saw pending already decremented but consumed not yet
+        incremented, and could be admitted past a shared cap. Doing both in a
+        single BEGIN IMMEDIATE removes that window."""
+        if est_cost_usd <= 0 and actual_cost_usd <= 0:
+            return
+        async with self._lock:
+            await asyncio.to_thread(
+                self._settle_sync, key, float(est_cost_usd or 0.0), float(actual_cost_usd or 0.0)
+            )
+
+    def _settle_sync(self, key: BudgetKey, est: float, actual: float) -> None:
+        self._begin_immediate_with_retry()
+        try:
+            chain = self._chain_rows(key)
+            now = time.time()
+            for env_key, _ in chain:
+                self._conn.execute(
+                    "UPDATE envelopes SET "
+                    "consumed_usd = consumed_usd + ?, "
+                    "pending_usd = max(0.0, pending_usd - ?) "
+                    "WHERE key_blob = ?",
+                    (actual, est, _serialise_key(env_key)),
+                )
+                if env_key == key and actual > 0:
+                    self._conn.execute(
+                        "INSERT INTO budget_spend_events "
+                        "(key_blob, amount_usd, committed_at) "
+                        "VALUES (?, ?, ?)",
+                        (_serialise_key(env_key), actual, now),
                     )
             self._conn.execute("COMMIT")
             for env_key, _ in chain:

@@ -369,6 +369,39 @@ class PostgresBudgetBackend:
                 pass
             raise
 
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None:
+        """RED1-7-01: atomic pending−=est + consumed+=actual in one transaction."""
+        if est_cost_usd <= 0 and actual_cost_usd <= 0:
+            return
+        async with self._lock:
+            await asyncio.to_thread(
+                self._settle_sync, key, float(est_cost_usd or 0.0), float(actual_cost_usd or 0.0)
+            )
+
+    def _settle_sync(self, key: BudgetKey, est: float, actual: float) -> None:
+        try:
+            with self._conn.cursor() as cur:
+                chain_keys = self._chain_keys(cur, key)
+                for env_key in chain_keys:
+                    cur.execute(
+                        "UPDATE chuzom_envelopes "
+                        "SET consumed_usd = consumed_usd + %s, "
+                        "pending_usd = GREATEST(0.0, pending_usd - %s) "
+                        "WHERE key_blob = %s",
+                        (actual, est, _serialise_key(env_key)),
+                    )
+            self._conn.commit()
+            for env_key in chain_keys:
+                self._maybe_flip_soft_state(env_key)
+        except Exception:
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+            raise
+
     def _chain_keys(self, cur: "psycopg.Cursor", key: BudgetKey) -> list[BudgetKey]:
         """Lock the leaf row + every registered ancestor, return their keys.
 

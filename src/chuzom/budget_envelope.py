@@ -277,6 +277,24 @@ class BudgetEnvelopeManager:
                     release_for(env.key, cost_usd)
                 self._update_soft_state(env)
 
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None:
+        """RED1-7-01: atomically undo the reservation (pending -= est) and record
+        the real spend (consumed += actual) under a SINGLE lock-hold, so a
+        concurrent try_reserve cannot observe the reservation as gone while the
+        spend has not yet landed (which allowed a shared cap to be breached)."""
+        if est_cost_usd <= 0 and actual_cost_usd <= 0:
+            return
+        est = float(est_cost_usd or 0.0)
+        actual = float(actual_cost_usd or 0.0)
+        async with self._lock:
+            for env in self._chain(key):
+                self._consumed[env.key] = self._consumed.get(env.key, 0.0) + actual
+                self._pending[env.key] = max(0.0, self._pending.get(env.key, 0.0) - est)
+                release_for(env.key, est)
+                self._update_soft_state(env)
+
     # ── T2-M3 soft tier ────────────────────────────────────────────────────
 
     def _update_soft_state(self, env: BudgetEnvelope) -> None:

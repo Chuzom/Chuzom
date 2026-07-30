@@ -25,6 +25,22 @@ def test_run_uninstall_invokes_all_removers(monkeypatch, capsys):
     assert "claw removed" in out and "ide removed" in out
 
 
+def test_install_hooks_main_uninstall_delegates(monkeypatch):
+    """RED2-7-01: the `chuzom-install-hooks uninstall` entry point (install_hooks.main)
+    must delegate to the same _run_uninstall, so it also cleans claw-code + IDE
+    configs — not just the primary Claude Code surfaces."""
+    import sys
+    import chuzom.install_hooks as ih2
+    from chuzom.commands import uninstall as uninstall_cmd
+
+    called = {}
+    monkeypatch.setattr(uninstall_cmd, "_run_uninstall", lambda flags=None: called.setdefault("flags", flags))
+    monkeypatch.setattr(sys, "argv", ["chuzom-install-hooks", "uninstall", "--purge"])
+    ih2.main()
+    assert "flags" in called, "main() uninstall did not delegate to _run_uninstall"
+    assert called["flags"] == ["--purge"], f"flags not forwarded: {called}"
+
+
 def test_remover_exception_does_not_abort_uninstall(monkeypatch, capsys):
     """A failure cleaning an optional surface must not abort the whole uninstall."""
     monkeypatch.setattr(ih, "uninstall", lambda: ["primary removed"])
