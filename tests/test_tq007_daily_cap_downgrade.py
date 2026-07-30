@@ -56,7 +56,8 @@ def _response(model: str) -> LLMResponse:
     )
 
 
-async def _run(chain, *, task_cap=None, total_cap=None, spend=9999.0, enforce="hard"):
+async def _run(chain, *, task_cap=None, total_cap=None, spend=9999.0, enforce="hard",
+               prompt="hello", org_specialists=None, classification_data=None):
     """Drive route_and_call with a given chain, cap, over-cap spend, enforce mode."""
     caps = {}
     if task_cap is not None:
@@ -64,6 +65,13 @@ async def _run(chain, *, task_cap=None, total_cap=None, spend=9999.0, enforce="h
     if total_cap is not None:
         caps["_total"] = total_cap
     repo_cfg = RepoConfig(daily_caps=caps, enforce=enforce)
+
+    active_policy = None
+    if org_specialists:
+        from chuzom.policy import RoutingPolicy
+        active_policy = RoutingPolicy(
+            name="test", description="test", specialists=dict(org_specialists)
+        )
 
     route_log = MagicMock()
     mock_log = MagicMock()
@@ -86,6 +94,7 @@ async def _run(chain, *, task_cap=None, total_cap=None, spend=9999.0, enforce="h
         p(patch("chuzom.router.cost.get_daily_spend", new_callable=AsyncMock, return_value=spend))
         p(patch("chuzom.router.cost.get_daily_spend_by_task_type", new_callable=AsyncMock, return_value=spend))
         p(patch("chuzom.policy.load_org_policy", return_value=None))
+        p(patch("chuzom.policy.get_active_policy", return_value=active_policy))
         p(patch("chuzom.router.cost.log_usage", new_callable=AsyncMock))
         p(patch("chuzom.router.reserve_envelope", new_callable=AsyncMock, return_value=(None, True, None)))
         p(patch("chuzom.router.commit_envelope", new_callable=AsyncMock))
@@ -96,7 +105,10 @@ async def _run(chain, *, task_cap=None, total_cap=None, spend=9999.0, enforce="h
         p(patch("chuzom.router.providers.call_llm", new_callable=AsyncMock,
                 side_effect=lambda model, messages, **kw: _response(model)))
         from chuzom.router import route_and_call
-        return await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
+        return await route_and_call(
+            TaskType.CODE, prompt, profile=RoutingProfile.BALANCED,
+            classification_data=classification_data,
+        )
 
 
 @pytest.mark.asyncio
@@ -136,3 +148,47 @@ async def test_total_cap_also_downgrades():
     # same downgrade filter through the mocked provider path.
     resp = await _run(["openai/gpt-4o", "ollama/qwen2.5:7b"], total_cap=0.0001, enforce="hard")
     assert resp.provider == "ollama", f"expected downgrade to free ollama, got {resp.model}"
+
+
+# ── RED1-01 / RED1-02: post-filter injection points must not re-add paid ──────
+
+@pytest.mark.asyncio
+async def test_cap_hit_precision_prompt_stays_free():
+    """RED1-01: a precision-triggering prompt must NOT re-front openai/gpt-4o-mini
+    after the cap-downgrade. The filter now runs last, so dispatch stays free."""
+    resp = await _run(
+        ["openai/gpt-4o", "ollama/qwen2.5:7b"],
+        task_cap=0.0001, enforce="hard",
+        prompt="What is 47 * 89? Reply with only the number.",
+    )
+    assert resp.provider in {"ollama", "codex", "gemini_cli"}, (
+        f"RED1-01: precision-tier re-injected a paid provider under cap: {resp.model}"
+    )
+    assert resp.cost_usd == 0.0
+
+
+@pytest.mark.asyncio
+async def test_cap_hit_org_specialist_stays_free():
+    """RED1-02: an org-policy subject specialist (paid) must NOT be re-injected
+    ahead of the free-local chain after the cap-downgrade."""
+    resp = await _run(
+        ["ollama/qwen2.5:7b"],
+        task_cap=0.0001, enforce="hard",
+        org_specialists={"backend": "openai/gpt-4o"},
+        classification_data={"subject": "backend"},
+    )
+    assert resp.provider in {"ollama", "codex", "gemini_cli"}, (
+        f"RED1-02: subject specialist re-injected a paid provider under cap: {resp.model}"
+    )
+    assert resp.cost_usd == 0.0
+
+
+@pytest.mark.asyncio
+async def test_cap_hit_precision_prompt_no_free_hard_blocks():
+    """RED1-01 corollary: precision prompt, cap hit, paid-only chain, hard →
+    still blocks (precision-tier cannot smuggle a paid call past a hard cap)."""
+    with pytest.raises(BudgetExceededError):
+        await _run(
+            ["openai/gpt-4o"], task_cap=0.0001, enforce="hard",
+            prompt="What is 47 * 89? Reply with only the number.",
+        )

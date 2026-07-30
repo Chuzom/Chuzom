@@ -3351,34 +3351,10 @@ async def route_and_call(
             task_type, profile, model_override, complexity_hint, c, config
         )
 
-        # TQ-007: a daily spend cap was exceeded → downgrade to free-local
-        # providers rather than block. Drop every paid model from the chain,
-        # keeping only Ollama/Codex/Gemini-CLI (all $0). If at least one survives,
-        # the turn runs free. If none is available, enforce mode decides: `hard`
-        # blocks (raise the captured cap error, caller pays nothing); `smart`/
-        # `soft` fall through to Claude on the original chain. Caps thus apply
-        # whenever configured; enforce mode only governs this no-free branch.
-        if _daily_cap_exc is not None:
-            _FREE_LOCAL_PROVIDERS = {"ollama", "codex", "gemini_cli"}
-            _free_chain = [
-                m for m in models_to_try
-                if provider_from_model(m) in _FREE_LOCAL_PROVIDERS
-            ]
-            if _free_chain:
-                route_log.warning(
-                    "Daily cap exceeded — downgrading to free-local providers "
-                    "(%d model(s), $0). %s",
-                    len(_free_chain), _daily_cap_exc,
-                )
-                models_to_try = _free_chain
-            elif _enforce_mode == "hard":
-                raise _daily_cap_exc
-            else:
-                route_log.warning(
-                    "Daily cap exceeded and no free-local provider available — "
-                    "falling through to Claude (enforce=%s): %s",
-                    _enforce_mode, _daily_cap_exc,
-                )
+        # TQ-007 cap-downgrade is applied LAST (after precision-tier,
+        # subject-specialist and bandit reorder) — see below, just before the
+        # empty-chain check. Applying it here was a bug (RED1-01/RED1-02): those
+        # later steps re-prepend paid models, defeating the filter.
 
         # #27 / Option B — precision-tier routing. A short prompt demanding an exact,
         # verifiable answer (arithmetic / code output / precise count) is the regime
@@ -3444,6 +3420,38 @@ async def route_and_call(
                 )
             except Exception as _bandit_err:
                 log.debug("Bandit reorder skipped (continuing): %s", _bandit_err)
+
+        # TQ-007 (applied LAST — RED1-01/RED1-02 fix): a daily spend cap was
+        # exceeded → confine the FINAL chain to free-local providers. This runs
+        # after every chain-mutation step (precision-tier fronting, subject
+        # specialist, bandit reorder), each of which could otherwise re-prepend a
+        # paid model after an earlier filter. Keeping this as the last transform
+        # guarantees dispatch never sees a paid provider once the cap is hit.
+        # If ≥1 free-local model survives → run free ($0). If none → enforce mode
+        # decides: `hard` blocks (caller pays nothing); `smart`/`soft` fall
+        # through to Claude. Caps apply whenever configured; enforce mode governs
+        # only this no-free branch.
+        if _daily_cap_exc is not None:
+            _FREE_LOCAL_PROVIDERS = {"ollama", "codex", "gemini_cli"}
+            _free_chain = [
+                m for m in models_to_try
+                if provider_from_model(m) in _FREE_LOCAL_PROVIDERS
+            ]
+            if _free_chain:
+                route_log.warning(
+                    "Daily cap exceeded — downgrading to free-local providers "
+                    "(%d model(s), $0). %s",
+                    len(_free_chain), _daily_cap_exc,
+                )
+                models_to_try = _free_chain
+            elif _enforce_mode == "hard":
+                raise _daily_cap_exc
+            else:
+                route_log.warning(
+                    "Daily cap exceeded and no free-local provider available — "
+                    "falling through to Claude (enforce=%s): %s",
+                    _enforce_mode, _daily_cap_exc,
+                )
 
         if not models_to_try:
             set_span_attributes(
