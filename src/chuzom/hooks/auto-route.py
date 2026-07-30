@@ -2239,6 +2239,22 @@ def _paid_spend_cap() -> float:
         return 0.50
 
 
+def _resolve_auto_render_mode(render_mode: str, zero_claude: bool) -> str:
+    """CHZ-DRAFT-01 / RED2-01: resolve the "auto" render mode.
+
+    Block mode ({"decision":"block"}) REPLACES the user's turn with a routed
+    draft, so it must only be used when the user has explicitly opted into
+    zero-Claude. Outside zero-Claude, "auto" always resolves to advisory "echo":
+    the draft becomes context the assistant verifies, never a fabricated answer
+    that replaces the turn. This makes _is_context_dependent's ~60% false-negative
+    rate irrelevant to the fabrication risk. An explicit CHUZOM_RENDER_MODE of
+    "block"/"echo" is honored unchanged (only "auto" is resolved here).
+    """
+    if render_mode != "auto":
+        return render_mode
+    return "block" if zero_claude else "echo"
+
+
 def _is_context_dependent(prompt: str) -> bool:
     """True when the prompt references the user's local code/files/history/state —
     things a stateless routed model cannot see, so a pre-generated draft would be
@@ -3203,12 +3219,9 @@ def main() -> None:
                     build_echo_output as _build_echo,
                     build_block_output as _build_block,
                 )
-                if _render_mode == "auto":
-                    _render_mode = (
-                        "echo"
-                        if (not zero_claude and _is_context_dependent(prompt))
-                        else "block"
-                    )
+                # CHZ-DRAFT-01 / RED2-01: block mode (turn replacement) only in
+                # zero-Claude; otherwise advisory echo. See _resolve_auto_render_mode.
+                _render_mode = _resolve_auto_render_mode(_render_mode, zero_claude)
                 _turn_blocked = not (_render_mode == "echo" and not zero_claude)
                 # Persist into usage + routing_decisions ONLY for turns that
                 # actually bypass Claude (audit P1): an echo turn still consumes
