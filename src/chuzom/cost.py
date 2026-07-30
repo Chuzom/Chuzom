@@ -809,14 +809,27 @@ async def get_correction_count(tool: str) -> int:
 async def get_monthly_spend() -> float:
     """Get total USD spent on external LLMs in the current calendar month.
 
+    RED1-07: uses a LOCAL-time month boundary to match get_daily_spend* (both
+    reference the user's local calendar), so "today" for the daily cap is always
+    a consistent subset of "this month" for the monthly cap. Previously this used
+    a UTC 'start of month' while the daily functions used 'localtime', so at
+    non-UTC offsets the two caps' reset windows disagreed by up to the offset
+    around a month boundary.
+
     Returns:
         Total spend as a float. Returns 0.0 if no usage data exists.
     """
     db = await _get_db()
     try:
+        # Mirror get_daily_spend's frame exactly: convert the stored (UTC)
+        # timestamp to LOCAL, then compare the local year-month. Using
+        # strftime(..., 'localtime') on both sides keeps the reference frame
+        # identical to the daily function (which does date(timestamp,'localtime')
+        # = date('now','localtime')), so daily-today is always inside monthly-now.
         cursor = await db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) FROM usage "
-            "WHERE timestamp >= datetime('now', 'start of month')"
+            "WHERE strftime('%Y-%m', timestamp, 'localtime') = "
+            "strftime('%Y-%m', 'now', 'localtime')"
         )
         row = await cursor.fetchone()
         return float(row[0]) if row else 0.0
@@ -825,7 +838,7 @@ async def get_monthly_spend() -> float:
 
 
 async def get_daily_spend() -> float:
-    """Get total USD spent on external LLMs today (UTC calendar day).
+    """Get total USD spent on external LLMs today (local calendar day).
 
     Returns:
         Total spend as a float. Returns 0.0 if no usage data exists.
@@ -3026,7 +3039,12 @@ async def get_cache_savings(period: str = "today") -> dict[str, float]:
         elif period == "week":
             time_filter = "timestamp >= datetime('now', '-7 days')"
         elif period == "month":
-            time_filter = "timestamp >= datetime('now', 'start of month')"
+            # RED1-07: local-frame month boundary, consistent with the "today"
+            # filter above (was a UTC 'start of month').
+            time_filter = (
+                "strftime('%Y-%m', timestamp, 'localtime') = "
+                "strftime('%Y-%m', 'now', 'localtime')"
+            )
         else:  # all
             time_filter = "1"
 
