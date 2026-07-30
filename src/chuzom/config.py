@@ -266,6 +266,19 @@ class RouterConfig(BaseSettings):
     chuzom_monthly_budget: float = 20.0  # $20/month default cap
     chuzom_daily_spend_limit: float = 0.0  # 0 = disabled; >0 fires alert when crossed
 
+    # ── Persistence hardening (sensitive-content lifecycle) ──
+    # Whether result_cache/semantic_cache/session_store scrub credentials,
+    # tokens, and PII from content BEFORE it is written to disk. On by
+    # default — persistence is not a safe place for raw secrets.
+    chuzom_persist_redaction: bool = True   # CHUZOM_PERSIST_REDACTION
+    # Opt-in escape hatch: when true, skip redaction entirely and persist
+    # verbatim content. Off by default; only for trusted local debugging.
+    chuzom_persist_raw: bool = False        # CHUZOM_PERSIST_RAW
+    # Retention window for persisted content. Rows/lines older than this are
+    # PHYSICALLY deleted (not just filtered from queries) the next time the
+    # owning store is opened or written to. 0 disables purging.
+    chuzom_persist_ttl_days: int = 30       # CHUZOM_PERSIST_TTL_DAYS
+
     # ── Explainability (v8.2.0) ──
     # Controls routing explanation visibility on every response.
     # "footer" (default): compact one-line after response

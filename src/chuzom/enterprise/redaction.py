@@ -19,10 +19,13 @@ via RedactionPolicy.with_patterns().
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
 from chuzom.plugins.redaction import RedactionResult
+
+log = logging.getLogger("chuzom.enterprise.redaction")
 
 _LUHN_RE = re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)")
 
@@ -136,3 +139,75 @@ def redact_prompt(
         text=out, counts=counts,
         any_redactions=bool(counts),
     )
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Persist-on-write redaction — used by result_cache / semantic_cache /
+# session_store before ANY content touches a DB row or JSONL line.
+# ────────────────────────────────────────────────────────────────────────
+
+# Broadened "prose" pass: catches unanchored keyword-then-value phrasing
+# that anchored `key[:=]value` patterns in secret_scrubber miss entirely,
+# e.g. "the launch code is ORANGE-742" or "the password was hunter2play".
+_PROSE_SECRET_RE = re.compile(
+    r"\b((?:launch\s+code|access\s+code|passcode|password|pass\s*phrase|"
+    r"secret\s*(?:key)?|api\s*key|auth\s*token|credential|pin\s*code|"
+    r"security\s*code)\s*(?:is|was|[:=])\s*)"
+    r"[\"']?([A-Za-z0-9][A-Za-z0-9_-]{2,})[\"']?",
+    re.IGNORECASE,
+)
+
+_REDACTION_FAILURE_PLACEHOLDER = "[REDACTION-FAILED: content withheld]"
+
+
+def _redact_prose_secrets(text: str) -> str:
+    def _sub(match: re.Match[str]) -> str:
+        return f"{match.group(1)}[REDACTED:prose_secret]"
+    return _PROSE_SECRET_RE.sub(_sub, text)
+
+
+def persist_redact(text: str) -> str:
+    """Scrub *text* before it is written to any on-disk store.
+
+    Every persistence path (result_cache rows, semantic_cache rows,
+    session_store JSONL lines, and their FTS shadow tables) must run
+    content through this function before the write — never after.
+
+    Layered defense:
+      1. ``redact_prompt`` — structured PII/credential patterns (this module).
+      2. ``secret_scrubber.scrub_text`` — the canonical anchored-substring
+         scrubber (API keys, tokens, ``key: value`` / ``key=value`` forms).
+      3. A broadened "prose" pass for unanchored phrasing like "the launch
+         code is ORANGE-742" that (1) and (2) don't catch.
+
+    Config gates (``chuzom.config``):
+      - ``CHUZOM_PERSIST_RAW=1`` — skip redaction entirely (opt-in escape
+        hatch for trusted local debugging only). Default off.
+      - ``CHUZOM_PERSIST_REDACTION=off`` — same effect, independent flag.
+        Default on.
+
+    Safe-failure: ANY internal error returns a fixed placeholder, never the
+    raw input. Persistence must never fall through to writing the secret.
+    """
+    if not text or not isinstance(text, str):
+        return text
+
+    try:
+        from chuzom.config import get_config
+        config = get_config()
+        if getattr(config, "chuzom_persist_raw", False):
+            return text
+        if not getattr(config, "chuzom_persist_redaction", True):
+            return text
+    except Exception as exc:  # noqa: BLE001 — config unavailable, fail safe below
+        log.debug("persist_redact: config lookup failed, redacting anyway: %s", exc)
+
+    try:
+        out = redact_prompt(text, RedactionPolicy.default()).text
+        from chuzom.secret_scrubber import scrub_text
+        out = scrub_text(out)
+        out = _redact_prose_secrets(out)
+        return out
+    except Exception as exc:  # noqa: BLE001 — never persist raw content on failure
+        log.debug("persist_redact: redaction failed, withholding content: %s", exc)
+        return _REDACTION_FAILURE_PLACEHOLDER

@@ -87,19 +87,37 @@ _SECRET_PATTERNS = [
 def _scrub_secrets(text: str) -> str:
     """Redact credential patterns from event content before persistence.
 
-    CHZ-SEC-01: delegates to the canonical ``secret_scrubber.scrub_text`` (the
-    single superset), falling back to the local patterns only if that import is
-    unavailable. Previously this was a *third* independent scrubber that had
-    drifted (it missed ``password:``); the union now lives in one place.
+    D-01/B-03: routes through the shared ``persist_redact()`` (layers the
+    structured PII patterns, the canonical ``secret_scrubber.scrub_text``,
+    and a broadened unanchored "prose secret" pass, e.g. "the launch code is
+    ORANGE-742"), gated by ``CHUZOM_PERSIST_RAW`` / ``CHUZOM_PERSIST_REDACTION``.
+    Falls back to calling ``secret_scrubber.scrub_text`` directly if the
+    redaction module can't be imported (config unavailable, etc).
+
+    The local ``_SECRET_PATTERNS`` belt-and-suspenders pass still runs
+    afterward — UNLESS ``CHUZOM_PERSIST_RAW=1``, in which case skipping it is
+    required for the raw opt-in escape hatch to actually mean raw.
     """
     try:
-        from chuzom.secret_scrubber import scrub_text
-        text = scrub_text(text)
+        from chuzom.enterprise.redaction import persist_redact
+        text = persist_redact(text)
     except Exception:
-        pass
-    # Belt-and-suspenders: local patterns (PEM etc.) as a fallback / extra pass.
-    for pat in _SECRET_PATTERNS:
-        text = pat.sub("[REDACTED]", text)
+        try:
+            from chuzom.secret_scrubber import scrub_text
+            text = scrub_text(text)
+        except Exception:
+            pass
+
+    try:
+        from chuzom.config import get_config
+        persist_raw = bool(getattr(get_config(), "chuzom_persist_raw", False))
+    except Exception:
+        persist_raw = False
+
+    if not persist_raw:
+        # Belt-and-suspenders: local patterns (PEM etc.) as a fallback / extra pass.
+        for pat in _SECRET_PATTERNS:
+            text = pat.sub("[REDACTED]", text)
     return text
 
 
@@ -301,6 +319,65 @@ def _last_record(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def _first_record(path: Path) -> dict[str, Any] | None:
+    """Best-effort read of the FIRST well-formed JSON line in *path*.
+
+    Records are always appended in chronological order, so the first line's
+    age is a cheap proxy for "does this file contain ANY TTL-expired record"
+    — avoids a full-file scan on every append just to check retention.
+    """
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    return json.loads(line)
+                except Exception:
+                    continue
+        return None
+    except Exception:
+        return None
+
+
+def _persist_ttl_seconds() -> float:
+    """Global physical-retention TTL (``CHUZOM_PERSIST_TTL_DAYS``), in seconds.
+
+    B-02: independent of ``cleanup_old_sessions()``'s whole-FILE mtime-based
+    ``_TTL_DAYS`` sweep below — this governs per-RECORD physical deletion
+    during compaction, so a long-lived session file can't accumulate records
+    well past the retention window just because the session itself stays
+    active. 0 (or lower) disables purging.
+    """
+    try:
+        from chuzom.config import get_config
+        days = float(getattr(get_config(), "chuzom_persist_ttl_days", 30))
+    except Exception:
+        days = 30.0
+    return max(days, 0.0) * 86_400
+
+
+def purge_expired(session_id: str | None) -> None:
+    """Public helper: physically purge TTL-expired records for *session_id*.
+
+    Runs the same per-record TTL check ``_maybe_compact()`` performs
+    automatically after every ``record_event()`` call — exposed directly so
+    tests / external maintenance passes can force a purge without waiting
+    for (or synthesizing) another append.
+    """
+    try:
+        if not session_id:
+            return
+        path = _session_path(session_id)
+        if not path.exists():
+            return
+        with exclusive_lock(_lock_path(path)):
+            _maybe_compact(path)
+    except Exception:
+        pass
+
+
 def record_event(
     session_id: str | None,
     kind: str,
@@ -387,7 +464,14 @@ def record_event(
 
 def _maybe_compact(path: Path) -> None:
     """Rewrite *path* to keep only its newest ``_COMPACT_TO`` records once it
-    exceeds ``_MAX_FILE_BYTES`` or ``_MAX_RECORDS`` lines."""
+    exceeds ``_MAX_FILE_BYTES`` or ``_MAX_RECORDS`` lines, or once its oldest
+    record exceeds the persistence TTL.
+
+    B-02: TTL enforcement here is a PHYSICAL delete — expired lines are
+    dropped from the rewrite and are gone from the on-disk bytes, not just
+    filtered at read time. Survives a fresh process/store instance because
+    it operates on the file itself, not in-memory state.
+    """
     try:
         try:
             size = path.stat().st_size
@@ -399,6 +483,17 @@ def _maybe_compact(path: Path) -> None:
             with path.open("r", encoding="utf-8", errors="ignore") as fh:
                 count = sum(1 for _ in fh)
             need_compact = count > _MAX_RECORDS
+
+        ttl_seconds = _persist_ttl_seconds()
+        ttl_cutoff = time.time() - ttl_seconds if ttl_seconds > 0 else None
+        if not need_compact and ttl_cutoff is not None:
+            first = _first_record(path)
+            if first is not None:
+                try:
+                    if float(first.get("ts", 0)) < ttl_cutoff:
+                        need_compact = True
+                except Exception:
+                    pass
         if not need_compact:
             return
 
@@ -409,9 +504,15 @@ def _maybe_compact(path: Path) -> None:
                 if not line:
                     continue
                 try:
-                    json.loads(line)  # validate; keep raw line to avoid re-encoding cost
+                    parsed = json.loads(line)  # validate; keep raw line to avoid re-encoding cost
                 except Exception:
                     continue
+                if ttl_cutoff is not None:
+                    try:
+                        if float(parsed.get("ts", 0)) < ttl_cutoff:
+                            continue  # B-02: physically drop expired record
+                    except Exception:
+                        pass
                 records.append(line)
 
         newest = records[-_COMPACT_TO:]

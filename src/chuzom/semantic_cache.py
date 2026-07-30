@@ -24,8 +24,10 @@ import json
 import logging
 import math
 import os
+import stat
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -94,6 +96,80 @@ CREATE_SEMANTIC_CACHE_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_semantic_cache_type_time
 ON semantic_cache(task_type, created_at DESC)
 """
+
+
+def _repair_shared_db_perms(db_path: "Path | None") -> None:
+    """D-02: repair unsafe perms on the shared usage.db at open time.
+
+    ``cost.py``'s ``_get_db()`` (off-limits — owned by another cluster)
+    already creates the file with mode 0600 on first creation, but does
+    not repair an already-existing file with looser perms. This is the
+    local, out-of-band repair pass for semantic_cache's use of that same
+    file — safe to run repeatedly, no-ops when perms are already correct.
+
+    ``db_path`` may be ``None`` (e.g. a test double for ``get_config()``
+    that doesn't define ``chuzom_db_path``) — no-op in that case rather
+    than raising, since callers pass ``getattr(config, "chuzom_db_path",
+    None)`` precisely to stay safe against minimal config stand-ins.
+    """
+    if db_path is None:
+        return
+    try:
+        if db_path.exists() and stat.S_IMODE(db_path.stat().st_mode) != 0o600:
+            os.chmod(db_path, 0o600)
+    except OSError:
+        pass
+
+
+def _persist_ttl_seconds() -> float:
+    """Global physical-retention TTL (CHUZOM_PERSIST_TTL_DAYS), in seconds.
+
+    Independent of the semantic-similarity ``_TTL_SECONDS`` above (which
+    only bounds how far back `check()` scans for a similarity match). This
+    TTL governs unconditional PHYSICAL deletion of semantic_cache rows.
+    0 disables purging.
+    """
+    try:
+        from chuzom.config import get_config
+        days = float(getattr(get_config(), "chuzom_persist_ttl_days", 30))
+    except Exception:
+        days = 30.0
+    return max(days, 0.0) * 86_400
+
+
+async def _purge_expired(db) -> int:
+    """Physically delete TTL-expired rows from the ``semantic_cache`` table.
+
+    Scoped strictly to ``semantic_cache`` — never touches other tables in
+    the shared usage.db (which also holds spend/usage rows owned by
+    ``cost.py``). Sets ``PRAGMA secure_delete=ON`` on this connection so
+    freed page bytes are zeroed immediately, satisfying raw-byte-grep
+    requirements without needing a VACUUM (which risks lock contention with
+    concurrent ``cost.py`` writers on the shared file).
+    """
+    ttl_seconds = _persist_ttl_seconds()
+    if ttl_seconds <= 0:
+        return 0
+    try:
+        await db.execute("PRAGMA secure_delete=ON")
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM semantic_cache WHERE created_at < datetime('now', ?)",
+            (f"-{int(ttl_seconds)} seconds",),
+        )
+        row = await cursor.fetchone()
+        count = row[0] if row else 0
+        if not count:
+            return 0
+        await db.execute(
+            "DELETE FROM semantic_cache WHERE created_at < datetime('now', ?)",
+            (f"-{int(ttl_seconds)} seconds",),
+        )
+        await db.commit()
+        log.debug("semantic_cache: purged %d expired row(s) (ttl=%.0fd)", count, ttl_seconds / 86_400)
+        return count
+    except Exception as exc:
+        log.debug("semantic_cache: TTL purge failed: %s", exc)
+        return 0
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -176,6 +252,7 @@ async def check(
 
     try:
         from chuzom.cost import _get_db
+        _repair_shared_db_perms(getattr(config, "chuzom_db_path", None))
         db = await _get_db()
         try:
             await _ensure_project_scope_column(db)
@@ -262,8 +339,19 @@ async def store(
     if embedding is None:
         return
 
+    # D-01/D-04: redact BEFORE the row touches the shared usage.db. Wrapped
+    # locally even though persist_redact() is already safe-failure, so an
+    # import failure here can't fall through to persisting raw content.
+    try:
+        from chuzom.enterprise.redaction import persist_redact
+        safe_content = persist_redact(response.content)
+    except Exception as exc:
+        log.debug("semantic_cache: redaction unavailable, withholding content: %s", exc)
+        safe_content = "[REDACTION-FAILED: content withheld]"
+
     try:
         from chuzom.cost import _get_db
+        _repair_shared_db_perms(getattr(config, "chuzom_db_path", None))
         db = await _get_db()
         try:
             await _ensure_project_scope_column(db)
@@ -278,13 +366,16 @@ async def store(
                     task_type.value,
                     _project_scope(),
                     json.dumps(embedding),
-                    response.content,
+                    safe_content,
                     response.model,
                     response.cost_usd,
                 ),
             )
             await db.commit()
             log.debug("semantic_cache: stored entry for %s", task_type.value)
+            # B-02/B-03: physically purge TTL-expired rows on every store,
+            # scoped strictly to this table.
+            await _purge_expired(db)
         finally:
             await db.close()
     except Exception as exc:
