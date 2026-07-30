@@ -17,8 +17,8 @@ import platform
 import re
 import subprocess
 import threading
+# weakref removed with the per-loop budget-lock cache (RED1-09).
 import time
-import weakref
 import zlib
 from dataclasses import replace
 from typing import Any, AsyncIterator, TYPE_CHECKING
@@ -1070,23 +1070,52 @@ def _reorder_for_agent_context(
         else:  # claude_code — Claude preferred for complex/deep reasoning
             return claude + ollama + codex + gemini_cli + rest
 
-# Guards the check-then-spend budget sequence so concurrent calls cannot
-# both slip through the limit before either has recorded its spend.
-# asyncio locks are bound to their event loop, and gateway requests can enter
-# through route_server.route_payload(), which uses asyncio.run() per request.
-# Keep one lock per active loop so the gateway does not trip "bound to a
-# different event loop" on its second routed request.
-_budget_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = weakref.WeakKeyDictionary()
+# Guards the check-then-spend budget sequence so concurrent calls cannot both
+# slip through the limit before either has recorded its spend.
+#
+# RED1-09: this was a per-event-loop asyncio.Lock (keyed in a WeakKeyDictionary).
+# The gateway (route_server.py) is a ThreadingHTTPServer that runs asyncio.run()
+# PER REQUEST — so every concurrent request ran on a distinct, short-lived event
+# loop and therefore got a DISTINCT asyncio.Lock, providing zero cross-request
+# mutual exclusion. Two requests could both pass the cap check before either
+# committed its spend (observed lost updates to _pending_spend).
+#
+# The fix is a single PROCESS-WIDE threading.Lock, acquired via a non-blocking
+# async spin so it serializes across BOTH deployment shapes without ever
+# blocking an event loop:
+#   * MCP server  — one long-lived loop, many async tasks: the spin yields via
+#     asyncio.sleep, so sibling tasks are not starved while one holds the lock.
+#   * Gateway     — many OS threads, one loop each: a process-global
+#     threading.Lock is the only thing that actually excludes across threads.
+# The critical section is short (a local SQLite spend read + arithmetic), so the
+# 5 ms spin granularity adds negligible latency.
+_budget_proc_lock = threading.Lock()
 _pending_spend: float = 0.0  # sum of provisional spend for all in-flight calls
 
 
-def _budget_lock() -> asyncio.Lock:
-    loop = asyncio.get_running_loop()
-    lock = _budget_locks.get(loop)
-    if lock is None:
-        lock = asyncio.Lock()
-        _budget_locks[loop] = lock
-    return lock
+class _AsyncProcLock:
+    """Async context manager over a process-wide threading.Lock (RED1-09).
+
+    Acquire is a non-blocking spin with ``asyncio.sleep`` so the event loop is
+    never blocked; the underlying threading.Lock provides real mutual exclusion
+    across threads and across distinct event loops. threading.Lock has no
+    owner-thread check on release, so acquiring and releasing from the same
+    coroutine (possibly observed on one loop thread) is valid.
+    """
+
+    __slots__ = ()
+
+    async def __aenter__(self) -> "_AsyncProcLock":
+        while not _budget_proc_lock.acquire(blocking=False):
+            await asyncio.sleep(0.005)
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        _budget_proc_lock.release()
+
+
+def _budget_lock() -> "_AsyncProcLock":
+    return _AsyncProcLock()
 
 
 def _disabled_subprocess_backends() -> set[str]:
