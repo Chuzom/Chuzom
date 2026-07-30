@@ -3253,6 +3253,7 @@ async def route_and_call(
         # budget below is a separate, harder ceiling and still hard-blocks.
         _enforce_mode = "smart"
         _daily_cap_exc: BudgetExceededError | None = None
+        _cap_downgrade_applied: str = ""  # RED2-02: reason string when downgrade fired
         async with _budget_lock():
             from chuzom.repo_config import effective_config as _get_repo_config_for_budget
             _repo_cfg_budget = _get_repo_config_for_budget()
@@ -3473,6 +3474,7 @@ async def route_and_call(
                     len(_free_chain), _daily_cap_exc,
                 )
                 models_to_try = _free_chain
+                _cap_downgrade_applied = str(_daily_cap_exc)  # RED2-02: surface it
             elif _enforce_mode == "hard":
                 raise _daily_cap_exc
             else:
@@ -3993,6 +3995,22 @@ async def route_and_call(
                 )
         except Exception:  # noqa: BLE001
             pass
+
+        # RED2-02: surface a daily-cap downgrade on the response so a caller/CLI/
+        # dashboard can explain the (cheaper, local) route instead of leaving an
+        # unexplained quality drop. LLMResponse is a frozen dataclass, so build a
+        # copy with the fields set (mutation would raise FrozenInstanceError).
+        # Best-effort — never break the return.
+        if _cap_downgrade_applied:
+            try:
+                import dataclasses as _dc
+                response = _dc.replace(
+                    response,
+                    cap_downgraded=True,
+                    cap_downgrade_reason=_cap_downgrade_applied,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
         return response
 

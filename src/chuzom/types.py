@@ -488,6 +488,12 @@ class LLMResponse:
     # Semantic cache fields (v8.4.0) — chuzom's own LRU prompt cache
     cache_hit: bool = False
     cache_similarity: float = 0.0
+    # RED2-02: set when a daily spend cap forced this turn to a free-local
+    # provider (TQ-007 downgrade). Lets a caller / CLI / dashboard tell the user
+    # "you hit your cap, so this used a cheaper local model" instead of leaving
+    # an unexplained quality drop. `cap_downgrade_reason` carries the cap detail.
+    cap_downgraded: bool = False
+    cap_downgrade_reason: str = ""
     # Anthropic prompt-caching token counts (v9.2.2) — populated when the
     # provider response includes a usage block with these fields. Used by
     # cost.py:_claude_cost for the 4-component billing formula matching
