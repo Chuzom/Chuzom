@@ -1491,8 +1491,15 @@ def _enrich_response(
     effective_complexity: str,
     task_type: TaskType,
     chain_attempts: list[str],
+    failed_attempt_cost: float = 0.0,
 ) -> LLMResponse:
-    """Add explainability fields to a successful LLMResponse."""
+    """Add explainability fields to a successful LLMResponse.
+
+    RED1-8-01: ``failed_attempt_cost`` carries the already-billed cost of prior
+    rejected attempts out of the dispatch loop so route_and_call can settle the
+    TRUE turn cost (this response's cost + the rejected attempts') into the
+    budget envelope and quota tracker.
+    """
     return replace(
         response,
         confidence=classification_data.get("classifier_confidence", 0.0) if classification_data else 0.0,
@@ -1500,6 +1507,7 @@ def _enrich_response(
         complexity=effective_complexity,
         task_type_str=task_type.value,
         chain_attempts=chain_attempts,
+        chain_attempt_cost_usd=float(failed_attempt_cost or 0.0),
     )
 
 
@@ -2631,6 +2639,7 @@ async def _dispatch_model_loop(
             return _enrich_response(
                 response, classification_data, effective_complexity,
                 task_type, chain_attempts,
+                failed_attempt_cost=_failed_attempt_cost,  # RED1-8-01
             )
 
         except Exception as e:
@@ -2784,6 +2793,7 @@ async def _dispatch_model_loop(
                     return _enrich_response(
                         response, classification_data, effective_complexity,
                         task_type, chain_attempts,
+                        failed_attempt_cost=_failed_attempt_cost,  # RED1-8-01
                     )
 
                 except Exception as e:
@@ -2878,9 +2888,14 @@ async def _dispatch_model_loop(
         # rejected); accepting it here does not re-bill. Terminal state is 'accepted'
         # — an answer WAS returned — with the degradation captured in the logs above.
         _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
+        # RED1-8-01: the floor answer's own cost is ALREADY inside
+        # _failed_attempt_cost (billed when it was rejected), so subtract it to
+        # avoid double-counting — settlement adds response.cost_usd back.
+        _floor_extra = max(0.0, _failed_attempt_cost - float(getattr(_best_rejected, "cost_usd", 0.0) or 0.0))
         return _enrich_response(
             _best_rejected, classification_data, effective_complexity,
             task_type, chain_attempts,
+            failed_attempt_cost=_floor_extra,
         )
 
     _emit_ledger_terminal(correlation_id, "failed", route_succeeded=False)
@@ -4032,14 +4047,20 @@ async def route_and_call(
             cached=False,
             detail_extras=_success_detail,
         )
+        # RED1-8-01: the TRUE turn cost is this final response's cost PLUS the
+        # already-billed cost of any prior attempts a gate/quality check rejected
+        # (carried out of the dispatch loop on chain_attempt_cost_usd). Settling
+        # only response.cost_usd under-counted real spend in BOTH enforcement
+        # mechanisms, letting cumulative spend exceed a cap undetected.
+        _true_cost = float(getattr(response, "cost_usd", 0.0) or 0.0) + float(
+            getattr(response, "chain_attempt_cost_usd", 0.0) or 0.0
+        )
         # F4: record real per-identity spend so the next over-cap turn is
         # refused. No-op off-mode / zero-cost (cached/local/free) turns.
-        record_consumption(identity, float(getattr(response, "cost_usd", 0.0) or 0.0))
+        record_consumption(identity, _true_cost)
         # P0-3: settle the budget envelope — release the estimate reservation and
         # commit the actual spend so the shared envelope reflects true cost.
-        await commit_envelope(
-            _env_key, _reservation, float(getattr(response, "cost_usd", 0.0) or 0.0)
-        )
+        await commit_envelope(_env_key, _reservation, _true_cost)
         # T3-M4: persist the result for a future replay under the same
         # idempotency_key. Best-effort; a write failure must not break
         # the success path the caller is about to receive.

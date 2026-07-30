@@ -18,6 +18,7 @@ import re
 import shlex
 import shutil
 import sys
+import time
 from pathlib import Path
 
 
@@ -164,12 +165,30 @@ def _command_script_path(command: str) -> Path | None:
 
 def _backup_before_overwrite(dst: Path) -> Path | None:
     """RED1-7-02: preserve the file about to be overwritten, so a hand-edited
-    managed hook/rules file is never SILENTLY and PERMANENTLY destroyed. Returns
-    the backup path (``<dst>.bak``) or None if the backup could not be written."""
+    managed hook/rules file is never SILENTLY and PERMANENTLY destroyed.
+
+    Returns the backup path or None if the backup could not be written (the
+    caller MUST NOT overwrite when None is returned — RED1-8-02).
+
+    RED1-8-03/RED2-8-02: never clobber an existing backup. The plain ``<dst>.bak``
+    is written only if absent (it holds the FIRST captured edit); a subsequent
+    drift event writes a timestamped ``<dst>.<ts>.bak`` instead, so no earlier
+    hand-edit is ever lost.
+    """
     try:
-        backup = dst.with_suffix(dst.suffix + ".bak")
-        shutil.copy2(dst, backup)
-        return backup
+        primary = dst.with_suffix(dst.suffix + ".bak")
+        if not primary.exists():
+            shutil.copy2(dst, primary)
+            return primary
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        alt = dst.with_suffix(dst.suffix + f".{ts}.bak")
+        # Guard the sub-second collision case so we still never clobber.
+        n = 0
+        while alt.exists():
+            n += 1
+            alt = dst.with_suffix(dst.suffix + f".{ts}-{n}.bak")
+        shutil.copy2(dst, alt)
+        return alt
     except OSError:
         return None
 
@@ -213,18 +232,26 @@ def check_and_update_hooks() -> list[str]:
             # downgrade (src_v < dst_v is left alone).
             _drifted = src_v == dst_v and _files_differ(src, dst)
             if src_v > dst_v or _drifted:
-                try:
-                    backup = _backup_before_overwrite(dst)  # RED1-7-02
-                    shutil.copy2(src, dst)
-                    if sys.platform != "win32":
-                        dst.chmod(0o755)
-                    _where = f" (previous saved to {backup.name})" if backup else ""
-                    if _drifted:
-                        updates.append(f"Refreshed {dst_name} (content drift at v{src_v}){_where}")
-                    else:
-                        updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}{_where}")
-                except OSError as e:
-                    updates.append(f"Failed to update {dst_name}: {e}")
+                # RED1-8-02: if the backup cannot be written, do NOT overwrite —
+                # a hand-edited file must never be destroyed with no recovery path.
+                backup = _backup_before_overwrite(dst)  # RED1-7-02
+                if backup is None:
+                    updates.append(
+                        f"SKIPPED {dst_name}: could not back up existing file — "
+                        f"update NOT applied (previous content preserved)"
+                    )
+                else:
+                    try:
+                        shutil.copy2(src, dst)
+                        if sys.platform != "win32":
+                            dst.chmod(0o755)
+                        _where = f" (previous saved to {backup.name})"
+                        if _drifted:
+                            updates.append(f"Refreshed {dst_name} (content drift at v{src_v}){_where}")
+                        else:
+                            updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}{_where}")
+                    except OSError as e:
+                        updates.append(f"Failed to update {dst_name}: {e}")
 
         legacy_msg = _sync_legacy_hook_alias(_HOOKS_DST, settings, src_name, dst_name, src)
         if legacy_msg:
@@ -259,10 +286,19 @@ def check_and_update_rules() -> str | None:
         return None
 
     _RULES_DST.mkdir(parents=True, exist_ok=True)
-    # RED1-7-02: back up a possibly hand-edited rules file before overwriting.
-    backup = _backup_before_overwrite(rules_dst) if rules_dst.exists() else None
+    # RED1-7-02 / RED1-8-02: back up a possibly hand-edited rules file before
+    # overwriting; if the backup cannot be written, skip the overwrite so the
+    # user's content is never destroyed without a recovery path.
+    _where = ""
+    if rules_dst.exists():
+        backup = _backup_before_overwrite(rules_dst)
+        if backup is None:
+            return (
+                "SKIPPED routing rules update: could not back up existing file "
+                "— update NOT applied (previous content preserved)"
+            )
+        _where = f" (previous saved to {backup.name})"
     shutil.copy2(rules_src, rules_dst)
-    _where = f" (previous saved to {backup.name})" if backup else ""
     if _drifted:
         return f"Refreshed routing rules (content drift at v{src_version}){_where}"
     return f"Updated routing rules v{dst_version} → v{src_version}{_where}"

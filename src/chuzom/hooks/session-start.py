@@ -141,7 +141,43 @@ BANNER_API_KEYS = """
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
-BANNER = BANNER_SUBSCRIPTION if _CC_MODE else BANNER_API_KEYS
+BANNER_LOCAL = """
+╔════════════════════════════════════════════════════════════════╗
+║  ⚡ chuzom ACTIVE — local routing (no cloud keys set)     ║
+╠════════════════════════════════════════════════════════════════╣
+║  No cloud API keys detected. Routing uses whatever is         ║
+║  available locally (Ollama / Codex / Gemini CLI) or falls     ║
+║  through to Claude when nothing else can serve the task.      ║
+║  Add OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY, etc. to  ║
+║  enable cloud fallbacks — run `chuzom setup` to configure.    ║
+╠════════════════════════════════════════════════════════════════╣
+║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+╚════════════════════════════════════════════════════════════════╝
+""".strip()
+
+# RED2-8-03: the banner must reflect ACTUAL provider availability, not just the
+# subscription flag. Claiming "API-key routing in effect" and naming cloud
+# providers when zero keys are configured (the README's own Ollama-first
+# quickstart state) is false. Cloud-key vars chuzom can actually route through:
+_CLOUD_KEY_VARS = (
+    "OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY",
+    "DEEPSEEK_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY", "PERPLEXITY_API_KEY",
+)
+
+
+def _any_cloud_key() -> bool:
+    return any(os.environ.get(k, "").strip() for k in _CLOUD_KEY_VARS)
+
+
+def _resolve_banner(is_subscription: bool) -> str:
+    if is_subscription or _CC_MODE:
+        return BANNER_SUBSCRIPTION
+    if _any_cloud_key():
+        return BANNER_API_KEYS
+    return BANNER_LOCAL  # honest: no cloud keys configured
+
+
+BANNER = _resolve_banner(_CC_MODE)
 
 
 _CHUZOM_LOGO = "⚡ Chuzom"
@@ -258,7 +294,9 @@ def _zero_claude_enabled() -> bool:
 def _select_banner(is_subscription: bool) -> str:
     if _zero_claude_enabled():
         return BANNER_ZERO_CLAUDE
-    return BANNER_SUBSCRIPTION if is_subscription or _CC_MODE else BANNER_API_KEYS
+    # RED2-8-03: honest — fall to the local banner when no cloud keys are set
+    # instead of claiming "API-key routing in effect".
+    return _resolve_banner(is_subscription)
 
 
 def _reset_session_stats() -> None:

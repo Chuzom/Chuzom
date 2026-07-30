@@ -73,6 +73,42 @@ def test_rules_drift_backs_up_previous(tmp_path, monkeypatch):
     assert ".bak" in (msg or "")
 
 
+def test_backup_failure_skips_overwrite(tmp_path, monkeypatch):
+    """RED1-8-02: if the backup cannot be written, the overwrite must be SKIPPED
+    (never destroy a hand-edited file with no recovery path)."""
+    src, dst = _setup(tmp_path, monkeypatch)
+    src.write_text("# chuzom-hook-version: 5\nbundled\n")
+    user_edit = "# chuzom-hook-version: 5\nUSER EDIT\n"
+    dst.write_text(user_edit)
+    monkeypatch.setattr(ih, "_backup_before_overwrite", lambda d: None)  # simulate backup failure
+
+    msgs = ih.check_and_update_hooks()
+
+    assert dst.read_text() == user_edit, "RED1-8-02: overwrite proceeded despite backup failure"
+    assert any("SKIPPED" in m for m in msgs), f"no skip signal: {msgs}"
+
+
+def test_second_drift_does_not_clobber_first_bak(tmp_path, monkeypatch):
+    """RED1-8-03/RED2-8-02: a second drift must not overwrite the first .bak."""
+    src, dst = _setup(tmp_path, monkeypatch)
+    src.write_text("# chuzom-hook-version: 5\nbundled\n")
+    edit1 = "# chuzom-hook-version: 5\nEDIT ONE\n"
+    dst.write_text(edit1)
+    ih.check_and_update_hooks()  # refresh #1 → .bak holds edit1
+
+    bak = dst.with_suffix(dst.suffix + ".bak")
+    assert bak.read_text() == edit1
+    # user re-edits, then a second drift refresh happens
+    edit2 = "# chuzom-hook-version: 5\nEDIT TWO\n"
+    dst.write_text(edit2)
+    ih.check_and_update_hooks()  # refresh #2
+
+    assert bak.read_text() == edit1, "RED1-8-03: first .bak clobbered — original edit lost"
+    # edit2 preserved somewhere (a timestamped .bak)
+    others = [p for p in dst.parent.glob(dst.name + ".*bak") if p != bak]
+    assert any(p.read_text() == edit2 for p in others), "second edit not preserved"
+
+
 def test_identical_content_is_a_noop(tmp_path, monkeypatch):
     src, dst = _setup(tmp_path, monkeypatch)
     body = "# chuzom-hook-version: 5\nsame\n"

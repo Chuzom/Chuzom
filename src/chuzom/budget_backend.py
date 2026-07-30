@@ -798,6 +798,29 @@ def get_budget_backend() -> BudgetBackend:
         try:
             from chuzom.budget_backend_postgres import PostgresBudgetBackend
             _backend = PostgresBudgetBackend()
+            # RED1-8-04: the Postgres backend has no T2-L2 forecast (burn-rate)
+            # tier. When the deployment expects "strict" forecast enforcement
+            # (the enterprise default), selecting Postgres silently disables that
+            # pre-emptive throttle — the hard cap still applies, but the early
+            # burn-rate refusal does not. Warn + alert so operators are not
+            # unknowingly missing a safety tier they believe is on.
+            if _forecast_mode() == "strict":
+                log.warning(
+                    "postgres_backend_no_forecast_tier",
+                    detail="CHUZOM_BUDGET_BACKEND=postgres has no burn-rate "
+                    "forecast tier; strict-forecast enforcement is inactive on "
+                    "this backend (hard cap still enforced). Set "
+                    "CHUZOM_BUDGET_FORECAST_MODE=off to acknowledge, or use the "
+                    "sqlite backend for forecast enforcement.",
+                )
+                try:
+                    from chuzom.alerts import BUDGET_POSTGRES_FALLBACK, emit_alert
+                    emit_alert(
+                        BUDGET_POSTGRES_FALLBACK,
+                        detail={"reason": "postgres_no_forecast_tier"},
+                    )
+                except Exception:
+                    pass
         except (ImportError, RuntimeError) as err:
             # Fail-open: a missing dep or DSN must not break boot.
             # Operators see the warning and can fix; routing continues

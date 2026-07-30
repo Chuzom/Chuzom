@@ -26,6 +26,8 @@ responses are displayed directly to the user in the Claude Code UI.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from mcp.server.fastmcp import FastMCP
 
 from chuzom.config import get_config
@@ -41,7 +43,27 @@ from chuzom.tools.setup import _mask_key, llm_setup  # noqa: F401
 configure_logging()
 log = get_logger("chuzom.server")
 
-mcp = FastMCP("chuzom")
+
+@asynccontextmanager
+async def _lifespan(_server):
+    """RED1-8-05: drain tracked fire-and-forget tasks on server shutdown.
+
+    _spawn_bg() records receipt/OKF/analytics writes in _BG_TASKS so they can be
+    flushed rather than abandoned (leaking an aiosqlite connection) when the loop
+    tears down. This runs on the SAME event loop as those tasks, so it can await
+    them — an atexit handler cannot (the tasks belong to the already-closed loop).
+    """
+    try:
+        yield
+    finally:
+        try:
+            from chuzom.router import drain_bg_tasks
+            await drain_bg_tasks(timeout_s=5.0)
+        except Exception:
+            pass  # best-effort flush; never block shutdown
+
+
+mcp = FastMCP("chuzom", lifespan=_lifespan)
 
 # Auto-update routing rules and hooks on startup if a newer version was installed via pip
 try:

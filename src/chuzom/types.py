@@ -494,6 +494,11 @@ class LLMResponse:
     # an unexplained quality drop. `cap_downgrade_reason` carries the cap detail.
     cap_downgraded: bool = False
     cap_downgrade_reason: str = ""
+    # RED1-8-01: total already-billed cost of PRIOR attempts in this turn that a
+    # contract gate or quality-escalation rejected before this final response.
+    # `cost_usd` is only this final attempt; the budget envelope + quota tracker
+    # must settle `cost_usd + chain_attempt_cost_usd` to not under-count true spend.
+    chain_attempt_cost_usd: float = 0.0
     # Anthropic prompt-caching token counts (v9.2.2) — populated when the
     # provider response includes a usage block with these fields. Used by
     # cost.py:_claude_cost for the 4-component billing formula matching
