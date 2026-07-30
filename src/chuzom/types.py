@@ -513,6 +513,10 @@ class LLMResponse:
             parts.append(tokens)
         parts.append(f"${self.cost_usd:.6f}")
         parts.append(f"{self.latency_ms:.0f}ms")
+        # RED2-2-02: make a daily-cap downgrade visible to the user, so a route
+        # to a cheaper local model isn't an unexplained quality drop.
+        if self.cap_downgraded:
+            parts.append("⬇ daily cap → free-local")
         return " ".join(parts)
 
     def header(self) -> str:
@@ -527,6 +531,8 @@ class LLMResponse:
             parts.append(tokens)
         parts.append(f"${self.cost_usd:.6f}")
         parts.append(f"{self.latency_ms:.0f}ms")
+        if self.cap_downgraded:  # RED2-2-02
+            parts.append("⬇ daily cap reached → routed to a free/local model")
         return " · ".join(parts)
 
 

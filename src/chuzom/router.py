@@ -3280,8 +3280,8 @@ async def route_and_call(
                     # TQ-007: record for downgrade instead of blocking here.
                     _daily_cap_exc = BudgetExceededError(
                         f"Daily spend limit of ${_daily_limit:.2f} exceeded "
-                        f"(spent: ${daily_spend:.4f} today UTC). "
-                        "Resets at midnight UTC. "
+                        f"(spent: ${daily_spend:.4f} today, local time). "
+                        "Resets at local midnight. "
                         "To raise the limit: set CHUZOM_DAILY_SPEND_LIMIT env var "
                         "or routing.yaml's daily_caps._total."
                     )
@@ -3311,8 +3311,8 @@ async def route_and_call(
                     # not-yet-hit total cap; if both are hit, either exc is fine.
                     _daily_cap_exc = BudgetExceededError(
                         f"Task-type daily limit for {task_type.value} (${task_cap:.2f}) exceeded "
-                        f"(spent: ${task_daily_spend:.4f} today UTC). "
-                        f"Resets at midnight UTC. "
+                        f"(spent: ${task_daily_spend:.4f} today, local time). "
+                        f"Resets at local midnight. "
                         f"To raise the limit: update ~/.chuzom/org-policy.yaml task_caps "
                         f"or routing.yaml's daily_caps.{task_type.value}."
                     )
