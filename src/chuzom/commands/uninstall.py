@@ -69,6 +69,14 @@ def _run_uninstall(flags: list[str] | None = None) -> None:
         actions.extend(uninstall_ide_configs())
     except Exception as e:
         actions.append(f"IDE-config cleanup skipped: {e}")
+    # RED2-8-01: remove the home-scoped MCP registrations written by
+    # `chuzom install --host <codex|cursor|gemini-cli|vscode|copilot-cli|…>`,
+    # so uninstall doesn't leave live/dangling chuzom entries in those tools.
+    try:
+        from chuzom.commands.install import uninstall_host_integrations
+        actions.extend(uninstall_host_integrations())
+    except Exception as e:
+        actions.append(f"host-integration cleanup skipped: {e}")
     for a in actions:
         print(f"  {a}")
 

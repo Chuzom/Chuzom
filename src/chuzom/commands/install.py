@@ -631,6 +631,133 @@ def _merge_json_mcp_block(
     return actions
 
 
+def _remove_json_mcp_block(
+    config_path, server_name: str = "chuzom", root_key: str = "mcpServers"
+) -> list[str]:
+    """RED2-8-01: inverse of _merge_json_mcp_block — surgically remove the chuzom
+    MCP entry from a host's JSON config, leaving every other server intact."""
+    import json as _json
+    import pathlib
+
+    actions: list[str] = []
+    config_path = pathlib.Path(config_path)
+    if not config_path.exists():
+        return actions
+    try:
+        existing = _json.loads(config_path.read_text())
+    except Exception:
+        return actions
+    servers = existing.get(root_key)
+    if isinstance(servers, dict) and server_name in servers:
+        del servers[server_name]
+        try:
+            config_path.write_text(_json.dumps(existing, indent=2))
+            actions.append(f"✓ Removed chuzom MCP server from {config_path}")
+        except OSError as e:
+            actions.append(f"  Could not update {config_path}: {e}")
+    return actions
+
+
+def _remove_toml_table_block(text: str, header: str) -> str:
+    """Remove a `[header]` TOML table and its body (until the next table / EOF)."""
+    import re
+    pattern = re.compile(
+        rf'(?:^|\n)\[{re.escape(header)}\]\s*\n(?:(?!\n\[).*\n?)*',
+        re.MULTILINE,
+    )
+    return pattern.sub("\n", text, count=1)
+
+
+def uninstall_host_integrations() -> list[str]:
+    """RED2-8-01: remove the live MCP registrations that `chuzom install --host
+    <codex|cursor|gemini-cli|vscode|copilot-cli|openclaw|trae>` wrote, so a
+    `chuzom uninstall` does not leave dangling `chuzom` entries that break those
+    tools after `pip uninstall`. Each remover is home-scoped and defensive — a
+    no-op when the host was never installed, and never aborts on one host's error.
+
+    NOTE: project-scoped writers (.vscode/mcp.json, .cursor/rules, .github/
+    copilot-instructions.md, Trae .rules in a project) are handled by
+    uninstall_ide_configs() against the cwd; this function covers the
+    home-directory MCP registrations only.
+    """
+    import pathlib
+    import shutil as _shutil
+    import sys
+
+    actions: list[str] = []
+    home = pathlib.Path.home()
+
+    # JSON MCP registrations (root_key varies by host).
+    json_targets = [
+        (home / ".gemini" / "settings.json", "mcpServers"),
+        (home / ".cursor" / "mcp.json", "mcpServers"),
+        (home / ".config" / "gh" / "copilot" / "mcp.json", "mcpServers"),
+        (home / ".openclaw" / "mcp.json", "mcpServers"),
+    ]
+    if sys.platform == "darwin":
+        json_targets.append((home / "Library" / "Application Support" / "Code" / "User" / "mcp.json", "servers"))
+        json_targets.append((home / "Library" / "Application Support" / "Trae" / "mcp.json", "mcpServers"))
+    elif sys.platform == "win32":
+        appdata = pathlib.Path(home / "AppData" / "Roaming")
+        json_targets.append((appdata / "Code" / "User" / "mcp.json", "servers"))
+        json_targets.append((appdata / "Trae" / "mcp.json", "mcpServers"))
+    else:
+        json_targets.append((home / ".config" / "Code" / "User" / "mcp.json", "servers"))
+        json_targets.append((home / ".config" / "Trae" / "mcp.json", "mcpServers"))
+
+    for path, root_key in json_targets:
+        try:
+            actions += _remove_json_mcp_block(path, "chuzom", root_key)
+        except Exception as e:  # noqa: BLE001 — one host must never abort the rest
+            actions.append(f"  host cleanup skipped for {path}: {e}")
+
+    # Gemini CLI extension directory (whole chuzom extension).
+    try:
+        ext_dir = home / ".gemini" / "extensions" / "chuzom"
+        if ext_dir.exists():
+            _shutil.rmtree(ext_dir, ignore_errors=True)
+            actions.append(f"✓ Removed Gemini CLI extension dir {ext_dir}")
+    except Exception as e:  # noqa: BLE001
+        actions.append(f"  gemini extension cleanup skipped: {e}")
+
+    # Cursor routing-rules file chuzom authored.
+    try:
+        cursor_rules = home / ".cursor" / "rules" / "chuzom.md"
+        if cursor_rules.exists():
+            cursor_rules.unlink()
+            actions.append(f"✓ Removed {cursor_rules}")
+    except Exception as e:  # noqa: BLE001
+        actions.append(f"  cursor rules cleanup skipped: {e}")
+
+    # Codex: remove the gateway TOML table and the appended config.yaml MCP block.
+    try:
+        codex_dir = home / ".codex"
+        config_toml = codex_dir / "config.toml"
+        if config_toml.exists():
+            original = config_toml.read_text()
+            updated = _remove_toml_table_block(original, "model_providers.chuzom")
+            if updated != original:
+                config_toml.write_text(updated)
+                actions.append(f"✓ Removed [model_providers.chuzom] from {config_toml}")
+        config_yaml = codex_dir / "config.yaml"
+        if config_yaml.exists():
+            y = config_yaml.read_text()
+            mcp_block = (
+                "\nmcp:\n"
+                "  servers:\n"
+                "    chuzom:\n"
+                "      command: chuzom\n"
+                "      args: []\n"
+            )
+            if mcp_block in y:
+                config_yaml.write_text(y.replace(mcp_block, ""))
+                actions.append(f"✓ Removed chuzom MCP block from {config_yaml}")
+    except Exception as e:  # noqa: BLE001
+        actions.append(f"  codex cleanup skipped: {e}")
+
+    return actions
+
+
 def _append_routing_rules(dest_path, rules_filename: str) -> list[str]:
     """Append routing rules from src/rules/ to dest_path. Returns list of action strings."""
     import pathlib
