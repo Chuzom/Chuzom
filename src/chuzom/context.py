@@ -434,14 +434,26 @@ async def build_context_messages(
     # Resolve the session-context privacy mode once, up front, so EVERY context
     # layer (not just the Session Context Accumulator in layer 2b) honors it.
     # 'off' blocks all cross-session/session context; 'local' additionally
-    # blocks external paid providers (openai/gemini). Fails open to 'all'.
-    # 🥷 Backslash-security: Enforce privacy gate to prevent unauthorized data egress.
+    # blocks context egress to any NON-free-local provider. Fails open to 'all'.
+    #
+    # RED2-04: this was a two-provider allowlist (`in ("openai","gemini")`), so
+    # Perplexity — which every research-task prompt is routed to — bypassed the
+    # gate entirely and received full session history in `local` mode. It is now
+    # an inverted check against the known-free-local set, so ANY provider that is
+    # not local/free (Perplexity, and any future paid provider) is blocked by
+    # default under `local`, rather than requiring each new paid provider to be
+    # added to a second allowlist. NOTE: `local` mode governs history/context
+    # attachment only — it does not change routing destination (whether the
+    # current prompt goes external is decided by the routing chain).
+    _FREE_LOCAL_PROVIDERS = ("ollama", "codex", "gemini_cli")
     try:
         from chuzom import session_store
         privacy_mode = session_store.get_mode()
     except Exception:
         privacy_mode = "all"
-    _blocks_external = privacy_mode == "local" and target_provider in ("openai", "gemini")
+    _blocks_external = (
+        privacy_mode == "local" and target_provider not in _FREE_LOCAL_PROVIDERS
+    )
     _context_suppressed = privacy_mode == "off" or _blocks_external
 
     # Layer 1: Previous session summaries. These are LLM-generated summaries of

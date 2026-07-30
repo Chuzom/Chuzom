@@ -481,7 +481,9 @@ def build_session_context(
         mode = get_mode()
         if mode == "off":
             return ""
-        if mode == "local" and target_provider in ("openai", "gemini"):
+        # RED2-04: block context egress to ANY non-free-local provider under
+        # `local` (was a two-provider allowlist that let Perplexity through).
+        if mode == "local" and target_provider not in ("ollama", "codex", "gemini_cli"):
             return ""
 
         records = load_events(session_id, limit=200)
