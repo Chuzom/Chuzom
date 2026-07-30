@@ -19,7 +19,7 @@ and is *suggesting* the cheapest model that can likely handle it. Format:
 ```
 
 **The economic point**: a good-enough answer from a local/cheap model (Ollama, Codex,
-Gemini, Kimi) costs 50–100× less than Claude handling it directly. So when the suggested
+Gemini, Kimi) can be much cheaper than Claude handling it directly. So when the suggested
 model can clearly do the job, prefer it. That's the whole value of Chuzom.
 
 ## What to do

@@ -1383,7 +1383,7 @@ def main() -> None:
         f"  Tool attempted: {tool_name}\n"
         f"  Session violations: {violation_count} this session\n\n"
         f"WHY THIS MATTERS:\n"
-        f"  Routing saves 50–100x on this task. Using {tool_name} instead of {expected_tool}\n"
+        f"  Routing to a cheaper capable model conserves quota. Using {tool_name} instead of {expected_tool}\n"
         f"  burns full model cost with no savings. For {complexity} tasks, that's expensive.\n\n"
         f"NEXT STEP (required):\n"
         f"{action}\n\n"

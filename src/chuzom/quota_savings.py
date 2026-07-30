@@ -239,7 +239,10 @@ _SUBSCRIPTION_PROVIDERS = frozenset({"anthropic", "cc"})
 # best signal chuzom can surface without an OpenAI-side quota API.
 _SUBSCRIPTION_AUTH_PROVIDERS = frozenset({"codex"})
 _API_PROVIDERS = frozenset({"openai", "gemini", "groq", "deepseek"})
-_FREE_LOCAL_PROVIDERS = frozenset({"ollama", "vllm", "lm_studio"})
+# RED2-3-03: gemini_cli is treated as free-local for cap routing (router.py's
+# _FREE_LOCAL_PROVIDERS), so it must be in this bucket too or its calls silently
+# lose their quota-hint line.
+_FREE_LOCAL_PROVIDERS = frozenset({"ollama", "vllm", "lm_studio", "gemini_cli"})
 
 
 def _sum_cost_usd_since_for_provider(

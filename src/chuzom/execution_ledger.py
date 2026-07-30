@@ -229,8 +229,15 @@ def _load_rows(where: str, params: tuple, path: Path | None = None) -> list[dict
     conn = _connect(path)
     try:
         conn.row_factory = sqlite3.Row
+        # RED1-3-05: deterministic order. _aggregate()'s realization-status merge
+        # is last-write-wins per route_id, so an unordered scan let identical
+        # conflicting rows flip realized_savings_usd between runs. Order by the
+        # event timestamp (then the primary key) so "last write wins" means the
+        # chronologically-latest event, deterministically.
         cur = conn.execute(
-            f"SELECT {','.join(_COLUMNS)} FROM execution_events WHERE {where}", params
+            f"SELECT {','.join(_COLUMNS)} FROM execution_events WHERE {where} "
+            "ORDER BY ts ASC, event_id ASC",
+            params,
         )
         out = []
         for r in cur.fetchall():

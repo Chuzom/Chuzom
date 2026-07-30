@@ -50,21 +50,28 @@ def test_readme_headline_has_no_fabricated_claims():
 MAGNITUDE_FORBIDDEN = [
     re.compile(r"3[×x]\s*longer", re.I),
     re.compile(r"60[–-]?90\s*%", re.I),
+    # RED2-3-02: any unqualified "NN-NNx"/"NNx" cost/speed multiplier claim
+    # (e.g. "50–100x less", "100x cheaper"). The guard previously only knew the
+    # two specific phrasings above, so "50–100x" shipped into installed rules.
+    re.compile(r"\d+\s*[–-]\s*\d+\s*[x×]\b", re.I),
+    re.compile(r"\b\d{2,}\s*[x×]\s*(?:less|cheaper|faster|savings?)\b", re.I),
 ]
 
 
 def test_no_fabricated_magnitude_claims_anywhere_in_src():
     src = ROOT / "src" / "chuzom"
     offenders = []
-    for path in src.rglob("*.py"):
-        try:
-            text = path.read_text()
-        except OSError:
-            continue
-        for pat in MAGNITUDE_FORBIDDEN:
-            if pat.search(text):
-                offenders.append(f"{path.relative_to(ROOT)} :: {pat.pattern}")
+    # Scan shipped code AND the rules/docs the product writes to a user's machine.
+    for pattern in ("*.py", "rules/*.md", "**/*.mdc"):
+        for path in src.rglob(pattern) if "**" in pattern else src.glob(f"**/{pattern}"):
+            try:
+                text = path.read_text()
+            except OSError:
+                continue
+            for pat in MAGNITUDE_FORBIDDEN:
+                if pat.search(text):
+                    offenders.append(f"{path.relative_to(ROOT)} :: {pat.pattern}")
     assert not offenders, (
-        "fabricated magnitude claim(s) in shipped source (RED2-05): "
+        "fabricated magnitude claim(s) in shipped source (RED2-05/RED2-3-02): "
         + "; ".join(offenders)
     )

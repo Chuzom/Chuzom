@@ -513,10 +513,11 @@ class LLMResponse:
             parts.append(tokens)
         parts.append(f"${self.cost_usd:.6f}")
         parts.append(f"{self.latency_ms:.0f}ms")
-        # RED2-2-02: make a daily-cap downgrade visible to the user, so a route
-        # to a cheaper local model isn't an unexplained quality drop.
+        # RED2-2-02 / RED2-3-01: make a daily-cap downgrade visible, and describe
+        # it HONESTLY by the actual provider — a smart-mode cap fallthrough routes
+        # to Claude (paid), not free-local, so don't claim "free-local" then.
         if self.cap_downgraded:
-            parts.append("⬇ daily cap → free-local")
+            parts.append(f"⬇ daily cap → {self._cap_downgrade_target()}")
         return " ".join(parts)
 
     def header(self) -> str:
@@ -531,9 +532,23 @@ class LLMResponse:
             parts.append(tokens)
         parts.append(f"${self.cost_usd:.6f}")
         parts.append(f"{self.latency_ms:.0f}ms")
-        if self.cap_downgraded:  # RED2-2-02
-            parts.append("⬇ daily cap reached → routed to a free/local model")
+        if self.cap_downgraded:  # RED2-2-02 / RED2-3-01
+            parts.append(f"⬇ daily cap reached → routed to {self._cap_downgrade_target()}")
         return " · ".join(parts)
+
+    def _cap_downgrade_target(self) -> str:
+        """Honest description of where a cap downgrade actually routed (RED2-3-01).
+
+        The smart/soft cap fallthrough routes to Claude (anthropic, PAID) — not a
+        free/local model — so the message must reflect the real provider instead
+        of unconditionally claiming "free-local".
+        """
+        prov = (self.provider or "").lower()
+        if prov in ("ollama", "codex", "gemini_cli"):
+            return "a free/local model"
+        if prov == "anthropic":
+            return "Claude (subscription)"
+        return f"{prov or self.model}"
 
 
 @dataclass(frozen=True)
