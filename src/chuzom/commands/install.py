@@ -390,6 +390,10 @@ Note: cost-routing is not available in Copilot (no hook system).
     "cursor": """\
 {bold}Cursor IDE{reset}  — writing config files…
 """,
+
+    "windsurf": """\
+{bold}Windsurf (MCP native){reset}  — writing config files…
+""",
 }
 
 
@@ -617,7 +621,7 @@ def _install_codex_files(mode: str = "gateway") -> list[str]:
             actions.append(f"✓ Created {instructions} with routing rules")
             try:
                 from chuzom import install_manifest
-                install_manifest.record("created_file", instructions)
+                install_manifest.record("created_file", instructions, block=rules_text)
             except Exception:
                 pass
 
@@ -780,10 +784,8 @@ def uninstall_host_integrations() -> list[str]:
             original = config_toml.read_text()
             updated = _remove_toml_table_block(original, "model_providers.chuzom")
             if updated != original:
-                try:  # RED1-9-02: back up before mutating the user's Codex config
-                    _shutil.copy2(config_toml, config_toml.with_suffix(".toml.chuzom-bak"))
-                except OSError:
-                    pass
+                # RED2-10-05: no persistent .chuzom-bak (uninstall leaves nothing
+                # chuzom-authored); the removal regex is ^-anchored + tested.
                 config_toml.write_text(updated)
                 actions.append(f"✓ Removed [model_providers.chuzom] from {config_toml}")
         config_yaml = codex_dir / "config.yaml"
@@ -857,7 +859,9 @@ def _append_routing_rules(dest_path, rules_filename: str) -> list[str]:
         actions.append(f"✓ Created {dest_path} with routing rules")
         try:
             from chuzom import install_manifest
-            install_manifest.record("created_file", dest_path)
+            # RED1-10-02: record the exact text so uninstall strips only chuzom's
+            # content and preserves anything the user appended later.
+            install_manifest.record("created_file", dest_path, block=rules_text)
         except Exception:
             pass
     return actions
@@ -1149,6 +1153,19 @@ def _install_vscode_files() -> list[str]:
     return actions
 
 
+def _install_windsurf_files() -> list[str]:
+    """Write Windsurf MCP config (project-scoped .windsurf/mcp.json). RED2-10-03:
+    windsurf is documented in README/--help but had no installer, so
+    `chuzom install --host windsurf` was rejected as an unknown host."""
+    import pathlib
+
+    actions: list[str] = []
+    mcp_json = pathlib.Path.cwd() / ".windsurf" / "mcp.json"
+    server_entry = {"command": "chuzom", "args": []}
+    actions += _merge_json_mcp_block(mcp_json, "chuzom", server_entry, root_key="mcpServers")
+    return actions
+
+
 def _install_cursor_files() -> list[str]:
     """Write Cursor IDE MCP config and routing rules. Returns list of actions taken."""
     import pathlib
@@ -1196,6 +1213,7 @@ def _install_host(host: str, mode: str = "auto") -> None:
         "factory":    (_install_factory_files,      "Run: factory plugin install ypollak2/chuzom"),
         "vscode":     (_install_vscode_files,       "Restart VS Code and enable MCP in Copilot settings."),
         "cursor":     (_install_cursor_files,       "Restart Cursor and run llm_savings to verify."),
+        "windsurf":   (_install_windsurf_files,     "Restart Windsurf and run llm_savings to verify."),
     }
 
     for h in hosts_to_show:

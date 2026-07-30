@@ -1093,7 +1093,13 @@ def main() -> None:
         _usage_path = os.path.join(STATE_DIR, "usage.json")
         with open(_usage_path) as _uf:
             _cached_usage = json.load(_uf)
-        _cached_sub = not _cached_usage.get("is_fallback", True)
+        # RED2-10-02: default to NOT-fallback (i.e. success) when the key is
+        # absent. Several success-path usage.json writers (subscription.py,
+        # usage-refresh.py) never write is_fallback; the fallback path ALWAYS
+        # writes is_fallback=True explicitly. So a missing key means success —
+        # the previous `True` default mis-read every such cache as a fallback and
+        # showed the wrong banner box. This one-line reader fix covers all writers.
+        _cached_sub = not _cached_usage.get("is_fallback", False)
     except Exception:
         _cached_sub = _CC_MODE
     banner = _select_banner(_cached_sub)

@@ -43,9 +43,21 @@ def _load() -> list[dict[str, Any]]:
 
 def record(kind: str, path: Any, **meta: Any) -> None:
     """Append an artifact record. Never raises — a manifest hiccup must not break
-    install. De-duplicates identical records so repeated installs don't bloat it."""
+    install. De-duplicates identical records so repeated installs don't bloat it.
+
+    RED2-10-01: the path is stored ABSOLUTE (resolved against the install-time
+    cwd). A relative path (e.g. Trae's project-scoped ``.rules``) would otherwise
+    be re-resolved against the DIFFERENT cwd of a later ``chuzom uninstall``,
+    deleting an unrelated file there and orphaning the real one — confirmed data
+    loss. Resolving here binds the record to the file that was actually written.
+    """
     try:
-        entry = {"kind": kind, "path": str(path), **meta}
+        abs_path = pathlib.Path(path)
+        try:
+            abs_path = abs_path.resolve() if abs_path.exists() else abs_path.absolute()
+        except OSError:
+            abs_path = abs_path.absolute()
+        entry = {"kind": kind, "path": str(abs_path), **meta}
         records = _load()
         if entry in records:
             return
@@ -77,6 +89,12 @@ def apply_uninstall() -> list[str]:
     actions: list[str] = []
     records = _load()
     for rec in reversed(records):
+        # RED1-10-01: a malformed (non-dict) record must be skipped safely — the
+        # except handler below must never itself raise (calling rec.get on a
+        # non-dict aborted the whole replay, orphaning later records' files).
+        if not isinstance(rec, dict):
+            actions.append(f"  manifest removal skipped (malformed record: {rec!r})")
+            continue
         try:
             kind = rec.get("kind")
             path = pathlib.Path(rec["path"])
@@ -86,7 +104,20 @@ def apply_uninstall() -> list[str]:
                 actions += _remove_toml_table(path, rec.get("header", ""))
             elif kind == "text_block":
                 actions += _remove_text_block(path, rec.get("block", ""))
-            elif kind in ("created_file", "file"):
+            elif kind == "created_file":
+                # RED1-10-02: chuzom created this file, but a user may have appended
+                # their own content afterward. If we recorded the exact text we
+                # wrote, strip ONLY that (deleting the file only if nothing else
+                # remains) — never unconditionally unlink and destroy user content.
+                block = rec.get("block")
+                if block:
+                    actions += _remove_text_block(path, block)
+                elif path.exists():
+                    path.unlink()
+                    actions.append(f"✓ Removed {path}")
+            elif kind == "file":
+                # A chuzom-authored script copy (e.g. a host hook script) — whole
+                # file is chuzom's, removal on uninstall is correct.
                 if path.exists():
                     path.unlink()
                     actions.append(f"✓ Removed {path}")
@@ -95,7 +126,8 @@ def apply_uninstall() -> list[str]:
                     _shutil.rmtree(path, ignore_errors=True)
                     actions.append(f"✓ Removed {path}")
         except Exception as e:  # noqa: BLE001 — one bad record must not abort the rest
-            actions.append(f"  manifest removal skipped ({rec.get('path')}): {e}")
+            _p = rec.get("path", "?")
+            actions.append(f"  manifest removal skipped ({_p}): {e}")
     clear()
     return actions
 
@@ -127,12 +159,9 @@ def _remove_toml_table(path: pathlib.Path, header: str) -> list[str]:
     )
     updated = pattern.sub("", text, count=1)
     if updated != text:
-        # Defensive backup before modifying a user's TOML config.
-        try:
-            _shutil = __import__("shutil")
-            _shutil.copy2(path, path.with_suffix(path.suffix + ".chuzom-bak"))
-        except OSError:
-            pass
+        # RED2-10-05: no persistent .chuzom-bak — uninstall must leave nothing
+        # chuzom-authored. The removal regex is ^-anchored and regression-tested
+        # (RED1-9-02), so it strips only the target table.
         path.write_text(updated)
         return [f"✓ Removed [{header}] from {path}"]
     return []
