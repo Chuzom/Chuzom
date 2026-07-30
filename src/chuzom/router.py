@@ -3467,6 +3467,21 @@ async def route_and_call(
                 m for m in models_to_try
                 if provider_from_model(m) in _FREE_LOCAL_PROVIDERS
             ]
+
+            async def _release_cap_reservation() -> None:
+                # Q-RESLEAK (RED1-2-02): a cap-block raise exits route_and_call
+                # BEFORE _dispatch_model_loop (the only place that releases the
+                # reservation), so the estimate added to _pending_spend would leak
+                # forever and bias every future cap check. Release it here on every
+                # raising exit. Guarded so a later dispatch-loop release can't
+                # double-decrement.
+                nonlocal _reservation
+                if _reservation:
+                    async with _budget_lock():
+                        global _pending_spend
+                        _pending_spend -= _reservation
+                    _reservation = 0.0
+
             if _free_chain:
                 route_log.warning(
                     "Daily cap exceeded — downgrading to free-local providers "
@@ -3475,14 +3490,32 @@ async def route_and_call(
                 )
                 models_to_try = _free_chain
                 _cap_downgrade_applied = str(_daily_cap_exc)  # RED2-02: surface it
-            elif _enforce_mode == "hard":
-                raise _daily_cap_exc
             else:
-                route_log.warning(
-                    "Daily cap exceeded and no free-local provider available — "
-                    "falling through to Claude (enforce=%s): %s",
-                    _enforce_mode, _daily_cap_exc,
-                )
+                # No free-local survivor. Q-SMART-PAID (RED2-2-01): the previous
+                # smart/soft branch left the (paid, non-Claude) chain untouched
+                # and let it dispatch — a SILENT metered paid call under an
+                # exceeded cap, despite the log saying "falling through to Claude".
+                # Correct behavior: smart/soft genuinely falls through to Claude,
+                # i.e. restrict to anthropic/Claude models if the chain has any;
+                # otherwise (and always under hard) BLOCK — never silently call a
+                # non-Claude paid provider once the cap is hit.
+                _claude_chain = [
+                    m for m in models_to_try if provider_from_model(m) == "anthropic"
+                ]
+                if _enforce_mode != "hard" and _claude_chain:
+                    route_log.warning(
+                        "Daily cap exceeded, no free-local provider — falling "
+                        "through to Claude (enforce=%s): %s",
+                        _enforce_mode, _daily_cap_exc,
+                    )
+                    models_to_try = _claude_chain
+                    _cap_downgrade_applied = str(_daily_cap_exc)
+                else:
+                    # hard, OR smart/soft with no Claude to fall through to →
+                    # block. Any remaining candidate is a metered paid provider
+                    # the cap forbids.
+                    await _release_cap_reservation()
+                    raise _daily_cap_exc
 
         if not models_to_try:
             set_span_attributes(

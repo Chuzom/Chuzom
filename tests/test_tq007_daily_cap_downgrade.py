@@ -45,7 +45,7 @@ class _Cfg:
     # All providers used in tests must be "available" — in production
     # _build_and_filter_chain only ever returns available providers, so a free
     # provider surviving the downgrade filter is guaranteed available.
-    available_providers = {"openai", "gemini", "ollama", "codex", "gemini_cli"}
+    available_providers = {"openai", "gemini", "ollama", "codex", "gemini_cli", "anthropic"}
 
 
 def _response(model: str) -> LLMResponse:
@@ -127,10 +127,43 @@ async def test_cap_hit_no_free_hard_blocks():
 
 
 @pytest.mark.asyncio
+async def test_cap_hit_no_free_no_claude_smart_blocks():
+    # Q-SMART-PAID (RED2-2-01): a paid-only NON-Claude chain (openai) with the cap
+    # exceeded under smart must NOT silently call openai — there is no Claude to
+    # fall through to, so it BLOCKS. (Was: wrongly asserted resp.provider=='openai'.)
+    with pytest.raises(BudgetExceededError):
+        await _run(["openai/gpt-4o"], task_cap=0.0001, enforce="smart")
+
+
+@pytest.mark.asyncio
 async def test_cap_hit_no_free_smart_falls_through_to_claude():
-    # chain is paid-only; cap exceeded + smart → falls through (call proceeds).
-    resp = await _run(["openai/gpt-4o"], task_cap=0.0001, enforce="smart")
-    assert resp.provider == "openai", "smart mode should fall through, not block"
+    # smart + cap + no free-local, but Claude IS in the chain → fall through to
+    # Claude (anthropic), never the non-Claude paid provider.
+    resp = await _run(
+        ["openai/gpt-4o", "anthropic/claude-sonnet-4-6"], task_cap=0.0001, enforce="smart"
+    )
+    assert resp.provider == "anthropic", (
+        f"smart no-free must fall through to Claude, not a paid non-Claude API: {resp.model}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_hard_block_releases_pending_spend_reservation():
+    # Q-RESLEAK (RED1-2-02): a hard-block raise must not leak _pending_spend.
+    from chuzom import router
+    before = router._pending_spend
+    with pytest.raises(BudgetExceededError):
+        await _run(["openai/gpt-4o"], task_cap=0.0001, enforce="hard")
+    assert abs(router._pending_spend - before) < 1e-9, (
+        f"reservation leaked: _pending_spend {before} -> {router._pending_spend}"
+    )
+    # Compounding: 3 hard blocks must not accumulate.
+    for _ in range(3):
+        with pytest.raises(BudgetExceededError):
+            await _run(["openai/gpt-4o"], task_cap=0.0001, enforce="hard")
+    assert abs(router._pending_spend - before) < 1e-9, (
+        f"reservation leaked across repeated blocks: {router._pending_spend}"
+    )
 
 
 @pytest.mark.asyncio
