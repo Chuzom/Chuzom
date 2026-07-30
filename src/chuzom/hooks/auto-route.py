@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets as _secrets_module  # RED1-2-03: route_id uniqueness nonce
 import subprocess
 import sys
 import tempfile
@@ -3494,13 +3495,19 @@ def main() -> None:
                     "session_id": session_id,
                     # RED1-06: a stable per-routing-decision id so the execution
                     # ledger can attribute each realization/override to the
-                    # specific route it corresponds to. Previously absent, so
-                    # enforce-route.py's pending.get("route_id") was always None
-                    # and every route in a session collapsed into one accounting
-                    # bucket. Composed from session + turn + expected tool so it
-                    # is unique per decision and stable across the pending →
-                    # ledger handoff.
-                    "route_id": f"{_safe_sid(session_id)}:{int(_now)}:{tool}",
+                    # specific route it corresponds to. Written ONCE here into the
+                    # pending file and read back by enforce-route/stop-enforce, so
+                    # a retried directive (same pending file) keeps the same id and
+                    # dedups correctly, while two DISTINCT decisions never collide.
+                    # RED1-2-03: int(_now) alone was 1-second-resolution, so two
+                    # same-session same-tool decisions within one second produced
+                    # identical ids and the second ledger row was dropped by
+                    # INSERT OR IGNORE. A random nonce makes each decision's id
+                    # unique regardless of wall-clock timing.
+                    "route_id": (
+                        f"{_safe_sid(session_id)}:{int(_now)}:{tool}:"
+                        f"{_secrets_module.token_hex(4)}"
+                    ),
                 },
             )
         except OSError:
