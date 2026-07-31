@@ -41,6 +41,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from chuzom.cost import _codex_cost
 from chuzom.execution_ledger import LedgerEvent, get_session_accounting, record_event
+from chuzom.quality_feedback import reset_quality_store
 from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
 # Quality gate: fraction of gold_answer tokens that must appear in the routed
@@ -48,10 +49,16 @@ from chuzom.types import LLMResponse, RoutingProfile, TaskType
 # (word-overlap, not exact match) -- this is a soak-level adoption proxy, not
 # a precision quality benchmark.
 GATE_THRESHOLD = 0.4
-# A stricter secondary threshold used only to estimate gate_false_negative_rate:
-# rows that failed the primary gate but would have passed this one are
-# "probably actually fine, the gate was too strict".
-_STRICT_THRESHOLD = 0.75
+# Phase 0.1 FIX 4c (bugfix): a LOWER secondary threshold used only to estimate
+# gate_false_negative_rate. Semantics: a row that failed the primary
+# GATE_THRESHOLD gate but still cleared this looser floor is "probably not
+# garbage, just below our official cutoff" -- a candidate false negative. This
+# must be strictly BELOW GATE_THRESHOLD: the original value here (0.75, ABOVE
+# GATE_THRESHOLD) made `quality_score < GATE_THRESHOLD and quality_score >=
+# _floor` mathematically unsatisfiable whenever the floor exceeds the gate --
+# gate_false_negative_rate was silently pinned to a fake, structural 0.0 for
+# every possible corpus, never a real per-row measurement.
+_LENIENT_FLOOR_THRESHOLD = 0.15
 # Fraction of gate-passing rows that are (deterministically, seeded) treated
 # as if the host/agent overrode the route instead of adopting it -- gives the
 # report a non-trivial (not 100%-adopted) adoption_unknown_fraction / mix.
@@ -146,6 +153,46 @@ class ReplayRun:
     period_end_ts: float = 0.0
 
 
+def _degraded_answer(gold_answer: str, rng: random.Random) -> str:
+    """Phase 0.1 FIX 4c: return a stub reply with realistic, seeded variation
+    in fidelity to ``gold_answer`` instead of an always-perfect echo.
+
+    Before this fix ``stub_call`` echoed ``gold_answer`` verbatim for every
+    row, which forces ``quality_score == 1.0`` (and therefore
+    ``quality_delta == 0``, ``gate_false_negative_rate == 0``) for the whole
+    corpus -- fake constants dressed up as measurements, not real signal.
+    This introduces three deterministic (seeded) fidelity buckets so those
+    metrics actually vary with the input, the way a real model's output
+    quality would:
+
+      * ~55% faithful replies (full gold content -- the routed model nailed it)
+      * ~30% partial replies (50-80% of gold tokens kept, in order -- mostly
+        right, some gaps -- exercises quality_delta > 0 while still passing
+        the GATE_THRESHOLD gate)
+      * ~15% degraded replies (5-20% of gold tokens kept -- exercises the
+        gate-fail path; the upper end of that range clears
+        _LENIENT_FLOOR_THRESHOLD while still failing GATE_THRESHOLD, giving
+        gate_false_negative_rate real per-row signal instead of a fake 0)
+
+    Word-subset, not exact-match corruption, so this is representative noise
+    (a model that got "most of it" or "little of it"), not adversarial
+    substitution.
+    """
+    words = gold_answer.split()
+    if not words:
+        return gold_answer
+    roll = rng.random()
+    if roll < 0.55:
+        return gold_answer
+    if roll < 0.85:
+        keep_frac = rng.uniform(0.5, 0.8)
+    else:
+        keep_frac = rng.uniform(0.05, 0.2)
+    keep_n = max(1, int(len(words) * keep_frac))
+    kept_idx = sorted(rng.sample(range(len(words)), keep_n))
+    return " ".join(words[i] for i in kept_idx)
+
+
 def _quality_score(response_text: str, gold_answer: str) -> float:
     """Word-overlap ratio: fraction of gold_answer's distinct tokens that
     appear (case-insensitively) somewhere in the response. [0, 1]."""
@@ -158,11 +205,32 @@ def _quality_score(response_text: str, gold_answer: str) -> float:
 
 
 def _accepted_route_id(ledger_path: Path, session_id: str) -> str | None:
+    """Phase 0.1 FIX 4a: a successful route can end its life two different
+    ways in the ledger, and both must count as "accepted" here:
+
+      1. The normal per-attempt path writes ``attempt_completed`` with
+         ``accepted = 1``.
+      2. The exhaustion-floor success path (router.py's
+         ``_emit_ledger_terminal(correlation_id, "accepted",
+         route_succeeded=True)`` around the chain-exhaustion fallback) writes
+         only a single ``route_completed`` row with
+         ``terminal_state = 'accepted'`` -- it does NOT also write an
+         ``attempt_completed accepted=1`` row for that same route.
+
+    Before this fix, rows dispatched via the exhaustion-floor path looked
+    like a dispatch failure to the soak harness (no matching route_id found),
+    even though the route genuinely succeeded -- inflating
+    ``mis_route_rate``/``soak_dispatch_failure_rate`` with harness artifacts
+    rather than real failures.
+    """
     conn = sqlite3.connect(str(ledger_path))
     try:
         rows = list(conn.execute(
             "SELECT route_id, turn_id FROM execution_events "
-            "WHERE session_id = ? AND event_type = 'attempt_completed' AND accepted = 1 "
+            "WHERE session_id = ? AND ("
+            "  (event_type = 'attempt_completed' AND accepted = 1)"
+            "  OR (event_type = 'route_completed' AND terminal_state = 'accepted')"
+            ") "
             "ORDER BY ts DESC LIMIT 1",
             (session_id,),
         ))
@@ -181,6 +249,7 @@ async def _call_row(
     routing_ledger_path: Path,
     monkeypatch,
     use_gold_complexity: bool,
+    rng: random.Random,
 ) -> tuple[str | None, str]:
     """Drive one route_and_call() for a corpus row. Returns
     (route_id_or_None, response_content_or_error_marker)."""
@@ -196,12 +265,13 @@ async def _call_row(
     gold_answer = row["gold_answer"]
 
     async def stub_call(model, messages, **kwargs):
-        # Hermetic stand-in for a real provider call: echoes back the gold
-        # answer plus a little noise, so quality scoring has real signal to
-        # work with (a pure hardcoded "answer" string would make every row
-        # score identically regardless of gold content).
+        # Hermetic stand-in for a real provider call. Phase 0.1 FIX 4c:
+        # reply fidelity is seeded-random (see _degraded_answer), not always
+        # a perfect echo, so quality_score/quality_delta have real per-row
+        # variation instead of being a constant 1.0/0.0 for the whole corpus.
+        content = _degraded_answer(gold_answer, rng)
         input_tokens = max(1, len(row["prompt"].split()))
-        output_tokens = max(1, len(gold_answer.split()))
+        output_tokens = max(1, len(content.split()))
         # Phase 0.1 FIX 2: derive cost_usd from REAL per-token pricing for the
         # model the router actually selected, times the real token counts --
         # not a flat stub value. `model` arrives as the full chain string
@@ -212,7 +282,7 @@ async def _call_row(
         bare_model = model.rsplit("/", 1)[-1]
         cost_usd = _codex_cost(bare_model, input_tokens, output_tokens)
         return LLMResponse(
-            content=f"{gold_answer} (routed reply)",
+            content=f"{content} (routed reply)",
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -327,6 +397,16 @@ async def replay_corpus(
     run.period_start_ts = time.time()
 
     for row in rows:
+        # Phase 0.1 FIX 4b: quality_feedback's _quality_store is a
+        # process-global dict keyed on (model, task_type, complexity). Left
+        # unreset, 3+ consecutive low-quality rows in the same bucket trip
+        # should_skip_model() for every later row in that bucket -- the
+        # single stub model gets excluded from its own chain and every
+        # subsequent same-bucket row dispatch-fails with "All models failed",
+        # a harness artifact, not a real routing failure. Reset before each
+        # row so quality learning never leaks across corpus rows.
+        reset_quality_store()
+
         session_id = f"soak-{row['id']}"
         route_id, content = await _call_row(
             row,
@@ -335,14 +415,17 @@ async def replay_corpus(
             routing_ledger_path=routing_ledger_dir / f"rq-{row['id']}.jsonl",
             monkeypatch=monkeypatch,
             use_gold_complexity=use_gold_complexity,
+            rng=rng,
         )
 
         dispatch_failed = route_id is None
         quality_score = 0.0 if dispatch_failed else _quality_score(content, row["gold_answer"])
         quality_delta = 1.0 - quality_score
         gate_pass = (not dispatch_failed) and quality_score >= GATE_THRESHOLD
-        strict_pass = (not dispatch_failed) and quality_score >= _STRICT_THRESHOLD
-        gate_false_negative = (not gate_pass) and strict_pass
+        clears_lenient_floor = (
+            (not dispatch_failed) and quality_score >= _LENIENT_FLOOR_THRESHOLD
+        )
+        gate_false_negative = (not gate_pass) and clears_lenient_floor
 
         realization_status = "unknown"
         adoption_method: str | None = None

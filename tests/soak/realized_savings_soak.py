@@ -98,7 +98,15 @@ def test_report_host_mode_split_covers_both_modes(soak_report):
 
 
 def test_overhead_never_exceeds_gross_savings(soak_report):
-    assert 0.0 <= soak_report["overhead_as_pct_of_gross"] <= 1.0
+    """Phase 0.1 FIX 4d: hook-token overhead is populated only by the
+    external Claude Code PreToolUse hook script, which this hermetic harness
+    never invokes -- so the honest value is null ("not measured"), not a
+    fake 0.0 that would silently imply overhead was checked and found to be
+    zero. If a future harness change starts exercising that code path, this
+    must fall back to asserting the real in-range percentage.
+    """
+    overhead = soak_report["overhead_as_pct_of_gross"]
+    assert overhead is None or 0.0 <= overhead <= 1.0
 
 
 def test_no_blended_dollar_figure_across_host_modes(soak_report):

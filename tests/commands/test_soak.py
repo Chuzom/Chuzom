@@ -46,7 +46,13 @@ def test_cmd_soak_use_gold_complexity_writes_valid_report():
         missing = REQUIRED_REPORT_KEYS - report.keys()
         assert not missing, f"report.json missing required keys: {missing}"
         assert report["n_routes"] > 0
-        assert 0.0 <= report["overhead_as_pct_of_gross"] <= 1.0
+        # Phase 0.1 FIX 4d: hook overhead is null ("not measured") in this
+        # hermetic harness -- the external PreToolUse hook script that
+        # populates hook_input_tokens/hook_output_tokens is never invoked by
+        # route_and_call, so a real percentage here would be structurally
+        # impossible, not a genuine zero-overhead measurement.
+        overhead = report["overhead_as_pct_of_gross"]
+        assert overhead is None or 0.0 <= overhead <= 1.0
 
         # Phase 0.1 FIX 3: gate on the CI lower bound, not the point estimate
         # (a point estimate whose CI includes 0 is noise, not a defensible

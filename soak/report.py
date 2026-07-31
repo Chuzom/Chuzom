@@ -16,6 +16,12 @@ explicit and machine-checkable instead of silently asserting a saving the
 data doesn't actually support. When False, treat the run as an
 infrastructure smoke-test (the pipeline executed and the report schema is
 complete) -- not as proof of a saving.
+
+Phase 0.1 FIX 4d: ``overhead_as_pct_of_gross`` is ``null`` in this harness's
+reports, not a fake ``0.0`` -- hook-token overhead is only ever populated by
+the external Claude Code PreToolUse hook script, which the soak harness
+never invokes (``route_and_call`` is driven directly). See the inline note
+in ``build_report`` for the full reasoning.
 """
 
 from __future__ import annotations
@@ -83,6 +89,25 @@ def build_report(run: ReplayRun) -> dict[str, Any]:
 
     period_acc = get_period_accounting(run.period_start_ts, run.period_end_ts, path=run.ledger_path)
 
+    # Phase 0.1 FIX 4d: hook_input_tokens/hook_output_tokens (and therefore
+    # overhead_as_pct_of_gross, which is derived from them by the ledger's
+    # own _aggregate -- untouched here) are populated ONLY by the external
+    # Claude Code PreToolUse hook script (chuzom/hooks/auto-route.py),
+    # which the soak harness never invokes -- route_and_call is called
+    # directly, bypassing that hook entirely. That means this figure isn't
+    # "measured and found to be zero overhead"; it structurally CANNOT be
+    # anything but 0 in this hermetic harness, because the code path that
+    # would populate it never runs. Reporting 0.0 here would silently imply
+    # a real measurement ("we checked, there's no overhead") when the truth
+    # is "we never checked" -- exactly the fake-0 pattern the brief calls
+    # out. Report null/not-measured instead, unless a future harness change
+    # actually starts exercising that code path (the `> 0` guard below then
+    # falls through to the ledger's real computed value).
+    overhead_measured = bool(period_acc.hook_input_tokens or period_acc.hook_output_tokens)
+    overhead_as_pct_of_gross = (
+        period_acc.overhead_as_pct_of_gross if overhead_measured else None
+    )
+
     metered_net_values = [r.net_realized_savings_usd for r in results if r.host_mode == "metered"]
     subscription_quota_values = [
         float(r.realized_quota_tokens_saved) for r in results if r.host_mode == "subscription"
@@ -119,7 +144,7 @@ def build_report(run: ReplayRun) -> dict[str, Any]:
         "quality_delta_p95": quality_delta_p95,
         "gate_false_negative_rate": round(gate_false_negative_rate, 6),
         "adoption_unknown_fraction": round(adoption_unknown_fraction, 6),
-        "overhead_as_pct_of_gross": period_acc.overhead_as_pct_of_gross,
+        "overhead_as_pct_of_gross": overhead_as_pct_of_gross,
         "baseline_tokens_method": BASELINE_TOKENS_METHOD,
         "savings_claim_supported": savings_claim_supported,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

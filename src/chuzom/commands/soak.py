@@ -92,7 +92,9 @@ def cmd_soak(args: list[str]) -> int:
         "  realized_quota_tokens_saved.subscription.point="
         f"{quota_ci['point']}  ci95={quota_ci['ci95']}"
     )
-    print(f"  overhead_as_pct_of_gross={report['overhead_as_pct_of_gross']}")
+    overhead = report["overhead_as_pct_of_gross"]
+    overhead_label = "null (not measured -- hook overhead requires the external PreToolUse hook, not exercised here)" if overhead is None else overhead
+    print(f"  overhead_as_pct_of_gross={overhead_label}")
     print(f"  mis_route_rate={report['mis_route_rate']}  adoption_unknown_fraction={report['adoption_unknown_fraction']}")
     # Phase 0.1 FIX 3: never surface only the point estimate -- state plainly
     # whether the CI lower bound actually supports a savings claim.
