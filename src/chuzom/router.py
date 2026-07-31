@@ -1675,6 +1675,249 @@ def _emit_ledger_terminal(
         pass
 
 
+async def _finalize_successful_route(
+    *,
+    response,
+    model: str,
+    provider: str,
+    task_type: "TaskType",
+    profile: "RoutingProfile",
+    prompt: str,
+    classification_data: dict | None,
+    chain_attempts: list[str],
+    chain_errors: list,
+    correlation_id: str | None,
+    failed_attempt_cost: float,
+    config,
+    receipt=None,
+    suppress_ledger: bool = False,
+) -> None:
+    """CHZ-AUD-B-05: single source of truth for the post-success finalization
+    side-effects, called from BOTH the primary success path AND the emergency
+    BUDGET fallback path.
+
+    The emergency fallback used to be a divergent copy that recorded only the
+    execution-ledger attempt/terminal and skipped everything else — so an answer
+    produced by the budget fallback was invisible to the session-spend meter, the
+    North-Star route-quality ledger, the context buffers, the routing-decision
+    analytics, the semantic cache, and the daily-spend alert. Centralising the
+    side-effects here removes the drift class: both paths now finalize identically.
+
+    Every sub-step is independently fail-open — telemetry never breaks routing.
+    `log_usage`, the accepted-attempt ledger event and the terminal ledger event
+    are intentionally NOT here: each caller already emits those before/around the
+    call, so including them would double-count.
+    """
+    # CLI-provider quota accounting (Codex / Gemini CLI).
+    if provider == "codex":
+        try:
+            from chuzom.quota_balance import record_codex_request
+            record_codex_request(config.codex_daily_limit)
+        except Exception as _quota_err:
+            log.debug("Failed to record Codex request: %s", _quota_err)
+    elif provider == "gemini_cli":
+        try:
+            from chuzom.gemini_cli_quota import record_gemini_request
+            record_gemini_request()
+        except Exception as _quota_err:
+            log.debug("Failed to record Gemini CLI request: %s", _quota_err)
+
+    # Real-time session spend meter (v4.0).
+    try:
+        from chuzom.session_spend import get_session_spend
+        _spend = get_session_spend()
+        _spend.record(
+            model=model,
+            tool=task_type.value,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            cost_usd=response.cost_usd,
+        )
+        if receipt is not None:
+            _spend.record_reclaimed(
+                tokens_reclaimed=receipt.tokens_reclaimed,
+                opus_equivalent_usd=receipt.opus_equivalent_cost,
+                gates_passed=receipt.all_passed,
+            )
+    except Exception as e:
+        log.warning("session_spend_tracking_failed", error=str(e))
+
+    # North Star route-quality ledger (CF-1) — completion route.
+    if not suppress_ledger:
+        try:
+            from chuzom.routing_quality import (
+                RouteLedgerRecord, derive_fallback_reason, record_route,
+            )
+            _fb_occurred = len(chain_errors) > 0
+            _fb_reason, _mis = derive_fallback_reason(chain_errors)
+            _first_model = chain_attempts[0] if chain_attempts else None
+            _in_tok = getattr(response, "input_tokens", 0)
+            _out_tok = getattr(response, "output_tokens", 0)
+            _base = _baseline_cost(task_type, profile, _in_tok, _out_tok)
+            _final_cost = float(getattr(response, "cost_usd", 0.0) or 0.0)
+            _actual = _final_cost + failed_attempt_cost
+            record_route(RouteLedgerRecord(
+                route_kind="completion",
+                task_type=task_type.value,
+                chosen_tier=_model_tier(_first_model, profile),
+                final_tier=_model_tier(response.model, profile),
+                chosen_model=_first_model,
+                final_model=response.model,
+                route_succeeded=True,
+                tool_execution_attempted=False,
+                tool_execution_succeeded=None,
+                verification_attempted=False,
+                verification_passed=None,
+                fallback_occurred=_fb_occurred,
+                fallback_reason=_fb_reason,
+                quality_escalation_occurred=(_mis is True),
+                quality_escalation_reason=(
+                    "cheap tier answer rejected by a dispatch gate"
+                    if _mis is True else None
+                ),
+                mis_route=_mis,
+                actual_cost_usd=_actual,
+                baseline_cost_usd=_base,
+                saved_usd=max(0.0, _base - _actual),
+                failed_attempt_cost_usd=failed_attempt_cost,
+                prompt_tokens=_in_tok,
+                completion_tokens=_out_tok,
+                chain_attempts=list(chain_attempts),
+                chain_errors=[{"model": m, "reason": r} for m, r in chain_errors],
+                price_table_version=_price_table_version(),
+            ))
+        except Exception as _ledger_err:  # noqa: BLE001 — telemetry never breaks routing
+            log.debug("route ledger emit skipped (non-fatal): %s", _ledger_err)
+
+    # Context buffers: in-process session buffer + durable session_store mirror,
+    # both scoped to the same resolved (project_id, session_id) identity.
+    _rt_pid, _rt_sid = _resolve_context_identity(None, None)
+    try:
+        buf = get_session_buffer(_rt_pid, _rt_sid)
+        buf.record("user", prompt, task_type=task_type.value)
+        buf.record("assistant", response.content, task_type=task_type.value)
+    except Exception as _buf_err:
+        log.debug("session buffer record failed (non-fatal): %s", _buf_err)
+    try:
+        from chuzom import session_store as _session_store
+        if _rt_sid:
+            _session_store.record_event(
+                _rt_sid, "user_prompt", prompt,
+                role="user", task_type=task_type.value,
+            )
+            _session_store.record_event(
+                _rt_sid, "routed_qa", response.content,
+                role="assistant", task_type=task_type.value, model=model,
+            )
+    except Exception as _sca_err:
+        log.debug("session_store record failed (non-fatal): %s", _sca_err)
+
+    # Routing-decision analytics + per-provider usage auto-logging.
+    if classification_data:
+        try:
+            await cost.log_routing_decision(
+                prompt=prompt,
+                task_type=classification_data.get("task_type", task_type.value),
+                profile=classification_data.get("profile", profile.value),
+                classifier_type=classification_data.get("classifier_type", "unknown"),
+                classifier_model=classification_data.get("classifier_model"),
+                classifier_confidence=classification_data.get("classifier_confidence", 0.0),
+                classifier_latency_ms=classification_data.get("classifier_latency_ms", 0.0),
+                complexity=classification_data.get("complexity", "moderate"),
+                recommended_model=classification_data.get("recommended_model", model),
+                base_model=classification_data.get("base_model", model),
+                was_downshifted=classification_data.get("was_downshifted", False),
+                budget_pct_used=classification_data.get("budget_pct_used", 0.0),
+                quality_mode=classification_data.get("quality_mode", "balanced"),
+                final_model=response.model,
+                final_provider=response.provider,
+                success=True,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                cost_usd=response.cost_usd,
+                latency_ms=response.latency_ms,
+                reason_code=classification_data.get("reason_code"),
+                correlation_id=correlation_id,
+                response=response.content,
+                requested_complexity=classification_data.get("requested_complexity"),
+                subject=classification_data.get("subject"),
+            )
+            if response.provider in {"claude_subscription", "subscription", "anthropic", "claude"}:
+                try:
+                    await cost.log_claude_usage(
+                        model=response.model,
+                        tokens_used=0,
+                        complexity=classification_data.get("complexity", "moderate"),
+                        task_type=classification_data.get("task_type"),
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                        cache_creation_input_tokens=response.cache_creation_input_tokens,
+                        cache_read_input_tokens=response.cache_read_input_tokens,
+                    )
+                except Exception as e:
+                    log.debug("Failed to log claude_usage: %s", e)
+            elif response.provider in {"openai", "openai_subscription", "codex", "codex_subscription"}:
+                try:
+                    await cost.log_codex_usage(
+                        model=response.model,
+                        tokens_used=0,
+                        complexity=classification_data.get("complexity", "moderate"),
+                        task_type=classification_data.get("task_type"),
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                        cache_creation_input_tokens=response.cache_creation_input_tokens,
+                        cache_read_input_tokens=response.cache_read_input_tokens,
+                    )
+                except Exception as e:
+                    log.debug("Failed to log codex_usage: %s", e)
+            elif response.provider in {"gemini", "google", "google_subscription", "gemini_cli", "gemini_subscription"}:
+                try:
+                    await cost.log_gemini_usage(
+                        model=response.model,
+                        tokens_used=0,
+                        complexity=classification_data.get("complexity", "moderate"),
+                        task_type=classification_data.get("task_type"),
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                        cache_creation_input_tokens=response.cache_creation_input_tokens,
+                        cache_read_input_tokens=response.cache_read_input_tokens,
+                    )
+                except Exception as e:
+                    log.debug("Failed to log gemini_usage: %s", e)
+        except Exception as e:
+            log.warning("Failed to log routing decision: %s", e)
+
+    # Daily-spend alert (fire-and-forget; never blocks the response).
+    _raw_limit = getattr(config, "chuzom_daily_spend_limit", 0.0)
+    daily_limit = float(_raw_limit) if isinstance(_raw_limit, (int, float)) else 0.0
+    if daily_limit > 0:
+        try:
+            daily_spend = await cost.get_daily_spend()
+            if daily_spend >= daily_limit:
+                cost.fire_budget_alert(
+                    "Chuzom — Daily Limit Reached",
+                    f"Daily spend ${daily_spend:.3f} has crossed the "
+                    f"${daily_limit:.2f} limit.",
+                )
+            elif daily_spend >= daily_limit * 0.9:
+                cost.fire_budget_alert(
+                    "Chuzom — Daily Spend Warning",
+                    f"Daily spend ${daily_spend:.3f} is at "
+                    f"{100 * daily_spend / daily_limit:.0f}% of the "
+                    f"${daily_limit:.2f} limit.",
+                )
+        except Exception as e:
+            log.debug("Daily budget alert check failed: %s", e)
+
+    # Semantic cache store for future dedup (fire-and-forget).
+    if task_type not in MEDIA_TASK_TYPES:
+        try:
+            from chuzom import semantic_cache
+            await semantic_cache.store(prompt, task_type, response)
+        except Exception as _sc_err:
+            log.debug("Semantic cache store failed (non-fatal): %s", _sc_err)
+
+
 async def _dispatch_model_loop(
     models_to_try: list[str],
     task_type: TaskType,
@@ -2368,210 +2611,28 @@ async def _dispatch_model_loop(
             except Exception as _sl_err:
                 log.debug("savings_log bridge skipped: %s", _sl_err)
 
-            # Record Codex/Gemini CLI requests for quota tracking (v7.1.0)
-            if provider == "codex":
-                try:
-                    from chuzom.quota_balance import record_codex_request
-                    record_codex_request(config.codex_daily_limit)
-                except Exception as _quota_err:
-                    log.debug("Failed to record Codex request: %s", _quota_err)
-            elif provider == "gemini_cli":
-                try:
-                    from chuzom.gemini_cli_quota import record_gemini_request
-                    record_gemini_request()
-                except Exception as _quota_err:
-                    log.debug("Failed to record Gemini CLI request: %s", _quota_err)
-
-            # Record spend for real-time session spend meter (v4.0)
-            try:
-                from chuzom.session_spend import get_session_spend
-                _spend = get_session_spend()
-                _spend.record(
-                    model=model,
-                    tool=task_type.value,
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                    cost_usd=response.cost_usd,
-                )
-                # v8.8.0: Track reclaimed tokens from contract verification
-                _spend.record_reclaimed(
-                    tokens_reclaimed=_receipt.tokens_reclaimed,
-                    opus_equivalent_usd=_receipt.opus_equivalent_cost,
-                    gates_passed=_receipt.all_passed,
-                )
-            except Exception as e:
-                log.warning("session_spend_tracking_failed", error=str(e))
-
-            # ── North Star route-quality ledger (CF-1) ────────────────────────
-            # Record this COMPLETION route where chain_attempts/chain_errors live.
-            # Honesty rules: no tools ran and no objective check ran, so
-            # tool_execution_succeeded / verification_passed are None (NOT True) —
-            # an unverified completion is honestly unverified. A gate_failed /
-            # low_quality entry in chain_errors IS a genuine quality escalation
-            # (a cheap tier's answer was rejected), so we derive it rather than
-            # hardcode False. suppress_ledger is set by MGEE internal calls so a
-            # delegation counts once (aggregate-delegation-only). Fail-open.
-            if not suppress_ledger:
-                try:
-                    from chuzom.routing_quality import (
-                        RouteLedgerRecord, derive_fallback_reason, record_route,
-                    )
-                    _fb_occurred = len(chain_errors) > 0
-                    _fb_reason, _mis = derive_fallback_reason(chain_errors)
-                    _first_model = chain_attempts[0] if chain_attempts else None
-                    _in_tok = getattr(response, "input_tokens", 0)
-                    _out_tok = getattr(response, "output_tokens", 0)
-                    _base = _baseline_cost(task_type, profile, _in_tok, _out_tok)
-                    # §4.3: actual cost = final success cost + billable failed attempts.
-                    _final_cost = float(getattr(response, "cost_usd", 0.0) or 0.0)
-                    _actual = _final_cost + _failed_attempt_cost
-                    record_route(RouteLedgerRecord(
-                        route_kind="completion",
-                        task_type=task_type.value,
-                        chosen_tier=_model_tier(_first_model, profile),
-                        final_tier=_model_tier(response.model, profile),
-                        chosen_model=_first_model,
-                        final_model=response.model,
-                        route_succeeded=True,
-                        tool_execution_attempted=False,
-                        tool_execution_succeeded=None,
-                        verification_attempted=False,
-                        verification_passed=None,
-                        fallback_occurred=_fb_occurred,
-                        fallback_reason=_fb_reason,
-                        quality_escalation_occurred=(_mis is True),
-                        quality_escalation_reason=(
-                            "cheap tier answer rejected by a dispatch gate"
-                            if _mis is True else None
-                        ),
-                        mis_route=_mis,
-                        actual_cost_usd=_actual,
-                        baseline_cost_usd=_base,
-                        saved_usd=max(0.0, _base - _actual),
-                        failed_attempt_cost_usd=_failed_attempt_cost,
-                        prompt_tokens=_in_tok,
-                        completion_tokens=_out_tok,
-                        chain_attempts=list(chain_attempts),
-                        chain_errors=[{"model": m, "reason": r} for m, r in chain_errors],
-                        price_table_version=_price_table_version(),
-                    ))
-                except Exception as _ledger_err:  # noqa: BLE001 — telemetry never breaks routing
-                    log.debug("route ledger emit skipped (non-fatal): %s", _ledger_err)
-
-            # Record exchange in session buffer for future context injection.
-            # CHZ-AUD-B-04: resolve (project_id, session_id) ONCE, fail-open,
-            # and reuse it for both the in-process buffer and the durable
-            # session_store mirror below so they stay scoped to the same
-            # identity (the buffer is no longer a single process-wide
-            # singleton — it is keyed by this identity in a bounded registry).
-            _rt_pid, _rt_sid = _resolve_context_identity(None, None)
-            buf = get_session_buffer(_rt_pid, _rt_sid)
-            buf.record("user", prompt, task_type=task_type.value)
-            buf.record("assistant", response.content, task_type=task_type.value)
-
-            # Session Context Accumulator (durable, cross-process): mirror the
-            # same exchange into the per-session JSONL store so future routed
-            # calls — including ones in a different process/hook — see it.
-            # Fully independent of the in-process buffer above; fails open.
-            try:
-                from chuzom import session_store as _session_store
-                _sid = _rt_sid
-                if _sid:
-                    _session_store.record_event(
-                        _sid, "user_prompt", prompt,
-                        role="user", task_type=task_type.value,
-                    )
-                    _session_store.record_event(
-                        _sid, "routed_qa", response.content,
-                        role="assistant", task_type=task_type.value, model=model,
-                    )
-            except Exception as _sca_err:
-                log.debug("session_store record failed (non-fatal): %s", _sca_err)
-
-            # Log routing decision for quality analytics
-            if classification_data:
-                try:
-                    await cost.log_routing_decision(
-                        prompt=prompt,
-                        task_type=classification_data.get("task_type", task_type.value),
-                        profile=classification_data.get("profile", profile.value),
-                        classifier_type=classification_data.get("classifier_type", "unknown"),
-                        classifier_model=classification_data.get("classifier_model"),
-                        classifier_confidence=classification_data.get("classifier_confidence", 0.0),
-                        classifier_latency_ms=classification_data.get("classifier_latency_ms", 0.0),
-                        complexity=classification_data.get("complexity", "moderate"),
-                        recommended_model=classification_data.get("recommended_model", model),
-                        base_model=classification_data.get("base_model", model),
-                        was_downshifted=classification_data.get("was_downshifted", False),
-                        budget_pct_used=classification_data.get("budget_pct_used", 0.0),
-                        quality_mode=classification_data.get("quality_mode", "balanced"),
-                        final_model=response.model,
-                        final_provider=response.provider,
-                        success=True,
-                        input_tokens=response.input_tokens,
-                        output_tokens=response.output_tokens,
-                        cost_usd=response.cost_usd,
-                        latency_ms=response.latency_ms,
-                        reason_code=classification_data.get("reason_code"),
-                        correlation_id=correlation_id,
-                        response=response.content,
-                        requested_complexity=classification_data.get("requested_complexity"),
-                        subject=classification_data.get("subject"),
-                    )
-                    
-                    # Auto-log Claude usage when router selects Claude model.
-                    # v9.2.2 — forward sub-component token counts (including cache
-                    # tokens from Anthropic prompt caching) and task_type so
-                    # log_claude_usage can compute cache-aware, task-baselined savings.
-                    if response.provider in {"claude_subscription", "subscription", "anthropic", "claude"}:
-                        try:
-                            await cost.log_claude_usage(
-                                model=response.model,
-                                tokens_used=0,  # compute from sub-components
-                                complexity=classification_data.get("complexity", "moderate"),
-                                task_type=classification_data.get("task_type"),
-                                input_tokens=response.input_tokens,
-                                output_tokens=response.output_tokens,
-                                cache_creation_input_tokens=response.cache_creation_input_tokens,
-                                cache_read_input_tokens=response.cache_read_input_tokens,
-                            )
-                        except Exception as e:
-                            log.debug("Failed to log claude_usage: %s", e)
-
-                    # v9.3.0 — Auto-log Codex/OpenAI usage in parallel. Same shape,
-                    # writes to codex_usage table for the dual-platform dashboard.
-                    elif response.provider in {"openai", "openai_subscription", "codex", "codex_subscription"}:
-                        try:
-                            await cost.log_codex_usage(
-                                model=response.model,
-                                tokens_used=0,
-                                complexity=classification_data.get("complexity", "moderate"),
-                                task_type=classification_data.get("task_type"),
-                                input_tokens=response.input_tokens,
-                                output_tokens=response.output_tokens,
-                                cache_creation_input_tokens=response.cache_creation_input_tokens,
-                                cache_read_input_tokens=response.cache_read_input_tokens,
-                            )
-                        except Exception as e:
-                            log.debug("Failed to log codex_usage: %s", e)
-
-                    # v9.3.1 — Auto-log Gemini usage. Same shape, writes to gemini_usage.
-                    elif response.provider in {"gemini", "google", "google_subscription", "gemini_cli", "gemini_subscription"}:
-                        try:
-                            await cost.log_gemini_usage(
-                                model=response.model,
-                                tokens_used=0,
-                                complexity=classification_data.get("complexity", "moderate"),
-                                task_type=classification_data.get("task_type"),
-                                input_tokens=response.input_tokens,
-                                output_tokens=response.output_tokens,
-                                cache_creation_input_tokens=response.cache_creation_input_tokens,
-                                cache_read_input_tokens=response.cache_read_input_tokens,
-                            )
-                        except Exception as e:
-                            log.debug("Failed to log gemini_usage: %s", e)
-                except Exception as e:
-                    log.warning("Failed to log routing decision: %s", e)
+            # CHZ-AUD-B-05: single shared finalization for the post-success
+            # side-effects (session-spend meter, North-Star route-quality ledger,
+            # context buffers, routing-decision analytics + usage auto-logging,
+            # daily-spend alert, semantic-cache store). The emergency BUDGET
+            # fallback path calls the SAME helper, so the two paths can no longer
+            # drift. All sub-steps are fail-open.
+            await _finalize_successful_route(
+                response=response,
+                model=model,
+                provider=provider,
+                task_type=task_type,
+                profile=profile,
+                prompt=prompt,
+                classification_data=classification_data,
+                chain_attempts=chain_attempts,
+                chain_errors=chain_errors,
+                correlation_id=correlation_id,
+                failed_attempt_cost=_failed_attempt_cost,
+                config=config,
+                receipt=_receipt,
+                suppress_ledger=suppress_ledger,
+            )
 
             # Enhanced notification showing provider for QUOTA_BALANCED
             provider_tag = f" [{response.provider.upper()}]" if profile == RoutingProfile.QUOTA_BALANCED else ""
@@ -2617,35 +2678,9 @@ async def _dispatch_model_loop(
                 attempts=attempt,
             )
 
-            # Daily spend alert — fire async so it never blocks the response
-            _raw_limit = getattr(config, "chuzom_daily_spend_limit", 0.0)
-            daily_limit = float(_raw_limit) if isinstance(_raw_limit, (int, float)) else 0.0
-            if daily_limit > 0:
-                try:
-                    daily_spend = await cost.get_daily_spend()
-                    if daily_spend >= daily_limit:
-                        cost.fire_budget_alert(
-                            "Chuzom — Daily Limit Reached",
-                            f"Daily spend ${daily_spend:.3f} has crossed the "
-                            f"${daily_limit:.2f} limit.",
-                        )
-                    elif daily_spend >= daily_limit * 0.9:
-                        cost.fire_budget_alert(
-                            "Chuzom — Daily Spend Warning",
-                            f"Daily spend ${daily_spend:.3f} is at "
-                            f"{100 * daily_spend / daily_limit:.0f}% of the "
-                            f"${daily_limit:.2f} limit.",
-                        )
-                except Exception as e:
-                    log.debug("Daily budget alert check failed: %s", e)
-
-            # Store in semantic cache for future dedup (fire-and-forget)
-            if task_type not in MEDIA_TASK_TYPES:
-                try:
-                    from chuzom import semantic_cache
-                    await semantic_cache.store(prompt, task_type, response)
-                except Exception as _sc_err:
-                    log.debug("Semantic cache store failed (non-fatal): %s", _sc_err)
+            # (Daily-spend alert + semantic-cache store now run inside
+            # _finalize_successful_route — CHZ-AUD-B-05 — so both the primary and
+            # the emergency BUDGET fallback paths perform them identically.)
 
             async with _budget_lock():
                 _pending_spend = max(0.0, _pending_spend - _reservation)
@@ -2799,6 +2834,30 @@ async def _dispatch_model_loop(
                     )
                     _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
 
+                    # CHZ-AUD-B-05: record the winning budget model in the chain
+                    # BEFORE finalization so the route-quality ledger sees it, then
+                    # run the SAME finalization helper the primary path uses. The
+                    # emergency path previously skipped the session-spend meter,
+                    # route-quality ledger, context buffers, routing-decision
+                    # analytics, daily-spend alert and semantic cache entirely.
+                    chain_attempts.append(model)
+                    await _finalize_successful_route(
+                        response=response,
+                        model=model,
+                        provider=provider,
+                        task_type=task_type,
+                        profile=profile,
+                        prompt=prompt,
+                        classification_data=classification_data,
+                        chain_attempts=chain_attempts,
+                        chain_errors=chain_errors,
+                        correlation_id=correlation_id,
+                        failed_attempt_cost=_failed_attempt_cost,
+                        config=config,
+                        receipt=None,
+                        suppress_ledger=suppress_ledger,
+                    )
+
                     route_log.info(
                         "emergency_fallback_success",
                         correlation_id=correlation_id,
@@ -2817,7 +2876,6 @@ async def _dispatch_model_loop(
 
                     async with _budget_lock():
                         _pending_spend = max(0.0, _pending_spend - _reservation)
-                    chain_attempts.append(model)
                     return _enrich_response(
                         response, classification_data, effective_complexity,
                         task_type, chain_attempts,
