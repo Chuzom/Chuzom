@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 27
+# chuzom-hook-version: 28
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -87,7 +87,7 @@ except ImportError:
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 27"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 28"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -2660,8 +2660,29 @@ def main() -> None:
 
     try:
         hook_input = json.load(sys.stdin)
-    except (json.JSONDecodeError, EOFError):
-        _debug_log(f"[INVOCATION {invocation_id:.3f}] JSON parse failed, exiting")
+    except (json.JSONDecodeError, EOFError) as _parse_err:
+        # CHZ-AUD-A-04: malformed/empty stdin must NOT be a SILENT total bypass.
+        # Under zero-Claude/strict enforcement, silently exiting 0 lets an
+        # unrouted turn proceed to Claude — the exact leak "strict" mode exists to
+        # prevent (same class as the empty-prompt case handled below). Fail CLOSED
+        # there; in non-enforcing modes pass through, but log VISIBLY to stderr
+        # (never a debug-only, invisible skip).
+        print(
+            f"chuzom auto-route: could not parse hook stdin ({_parse_err}); "
+            f"this turn was NOT routed.",
+            file=sys.stderr,
+        )
+        _debug_log(f"[INVOCATION {invocation_id:.3f}] JSON parse failed")
+        if _zero_claude_enabled():
+            print(json.dumps({
+                "decision": "block",
+                "reason": (
+                    "chuzom (zero-Claude): the prompt payload could not be parsed, "
+                    "so it could not be routed. Zero-Claude mode blocks unrouted "
+                    "turns. Fix the hook input, or set CHUZOM_ZERO_CLAUDE=0 to allow "
+                    "native Claude on parse failures."
+                ),
+            }))
         sys.exit(0)
 
     prompt = hook_input.get("prompt", "")
