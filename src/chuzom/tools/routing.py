@@ -381,6 +381,7 @@ async def llm_route(
         "was_downshifted": rec.was_downshifted,
         "budget_pct_used": budget_pct,
         "quality_mode": q_mode.value if hasattr(q_mode, "value") else str(q_mode),
+        "classifier_cost_usd": classification.classifier_cost_usd,
     }
 
     # Step 4: Route and call
@@ -566,6 +567,7 @@ async def llm_auto(
         "was_downshifted": False,
         "budget_pct_used": budget_pct,
         "quality_mode": q_mode.value if hasattr(q_mode, "value") else str(q_mode),
+        "classifier_cost_usd": classification.classifier_cost_usd,
     }
 
     resp = await route_and_call(

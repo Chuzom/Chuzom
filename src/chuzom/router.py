@@ -1651,6 +1651,10 @@ def _emit_ledger_attempt(
     accepted: bool | None = None,
     rejected: bool | None = None,
     rejection_reason: str | None = None,
+    classifier_cost_usd: float | None = None,
+    failed_attempt_cost_usd: float | None = None,
+    baseline_equivalent_cost_usd: float | None = None,
+    baseline_tokens: int | None = None,
 ) -> None:
     """Emit ONE attempt event to the canonical execution ledger (INV-COST-001).
 
@@ -1658,6 +1662,18 @@ def _emit_ledger_attempt(
     exactly once, so route/session totals derived by the aggregation layer include
     rejected/escalated attempt cost (which cost.log_usage/session_spend, called only
     for the winning attempt, structurally omit). FAIL-OPEN: never raises into routing.
+
+    Phase 0 realized-savings params (all optional, default None — only the
+    ACCEPTED attempt on a route should carry these; rejected/failed attempts
+    stay cost-only so the baseline is never credited more than once, R6):
+        classifier_cost_usd: this route's classification cost (Gap 1).
+        failed_attempt_cost_usd: the route's running `_failed_attempt_cost`
+            carried onto the accepted attempt (Gap 1).
+        baseline_equivalent_cost_usd: $ cost of the realistic counterfactual
+            baseline model for this call (reuses the existing ledger column;
+            un-breaks `potential_savings_usd`).
+        baseline_tokens: actual_proxy token count for quota-tokens-saved on
+            subscription hosts (Gap 2 — populated starting Step 5).
     """
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
@@ -1677,6 +1693,10 @@ def _emit_ledger_attempt(
             accepted=accepted,
             rejected=rejected,
             rejection_reason=rejection_reason,
+            classifier_cost_usd=classifier_cost_usd,
+            failed_attempt_cost_usd=failed_attempt_cost_usd,
+            baseline_equivalent_cost_usd=baseline_equivalent_cost_usd,
+            baseline_tokens=baseline_tokens,
         ))
     except Exception:  # noqa: BLE001 — ledger emission must never break routing
         pass
@@ -2631,10 +2651,28 @@ async def _dispatch_model_loop(
 
             tracker.record_success(provider)
             await cost.log_usage(response, task_type, profile, correlation_id=correlation_id)
+            # Phase 0 (Gap 1): credit the realistic $ baseline + classifier/failed-
+            # attempt cost ONCE, on the accepted attempt only (R6 — rejected
+            # attempts above stay cost-only). Fail-open: a computation error here
+            # must never break the routed turn or drop the accepted ledger row.
+            _classifier_cost_usd = (
+                classification_data.get("classifier_cost_usd", 0.0)
+                if classification_data else 0.0
+            )
+            try:
+                _baseline_model = cost._get_baseline_for_task(task_type.value, c.value)
+                _baseline_equivalent_cost_usd = cost._get_baseline_cost(
+                    response.input_tokens or 0, response.output_tokens or 0, _baseline_model,
+                )
+            except Exception:
+                _baseline_equivalent_cost_usd = None
             _emit_ledger_attempt(
                 response, model, task_type, profile,
                 event_type="attempt_completed", accepted=True,
                 correlation_id=correlation_id,
+                classifier_cost_usd=_classifier_cost_usd,
+                failed_attempt_cost_usd=_failed_attempt_cost,
+                baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd,
             )
             _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
             # P1-7: the token reservation is released in this attempt's finally.
@@ -2894,10 +2932,26 @@ async def _dispatch_model_loop(
 
                     tracker.record_success(provider)
                     await cost.log_usage(response, task_type, RoutingProfile.BUDGET, correlation_id=correlation_id)
+                    # Phase 0 (Gap 1): symmetric with the primary accepted-attempt
+                    # site above — same fail-open baseline derivation.
+                    _classifier_cost_usd_eb = (
+                        classification_data.get("classifier_cost_usd", 0.0)
+                        if classification_data else 0.0
+                    )
+                    try:
+                        _baseline_model_eb = cost._get_baseline_for_task(task_type.value, c.value)
+                        _baseline_equivalent_cost_usd_eb = cost._get_baseline_cost(
+                            response.input_tokens or 0, response.output_tokens or 0, _baseline_model_eb,
+                        )
+                    except Exception:
+                        _baseline_equivalent_cost_usd_eb = None
                     _emit_ledger_attempt(
                         response, model, task_type, RoutingProfile.BUDGET,
                         event_type="attempt_completed", accepted=True,
                         correlation_id=correlation_id,
+                        classifier_cost_usd=_classifier_cost_usd_eb,
+                        failed_attempt_cost_usd=_failed_attempt_cost,
+                        baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd_eb,
                     )
                     _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
 
