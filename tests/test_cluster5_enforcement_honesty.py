@@ -43,3 +43,12 @@ def test_enforce_label_is_honest_for_enforcing_modes():
             assert "hold" in label.lower(), f"{mode} does not disclose holding: {label}"
     finally:
         ec.resolve_enforce_mode = orig
+
+
+def test_hard_mode_banner_does_not_claim_edit_write_bash_allowed():
+    """CHZ-AUD-A-06: the hard-enforcement directive banner must not claim
+    'Edit/Write/Bash stay allowed' — hard mode blocks them."""
+    src = (ROOT / "src" / "chuzom" / "hooks" / "auto-route.py").read_text()
+    assert "(Edit/Write/Bash) stay allowed" not in src
+    # It must acknowledge the blocked tools in hard mode.
+    assert "Bash/Edit/Write/MultiEdit/NotebookEdit are" in src

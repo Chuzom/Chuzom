@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 28
+# chuzom-hook-version: 29
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -87,7 +87,7 @@ except ImportError:
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 28"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 29"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -3405,10 +3405,11 @@ def main() -> None:
             f"╚══════════════════════════════════════════════════╝\n"
             f"\n"
             f"⚠ ENFORCEMENT ACTIVE (hard, or smart on a Q&A task): the PreToolUse hook\n"
-            f"   (enforce-route.py) blocks THIS task's reasoning/generation tools\n"
-            f"   until you call {tool}. File reads and implementation tools\n"
-            f"   (Edit/Write/Bash) stay allowed — only the route-first step is\n"
-            f"   enforced, and only for the blocklisted tools for {task_type}.\n"
+            f"   (enforce-route.py) holds tools until you call {tool}.\n"
+            f"   CHZ-AUD-A-06: in HARD mode, Bash/Edit/Write/MultiEdit/NotebookEdit are\n"
+            f"   ALL blocked until you route (only Read/Glob/Grep/LS stay allowed). In\n"
+            f"   SMART (default), reasoning/Q&A tools are held for Q&A tasks; code tasks\n"
+            f"   allow file editing. Run `chuzom set-enforce off` to disable enforcement.\n"
             f"\n"
             f"✅ REQUIRED SEQUENCE:\n"
             f"   1. Call {tool}(prompt=<user's request>) — FIRST and ONLY action\n"
