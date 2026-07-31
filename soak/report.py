@@ -26,7 +26,10 @@ from soak.replay import EnvPatcher, ReplayRun, replay_corpus
 
 DEFAULT_REPORT_PATH = Path(__file__).resolve().parent / "report.json"
 
-BASELINE_TOKENS_METHOD = "actual_proxy"
+# Phase 0.1: the subscription quota figure is no longer a baseline-minus-actual
+# delta (see execution_ledger.py's _aggregate Gap-2 reframe) -- it's the sum of
+# tokens actually served by a non-Claude model on a realized, adopted route.
+BASELINE_TOKENS_METHOD = "claude_tokens_avoided"
 
 
 def _percentile(values: list[float], pct: float) -> float:

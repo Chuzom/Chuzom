@@ -21,7 +21,7 @@ from chuzom.execution_ledger import LedgerEvent, get_route_accounting, record_ev
 
 def _attempt(route_id, *, measured=0.0, baseline=0.0, classifier=None, failed=None,
              baseline_tokens=None, input_tokens=None, output_tokens=None,
-             host_mode="unknown", hook_in=None, hook_out=None):
+             host_mode="unknown", hook_in=None, hook_out=None, provider=""):
     return LedgerEvent(
         session_id="s-agg",
         route_id=route_id,
@@ -37,6 +37,7 @@ def _attempt(route_id, *, measured=0.0, baseline=0.0, classifier=None, failed=No
         host_mode=host_mode,
         hook_input_tokens=hook_in,
         hook_output_tokens=hook_out,
+        provider=provider,
     )
 
 
@@ -144,32 +145,82 @@ def test_null_adoption_on_verified_used_backcompat_treated_as_door_call(tmp_path
 
 
 def test_quota_tokens_saved_only_on_realized_routes_bucketed_by_host_mode(tmp_path, monkeypatch):
+    """Phase 0.1 reframe: quota-tokens-saved = "Claude tokens NOT consumed" — the
+    Σ(input+output) tokens actually served by a NON-Claude model, on a route that
+    is realized (verified_used + adoption in _COUNTS_AS_REALIZED). It is no longer
+    a baseline-minus-actual delta (that was a structural tautology — baseline_tokens
+    was written as the SAME accepted attempt's own token count)."""
     db_path = tmp_path / "usage.db"
     monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(db_path))
 
     r1, r2 = "r-quota-sub", "r-quota-cm"
-    # r1: realized (door_call), subscription — quota should accrue.
+    # r1: realized (door_call), subscription, served by a non-Claude model
+    # ("openai") — quota should accrue as the full served-token count.
     record_event(
-        _attempt(r1, measured=0.0, baseline=0.0, baseline_tokens=1000,
-                 input_tokens=200, output_tokens=100, host_mode="subscription"),
+        _attempt(r1, measured=0.0, baseline=0.0,
+                 input_tokens=200, output_tokens=100, host_mode="subscription",
+                 provider="openai"),
         path=db_path,
     )
     record_event(_realized(r1, adoption_method="door_call"), path=db_path)
-    # r2: content_match (NOT realized) — quota must NOT accrue even though tokens differ.
+    # r2: content_match (NOT realized) — quota must NOT accrue even though the
+    # route was also served by a non-Claude model.
     record_event(
-        _attempt(r2, measured=0.0, baseline=0.0, baseline_tokens=1000,
-                 input_tokens=200, output_tokens=100, host_mode="subscription"),
+        _attempt(r2, measured=0.0, baseline=0.0,
+                 input_tokens=200, output_tokens=100, host_mode="subscription",
+                 provider="openai"),
         path=db_path,
     )
     record_event(_realized(r2, adoption_method="content_match"), path=db_path)
 
     acc1 = get_route_accounting(r1, path=db_path)
-    assert acc1.realized_quota_tokens_saved == 700  # 1000 - 300
-    assert acc1.quota_tokens_saved_by_host_mode == {"subscription": 700}
+    assert acc1.realized_quota_tokens_saved == 300  # 200 + 100, served off-Claude
+    assert acc1.quota_tokens_saved_by_host_mode == {"subscription": 300}
 
     acc2 = get_route_accounting(r2, path=db_path)
     assert acc2.realized_quota_tokens_saved == 0
     assert acc2.quota_tokens_saved_by_host_mode == {}
+
+
+def test_quota_tokens_saved_zero_when_final_model_is_claude(tmp_path, monkeypatch):
+    """If the route's final (accepted) attempt was itself served by Claude — e.g.
+    escalated back to the frontier model — Claude ran, so the route saved 0 quota,
+    even though it's realized and would otherwise qualify."""
+    db_path = tmp_path / "usage.db"
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(db_path))
+
+    rid = "r-quota-claude"
+    record_event(
+        _attempt(rid, measured=0.0, baseline=0.0,
+                 input_tokens=200, output_tokens=100, host_mode="subscription",
+                 provider="anthropic"),
+        path=db_path,
+    )
+    record_event(_realized(rid, adoption_method="door_call"), path=db_path)
+
+    acc = get_route_accounting(rid, path=db_path)
+    assert acc.realized_quota_tokens_saved == 0
+    assert acc.quota_tokens_saved_by_host_mode == {}
+
+
+def test_quota_tokens_saved_zero_when_provider_unknown(tmp_path, monkeypatch):
+    """Never fabricate: a route with no recorded provider (e.g. a pre-migration
+    row) must NOT be assumed non-Claude — it contributes 0 quota, not a guessed
+    saving we can't actually verify."""
+    db_path = tmp_path / "usage.db"
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(db_path))
+
+    rid = "r-quota-unknown-provider"
+    record_event(
+        _attempt(rid, measured=0.0, baseline=0.0,
+                 input_tokens=200, output_tokens=100, host_mode="subscription"),
+        path=db_path,
+    )
+    record_event(_realized(rid, adoption_method="door_call"), path=db_path)
+
+    acc = get_route_accounting(rid, path=db_path)
+    assert acc.realized_quota_tokens_saved == 0
+    assert acc.quota_tokens_saved_by_host_mode == {}
 
 
 def test_overhead_as_pct_of_gross_guarded_for_zero_realized_savings(tmp_path, monkeypatch):

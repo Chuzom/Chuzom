@@ -81,6 +81,16 @@ AdoptionMethod = Literal["door_call", "agent_marked", "content_match", "unknown"
 # content_match is corroborating evidence, not proof, so it does NOT count here.
 _COUNTS_AS_REALIZED: frozenset[str] = frozenset({"door_call", "agent_marked"})
 
+# Phase 0.1: provider strings that identify a response as served by Claude on
+# the user's subscription quota (as opposed to a metered/external model).
+# Mirrors the identical classification set already used at the response-level
+# in router.py (`response.provider in {"claude_subscription", "subscription",
+# "anthropic", "claude"}`, ~line 1918) so the ledger's notion of "this attempt
+# ran on Claude" stays consistent with the router's own accounting.
+_CLAUDE_PROVIDERS: frozenset[str] = frozenset(
+    {"claude_subscription", "subscription", "anthropic", "claude"}
+)
+
 
 @dataclass
 class LedgerEvent:
@@ -371,7 +381,14 @@ class Accounting:
                                                     # (marginal-$0 rule on subscription, cost.py:2803)
     net_realized_savings_usd: float = 0.0         # realized_savings_usd − classifier − failed − hook_overhead
     overhead_as_pct_of_gross: float = 0.0         # overhead / realized_savings_usd; 0.0 if gross is ~0
-    realized_quota_tokens_saved: int = 0          # Σ max(0, baseline_tokens − actual_tokens) on realized routes
+    # Phase 0.1: "Claude tokens NOT consumed" — Σ (input+output) tokens actually
+    # served by a NON-Claude model, on routes that are realized (verified_used +
+    # adoption in _COUNTS_AS_REALIZED) AND whose FINAL model is not Claude. This
+    # replaced a self-subtracting `baseline_tokens − actual_tokens` formula that
+    # was a structural tautology (baseline_tokens was written as the SAME
+    # accepted attempt's own token count, so the delta was always 0) — see
+    # `_aggregate`'s Gap 2 block and `_CLAUDE_PROVIDERS` above.
+    realized_quota_tokens_saved: int = 0
     realized_savings_by_host_mode: dict[str, float] = field(default_factory=dict)
     quota_tokens_saved_by_host_mode: dict[str, int] = field(default_factory=dict)
     realized_by_adoption_method: dict[str, float] = field(default_factory=dict)
@@ -409,7 +426,12 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
     route_adoption: dict[str, str | None] = {}    # route_id → last adoption_method seen
     route_host_mode: dict[str, str] = {}          # route_id → last known non-"unknown" host_mode
     route_actual_tokens: dict[str, int] = {}      # route_id → Σ(input+output) over billable rows
-    route_baseline_tokens: dict[str, int] = {}    # route_id → Σ baseline_tokens (actual_proxy)
+    route_baseline_tokens: dict[str, int] = {}    # route_id → Σ baseline_tokens (actual_proxy;
+                                                    # kept for back-compat/debugging, no longer
+                                                    # used to derive quota — see route_final_provider)
+    route_final_provider: dict[str, str] = {}      # route_id → provider of the LAST billable
+                                                    # (attempt_completed/rejected/failed) row seen —
+                                                    # i.e. the model that actually ran on this route
     _host_in_pm, _host_out_pm = _host_opus_rates()
     for r in rows:
         et = r["event_type"]
@@ -439,7 +461,10 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
             ftok = r.get("failed_attempt_cost_usd")
             if ftok is not None:
                 acc.failed_attempt_cost_usd_total += float(ftok)
-            # Gap 2: actual + baseline tokens, per route (quota derivation below).
+            # Gap 2: actual + baseline tokens, per route. `route_actual_tokens`
+            # feeds the Phase 0.1 quota derivation below (served-off-Claude
+            # tokens); `route_baseline_tokens` is retained for back-compat /
+            # debugging only and is no longer part of that derivation.
             itok = r.get("input_tokens") or 0
             otok = r.get("output_tokens") or 0
             if itok or otok:
@@ -447,6 +472,12 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
             btok = r.get("baseline_tokens")
             if btok is not None:
                 route_baseline_tokens[rid] = route_baseline_tokens.get(rid, 0) + int(btok)
+            # Phase 0.1: track the provider of the LAST billable row for this
+            # route (rows are loaded ts ASC — see `_load_rows`), so we know
+            # which model actually served the route's final/accepted attempt.
+            prov = r.get("provider")
+            if prov:
+                route_final_provider[rid] = prov
         # host_mode: track the last known CONFIRMED value (never let a row with no
         # host_mode/"unknown" clobber a previously-seen subscription/metered value).
         hm = r.get("host_mode")
@@ -514,8 +545,26 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
             acc.realized_by_adoption_method[adoption] = (
                 acc.realized_by_adoption_method.get(adoption, 0.0) + saving
             )
-            # Gap 2: quota-tokens-saved, only on routes that count as realized.
-            quota = max(0, route_baseline_tokens.get(rid, 0) - route_actual_tokens.get(rid, 0))
+            # Gap 2 (Phase 0.1 reframe): quota-tokens-saved = "Claude tokens NOT
+            # consumed" on routes that count as realized. Every token actually
+            # served by a NON-Claude model on an adopted route is a Claude/quota
+            # token that would otherwise have been spent; if the route's FINAL
+            # model IS Claude (e.g. escalated to frontier), Claude ran, so the
+            # route saved 0 quota. This replaces the old self-subtracting
+            # `baseline_tokens − actual_tokens` formula, which was a structural
+            # tautology (baseline_tokens was written as the SAME accepted
+            # attempt's own token count, so the delta was always 0 by
+            # construction) — see `_CLAUDE_PROVIDERS` above.
+            # Never fabricate: an UNKNOWN provider (no attempt row carried one —
+            # e.g. a pre-migration route) does NOT count as "non-Claude"; it
+            # counts as 0 quota saved rather than assuming a saving we can't
+            # actually verify.
+            final_provider = route_final_provider.get(rid, "")
+            quota = (
+                route_actual_tokens.get(rid, 0)
+                if final_provider and final_provider.lower() not in _CLAUDE_PROVIDERS
+                else 0
+            )
             if quota:
                 acc.realized_quota_tokens_saved += quota
                 acc.quota_tokens_saved_by_host_mode[host_mode] = (

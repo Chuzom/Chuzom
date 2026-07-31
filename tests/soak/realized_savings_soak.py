@@ -158,7 +158,7 @@ def test_quality_and_adoption_fractions_are_valid_rates(soak_report):
 
 def test_report_metadata_fields_are_populated(soak_report):
     assert soak_report["corpus_version"]
-    assert soak_report["baseline_tokens_method"] == "actual_proxy"
+    assert soak_report["baseline_tokens_method"] == "claude_tokens_avoided"
     assert soak_report["generated_at"]
     assert soak_report["chuzom_version"]
     assert soak_report["price_table_version"]
