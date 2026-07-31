@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from chuzom.cost import _codex_cost
 from chuzom.execution_ledger import LedgerEvent, get_session_accounting, record_event
 from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
@@ -199,12 +200,23 @@ async def _call_row(
         # answer plus a little noise, so quality scoring has real signal to
         # work with (a pure hardcoded "answer" string would make every row
         # score identically regardless of gold content).
+        input_tokens = max(1, len(row["prompt"].split()))
+        output_tokens = max(1, len(gold_answer.split()))
+        # Phase 0.1 FIX 2: derive cost_usd from REAL per-token pricing for the
+        # model the router actually selected, times the real token counts --
+        # not a flat stub value. `model` arrives as the full chain string
+        # (e.g. "openai/gpt-4o-mini"); OPENAI_RATES_PER_M is keyed by the
+        # bare model name, so strip the provider prefix before lookup.
+        # Unknown models fall back to _codex_cost's own 0.0 (never fabricate
+        # a rate we don't have).
+        bare_model = model.rsplit("/", 1)[-1]
+        cost_usd = _codex_cost(bare_model, input_tokens, output_tokens)
         return LLMResponse(
             content=f"{gold_answer} (routed reply)",
             model=model,
-            input_tokens=max(1, len(row["prompt"].split())),
-            output_tokens=max(1, len(gold_answer.split())),
-            cost_usd=0.0008,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
             latency_ms=8.0,
             provider="openai",
         )
