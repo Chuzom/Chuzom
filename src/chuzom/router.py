@@ -22,6 +22,7 @@ import time
 import zlib
 from dataclasses import replace
 from typing import Any, AsyncIterator, TYPE_CHECKING
+from contextvars import ContextVar
 from uuid import uuid4
 
 from chuzom import cost, media, providers
@@ -1617,6 +1618,28 @@ async def _cli_prompt_with_context(
     )
 
 
+# CHZ-AUD-A-02: when route_and_call is invoked with an agent_session_id, the
+# execution ledger must attribute its rows to THAT session so
+# get_session_accounting(agent_session_id) returns the agent's real activity.
+# The identifier is carried through this ContextVar, set for the exact span of
+# the dispatch (and reset in a finally), rather than threaded through every one
+# of the ~12 ledger-emit call sites. Precedence when resolving the ledger
+# session id: explicit agent_session_id > CHUZOM_SESSION_ID env > correlation_id.
+_LEDGER_SESSION_OVERRIDE: "ContextVar[str]" = ContextVar(
+    "chuzom_ledger_session_override", default=""
+)
+
+
+def _ledger_session_id(correlation_id: str | None, override: str | None = None) -> str:
+    """Resolve the ledger session_id with CHZ-AUD-A-02 precedence."""
+    return (
+        override
+        or _LEDGER_SESSION_OVERRIDE.get()
+        or os.environ.get("CHUZOM_SESSION_ID", "")
+        or (correlation_id or "")
+    )
+
+
 def _emit_ledger_attempt(
     response: Any,
     model: str,
@@ -1640,7 +1663,7 @@ def _emit_ledger_attempt(
         from chuzom.execution_ledger import LedgerEvent, record_event
         host_mode = "metered" if cost._host_is_metered() else "subscription"
         record_event(LedgerEvent(
-            session_id=os.environ.get("CHUZOM_SESSION_ID", "") or (correlation_id or ""),
+            session_id=_ledger_session_id(correlation_id),
             route_id=correlation_id or "",
             event_type=event_type,  # type: ignore[arg-type]
             task_type=task_type.value,
@@ -1660,13 +1683,19 @@ def _emit_ledger_attempt(
 
 
 def _emit_ledger_terminal(
-    correlation_id: str | None, terminal_state: str, *, route_succeeded: bool
+    correlation_id: str | None, terminal_state: str, *, route_succeeded: bool,
+    agent_session_id: str | None = None,
 ) -> None:
-    """Emit the route's single terminal-state event (INV-ROUTE-004/005). FAIL-OPEN."""
+    """Emit the route's single terminal-state event (INV-ROUTE-004/005). FAIL-OPEN.
+
+    agent_session_id (CHZ-AUD-A-02) lets the bypass paths — which run OUTSIDE the
+    dispatch span where the ContextVar override is active — still attribute their
+    terminal row to the agent session.
+    """
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
         record_event(LedgerEvent(
-            session_id=os.environ.get("CHUZOM_SESSION_ID", "") or (correlation_id or ""),
+            session_id=_ledger_session_id(correlation_id, agent_session_id),
             route_id=correlation_id or "",
             event_type="route_completed" if route_succeeded else "route_failed",
             terminal_state=terminal_state,  # type: ignore[arg-type]
@@ -3280,7 +3309,7 @@ async def route_and_call(
                 log.warning("audit_idempotency_dedupe_write_failed", error=str(_audit_err))
             # AC-6/INV-ROUTE-005: a cache hit is a real terminal outcome (no billable
             # attempt) — record it so every route ends in exactly one recorded state.
-            _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
+            _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True, agent_session_id=agent_session_id)
             return _cached_resp
 
     # T4-M1: prompt redaction immediately before the prompt heads to any
@@ -3689,7 +3718,7 @@ async def route_and_call(
                         detail_extras={"correlation_id": correlation_id},
                     )
                     # AC-6/INV-ROUTE-005: semantic-cache hit is a bypassed terminal state.
-                    _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
+                    _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True, agent_session_id=agent_session_id)
                     await _release_reservation_if_held()  # RED1-3-02: cache-hit fast path
                     return cached
             except Exception as _sc_err:
@@ -3980,6 +4009,14 @@ async def route_and_call(
         else:
             _effective_timeout = None
             _deadline_is_tighter = False
+        # CHZ-AUD-A-02: bind the ledger session override to this agent_session_id
+        # for exactly the dispatch span — every ledger row emitted inside
+        # _dispatch_model_loop (attempts + terminals) then attributes to the agent
+        # session. Reset unconditionally in the finally so the ContextVar never
+        # leaks past this call (success, timeout, cancel, or all-models-failed).
+        _led_tok = (
+            _LEDGER_SESSION_OVERRIDE.set(agent_session_id) if agent_session_id else None
+        )
         try:
             if _effective_timeout is not None and _effective_timeout > 0:
                 response = await asyncio.wait_for(
@@ -4108,6 +4145,11 @@ async def route_and_call(
             except Exception:  # noqa: BLE001 — cleanup must not mask the original error
                 pass
             raise
+        finally:
+            # CHZ-AUD-A-02: always clear the ledger session override so it cannot
+            # leak into a later route on this task (nested/sequential calls).
+            if _led_tok is not None:
+                _LEDGER_SESSION_OVERRIDE.reset(_led_tok)
         # RED1-5-02: do NOT release _pending_spend here. This line is reached only
         # after `_dispatch_model_loop` returned a successful response, and every
         # success return in that loop already released the reservation exactly once
