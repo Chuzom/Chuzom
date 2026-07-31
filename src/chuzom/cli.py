@@ -45,6 +45,7 @@ Usage:
     chuzom stats [--period recent] — show combined download stats (llm-routing + claude-code-chuzom)
     chuzom verify                — end-to-end health check (30 seconds)
     chuzom gc [--ttl-days N] [--apply] — sweep stale session shards from ~/.chuzom (dry-run by default)
+    chuzom soak [--use-gold-complexity] [--full] [--out PATH] — replay the realized-savings soak corpus and write soak/report.json
 """
 
 from __future__ import annotations
@@ -942,6 +943,9 @@ def main() -> None:
     elif args and args[0] == "gc":
         from chuzom.commands.gc import main as _gc_main
         sys.exit(_gc_main(args[1:]))
+    elif args and args[0] == "soak":
+        from chuzom.commands.soak import cmd_soak
+        sys.exit(cmd_soak(args[1:]))
     elif args and args[0] == "retrospect":
         from chuzom.commands.retrospect import main as _retrospect_main
         _retrospect_main(args[1:])
