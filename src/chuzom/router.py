@@ -1698,6 +1698,7 @@ async def _dispatch_model_loop(
     identity: TurnIdentity | None = None,
     routing_policy: "AgentRoutingPolicy | None" = None,
     suppress_ledger: bool = False,
+    model_override: str | None = None,
 ) -> LLMResponse:
     """Execute the main model dispatch loop with primary + emergency fallback chains.
 
@@ -1990,10 +1991,14 @@ async def _dispatch_model_loop(
                     )
                     continue
 
-        # Quality feedback: skip models with poor track record for this task pattern
+        # Quality feedback: skip models with poor track record for this task pattern.
+        # CHZ-AUD-C-02: an EXPLICIT model_override must be honored exactly — the
+        # process-global quality circuit-breaker must NOT silently substitute a
+        # different model for a caller's explicit pin. Only non-override models are
+        # subject to the breaker.
         try:
             from chuzom.quality_feedback import should_skip_model
-            if should_skip_model(model, task_type.value, c.value):
+            if model != model_override and should_skip_model(model, task_type.value, c.value):
                 log.info("Skipping low-quality model for %s/%s: %s", task_type.value, c.value, model)
                 route_log.info(
                     "model_quality_skip",
@@ -3833,6 +3838,7 @@ async def route_and_call(
             identity=identity,
             routing_policy=_routing_policy,
             suppress_ledger=suppress_ledger,
+            model_override=model_override,  # CHZ-AUD-C-02: honor explicit pin
         )
         # T3-S2 + T3-M1: combined timeout + cancel handling. Both failure
         # modes share the same cleanup contract — release the budget
