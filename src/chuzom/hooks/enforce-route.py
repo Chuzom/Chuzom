@@ -500,6 +500,41 @@ def _record_realization_used(session_id: str, pending: dict | None) -> None:
             event_type="route_realized",
             task_type=pending.get("task_type"),
             realization_status="verified_used",
+            adoption_method="door_call",  # Phase 0: hook-observed PreToolUse door call
+            used_by_host=True,
+            accepted=True,
+        ))
+    except Exception:  # noqa: BLE001 — realization accounting must never break routing
+        pass
+
+
+def _record_agent_marked(session_id: str, pending: dict | None) -> None:
+    """Phase 0 (Gap 3): sibling of _record_realization_used for the soak harness.
+
+    Records a route as verified_used with adoption_method="agent_marked" — used
+    where the agent (not the PreToolUse door-call hook) is the one asserting the
+    routed directive was honored. Only exercised inside soak/replay.py for Phase 0;
+    the production agent-marks-adoption transport is Phase 1. Fully fail-open,
+    identical event shape to _record_realization_used aside from adoption_method
+    and the event_id salt (kept distinct so the two never collide/dedup together).
+    """
+    try:
+        pending = pending or {}
+        import hashlib
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        _route_id = pending.get("route_id")
+        _eid = hashlib.sha256(
+            f"{session_id}|{_route_id or ''}|route_realized|agent_marked".encode()
+        ).hexdigest()[:32]
+        record_event(LedgerEvent(
+            event_id=_eid,
+            session_id=session_id,
+            route_id=_route_id,
+            turn_id=pending.get("turn_id"),
+            event_type="route_realized",
+            task_type=pending.get("task_type"),
+            realization_status="verified_used",
+            adoption_method="agent_marked",
             used_by_host=True,
             accepted=True,
         ))

@@ -143,6 +143,7 @@ def _record_override(session_id: str, task_type: str, pending: dict | None = Non
             task_type=task_type,
             override_type="plain_text",
             realization_status="verified_overridden",
+            adoption_method=None,  # Phase 0: an override is never "adopted"
             used_by_host=False,
         ))
     except Exception:
