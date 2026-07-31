@@ -1,15 +1,31 @@
-<!-- chuzom-rules-version: 8 -->
+<!-- chuzom-rules-version: 9 -->
 # Chuzom — Global Routing Rules
 
 > Installed by chuzom. These rules help you route each task to the cheapest capable
 > model. **What actually happens depends on the enforcement mode** (default:
-> `smart`). In `smart`/`hard`, the PreToolUse hook *holds* the blocklisted
-> reasoning/Q&A tools until you call a routing tool (you can satisfy the route,
-> use an escape valve, or run `chuzom set-enforce off`); implementation tools
-> (Edit/Write/Bash) proceed. In `advise`/`suggest`/`soft`/`shadow`/`off`, nothing
-> is blocked. You always keep the final call on the answer. Whether a tool is
-> held is therefore **mode-dependent** — not a blanket guarantee. See
+> `smart`). In `smart` (default), the PreToolUse hook *holds* the blocklisted
+> reasoning/Q&A tools for Q&A tasks until you call a routing tool; code tasks let
+> Edit/Write/Bash proceed. In `hard`, Bash/Edit/Write/MultiEdit/NotebookEdit are
+> ALL held until you route (only Read/Glob/Grep/LS proceed). In
+> `advise`/`suggest`/`soft`/`shadow`/`off`, nothing is blocked. You can satisfy
+> the route, use an escape valve, or run `chuzom set-enforce off`. Whether a tool
+> is held is therefore **mode-dependent** — not a blanket guarantee. See
 > `Docs/configuration.md` and `chuzom doctor` for the resolved mode.
+
+## Routing guarantees — honest scope (CHZ-AUD-A-03/A-05)
+
+- **Push (Claude Code hook):** interception of every eligible prompt is
+  guaranteed, but **external execution as the answer is NOT** — in the default
+  (non-zero-Claude) modes the routed result is *advisory context* and Claude
+  keeps the final call. **Only `CHUZOM_ZERO_CLAUDE=1`** turns a successful route
+  into an authoritative turn replacement.
+- **PreToolUse enforcement cannot intercept a prose-only answer.** It gates
+  *tool calls*; if Claude answers directly in text, no PreToolUse mode (including
+  `hard`) can force routing. Prose-only routing needs the UserPromptSubmit layer
+  with zero-Claude semantics.
+- **Pull integrations (Cursor / Copilot / Windsurf / Gemini / OpenCode):**
+  best-effort — the host model *decides* whether to call a Chuzom tool. Not
+  guaranteed interception.
 
 ---
 

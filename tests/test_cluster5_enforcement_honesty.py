@@ -52,3 +52,21 @@ def test_hard_mode_banner_does_not_claim_edit_write_bash_allowed():
     assert "(Edit/Write/Bash) stay allowed" not in src
     # It must acknowledge the blocked tools in hard mode.
     assert "Bash/Edit/Write/MultiEdit/NotebookEdit are" in src
+
+
+def test_rules_document_guarantee_scope_honestly():
+    """CHZ-AUD-A-03/A-05: rules must state that push execution is advisory
+    unless zero-Claude, and that PreToolUse cannot intercept a prose-only answer."""
+    rules = (ROOT / "src" / "chuzom" / "rules" / "chuzom.md").read_text()
+    # A-03: external execution is advisory by default; only zero-Claude is authoritative.
+    assert "CHUZOM_ZERO_CLAUDE=1" in rules
+    assert "authoritative turn replacement" in rules
+    # A-05: prose-only answers are not interceptable by PreToolUse.
+    assert "cannot intercept a prose-only answer" in rules
+
+
+def test_session_start_banner_not_absolute_never_block():
+    """CHZ-AUD-D-05/A-06 sibling: the session-start banner must not assert
+    routing 'never a block' — enforcement decides what is blocked."""
+    src = (ROOT / "src" / "chuzom" / "hooks" / "session-start.py").read_text()
+    assert "never a block" not in src
