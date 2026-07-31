@@ -268,12 +268,57 @@ def _get_db_path() -> Path:
     return get_config().chuzom_db_path
 
 
-def _ensure_session_table(db_path: Path) -> None:
-    """Create the session_summaries table if it doesn't exist."""
+def _secure_db_perms(path: Path) -> None:
+    """Ensure *path* is mode 0600, repairing looser existing perms.
+
+    CHZ-AUD-D-02 (sibling): the session-summary sink shares ``usage.db`` but
+    opened it without securing perms, leaving it world-readable (0644). Mirrors
+    result_cache._secure_perms.
+    """
+    import os
+    import stat as _stat
+    try:
+        if _stat.S_IMODE(path.stat().st_mode) != 0o600:
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def _open_session_db(db_path: Path) -> "sqlite3.Connection":
+    """Open usage.db for the session-summary sink with 0600 perms +
+    secure_delete so TTL purges physically remove secret bytes."""
     import sqlite3
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    if not db_path.exists():
+        db_path.touch(mode=0o600)
+    else:
+        _secure_db_perms(db_path)
+    conn = sqlite3.connect(str(db_path), timeout=5)
+    conn.execute("PRAGMA busy_timeout=3000")
+    # CHZ-AUD-D-04 (sibling): zero freed pages on DELETE so the TTL purge below
+    # physically removes redacted-but-still-sensitive summary bytes.
+    conn.execute("PRAGMA secure_delete=ON")
+    for suffix in ("-wal", "-shm"):
+        sidecar = db_path.with_name(db_path.name + suffix)
+        if sidecar.exists():
+            _secure_db_perms(sidecar)
+    return conn
+
+
+def _persist_ttl_seconds() -> float:
+    """Physical-retention TTL for session summaries (CHUZOM_PERSIST_TTL_DAYS)."""
+    try:
+        from chuzom.config import get_config
+        days = float(getattr(get_config(), "chuzom_persist_ttl_days", 30))
+    except Exception:
+        days = 30.0
+    return max(days, 0.0) * 86_400
+
+
+def _ensure_session_table(db_path: Path) -> None:
+    """Create the session_summaries table if it doesn't exist."""
+    conn = _open_session_db(db_path)
     try:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS session_summaries (
@@ -326,14 +371,37 @@ async def save_session_summary(
     ).isoformat()
     session_end = datetime.now(timezone.utc).isoformat()
 
-    conn = sqlite3.connect(str(db_path))
+    # CHZ-AUD-D-01 (sibling): the session summary is LLM-generated from the
+    # conversation and can carry secrets/PII. Scrub it through the same shared
+    # persist_redact() the other persistence sinks use BEFORE it touches disk.
+    # Safe-failure: on any redaction error, store a placeholder rather than the
+    # raw text, so a scrubber bug can never leak the original.
+    try:
+        from chuzom.enterprise.redaction import persist_redact
+        safe_summary = persist_redact(summary)
+    except Exception as _redact_err:  # noqa: BLE001
+        log.warning("session_summary_redaction_failed", error=str(_redact_err))
+        safe_summary = "[REDACTION_ERROR: summary withheld]"
+
+    import time as _time
+    conn = _open_session_db(db_path)
     try:
         conn.execute(
             """INSERT INTO session_summaries
                (session_start, session_end, summary, message_count, task_types)
                VALUES (?, ?, ?, ?, ?)""",
-            (session_start, session_end, summary, message_count, json.dumps(task_types)),
+            (session_start, session_end, safe_summary, message_count, json.dumps(task_types)),
         )
+        # CHZ-AUD-D-04 (sibling): physically purge summaries older than the TTL
+        # (secure_delete=ON zeroes the freed pages). 0 disables purging.
+        _ttl = _persist_ttl_seconds()
+        if _ttl > 0:
+            _cutoff = datetime.fromtimestamp(
+                _time.time() - _ttl, tz=timezone.utc,
+            ).isoformat()
+            conn.execute(
+                "DELETE FROM session_summaries WHERE session_end < ?", (_cutoff,),
+            )
         conn.commit()
     finally:
         conn.close()

@@ -38,6 +38,20 @@ from chuzom.types import LLMResponse
 log = get_logger("chuzom.idempotency")
 
 
+def _secure_perms(path: Path) -> None:
+    """Ensure *path* is mode 0600, repairing looser existing perms.
+
+    CHZ-AUD-D-02 (sibling): mirrors result_cache._secure_perms — sensitive DB
+    files must never be world/group-readable.
+    """
+    import stat as _stat
+    try:
+        if _stat.S_IMODE(path.stat().st_mode) != 0o600:
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 # Default TTL — 1 hour. Long enough to cover most agent-workflow
 # retry windows; short enough to prevent unbounded growth without a
 # vacuum job.
@@ -69,9 +83,24 @@ class IdempotencyStore:
             or (Path.home() / ".chuzom" / "idempotency.db")
         )
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # CHZ-AUD-D-02 (sibling): the dedupe DB persists LLM responses to disk —
+        # create it 0600 (owner-only) and repair looser perms on an existing file
+        # opened by an older version, so it is never world/group-readable.
+        if not self.db_path.exists():
+            self.db_path.touch(mode=0o600)
+        else:
+            _secure_perms(self.db_path)
         self._conn = sqlite3.connect(str(self.db_path))
+        # CHZ-AUD-D-04 (sibling): zero freed pages on DELETE so the TTL sweep
+        # physically removes response bytes rather than leaving them in
+        # unallocated pages.
+        self._conn.execute("PRAGMA secure_delete=ON")
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
+        for suffix in ("-wal", "-shm"):
+            _sidecar = self.db_path.with_name(self.db_path.name + suffix)
+            if _sidecar.exists():
+                _secure_perms(_sidecar)
 
     # ── Lookup + insert ───────────────────────────────────────────────────
 
@@ -184,9 +213,22 @@ def _response_to_payload(response: LLMResponse) -> dict[str, Any]:
     ``LLMResponse`` is a frozen dataclass and may carry non-JSON-able
     extras in future revisions; pinning the fields keeps the format
     stable across upgrades.
+
+    CHZ-AUD-D-01 (sibling): the response ``content`` can carry secrets/PII and
+    was previously persisted 100% raw. Route it through the same shared
+    ``persist_redact()`` every other on-disk sink uses — gated by
+    ``CHUZOM_PERSIST_RAW`` / ``CHUZOM_PERSIST_REDACTION`` so a caller who needs
+    byte-exact dedupe replay can still opt into raw storage explicitly. Default
+    is redact-on-write, consistent with result_cache/semantic_cache/session_store.
     """
+    try:
+        from chuzom.enterprise.redaction import persist_redact
+        safe_content = persist_redact(response.content)
+    except Exception as _redact_err:  # noqa: BLE001 — never persist raw on failure
+        log.warning("idempotency_content_redaction_failed", error=str(_redact_err))
+        safe_content = "[REDACTION_ERROR: content withheld]"
     return {
-        "content": response.content,
+        "content": safe_content,
         "model": response.model,
         "provider": response.provider,
         "input_tokens": int(response.input_tokens or 0),

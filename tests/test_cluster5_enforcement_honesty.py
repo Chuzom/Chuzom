@@ -27,20 +27,49 @@ def test_enforce_label_is_honest_for_enforcing_modes():
         "ss_d05", ROOT / "src" / "chuzom" / "hooks" / "session-start.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
-    # Enforcing modes must NOT claim they never block, and must say they hold.
-    for mode in ("smart", "hard", "strict"):
-        label = m._enforce_label.__wrapped__(mode) if hasattr(m._enforce_label, "__wrapped__") else None
-    # _enforce_label() reads the resolved mode; test the description dict directly
-    # via a monkeypatch of resolve_enforce_mode.
+    # _enforce_label() reads the resolved mode; drive it via resolve_enforce_mode.
+    import re
     import chuzom.enforce_config as ec
     orig = ec.resolve_enforce_mode
     try:
         for mode in ("smart", "hard", "strict"):
             ec.resolve_enforce_mode = lambda *a, **k: mode
-            # session-start imports resolve at call time
             label = m._enforce_label()
-            assert "never block" not in label.lower(), f"{mode} falsely claims never-block: {label}"
-            assert "hold" in label.lower(), f"{mode} does not disclose holding: {label}"
+            low = label.lower()
+            assert "never block" not in low, f"{mode} falsely claims never-block: {label}"
+            assert "hold" in low, f"{mode} does not disclose holding: {label}"
+    finally:
+        ec.resolve_enforce_mode = orig
+
+
+def test_hard_strict_labels_do_not_claim_edit_write_bash_proceed():
+    """CHZ-AUD-D-05/A-06 sibling: HARD/STRICT hold Bash/Edit/Write/MultiEdit/
+    NotebookEdit — their session-start labels must NOT claim those tools 'proceed'
+    (only SMART, which holds just reasoning/Q&A tools on Q&A tasks, may say that).
+    This asserts the SPECIFIC false claim is absent, not merely that 'never block'
+    is absent — the gap the previous test could not catch."""
+    import re
+    import importlib.util as _u
+    spec = _u.spec_from_file_location(
+        "ss_d05b", ROOT / "src" / "chuzom" / "hooks" / "session-start.py")
+    m = _u.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    import chuzom.enforce_config as ec
+    orig = ec.resolve_enforce_mode
+    try:
+        for mode in ("hard", "strict"):
+            ec.resolve_enforce_mode = lambda *a, **k: mode
+            label = m._enforce_label()
+            low = label.lower()
+            assert not re.search(r"edit\s*/\s*write\s*/\s*bash\s+proceed", low), \
+                f"{mode} falsely claims Edit/Write/Bash proceed: {label}"
+            # Must name the implementation tools it actually holds.
+            assert "bash/edit/write" in low or "bash/edit" in low, \
+                f"{mode} does not disclose it holds the implementation tools: {label}"
+        # SMART legitimately lets code tasks proceed — its label MAY mention proceed.
+        ec.resolve_enforce_mode = lambda *a, **k: "smart"
+        smart = m._enforce_label().lower()
+        assert "proceed" in smart, f"smart should disclose code tasks proceed: {smart}"
     finally:
         ec.resolve_enforce_mode = orig
 

@@ -213,19 +213,22 @@ def _enforce_label() -> str:
         mode = resolve_enforce_mode()
     except Exception:
         mode = "soft"
-    # CHZ-AUD-D-05: honest — the enforcing modes (smart/hard/strict, and smart is
-    # the DEFAULT) HOLD the blocklisted reasoning/Q&A tools until a route is called;
-    # file/shell tools (Edit/Write/Bash) proceed. Only off/shadow/advise/suggest/soft
-    # never block. Must not claim "never blocks" for a mode that does.
+    # CHZ-AUD-D-05/A-06 (sibling): honest per-mode text. In SMART (default) only
+    # the reasoning/Q&A tools are held for Q&A tasks — code tasks let Edit/Write/
+    # Bash proceed. In HARD/STRICT the implementation tools (Bash/Edit/Write/
+    # MultiEdit/NotebookEdit) are ALSO held until a route is called; only
+    # Read/Glob/Grep/LS proceed. Only off/shadow/advise/suggest/soft never block.
+    # Must not claim "never blocks" for a mode that blocks, nor claim
+    # "Edit/Write/Bash proceed" for a mode that holds them.
     descriptions = {
         "off": "off (no enforcement)",
         "shadow": "shadow (observe-only; never blocks)",
         "advise": "advise (silent; never blocks)",
         "suggest": "suggest (logs routing misses; never blocks)",
         "soft": "soft (logs routing misses; never blocks)",
-        "smart": "smart — DEFAULT (holds reasoning/Q&A tools until routed; Edit/Write/Bash proceed)",
-        "hard": "hard (holds all blocklisted tools until routed; Edit/Write/Bash proceed)",
-        "strict": "strict (holds blocklisted tools until routed; Edit/Write/Bash proceed)",
+        "smart": "smart — DEFAULT (holds reasoning/Q&A tools on Q&A tasks until routed; code tasks let Edit/Write/Bash proceed)",
+        "hard": "hard (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed; only Read/Glob/Grep/LS proceed)",
+        "strict": "strict (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed; only Read/Glob/Grep/LS proceed)",
     }
     return descriptions.get(mode, f"{mode} (holds blocklisted tools until routed)")
 

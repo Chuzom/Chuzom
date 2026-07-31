@@ -63,13 +63,66 @@ def test_finalizer_fires_all_side_effects(monkeypatch):
     assert sem_store.called, "semantic cache not stored"
 
 
-def test_both_paths_call_shared_finalizer():
-    """Guard against the drift class returning: exactly one helper def and it is
-    invoked from BOTH the primary success path and the emergency fallback path."""
+def test_every_success_path_calls_shared_finalizer():
+    """Guard against the drift class returning: exactly one helper def, invoked
+    from ALL FOUR success paths — primary, emergency BUDGET fallback, semantic-
+    cache hit, and idempotency dedupe. RED-1 reopened B-05 because two bypass
+    success returns skipped the finalizer; this asserts they no longer do."""
     src = (ROOT / "src" / "chuzom" / "router.py").read_text()
     assert src.count("async def _finalize_successful_route(") == 1
     call_sites = len(re.findall(r"await _finalize_successful_route\(", src))
-    assert call_sites == 2, f"expected primary + emergency call sites, found {call_sites}"
+    assert call_sites == 4, (
+        f"expected primary + emergency + semantic-cache + idempotency call sites, "
+        f"found {call_sites}"
+    )
+    # Both bypass call sites must pass served_from_cache=True (call form uses a
+    # trailing comma; docstring mentions do not).
+    assert src.count("served_from_cache=True,") == 2, \
+        "both bypass paths must finalize with served_from_cache=True"
+
+
+def test_cache_served_turn_records_context_but_not_spend(monkeypatch):
+    """CHZ-AUD-B-05 (sibling): a cache-served turn MUST record the exchange into
+    the context buffers + routing analytics (so it is not lost), and MUST NOT
+    re-count spend, re-emit the route-quality completion, or re-store the cache."""
+    spend = MagicMock()
+    monkeypatch.setattr("chuzom.session_spend.get_session_spend", lambda: spend)
+    rec_route = MagicMock()
+    monkeypatch.setattr("chuzom.routing_quality.record_route", rec_route)
+    buf = MagicMock()
+    monkeypatch.setattr(router, "get_session_buffer", lambda *_a, **_k: buf)
+    monkeypatch.setattr(router, "_resolve_context_identity", lambda *_a, **_k: ("proj", "sess"))
+    sess_rec = MagicMock()
+    monkeypatch.setattr("chuzom.session_store.record_event", sess_rec)
+    sem_store = AsyncMock()
+    monkeypatch.setattr("chuzom.semantic_cache.store", sem_store)
+    fake_cost = SimpleNamespace(
+        log_routing_decision=AsyncMock(),
+        log_claude_usage=AsyncMock(), log_codex_usage=AsyncMock(),
+        log_gemini_usage=AsyncMock(), get_daily_spend=AsyncMock(return_value=0.0),
+        fire_budget_alert=MagicMock(),
+    )
+    monkeypatch.setattr(router, "cost", fake_cost)
+
+    cfg = SimpleNamespace(codex_daily_limit=100, chuzom_daily_spend_limit=1.0)
+    asyncio.run(router._finalize_successful_route(
+        response=_fake_response(),
+        model="ollama/qwen2.5-coder:7b", provider="ollama",
+        task_type=TaskType.CODE, profile=RoutingProfile.BALANCED,
+        prompt="q", classification_data={"task_type": "code", "complexity": "moderate"},
+        chain_attempts=[], chain_errors=[],
+        correlation_id="cid", failed_attempt_cost=0.0, config=cfg,
+        receipt=None, suppress_ledger=False, served_from_cache=True,
+    ))
+
+    # Recorded (not lost):
+    assert buf.record.call_count >= 2, "cache-served turn lost the context buffer"
+    assert sess_rec.called, "cache-served turn lost the durable session_store"
+    assert fake_cost.log_routing_decision.called, "cache-served turn lost analytics"
+    # NOT re-counted / re-stored:
+    assert not spend.record.called, "cache hit must not double-count spend"
+    assert not rec_route.called, "cache hit must not emit a completion ledger record"
+    assert not sem_store.called, "cache hit must not re-store into the semantic cache"
 
 
 def test_suppress_ledger_skips_route_quality(monkeypatch):

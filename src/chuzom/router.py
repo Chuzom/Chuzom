@@ -1720,10 +1720,20 @@ async def _finalize_successful_route(
     config,
     receipt=None,
     suppress_ledger: bool = False,
+    served_from_cache: bool = False,
 ) -> None:
     """CHZ-AUD-B-05: single source of truth for the post-success finalization
-    side-effects, called from BOTH the primary success path AND the emergency
-    BUDGET fallback path.
+    side-effects, called from EVERY success path: the primary success path, the
+    emergency BUDGET fallback path, AND the two bypass paths (semantic-cache hit
+    and idempotency dedupe) via served_from_cache=True.
+
+    served_from_cache=True records the parts a cache-served turn MUST NOT lose —
+    the context buffers (so future turns see the exchange) and the routing-decision
+    analytics — while skipping the parts that would be wrong for a bypass: the
+    session-spend meter and route-quality ledger completion (which would
+    double-count the originally-billed cost / duplicate the already-emitted
+    `bypassed` terminal), the daily-spend alert (no new spend), and the semantic
+    cache store (never re-store a hit).
 
     The emergency fallback used to be a divergent copy that recorded only the
     execution-ledger attempt/terminal and skipped everything else — so an answer
@@ -1751,28 +1761,33 @@ async def _finalize_successful_route(
         except Exception as _quota_err:
             log.debug("Failed to record Gemini CLI request: %s", _quota_err)
 
-    # Real-time session spend meter (v4.0).
-    try:
-        from chuzom.session_spend import get_session_spend
-        _spend = get_session_spend()
-        _spend.record(
-            model=model,
-            tool=task_type.value,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            cost_usd=response.cost_usd,
-        )
-        if receipt is not None:
-            _spend.record_reclaimed(
-                tokens_reclaimed=receipt.tokens_reclaimed,
-                opus_equivalent_usd=receipt.opus_equivalent_cost,
-                gates_passed=receipt.all_passed,
+    # Real-time session spend meter (v4.0). Skipped for cache-served turns — the
+    # cost was already billed when the response was first produced; re-recording
+    # it here would double-count (CHZ-AUD-B-05).
+    if not served_from_cache:
+        try:
+            from chuzom.session_spend import get_session_spend
+            _spend = get_session_spend()
+            _spend.record(
+                model=model,
+                tool=task_type.value,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                cost_usd=response.cost_usd,
             )
-    except Exception as e:
-        log.warning("session_spend_tracking_failed", error=str(e))
+            if receipt is not None:
+                _spend.record_reclaimed(
+                    tokens_reclaimed=receipt.tokens_reclaimed,
+                    opus_equivalent_usd=receipt.opus_equivalent_cost,
+                    gates_passed=receipt.all_passed,
+                )
+        except Exception as e:
+            log.warning("session_spend_tracking_failed", error=str(e))
 
-    # North Star route-quality ledger (CF-1) — completion route.
-    if not suppress_ledger:
+    # North Star route-quality ledger (CF-1) — completion route. Skipped on cache
+    # hits: the `bypassed` terminal already emitted at the call site is the correct
+    # ledger signal; a completion record here would double-signal (CHZ-AUD-B-05).
+    if not suppress_ledger and not served_from_cache:
         try:
             from chuzom.routing_quality import (
                 RouteLedgerRecord, derive_fallback_reason, record_route,
@@ -1916,10 +1931,11 @@ async def _finalize_successful_route(
         except Exception as e:
             log.warning("Failed to log routing decision: %s", e)
 
-    # Daily-spend alert (fire-and-forget; never blocks the response).
+    # Daily-spend alert (fire-and-forget; never blocks the response). No new spend
+    # on a cache hit, so skip (CHZ-AUD-B-05).
     _raw_limit = getattr(config, "chuzom_daily_spend_limit", 0.0)
     daily_limit = float(_raw_limit) if isinstance(_raw_limit, (int, float)) else 0.0
-    if daily_limit > 0:
+    if daily_limit > 0 and not served_from_cache:
         try:
             daily_spend = await cost.get_daily_spend()
             if daily_spend >= daily_limit:
@@ -1938,8 +1954,9 @@ async def _finalize_successful_route(
         except Exception as e:
             log.debug("Daily budget alert check failed: %s", e)
 
-    # Semantic cache store for future dedup (fire-and-forget).
-    if task_type not in MEDIA_TASK_TYPES:
+    # Semantic cache store for future dedup (fire-and-forget). Never re-store a
+    # cache hit (CHZ-AUD-B-05).
+    if task_type not in MEDIA_TASK_TYPES and not served_from_cache:
         try:
             from chuzom import semantic_cache
             await semantic_cache.store(prompt, task_type, response)
@@ -2916,6 +2933,22 @@ async def _dispatch_model_loop(
                     log.warning(
                         "Emergency fallback model %s failed: %s", model, e
                     )
+                    # CHZ-AUD-A-01 (sibling): the emergency BUDGET fallback loop's
+                    # provider-failure path must record the failed attempt in the
+                    # execution ledger too — the primary loop already does, so
+                    # leaving this out under-counted real billable attempts on any
+                    # turn that fell through to the budget chain. Fail-open.
+                    import types as _types_a01eb
+                    _emit_ledger_attempt(
+                        _types_a01eb.SimpleNamespace(
+                            provider=provider, cost_usd=0.0, input_tokens=0,
+                            output_tokens=0, model=model, latency_ms=0.0,
+                        ),
+                        model, task_type, RoutingProfile.BUDGET,
+                        event_type="attempt_failed",
+                        correlation_id=correlation_id,
+                        rejection_reason=f"{type(e).__name__}: {e}"[:200],
+                    )
                     last_error = e
                     chain_errors.append((model, f"{type(e).__name__}: {e}"))
                     continue
@@ -3310,6 +3343,21 @@ async def route_and_call(
             # AC-6/INV-ROUTE-005: a cache hit is a real terminal outcome (no billable
             # attempt) — record it so every route ends in exactly one recorded state.
             _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True, agent_session_id=agent_session_id)
+            # CHZ-AUD-B-05 (sibling): idempotency dedupe is also a success path —
+            # record the served exchange's context + analytics (served_from_cache
+            # skips spend/ledger/store). Runs before profile resolution, so pass a
+            # neutral profile default (only used by the skipped ledger block).
+            await _finalize_successful_route(
+                response=_cached_resp,
+                model=getattr(_cached_resp, "model", "cache") or "cache",
+                provider=getattr(_cached_resp, "provider", "cache") or "cache",
+                task_type=task_type,
+                profile=profile if profile is not None else RoutingProfile.BALANCED,
+                prompt=prompt, classification_data=classification_data,
+                chain_attempts=[], chain_errors=[], correlation_id=correlation_id,
+                failed_attempt_cost=0.0, config=config, receipt=None,
+                served_from_cache=True,
+            )
             return _cached_resp
 
     # T4-M1: prompt redaction immediately before the prompt heads to any
@@ -3719,6 +3767,18 @@ async def route_and_call(
                     )
                     # AC-6/INV-ROUTE-005: semantic-cache hit is a bypassed terminal state.
                     _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True, agent_session_id=agent_session_id)
+                    # CHZ-AUD-B-05 (sibling): a cache-served turn is a real success
+                    # path — record the exchange into the context buffers and
+                    # routing analytics so it is not lost. served_from_cache=True
+                    # skips spend/ledger/semantic-store (would double-count).
+                    await _finalize_successful_route(
+                        response=cached, model=cached.model, provider=cached.provider,
+                        task_type=task_type, profile=profile, prompt=prompt,
+                        classification_data=classification_data, chain_attempts=[],
+                        chain_errors=[], correlation_id=correlation_id,
+                        failed_attempt_cost=0.0, config=config, receipt=None,
+                        served_from_cache=True,
+                    )
                     await _release_reservation_if_held()  # RED1-3-02: cache-hit fast path
                     return cached
             except Exception as _sc_err:
