@@ -76,6 +76,11 @@ RealizationStatus = Literal["verified_used", "verified_overridden", "unknown"]
 # and agent_marked count toward realized savings (`_COUNTS_AS_REALIZED` below).
 AdoptionMethod = Literal["door_call", "agent_marked", "content_match", "unknown"]
 
+# Adoption methods strong enough to count a verified_used route's saving as
+# REALIZED (as opposed to merely "likely" — see Accounting.likely_used_routes).
+# content_match is corroborating evidence, not proof, so it does NOT count here.
+_COUNTS_AS_REALIZED: frozenset[str] = frozenset({"door_call", "agent_marked"})
+
 
 @dataclass
 class LedgerEvent:
@@ -354,10 +359,40 @@ class Accounting:
     overridden_routes: int = 0                   # verified_overridden
     realization_unknown_routes: int = 0          # unknown (or never verified)
     potential_savings_usd: float = 0.0           # Σ max(0, baseline_eq − actual) over ALL routes
-    realized_savings_usd: float = 0.0            # Σ that saving ONLY on verified_used routes
+    realized_savings_usd: float = 0.0            # Σ that saving ONLY on verified_used routes,
+                                                   # ADOPTION-GATED (adoption_method in
+                                                   # _COUNTS_AS_REALIZED; NULL on a verified_used
+                                                   # row is back-compat-treated as door_call)
+
+    # ── Phase 0 (realized-savings ledger: Gaps 1/2/3) ────────────────────────
+    classifier_cost_usd_total: float = 0.0        # Σ classifier spend over accepted attempts
+    failed_attempt_cost_usd_total: float = 0.0    # Σ failed-attempt cost carried onto accepted rows
+    hook_overhead_usd: float = 0.0                # Σ hook token cost; $0 unless row.host_mode=="metered"
+                                                    # (marginal-$0 rule on subscription, cost.py:2803)
+    net_realized_savings_usd: float = 0.0         # realized_savings_usd − classifier − failed − hook_overhead
+    overhead_as_pct_of_gross: float = 0.0         # overhead / realized_savings_usd; 0.0 if gross is ~0
+    realized_quota_tokens_saved: int = 0          # Σ max(0, baseline_tokens − actual_tokens) on realized routes
+    realized_savings_by_host_mode: dict[str, float] = field(default_factory=dict)
+    quota_tokens_saved_by_host_mode: dict[str, int] = field(default_factory=dict)
+    realized_by_adoption_method: dict[str, float] = field(default_factory=dict)
+    likely_used_routes: int = 0                   # verified_used + adoption_method == content_match
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def _host_opus_rates() -> tuple[float, float]:
+    """Lazy import of cost.py's host-Opus per-token rates for `hook_overhead_usd`
+    pricing. Lazy (not module-level) so execution_ledger.py stays importable even
+    if cost.py's heavier dependency surface fails to load, and fail-open to
+    ``(0.0, 0.0)`` — the conservative "never fabricate a cost" default. No
+    circular import: cost.py has no reference to execution_ledger.py.
+    """
+    try:
+        from chuzom.cost import _HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M
+        return float(_HOST_INPUT_PER_M), float(_HOST_OUTPUT_PER_M)
+    except Exception:
+        return 0.0, 0.0
 
 
 def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Accounting:
@@ -367,6 +402,15 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
     # so a single unknown/overridden route can't inflate the realized total.
     route_potential: dict[str, float] = {}       # route_id → Σ(baseline_eq − actual)
     route_realization: dict[str, str] = {}       # route_id → last realization_status seen
+    # Phase 0 (Gaps 1/2/3): adoption_method is written on the SAME row that carries
+    # realization_status (a separate `route_realized` event, not the original
+    # attempt_completed row — see enforce-route.py::_record_realization_used), so
+    # it's captured alongside route_realization below, not in the billable block.
+    route_adoption: dict[str, str | None] = {}    # route_id → last adoption_method seen
+    route_host_mode: dict[str, str] = {}          # route_id → last known non-"unknown" host_mode
+    route_actual_tokens: dict[str, int] = {}      # route_id → Σ(input+output) over billable rows
+    route_baseline_tokens: dict[str, int] = {}    # route_id → Σ baseline_tokens (actual_proxy)
+    _host_in_pm, _host_out_pm = _host_opus_rates()
     for r in rows:
         et = r["event_type"]
         rid = r.get("route_id") or ""
@@ -387,32 +431,98 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
             if base is not None:
                 acc.baseline_equivalent_cost_usd += float(base)
                 route_potential[rid] = route_potential.get(rid, 0.0) + float(base)
+            # Gap 1: classifier + carried failed-attempt cost, scope-wide totals
+            # (net_realized_savings_usd is a single scope-level P&L, not per-route).
+            ctok = r.get("classifier_cost_usd")
+            if ctok is not None:
+                acc.classifier_cost_usd_total += float(ctok)
+            ftok = r.get("failed_attempt_cost_usd")
+            if ftok is not None:
+                acc.failed_attempt_cost_usd_total += float(ftok)
+            # Gap 2: actual + baseline tokens, per route (quota derivation below).
+            itok = r.get("input_tokens") or 0
+            otok = r.get("output_tokens") or 0
+            if itok or otok:
+                route_actual_tokens[rid] = route_actual_tokens.get(rid, 0) + int(itok) + int(otok)
+            btok = r.get("baseline_tokens")
+            if btok is not None:
+                route_baseline_tokens[rid] = route_baseline_tokens.get(rid, 0) + int(btok)
+        # host_mode: track the last known CONFIRMED value (never let a row with no
+        # host_mode/"unknown" clobber a previously-seen subscription/metered value).
+        hm = r.get("host_mode")
+        if hm and hm != "unknown":
+            route_host_mode[rid] = hm
         # Realization tracking: the explicit status field wins; the
         # `realization_unknown` event type is a fallback signal for unknown.
         rs = r.get("realization_status")
         if rs:
             route_realization[rid] = rs
+            route_adoption[rid] = r.get("adoption_method")
         elif et == "realization_unknown":
             route_realization.setdefault(rid, "unknown")
         if r.get("hook_input_tokens"):
             acc.hook_input_tokens += int(r["hook_input_tokens"])
         if r.get("hook_output_tokens"):
             acc.hook_output_tokens += int(r["hook_output_tokens"])
+        # hook_overhead_usd: marginal-$0 rule (cost.py:2803) — only a CONFIRMED
+        # metered row prices the hook tokens; subscription/unknown never fabricate
+        # a cost. Row-level host_mode, not the global cost.py env check, since the
+        # ledger already carries host_mode per-event and results must be
+        # bucketed by it.
+        hook_in = r.get("hook_input_tokens") or 0
+        hook_out = r.get("hook_output_tokens") or 0
+        if (hook_in or hook_out) and hm == "metered":
+            acc.hook_overhead_usd += (
+                int(hook_in) * _host_in_pm + int(hook_out) * _host_out_pm
+            ) / 1_000_000
         ts = r.get("terminal_state")
         if ts:
             acc.terminal_states[ts] = acc.terminal_states.get(ts, 0) + 1
     acc.actual_cost_usd = round(acc.actual_cost_usd, 6)
     acc.baseline_equivalent_cost_usd = round(acc.baseline_equivalent_cost_usd, 6)
+    acc.classifier_cost_usd_total = round(acc.classifier_cost_usd_total, 6)
+    acc.failed_attempt_cost_usd_total = round(acc.failed_attempt_cost_usd_total, 6)
+    acc.hook_overhead_usd = round(acc.hook_overhead_usd, 6)
 
     # ── Realization-gated savings (Gate 18) ──────────────────────────────────
     # potential = every route's positive saving; realized = ONLY verified_used
     # routes. A route with realization `unknown` or `verified_overridden` — or no
     # realization event at all — contributes to potential but NEVER to realized,
     # so an unverified saving can never be reported as realized.
+    #
+    # Phase 0 adoption gating: within verified_used routes, realized_savings_usd
+    # additionally requires adoption_method in _COUNTS_AS_REALIZED (door_call or
+    # agent_marked). A verified_used row with NO adoption_method (NULL) predates
+    # Phase 0 and is back-compat-treated as door_call — the strongest signal —
+    # rather than silently dropping every pre-migration verified_used route from
+    # realized savings. content_match is evidence but not proof: it lands in
+    # likely_used_routes instead of realized_savings_usd.
     for rid, delta in route_potential.items():
-        acc.potential_savings_usd += max(0.0, delta)
-        if route_realization.get(rid) == "verified_used":
-            acc.realized_savings_usd += max(0.0, delta)
+        saving = max(0.0, delta)
+        acc.potential_savings_usd += saving
+        if route_realization.get(rid) != "verified_used":
+            continue
+        adoption = route_adoption.get(rid)
+        if adoption is None:
+            adoption = "door_call"  # pre-migration back-compat ONLY
+        host_mode = route_host_mode.get(rid, "unknown")
+        if adoption in _COUNTS_AS_REALIZED:
+            acc.realized_savings_usd += saving
+            acc.realized_savings_by_host_mode[host_mode] = (
+                acc.realized_savings_by_host_mode.get(host_mode, 0.0) + saving
+            )
+            acc.realized_by_adoption_method[adoption] = (
+                acc.realized_by_adoption_method.get(adoption, 0.0) + saving
+            )
+            # Gap 2: quota-tokens-saved, only on routes that count as realized.
+            quota = max(0, route_baseline_tokens.get(rid, 0) - route_actual_tokens.get(rid, 0))
+            if quota:
+                acc.realized_quota_tokens_saved += quota
+                acc.quota_tokens_saved_by_host_mode[host_mode] = (
+                    acc.quota_tokens_saved_by_host_mode.get(host_mode, 0) + quota
+                )
+        elif adoption == "content_match":
+            acc.likely_used_routes += 1
     for rs in route_realization.values():
         if rs == "verified_used":
             acc.realized_routes += 1
@@ -422,6 +532,31 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
             acc.realization_unknown_routes += 1
     acc.potential_savings_usd = round(acc.potential_savings_usd, 6)
     acc.realized_savings_usd = round(acc.realized_savings_usd, 6)
+    acc.realized_savings_by_host_mode = {
+        k: round(v, 6) for k, v in acc.realized_savings_by_host_mode.items()
+    }
+    acc.realized_by_adoption_method = {
+        k: round(v, 6) for k, v in acc.realized_by_adoption_method.items()
+    }
+
+    # ── Net realized savings + overhead ratio ────────────────────────────────
+    acc.net_realized_savings_usd = round(
+        acc.realized_savings_usd
+        - acc.classifier_cost_usd_total
+        - acc.failed_attempt_cost_usd_total
+        - acc.hook_overhead_usd,
+        6,
+    )
+    _overhead = (
+        acc.classifier_cost_usd_total
+        + acc.failed_attempt_cost_usd_total
+        + acc.hook_overhead_usd
+    )
+    acc.overhead_as_pct_of_gross = (
+        round(_overhead / acc.realized_savings_usd, 6)
+        if acc.realized_savings_usd > 1e-9
+        else 0.0
+    )
     return acc
 
 
