@@ -205,28 +205,29 @@ def _enforce_label() -> str:
     """Human description of the RESOLVED enforcement mode (honest — no hardcoding).
 
     Resolves through the same source of truth the PreToolUse enforcer uses, so
-    this line always matches actual behavior. After P0, no mode blocks file/shell
-    tools — the differences are only in logging.
+    this line always matches actual behavior.
     """
     try:
         from chuzom.enforce_config import resolve_enforce_mode
         mode = resolve_enforce_mode()
     except Exception:
         mode = "soft"
-    # CHZ-AUD-D-05/A-06 (sibling): honest per-mode text. In SMART (default) only
-    # the reasoning/Q&A tools are held for Q&A tasks — code tasks let Edit/Write/
-    # Bash proceed. In HARD/STRICT the implementation tools (Bash/Edit/Write/
-    # MultiEdit/NotebookEdit) are ALSO held until a route is called; only
-    # Read/Glob/Grep/LS proceed. Only off/shadow/advise/suggest/soft never block.
-    # Must not claim "never blocks" for a mode that blocks, nor claim
-    # "Edit/Write/Bash proceed" for a mode that holds them.
+    # CHZ-AUD-D-05/A-06 (RED-2 re-audit): honest per-mode text, verified against
+    # enforce-route.py. On a ROUTED turn (one for which auto-route wrote a pending
+    # directive), SMART holds Edit/Write/MultiEdit until the route is satisfied —
+    # for ALL task types, NOT just Q&A (enforce-route.py:1181). Its only concession
+    # over hard is that read-only Bash is allowed for code/non-Q&A tasks; write Bash
+    # is still held. HARD/STRICT hold Bash/Edit/Write/MultiEdit/NotebookEdit
+    # outright (only Read/Glob/Grep/LS proceed). Only off/shadow/advise/suggest/soft
+    # never block. The smart label must not tell code tasks their write tools are
+    # free, nor claim "never blocks" for a mode that blocks.
     descriptions = {
         "off": "off (no enforcement)",
         "shadow": "shadow (observe-only; never blocks)",
         "advise": "advise (silent; never blocks)",
         "suggest": "suggest (logs routing misses; never blocks)",
         "soft": "soft (logs routing misses; never blocks)",
-        "smart": "smart — DEFAULT (holds reasoning/Q&A tools on Q&A tasks until routed; code tasks let Edit/Write/Bash proceed)",
+        "smart": "smart — DEFAULT (on a routed turn holds Edit/Write/MultiEdit until routed for ALL tasks; Read/Glob/Grep/LS always proceed, read-only Bash proceeds for code tasks)",
         "hard": "hard (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed; only Read/Glob/Grep/LS proceed)",
         "strict": "strict (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed; only Read/Glob/Grep/LS proceed)",
     }

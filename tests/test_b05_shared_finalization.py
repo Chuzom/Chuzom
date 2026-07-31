@@ -71,14 +71,19 @@ def test_every_success_path_calls_shared_finalizer():
     src = (ROOT / "src" / "chuzom" / "router.py").read_text()
     assert src.count("async def _finalize_successful_route(") == 1
     call_sites = len(re.findall(r"await _finalize_successful_route\(", src))
-    assert call_sites == 4, (
-        f"expected primary + emergency + semantic-cache + idempotency call sites, "
-        f"found {call_sites}"
+    assert call_sites == 5, (
+        f"expected primary + emergency + semantic-cache + idempotency + "
+        f"exhaustion-floor call sites, found {call_sites}"
     )
-    # Both bypass call sites must pass served_from_cache=True (call form uses a
-    # trailing comma; docstring mentions do not).
-    assert src.count("served_from_cache=True,") == 2, \
-        "both bypass paths must finalize with served_from_cache=True"
+    # The three no-fresh-spend paths (idempotency, semantic-cache, exhaustion
+    # floor) must pass served_from_cache=True (call form uses a trailing comma;
+    # docstring mentions do not).
+    assert src.count("served_from_cache=True,") == 3, \
+        "the cache/floor paths must finalize with served_from_cache=True"
+    # RED-1 re-audit: every finalize call site must be wrapped so a finalize bug
+    # is never misclassified as a provider failure — assert as many guard handlers
+    # as call sites.
+    assert src.count("finalize_successful_route") >= 5
 
 
 def test_cache_served_turn_records_context_but_not_spend(monkeypatch):

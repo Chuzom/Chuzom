@@ -66,12 +66,37 @@ def test_hard_strict_labels_do_not_claim_edit_write_bash_proceed():
             # Must name the implementation tools it actually holds.
             assert "bash/edit/write" in low or "bash/edit" in low, \
                 f"{mode} does not disclose it holds the implementation tools: {label}"
-        # SMART legitimately lets code tasks proceed — its label MAY mention proceed.
+        # CHZ-AUD-D-05/A-06 (RED-2): SMART holds Edit/Write/MultiEdit for ALL
+        # tasks on a routed turn (enforce-route.py:1181) — it must NOT claim
+        # "code tasks let Edit/Write/Bash proceed". It MAY say read-only Bash /
+        # read tools proceed, and must disclose that it holds Edit/Write.
         ec.resolve_enforce_mode = lambda *a, **k: "smart"
         smart = m._enforce_label().lower()
-        assert "proceed" in smart, f"smart should disclose code tasks proceed: {smart}"
+        assert not re.search(r"code tasks? (let|allow).*edit/write", smart), \
+            f"smart falsely claims code tasks get Edit/Write: {smart}"
+        assert not re.search(r"edit\s*/\s*write\S*\s+proceed", smart), \
+            f"smart falsely claims Edit/Write proceed: {smart}"
+        assert "holds edit/write" in smart, \
+            f"smart must disclose it holds Edit/Write: {smart}"
     finally:
         ec.resolve_enforce_mode = orig
+
+
+def test_shipped_hook_strings_do_not_overstate_smart_code_access():
+    """CHZ-AUD-D-05/A-06 (RED-2): the session-start docstring and the auto-route
+    enforcement banner must not claim code tasks freely edit files in smart mode.
+    Checks the docstring + the banner's literal user-facing phrasing (not guard
+    comments, which may quote the banned wording to explain what to avoid)."""
+    import importlib.util as _u
+    spec = _u.spec_from_file_location(
+        "ss_d05c", ROOT / "src" / "chuzom" / "hooks" / "session-start.py")
+    m = _u.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    assert "no mode blocks file/shell tools" not in (m._enforce_label.__doc__ or ""), \
+        "session-start docstring still claims no mode blocks file/shell tools"
+    ar = (ROOT / "src" / "chuzom" / "hooks" / "auto-route.py").read_text()
+    assert "allow file editing" not in ar, \
+        "auto-route banner still claims code tasks allow file editing in smart mode"
 
 
 def test_hard_mode_banner_does_not_claim_edit_write_bash_allowed():

@@ -123,3 +123,16 @@ def test_all_known_content_sinks_route_through_persist_redact():
         src = (root / s).read_text()
         assert "persist_redact" in src, \
             f"{s} persists content but does not route it through persist_redact"
+
+
+def test_execution_ledger_creates_usage_db_0600(tmp_path, monkeypatch):
+    """CHZ-AUD-D-02 (RED-2): execution_ledger must secure usage.db to 0600 even
+    when it is the first/only writer of the shared file."""
+    db = tmp_path / "usage.db"
+    monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(db))
+    from chuzom import execution_ledger
+    from chuzom.execution_ledger import LedgerEvent, record_event
+    record_event(LedgerEvent(session_id="s", route_id="r", event_type="route_completed",
+                             terminal_state="accepted"))
+    assert db.exists()
+    assert stat.S_IMODE(os.stat(db).st_mode) == 0o600, "execution_ledger left usage.db world-readable"

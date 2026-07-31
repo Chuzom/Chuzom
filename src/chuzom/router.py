@@ -1835,7 +1835,16 @@ async def _finalize_successful_route(
 
     # Context buffers: in-process session buffer + durable session_store mirror,
     # both scoped to the same resolved (project_id, session_id) identity.
-    _rt_pid, _rt_sid = _resolve_context_identity(None, None)
+    # CHZ-AUD (RED-1 re-audit): identity resolution must itself be fail-open — it
+    # was the ONE unguarded statement in this finalizer, so a resolution failure
+    # would propagate out and be misclassified by the primary loop's provider-error
+    # handler (writing a contradictory attempt_failed + discarding a billed
+    # response) or break the idempotency dedupe path's fail-open guarantee.
+    try:
+        _rt_pid, _rt_sid = _resolve_context_identity(None, None)
+    except Exception as _id_err:  # noqa: BLE001 — telemetry never breaks routing
+        log.debug("context identity resolution failed (non-fatal): %s", _id_err)
+        _rt_pid, _rt_sid = None, None
     try:
         buf = get_session_buffer(_rt_pid, _rt_sid)
         buf.record("user", prompt, task_type=task_type.value)
@@ -2663,22 +2672,34 @@ async def _dispatch_model_loop(
             # daily-spend alert, semantic-cache store). The emergency BUDGET
             # fallback path calls the SAME helper, so the two paths can no longer
             # drift. All sub-steps are fail-open.
-            await _finalize_successful_route(
-                response=response,
-                model=model,
-                provider=provider,
-                task_type=task_type,
-                profile=profile,
-                prompt=prompt,
-                classification_data=classification_data,
-                chain_attempts=chain_attempts,
-                chain_errors=chain_errors,
-                correlation_id=correlation_id,
-                failed_attempt_cost=_failed_attempt_cost,
-                config=config,
-                receipt=_receipt,
-                suppress_ledger=suppress_ledger,
-            )
+            #
+            # CHZ-AUD (RED-1 re-audit): this call MUST be isolated in its own
+            # try/except, distinct from the per-model provider-error handler below.
+            # Otherwise a bug inside finalization (which runs AFTER cost.log_usage
+            # + the attempt_completed ledger row) is caught by that handler, logged
+            # as "model failed", written as a CONTRADICTORY attempt_failed for the
+            # same attempt, and the already-generated, already-billed response is
+            # discarded and a second real provider call is made. Finalization is
+            # telemetry — it must never fail the routed turn.
+            try:
+                await _finalize_successful_route(
+                    response=response,
+                    model=model,
+                    provider=provider,
+                    task_type=task_type,
+                    profile=profile,
+                    prompt=prompt,
+                    classification_data=classification_data,
+                    chain_attempts=chain_attempts,
+                    chain_errors=chain_errors,
+                    correlation_id=correlation_id,
+                    failed_attempt_cost=_failed_attempt_cost,
+                    config=config,
+                    receipt=_receipt,
+                    suppress_ledger=suppress_ledger,
+                )
+            except Exception as _fin_err:  # noqa: BLE001 — finalize never fails the turn
+                log.warning("finalize_successful_route failed (non-fatal): %s", _fin_err)
 
             # Enhanced notification showing provider for QUOTA_BALANCED
             provider_tag = f" [{response.provider.upper()}]" if profile == RoutingProfile.QUOTA_BALANCED else ""
@@ -2887,22 +2908,25 @@ async def _dispatch_model_loop(
                     # route-quality ledger, context buffers, routing-decision
                     # analytics, daily-spend alert and semantic cache entirely.
                     chain_attempts.append(model)
-                    await _finalize_successful_route(
-                        response=response,
-                        model=model,
-                        provider=provider,
-                        task_type=task_type,
-                        profile=profile,
-                        prompt=prompt,
-                        classification_data=classification_data,
-                        chain_attempts=chain_attempts,
-                        chain_errors=chain_errors,
-                        correlation_id=correlation_id,
-                        failed_attempt_cost=_failed_attempt_cost,
-                        config=config,
-                        receipt=None,
-                        suppress_ledger=suppress_ledger,
-                    )
+                    try:
+                        await _finalize_successful_route(
+                            response=response,
+                            model=model,
+                            provider=provider,
+                            task_type=task_type,
+                            profile=profile,
+                            prompt=prompt,
+                            classification_data=classification_data,
+                            chain_attempts=chain_attempts,
+                            chain_errors=chain_errors,
+                            correlation_id=correlation_id,
+                            failed_attempt_cost=_failed_attempt_cost,
+                            config=config,
+                            receipt=None,
+                            suppress_ledger=suppress_ledger,
+                        )
+                    except Exception as _fin_err:  # noqa: BLE001 — finalize never fails the turn
+                        log.warning("finalize_successful_route (emergency) failed (non-fatal): %s", _fin_err)
 
                     route_log.info(
                         "emergency_fallback_success",
@@ -3040,6 +3064,24 @@ async def _dispatch_model_loop(
         # _failed_attempt_cost (billed when it was rejected), so subtract it to
         # avoid double-counting — settlement adds response.cost_usd back.
         _floor_extra = max(0.0, _failed_attempt_cost - float(getattr(_best_rejected, "cost_usd", 0.0) or 0.0))
+        # CHZ-AUD-B-05 (RED-1 re-audit): the exhaustion floor is a FOURTH success
+        # path that returned content to the caller but skipped finalization — the
+        # degraded answer never reached the context buffers or routing analytics.
+        # served_from_cache=True records context + analytics without re-billing
+        # (its cost is already accounted) or re-emitting a completion ledger row
+        # (the 'accepted' terminal above is the signal). Fail-open.
+        try:
+            await _finalize_successful_route(
+                response=_best_rejected,
+                model=_best_rejected.model, provider=_best_rejected.provider,
+                task_type=task_type, profile=profile, prompt=prompt,
+                classification_data=classification_data,
+                chain_attempts=chain_attempts, chain_errors=chain_errors,
+                correlation_id=correlation_id, failed_attempt_cost=_floor_extra,
+                config=config, receipt=None, served_from_cache=True,
+            )
+        except Exception as _fin_err:  # noqa: BLE001 — finalize never fails the turn
+            log.warning("finalize_successful_route (exhaustion-floor) failed (non-fatal): %s", _fin_err)
         return _enrich_response(
             _best_rejected, classification_data, effective_complexity,
             task_type, chain_attempts,
@@ -3347,17 +3389,20 @@ async def route_and_call(
             # record the served exchange's context + analytics (served_from_cache
             # skips spend/ledger/store). Runs before profile resolution, so pass a
             # neutral profile default (only used by the skipped ledger block).
-            await _finalize_successful_route(
-                response=_cached_resp,
-                model=getattr(_cached_resp, "model", "cache") or "cache",
-                provider=getattr(_cached_resp, "provider", "cache") or "cache",
-                task_type=task_type,
-                profile=profile if profile is not None else RoutingProfile.BALANCED,
-                prompt=prompt, classification_data=classification_data,
-                chain_attempts=[], chain_errors=[], correlation_id=correlation_id,
-                failed_attempt_cost=0.0, config=config, receipt=None,
-                served_from_cache=True,
-            )
+            try:
+                await _finalize_successful_route(
+                    response=_cached_resp,
+                    model=getattr(_cached_resp, "model", "cache") or "cache",
+                    provider=getattr(_cached_resp, "provider", "cache") or "cache",
+                    task_type=task_type,
+                    profile=profile if profile is not None else RoutingProfile.BALANCED,
+                    prompt=prompt, classification_data=classification_data,
+                    chain_attempts=[], chain_errors=[], correlation_id=correlation_id,
+                    failed_attempt_cost=0.0, config=config, receipt=None,
+                    served_from_cache=True,
+                )
+            except Exception as _fin_err:  # noqa: BLE001 — dedupe fail-open: never break the served turn
+                log.warning("finalize_successful_route (idempotency) failed (non-fatal): %s", _fin_err)
             return _cached_resp
 
     # T4-M1: prompt redaction immediately before the prompt heads to any
@@ -3771,14 +3816,21 @@ async def route_and_call(
                     # path — record the exchange into the context buffers and
                     # routing analytics so it is not lost. served_from_cache=True
                     # skips spend/ledger/semantic-store (would double-count).
-                    await _finalize_successful_route(
-                        response=cached, model=cached.model, provider=cached.provider,
-                        task_type=task_type, profile=profile, prompt=prompt,
-                        classification_data=classification_data, chain_attempts=[],
-                        chain_errors=[], correlation_id=correlation_id,
-                        failed_attempt_cost=0.0, config=config, receipt=None,
-                        served_from_cache=True,
-                    )
+                    try:
+                        await _finalize_successful_route(
+                            response=cached, model=cached.model, provider=cached.provider,
+                            task_type=task_type, profile=profile, prompt=prompt,
+                            classification_data=classification_data, chain_attempts=[],
+                            chain_errors=[], correlation_id=correlation_id,
+                            failed_attempt_cost=0.0, config=config, receipt=None,
+                            served_from_cache=True,
+                        )
+                    except Exception as _fin_err:  # noqa: BLE001 — must not fall through to a real call
+                        # CHZ-AUD (RED-1): a finalize failure here must NOT be caught
+                        # by the outer semantic-cache `except` (which falls through to
+                        # real chain dispatch, discarding this cache hit and making a
+                        # billed provider call). Swallow it and serve the cached result.
+                        log.warning("finalize_successful_route (semantic-cache) failed (non-fatal): %s", _fin_err)
                     await _release_reservation_if_held()  # RED1-3-02: cache-hit fast path
                     return cached
             except Exception as _sc_err:

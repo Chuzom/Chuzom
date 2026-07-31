@@ -179,15 +179,44 @@ CREATE INDEX IF NOT EXISTS idx_exec_ts ON execution_events(ts);
 """
 
 
+def _secure_perms(path: Path) -> None:
+    """Ensure *path* is mode 0600, repairing looser existing perms.
+
+    CHZ-AUD-D-02 (RED-2 re-audit): the ledger shares ~/.chuzom/usage.db with the
+    cost + session-summary sinks but opened it with no permission hardening — when
+    execution_ledger was the FIRST writer of the file (any route in a session that
+    never reaches a session-summary save) the OS default left it 0644. This
+    guarantees 0600 independently of which module touches the shared file first.
+    """
+    import stat as _stat
+    try:
+        if _stat.S_IMODE(path.stat().st_mode) != 0o600:
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 def _connect(path: Path | None = None) -> sqlite3.Connection:
     p = path or _db_path()
     p.parent.mkdir(parents=True, exist_ok=True)
+    if not p.exists():
+        try:
+            p.touch(mode=0o600)
+        except OSError:
+            pass
+    else:
+        _secure_perms(p)
     # 30s busy-timeout (was 5s): under pathological CI-runner load, rapid open/write/
     # close cycles can transiently hold the WAL lock long enough that a 5s wait errored
     # with `database is locked`. A longer wait lets the writer drain instead of failing.
     conn = sqlite3.connect(str(p), timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_DDL)
+    # WAL/SHM sidecars can carry the same rows — keep them 0600 too.
+    for suffix in ("-wal", "-shm"):
+        _sidecar = p.with_name(p.name + suffix)
+        if _sidecar.exists():
+            _secure_perms(_sidecar)
     return conn
 
 
