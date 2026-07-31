@@ -32,6 +32,8 @@ REQUIRED_REPORT_KEYS = {
     "generated_at",
     "chuzom_version",
     "price_table_version",
+    "n_soak_runs",
+    "nondeterminism_note",
 }
 
 
@@ -55,16 +57,21 @@ def test_cmd_soak_use_gold_complexity_writes_valid_report():
         overhead = report["overhead_as_pct_of_gross"]
         assert overhead is None or 0.0 <= overhead <= 1.0
 
-        # Phase 0.1 FIX 3: gate on the CI lower bound, not the point estimate
-        # (a point estimate whose CI includes 0 is noise, not a defensible
-        # saving) -- and require the report's own label to agree with the math.
-        quota_ci = report["realized_quota_tokens_saved"]["subscription"]["ci95"]
-        net_ci = report["net_realized_savings_usd"]["metered"]["ci95"]
-        defensible = quota_ci[0] > 0 or net_ci[0] > 0
+        # Phase 0.1 FIX 3, extended by Phase 0.2 FIX A/C: gate on
+        # conservative_ci_lower -- the MINIMUM 95% CI lower bound observed
+        # across all N soak runs (a single run's point estimate is not
+        # run-to-run reproducible, see soak.report.NONDETERMINISM_NOTE) --
+        # never a single run's point estimate or single-run CI. Require the
+        # report's own label to agree with the math.
+        quota_floor = report["realized_quota_tokens_saved"]["subscription"]["conservative_ci_lower"]
+        net_floor = report["net_realized_savings_usd"]["metered"]["conservative_ci_lower"]
+        defensible = quota_floor > 0 or net_floor > 0
         assert report["savings_claim_supported"] == defensible, (
             f"savings_claim_supported={report['savings_claim_supported']} does not "
-            f"match the CI math (quota ci95[0]={quota_ci[0]}, net ci95[0]={net_ci[0]})"
+            f"match the CI math (quota conservative_ci_lower={quota_floor}, "
+            f"net conservative_ci_lower={net_floor})"
         )
+        assert report["n_soak_runs"] >= 1
 
 
 def test_cmd_soak_default_output_path_when_out_omitted(monkeypatch, tmp_path):

@@ -25,7 +25,7 @@ import asyncio
 import pytest
 
 from soak.corpus_schema import load_corpus, validate_corpus
-from soak.report import run_soak
+from soak.report import DEFAULT_N_SOAK_RUNS, run_soak_n
 
 REQUIRED_REPORT_KEYS = {
     "corpus_version",
@@ -45,6 +45,8 @@ REQUIRED_REPORT_KEYS = {
     "generated_at",
     "chuzom_version",
     "price_table_version",
+    "n_soak_runs",
+    "nondeterminism_note",
 }
 
 
@@ -59,22 +61,24 @@ def test_corpus_is_valid_and_secret_free_before_soaking():
 
 
 @pytest.fixture
-def soak_report(temp_db, tmp_path, monkeypatch):
-    """Run the full replay+report pipeline once against the committed v1
-    corpus, hermetically (use_gold_complexity=True => no live classifier, and
-    _call_row mocks out every network-touching dependency). Session-scoped
-    would be nice, but monkeypatch/tmp_path are function-scoped, and the
-    report build is cheap (small corpus, no real network calls) -- rerunning
-    per-test is fine.
+def soak_report(temp_db, monkeypatch):
+    """Run the full replay+report pipeline DEFAULT_N_SOAK_RUNS times (Phase
+    0.2 FIX A) against the committed v1 corpus, hermetically
+    (use_gold_complexity=True => no live classifier, and _call_row mocks out
+    every network-touching dependency), and aggregate into the N-run report
+    schema. A single run's point estimate is NOT run-to-run reproducible
+    (see soak.report.NONDETERMINISM_NOTE) -- the gate below asserts against
+    ``conservative_ci_lower`` (the min CI lower bound across all N runs), not
+    any single run's point/ci95. run_soak_n manages its own per-run scratch
+    ledger dirs internally, so no tmp_path wiring is needed here; temp_db
+    still isolates the underlying chuzom usage DB writes from the real one.
+    Session-scoped would be nice, but monkeypatch is function-scoped, and the
+    report build is cheap (small corpus, no real network calls, ~1s/run) --
+    rerunning per-test is fine.
     """
-    ledger_path = tmp_path / "soak_ledger.db"
-    routing_ledger_dir = tmp_path / "routing_ledger"
-    routing_ledger_dir.mkdir(parents=True, exist_ok=True)
-
     return asyncio.run(
-        run_soak(
-            ledger_path=ledger_path,
-            routing_ledger_dir=routing_ledger_dir,
+        run_soak_n(
+            n_runs=DEFAULT_N_SOAK_RUNS,
             monkeypatch=monkeypatch,
             use_gold_complexity=True,
         )
@@ -121,9 +125,20 @@ def test_no_blended_dollar_figure_across_host_modes(soak_report):
     assert set(soak_report["realized_quota_tokens_saved"].keys()) == {"subscription"}
     for bucket in ("net_realized_savings_usd", "realized_quota_tokens_saved"):
         for host_mode, ci in soak_report[bucket].items():
-            assert set(ci.keys()) == {"point", "ci95"}
+            # Phase 0.2 FIX A: the legacy point/ci95 keys are kept (now
+            # populated from the N-run aggregate), alongside the new
+            # point_median/run_spread/conservative_ci_lower headline keys.
+            assert set(ci.keys()) == {
+                "point",
+                "ci95",
+                "point_median",
+                "run_spread",
+                "conservative_ci_lower",
+            }
             assert len(ci["ci95"]) == 2
             assert ci["ci95"][0] <= ci["point"] <= ci["ci95"][1] or ci["ci95"] == [ci["point"], ci["point"]]
+            assert len(ci["run_spread"]) == 2
+            assert ci["run_spread"][0] <= ci["point_median"] <= ci["run_spread"][1] or ci["run_spread"][0] == ci["run_spread"][1]
 
 
 def test_subscription_quota_tokens_are_non_negative(soak_report):
@@ -134,15 +149,20 @@ def test_subscription_quota_tokens_are_non_negative(soak_report):
 def test_report_defensibility_is_honestly_labeled(soak_report):
     """Phase 0.1 exit gate (replaces the old point-estimate gate, which could
     "pass" on pure noise -- a point estimate whose 95% CI straddles 0 is not
-    a proven saving, it's noise the gate was wrongly treating as a result).
+    a proven saving, it's noise the gate was wrongly treating as a result),
+    extended by Phase 0.2 FIX A/C to be robust across N independent soak
+    runs (a single run's point estimate is not run-to-run reproducible --
+    see soak.report.NONDETERMINISM_NOTE).
 
-    The gate now checks the CI LOWER BOUND, never the point estimate, and
-    the report is required to say so explicitly via
-    ``savings_claim_supported``. Both outcomes are acceptable here as long
-    as the label matches reality:
-      * True  -> at least one headline metric's 95% CI lower bound clears 0
-                 -- a defensible, non-noise saving.
-      * False -> neither metric's CI lower bound clears 0 -- this run is
+    The gate now checks ``conservative_ci_lower`` -- the MINIMUM 95% CI
+    lower bound observed across all N runs, never a single run's point
+    estimate or a single run's CI -- and the report is required to say so
+    explicitly via ``savings_claim_supported``. Both outcomes are acceptable
+    here as long as the label matches reality:
+      * True  -> at least one headline metric's conservative_ci_lower (the
+                 worst-case CI lower bound across all N runs) clears 0 --
+                 a defensible, non-noise saving robust to run-to-run noise.
+      * False -> neither metric's conservative_ci_lower clears 0 -- this is
                  honestly an infrastructure smoke-test (the pipeline ran end
                  to end and the report schema is complete), not proof of a
                  saving, and the report must not claim otherwise.
@@ -150,14 +170,15 @@ def test_report_defensibility_is_honestly_labeled(soak_report):
     adversarial re-audit checks the label matches the underlying CI math,
     not that the soak corpus happens to produce a big number.
     """
-    quota_ci = soak_report["realized_quota_tokens_saved"]["subscription"]["ci95"]
-    net_ci = soak_report["net_realized_savings_usd"]["metered"]["ci95"]
-    defensible = quota_ci[0] > 0 or net_ci[0] > 0
+    quota_floor = soak_report["realized_quota_tokens_saved"]["subscription"]["conservative_ci_lower"]
+    net_floor = soak_report["net_realized_savings_usd"]["metered"]["conservative_ci_lower"]
+    defensible = quota_floor > 0 or net_floor > 0
     assert soak_report["savings_claim_supported"] == defensible, (
         f"savings_claim_supported={soak_report['savings_claim_supported']} does not "
-        f"match the CI math (quota ci95[0]={quota_ci[0]}, net ci95[0]={net_ci[0]}) -- "
-        "the label must reflect whether either metric's CI lower bound actually "
-        "clears 0, never a point estimate."
+        f"match the CI math (quota conservative_ci_lower={quota_floor}, "
+        f"net conservative_ci_lower={net_floor}) -- the label must reflect whether "
+        "either metric's conservative (worst-of-N) CI lower bound actually clears 0, "
+        "never a single run's point estimate or single-run CI."
     )
 
 
