@@ -50,6 +50,11 @@ EventType = Literal[
     "result_discarded",
     "realization_unknown",
     "provider_health_changed",
+    # Phase 0 (realized-savings ledger): written at runtime by
+    # enforce-route.py::_record_realization_used / _record_agent_marked but was
+    # missing from this type declaration until now. Non-billable — it records
+    # adoption evidence for an already-billed route, not a new billable attempt.
+    "route_realized",
 ]
 
 # Event types that carry billable token/quota cost and therefore contribute to
@@ -63,6 +68,13 @@ TerminalState = Literal[
     "accepted", "rejected", "failed", "cancelled", "bypassed", "overridden", "unknown",
 ]
 RealizationStatus = Literal["verified_used", "verified_overridden", "unknown"]
+# Phase 0: how a `verified_used` row's usage was actually confirmed.
+# door_call = host called back through the enforcement door (strongest signal);
+# agent_marked = the (currently soak-only) agent-side adoption marker; content_match
+# = output-similarity heuristic (enum value only in Phase 0, not implemented as a
+# writer yet — see soak/replay.py); unknown = no adoption evidence. Only door_call
+# and agent_marked count toward realized savings (`_COUNTS_AS_REALIZED` below).
+AdoptionMethod = Literal["door_call", "agent_marked", "content_match", "unknown"]
 
 
 @dataclass
@@ -95,6 +107,15 @@ class LedgerEvent:
     cache_write_tokens: int | None = None
     measured_cost_usd: float | None = None
     baseline_equivalent_cost_usd: float | None = None
+
+    # Phase 0 (realized-savings ledger — Gaps 1/2/3). All optional/None-safe so
+    # pre-migration rows and non-attempt event types remain valid.
+    classifier_cost_usd: float | None = None       # Gap 1: classifier spend for this attempt
+    failed_attempt_cost_usd: float | None = None    # Gap 1: route's running failed-attempt cost,
+                                                      # carried onto the accepted attempt (R6: no
+                                                      # double count — set ONLY on the accepted row)
+    baseline_tokens: int | None = None              # Gap 2: actual_proxy (see soak/report.py)
+    adoption_method: AdoptionMethod | None = None    # Gap 3: how verified_used was confirmed
 
     # Orchestration overhead (INV-COST-005)
     hook_input_tokens: int | None = None
@@ -136,6 +157,11 @@ _COLUMNS: tuple[str, ...] = (
     "rejection_reason", "escalation_reason", "fallback_reason",
     "provider_failure_reason", "used_by_host", "realization_status",
     "override_type", "terminal_state", "metadata",
+    # Phase 0 additions — appended at the end so a fresh CREATE TABLE and an
+    # ALTER-migrated old DB end up with the same column SET (order doesn't need
+    # to match _DDL's declared order; INSERT/SELECT are always by explicit name).
+    "classifier_cost_usd", "failed_attempt_cost_usd", "baseline_tokens",
+    "adoption_method",
 )
 
 _DDL = """
@@ -171,12 +197,30 @@ CREATE TABLE IF NOT EXISTS execution_events (
     realization_status TEXT,
     override_type TEXT,
     terminal_state TEXT,
-    metadata TEXT
+    metadata TEXT,
+    classifier_cost_usd REAL,
+    failed_attempt_cost_usd REAL,
+    baseline_tokens INTEGER,
+    adoption_method TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_exec_route ON execution_events(route_id);
 CREATE INDEX IF NOT EXISTS idx_exec_session ON execution_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_exec_ts ON execution_events(ts);
 """
+
+# ── Migrations ───────────────────────────────────────────────────────────────
+# `execution_events` is created via `CREATE TABLE IF NOT EXISTS` with no ALTER
+# path, so a pre-Phase-0 `~/.chuzom/usage.db` lacks these columns. Mirrors the
+# idempotent-migration-list pattern in cost.py (e.g. MIGRATE_USAGE_ADD_SAVINGS):
+# each statement is applied individually in `_connect`, wrapped in its own
+# try/except so an already-migrated DB (or a fresh one where _DDL already
+# created the column) is a silent no-op. Never breaks a pre-existing DB.
+_MIGRATIONS: tuple[str, ...] = (
+    "ALTER TABLE execution_events ADD COLUMN classifier_cost_usd REAL",
+    "ALTER TABLE execution_events ADD COLUMN failed_attempt_cost_usd REAL",
+    "ALTER TABLE execution_events ADD COLUMN baseline_tokens INTEGER",
+    "ALTER TABLE execution_events ADD COLUMN adoption_method TEXT",
+)
 
 
 def _secure_perms(path: Path) -> None:
@@ -212,6 +256,12 @@ def _connect(path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(p), timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_DDL)
+    for _stmt in _MIGRATIONS:
+        try:
+            conn.execute(_stmt)
+        except sqlite3.OperationalError:
+            pass  # column already exists (fresh DB via _DDL, or already migrated)
+    conn.commit()
     # WAL/SHM sidecars can carry the same rows — keep them 0600 too.
     for suffix in ("-wal", "-shm"):
         _sidecar = p.with_name(p.name + suffix)
