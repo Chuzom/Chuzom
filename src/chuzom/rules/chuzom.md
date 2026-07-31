@@ -1,9 +1,15 @@
-<!-- chuzom-rules-version: 7 -->
-# Chuzom — Global Routing Rules (advise mode: route everywhere, never block)
+<!-- chuzom-rules-version: 8 -->
+# Chuzom — Global Routing Rules
 
 > Installed by chuzom. These rules help you route each task to the cheapest capable
-> model. They are a **default recommendation, not a constraint** — you always keep the
-> final call, and no tool is ever blocked.
+> model. **What actually happens depends on the enforcement mode** (default:
+> `smart`). In `smart`/`hard`, the PreToolUse hook *holds* the blocklisted
+> reasoning/Q&A tools until you call a routing tool (you can satisfy the route,
+> use an escape valve, or run `chuzom set-enforce off`); implementation tools
+> (Edit/Write/Bash) proceed. In `advise`/`suggest`/`soft`/`shadow`/`off`, nothing
+> is blocked. You always keep the final call on the answer. Whether a tool is
+> held is therefore **mode-dependent** — not a blanket guarantee. See
+> `Docs/configuration.md` and `chuzom doctor` for the resolved mode.
 
 ---
 

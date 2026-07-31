@@ -118,7 +118,7 @@ BANNER_SUBSCRIPTION = """
 ║  Subscription usage tracked for session-end delta reporting  ║
 ║  Inline OAuth refresh keeps pressure data fresh              ║
 ╠════════════════════════════════════════════════════════════════╣
-║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+║  routing is advisory; enforce mode decides what is blocked  ║
 ║  Prefer the cheap tool when it fits, else just do the work  ║
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
@@ -136,7 +136,7 @@ BANNER_API_KEYS = """
 ║  Free-first chain: Ollama → Codex → paid API providers        ║
 ║  Set GEMINI_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, etc.      ║
 ╠════════════════════════════════════════════════════════════════╣
-║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+║  routing is advisory; enforce mode decides what is blocked  ║
 ║  Prefer the cheap tool when it fits, else just do the work  ║
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
@@ -151,7 +151,7 @@ BANNER_LOCAL = """
 ║  Add OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY, etc. to  ║
 ║  enable cloud fallbacks — run `chuzom setup` to configure.    ║
 ╠════════════════════════════════════════════════════════════════╣
-║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+║  routing is advisory; enforce mode decides what is blocked  ║
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
@@ -213,17 +213,21 @@ def _enforce_label() -> str:
         mode = resolve_enforce_mode()
     except Exception:
         mode = "soft"
+    # CHZ-AUD-D-05: honest — the enforcing modes (smart/hard/strict, and smart is
+    # the DEFAULT) HOLD the blocklisted reasoning/Q&A tools until a route is called;
+    # file/shell tools (Edit/Write/Bash) proceed. Only off/shadow/advise/suggest/soft
+    # never block. Must not claim "never blocks" for a mode that does.
     descriptions = {
         "off": "off (no enforcement)",
-        "shadow": "shadow (observe-only)",
+        "shadow": "shadow (observe-only; never blocks)",
         "advise": "advise (silent; never blocks)",
-        "suggest": "soft (logs routing misses; never blocks)",
-        "soft": "soft (logs routing misses; never blocks — default)",
-        "smart": "smart (logs misses; file/shell tools never blocked)",
-        "hard": "hard (logs misses; file/shell tools never blocked)",
-        "strict": "strict (logs misses; file/shell tools never blocked)",
+        "suggest": "suggest (logs routing misses; never blocks)",
+        "soft": "soft (logs routing misses; never blocks)",
+        "smart": "smart — DEFAULT (holds reasoning/Q&A tools until routed; Edit/Write/Bash proceed)",
+        "hard": "hard (holds all blocklisted tools until routed; Edit/Write/Bash proceed)",
+        "strict": "strict (holds blocklisted tools until routed; Edit/Write/Bash proceed)",
     }
-    return descriptions.get(mode, f"{mode} (never blocks file/shell tools)")
+    return descriptions.get(mode, f"{mode} (holds blocklisted tools until routed)")
 
 
 def _render_welcome(is_subscription: bool) -> str:
