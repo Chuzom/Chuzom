@@ -228,8 +228,8 @@ def _enforce_label() -> str:
         "suggest": "suggest (logs routing misses; never blocks)",
         "soft": "soft (logs routing misses; never blocks)",
         "smart": "smart — DEFAULT (on a routed turn holds Edit/Write/MultiEdit until routed for ALL tasks; Read/Glob/Grep/LS always proceed, read-only Bash proceeds for code tasks)",
-        "hard": "hard (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed; only Read/Glob/Grep/LS proceed)",
-        "strict": "strict (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed; only Read/Glob/Grep/LS proceed)",
+        "hard": "hard (holds Edit/Write/MultiEdit/NotebookEdit + write Bash until routed; Read/Glob/Grep/LS proceed, and read-only Bash proceeds for code tasks)",
+        "strict": "strict (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed — read-only Bash included; only Read/Glob/Grep/LS proceed)",
     }
     return descriptions.get(mode, f"{mode} (holds blocklisted tools until routed)")
 
