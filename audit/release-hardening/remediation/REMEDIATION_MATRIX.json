@@ -22,6 +22,11 @@
       "commit": "0160ff3",
       "regression_test": "tests/test_cluster1_persistence_hardening.py",
       "method": "root-cause class fix + data-based regression test"
+    },
+    "phase5_sibling_closure": {
+      "commit": "963c7c1",
+      "detail": "context.save_session_summary + idempotency.py now persist_redact content (tests/test_persistence_siblings.py raw-byte scans)",
+      "note": "initial cluster closure was a point-fix on named files; Phase 5 closed the defect CLASS after independent GATE/RED audit found sibling occurrences"
     }
   },
   {
@@ -49,6 +54,11 @@
       "commit": "0160ff3",
       "regression_test": "tests/test_cluster1_persistence_hardening.py",
       "method": "root-cause class fix + data-based regression test"
+    },
+    "phase5_sibling_closure": {
+      "commit": "963c7c1",
+      "detail": "context usage.db + idempotency.db now 0600 with perm-repair (tests/test_persistence_siblings.py)",
+      "note": "initial cluster closure was a point-fix on named files; Phase 5 closed the defect CLASS after independent GATE/RED audit found sibling occurrences"
     }
   },
   {
@@ -79,6 +89,11 @@
       "commit": "0160ff3",
       "regression_test": "tests/test_cluster1_persistence_hardening.py",
       "method": "root-cause class fix + data-based regression test"
+    },
+    "phase5_sibling_closure": {
+      "commit": "963c7c1",
+      "detail": "session_summaries + idempotency now TTL-purge with secure_delete (tests/test_persistence_siblings.py)",
+      "note": "initial cluster closure was a point-fix on named files; Phase 5 closed the defect CLASS after independent GATE/RED audit found sibling occurrences"
     }
   },
   {
@@ -185,6 +200,11 @@
       "commit": "9210b06",
       "regression_test": "tests/test_b05_shared_finalization.py",
       "method": "root-cause class fix + data-based regression test"
+    },
+    "phase5_sibling_closure": {
+      "commit": "963c7c1",
+      "detail": "semantic-cache-hit + idempotency-dedupe bypass paths now finalize via served_from_cache (tests/test_b05_shared_finalization.py::test_cache_served_turn_records_context_but_not_spend; drift guard now requires 4 call sites)",
+      "note": "initial cluster closure was a point-fix on named files; Phase 5 closed the defect CLASS after independent GATE/RED audit found sibling occurrences"
     }
   },
   {
@@ -209,6 +229,11 @@
       "commit": "65606e1",
       "regression_test": "tests/test_a01_attempt_failed_ledger.py",
       "method": "root-cause class fix + data-based regression test"
+    },
+    "phase5_sibling_closure": {
+      "commit": "963c7c1",
+      "detail": "emergency BUDGET fallback except now emits attempt_failed (tests/test_a01_attempt_failed_ledger.py::test_emergency_budget_fallback_failure_also_emits_attempt_failed)",
+      "note": "initial cluster closure was a point-fix on named files; Phase 5 closed the defect CLASS after independent GATE/RED audit found sibling occurrences"
     }
   },
   {
@@ -379,6 +404,11 @@
       "commit": "9c349bf",
       "regression_test": "tests/test_cluster5_enforcement_honesty.py",
       "method": "root-cause class fix + data-based regression test"
+    },
+    "phase5_sibling_closure": {
+      "commit": "963c7c1",
+      "detail": "same as D-05 sibling (session-start.py label)",
+      "note": "initial cluster closure was a point-fix on named files; Phase 5 closed the defect CLASS after independent GATE/RED audit found sibling occurrences"
     }
   },
   {
@@ -405,6 +435,11 @@
       "commit": "5b48069",
       "regression_test": "tests/test_cluster5_enforcement_honesty.py",
       "method": "root-cause class fix + data-based regression test"
+    },
+    "phase5_sibling_closure": {
+      "commit": "963c7c1",
+      "detail": "session-start.py _enforce_label() hard/strict no longer claim 'Edit/Write/Bash proceed'; honesty test asserts the specific claim (tests/test_cluster5_enforcement_honesty.py::test_hard_strict_labels_do_not_claim_edit_write_bash_proceed)",
+      "note": "initial cluster closure was a point-fix on named files; Phase 5 closed the defect CLASS after independent GATE/RED audit found sibling occurrences"
     }
   },
   {
