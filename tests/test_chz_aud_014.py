@@ -52,8 +52,14 @@ def test_deep_reasoning_length_gate_failure_logs_warning(caplog):
 
 
 def test_simple_length_gate_failure_stays_quiet(caplog):
-    """Non-premium tasks must NOT emit the premium warning (avoid log noise)."""
-    contract = build_contract("c3", TaskType.QUERY, Complexity.MODERATE, "ollama/gemma4")
+    """Non-premium tasks must NOT emit the premium warning (avoid log noise).
+
+    Uses GENERATE, not QUERY: CHZ-AUD-C-03 makes QUERY a terse-answer task
+    (min length capped to the empty-guard), so a 1-char QUERY answer now passes
+    the length gate. GENERATE keeps the complexity floor, so "x" still fails —
+    exercising the non-premium quiet path this test guards.
+    """
+    contract = build_contract("c3", TaskType.GENERATE, Complexity.MODERATE, "ollama/gemma4")
     with caplog.at_level(logging.WARNING, logger="chuzom.gates"):
         result = _check_length(contract, "x")  # 1 < 20 for moderate
     assert not result.passed

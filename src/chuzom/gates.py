@@ -106,17 +106,54 @@ def _check_syntax(contract: RoutingContract, text: str) -> GateResult:
     return GateResult(gate=GateType.SYNTAX, passed=True)
 
 
+# CHZ-AUD-C-03: bare answers that are complete despite being short. The length
+# gate exists to catch empty/truncated garbage, NOT to reject a legitimately
+# terse answer and force a silent post-dispatch re-route.
+_VALID_SHORT_ANSWERS = frozenset({
+    "yes", "no", "true", "false", "n/a", "na", "none", "null", "nil",
+    "ok", "okay", "done", "pass", "fail", "unknown",
+})
+_NUMERIC_ANSWER_RE = re.compile(r"[-+]?[\$€£]?\d[\d,]*(?:\.\d+)?\s?%?")
+
+
+def _is_valid_short_answer(text: str) -> bool:
+    """CHZ-AUD-C-03: recognise a legitimately short, complete answer (yes/no,
+    a boolean, a bare number/currency/percentage, or a single short token) so
+    the length gate passes it instead of triggering a silent re-dispatch."""
+    s = text.strip().rstrip(".!").strip()
+    if not s:
+        return False
+    if s.lower() in _VALID_SHORT_ANSWERS:
+        return True
+    if _NUMERIC_ANSWER_RE.fullmatch(s):
+        return True
+    # NOTE: a bare single WORD is intentionally NOT allow-listed here. For terse
+    # factual Q&A (TaskType.QUERY) the contract already caps the length floor to
+    # the empty-guard, so "London"/"Python" pass without this gate rejecting them;
+    # for CODE/ANALYZE/RESEARCH a one-word "answer" is almost certainly truncated
+    # or wrong, so it must still trip the gate rather than be waved through.
+    return False
+
+
 def _check_length(contract: RoutingContract, text: str) -> GateResult:
     """Verify response meets minimum length threshold."""
     min_len = contract.constraints.min_output_length
     actual = len(text.strip())
 
     if actual < min_len:
+        # CHZ-AUD-C-03: allow-list legitimately short valid answers so a terse
+        # but complete reply is not rejected and silently re-dispatched.
+        if _is_valid_short_answer(text):
+            return GateResult(gate=GateType.LENGTH, passed=True)
         # CHZ-AUD-014: A length-gate failure on a complex/premium task is what
         # forces the router to abandon the premium chain and (potentially)
         # emergency-fallback to a budget Ollama model. Make that downshift
         # observable — a brief but valid premium answer must not silently
-        # downgrade quality without a trace.
+        # downgrade quality without a trace. (Non-premium length rejections are
+        # still surfaced by the router's `gate_verification_failed` structured
+        # log and the route-quality ledger's fallback_reason — CHZ-AUD-C-03 — so
+        # WHICH gate triggered the fallback is always recoverable; this WARNING
+        # is the extra human-visible signal reserved for premium downshifts.)
         if contract.complexity in _PREMIUM_COMPLEXITY:
             log.warning(
                 "Length gate failed on premium task (%s/%s): %d < %d chars — "
