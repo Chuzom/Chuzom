@@ -82,14 +82,25 @@ def cmd_soak(args: list[str]) -> int:
     print(f"Wrote {written}")
     print(f"  corpus_version={report['corpus_version']}  n_routes={report['n_routes']}")
     print(f"  host_mode_split={report['host_mode_split']}")
+    net_ci = report["net_realized_savings_usd"]["metered"]
+    quota_ci = report["realized_quota_tokens_saved"]["subscription"]
     print(
         "  net_realized_savings_usd.metered.point="
-        f"{report['net_realized_savings_usd']['metered']['point']}"
+        f"{net_ci['point']}  ci95={net_ci['ci95']}"
     )
     print(
         "  realized_quota_tokens_saved.subscription.point="
-        f"{report['realized_quota_tokens_saved']['subscription']['point']}"
+        f"{quota_ci['point']}  ci95={quota_ci['ci95']}"
     )
     print(f"  overhead_as_pct_of_gross={report['overhead_as_pct_of_gross']}")
     print(f"  mis_route_rate={report['mis_route_rate']}  adoption_unknown_fraction={report['adoption_unknown_fraction']}")
+    # Phase 0.1 FIX 3: never surface only the point estimate -- state plainly
+    # whether the CI lower bound actually supports a savings claim.
+    if report["savings_claim_supported"]:
+        print("  savings_claim_supported=True (a headline metric's 95% CI lower bound clears 0)")
+    else:
+        print(
+            "  savings_claim_supported=False -- this run is an infrastructure "
+            "smoke-test (pipeline ran, report schema complete), NOT proof of a saving."
+        )
     return 0

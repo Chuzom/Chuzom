@@ -7,6 +7,15 @@ surface per INV-COST-004), and computes the remaining report keys
 ``adoption_unknown_fraction``, ``host_mode_split``) directly from the raw
 per-row ``RowResult`` list, since those have no ``Accounting`` field --
 they are soak-harness-level QA metrics, not ledger accounting.
+
+Phase 0.1 FIX 3: ``savings_claim_supported`` is the exit-gate verdict --
+True only if at least one headline metric's 95% CI LOWER BOUND clears 0.
+Gating on the point estimate alone (the pre-Phase-0.1 behaviour) can "pass"
+on pure noise when the CI straddles 0; this field makes that distinction
+explicit and machine-checkable instead of silently asserting a saving the
+data doesn't actually support. When False, treat the run as an
+infrastructure smoke-test (the pipeline executed and the report schema is
+complete) -- not as proof of a saving.
 """
 
 from __future__ import annotations
@@ -88,6 +97,17 @@ def build_report(run: ReplayRun) -> dict[str, Any]:
         "ci95": [round(quota_subscription_ci["ci95"][0]), round(quota_subscription_ci["ci95"][1])],
     }
 
+    # Phase 0.1 FIX 3: the exit gate must never assert a saving on a point
+    # estimate whose confidence interval includes 0 -- that's noise, not a
+    # proven number (the "North Star" failure mode this fixes). A headline
+    # metric is only defensible if its 95% CI LOWER BOUND clears 0. If
+    # neither metric clears it, the honest thing to report is that this run
+    # is an infrastructure smoke-test (pipeline ran, schema is complete) and
+    # NOT a proof of savings -- never silently pass on noise.
+    subscription_ci_lower = quota_subscription_ci["ci95"][0]
+    metered_ci_lower = net_metered_ci["ci95"][0]
+    savings_claim_supported = subscription_ci_lower > 0 or metered_ci_lower > 0
+
     return {
         "corpus_version": run.corpus_version,
         "n_routes": n_routes,
@@ -101,6 +121,7 @@ def build_report(run: ReplayRun) -> dict[str, Any]:
         "adoption_unknown_fraction": round(adoption_unknown_fraction, 6),
         "overhead_as_pct_of_gross": period_acc.overhead_as_pct_of_gross,
         "baseline_tokens_method": BASELINE_TOKENS_METHOD,
+        "savings_claim_supported": savings_claim_supported,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "chuzom_version": _chuzom_version,
         "price_table_version": _price_table_version(),

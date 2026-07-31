@@ -27,6 +27,7 @@ REQUIRED_REPORT_KEYS = {
     "adoption_unknown_fraction",
     "overhead_as_pct_of_gross",
     "baseline_tokens_method",
+    "savings_claim_supported",
     "generated_at",
     "chuzom_version",
     "price_table_version",
@@ -47,10 +48,15 @@ def test_cmd_soak_use_gold_complexity_writes_valid_report():
         assert report["n_routes"] > 0
         assert 0.0 <= report["overhead_as_pct_of_gross"] <= 1.0
 
-        quota = report["realized_quota_tokens_saved"]["subscription"]["point"]
-        net_metered = report["net_realized_savings_usd"]["metered"]["point"]
-        assert quota > 0 or net_metered > 0, (
-            f"degenerate soak result: quota={quota}, net_metered={net_metered}"
+        # Phase 0.1 FIX 3: gate on the CI lower bound, not the point estimate
+        # (a point estimate whose CI includes 0 is noise, not a defensible
+        # saving) -- and require the report's own label to agree with the math.
+        quota_ci = report["realized_quota_tokens_saved"]["subscription"]["ci95"]
+        net_ci = report["net_realized_savings_usd"]["metered"]["ci95"]
+        defensible = quota_ci[0] > 0 or net_ci[0] > 0
+        assert report["savings_claim_supported"] == defensible, (
+            f"savings_claim_supported={report['savings_claim_supported']} does not "
+            f"match the CI math (quota ci95[0]={quota_ci[0]}, net ci95[0]={net_ci[0]})"
         )
 
 

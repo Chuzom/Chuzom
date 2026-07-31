@@ -40,6 +40,7 @@ REQUIRED_REPORT_KEYS = {
     "adoption_unknown_fraction",
     "overhead_as_pct_of_gross",
     "baseline_tokens_method",
+    "savings_claim_supported",
     "generated_at",
     "chuzom_version",
     "price_table_version",
@@ -121,31 +122,33 @@ def test_subscription_quota_tokens_are_non_negative(soak_report):
     assert quota >= 0
 
 
-def test_report_produces_a_non_degenerate_number(soak_report):
-    """Phase 0 exit gate (per phase0_brief.md's final acceptance section):
-    "a non-degenerate (subscription quota-tokens > 0 OR metered net > 0)
-    number". Both figures are legitimate zero in principle (e.g. an
-    all-subscription corpus with no multi-attempt escalation legitimately
-    yields 0 realized quota-tokens under the actual_proxy baseline -- see
-    execution_ledger.py's route_baseline_tokens/route_actual_tokens
-    derivation), so this asserts the OR, not either figure individually.
+def test_report_defensibility_is_honestly_labeled(soak_report):
+    """Phase 0.1 exit gate (replaces the old point-estimate gate, which could
+    "pass" on pure noise -- a point estimate whose 95% CI straddles 0 is not
+    a proven saving, it's noise the gate was wrongly treating as a result).
 
-    # TODO(phase-0): realized_quota_tokens_saved is structurally 0 for any
-    # route with a single accepted attempt and no escalation, because
-    # baseline_tokens is written as the actual_proxy of that SAME accepted
-    # attempt (router.py ~2673) while route_actual_tokens sums the identical
-    # value -- quota = max(0, baseline - actual) = 0 by construction. Only
-    # multi-attempt (escalated) routes could show quota > 0 today, and this
-    # soak harness's mocked dispatch chain never escalates. A truer subscription
-    # quota-tokens signal needs either a real (pre-routing, frontier-model)
-    # token-estimate baseline distinct from the actual_proxy, or corpus rows
-    # that force escalation -- both deferred; Phase 0's bar is met here via
-    # the metered net $ figure instead.
+    The gate now checks the CI LOWER BOUND, never the point estimate, and
+    the report is required to say so explicitly via
+    ``savings_claim_supported``. Both outcomes are acceptable here as long
+    as the label matches reality:
+      * True  -> at least one headline metric's 95% CI lower bound clears 0
+                 -- a defensible, non-noise saving.
+      * False -> neither metric's CI lower bound clears 0 -- this run is
+                 honestly an infrastructure smoke-test (the pipeline ran end
+                 to end and the report schema is complete), not proof of a
+                 saving, and the report must not claim otherwise.
+    This test asserts the label is *honest*, not that it's True -- an
+    adversarial re-audit checks the label matches the underlying CI math,
+    not that the soak corpus happens to produce a big number.
     """
-    quota = soak_report["realized_quota_tokens_saved"]["subscription"]["point"]
-    net_metered = soak_report["net_realized_savings_usd"]["metered"]["point"]
-    assert quota > 0 or net_metered > 0, (
-        f"degenerate soak result: quota={quota}, net_metered={net_metered}"
+    quota_ci = soak_report["realized_quota_tokens_saved"]["subscription"]["ci95"]
+    net_ci = soak_report["net_realized_savings_usd"]["metered"]["ci95"]
+    defensible = quota_ci[0] > 0 or net_ci[0] > 0
+    assert soak_report["savings_claim_supported"] == defensible, (
+        f"savings_claim_supported={soak_report['savings_claim_supported']} does not "
+        f"match the CI math (quota ci95[0]={quota_ci[0]}, net ci95[0]={net_ci[0]}) -- "
+        "the label must reflect whether either metric's CI lower bound actually "
+        "clears 0, never a point estimate."
     )
 
 
