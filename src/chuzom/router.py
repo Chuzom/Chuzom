@@ -2698,6 +2698,21 @@ async def _dispatch_model_loop(
                     fallback_reason="provider_error",
                 )
                 tracker.record_failure(provider)
+            # CHZ-AUD-A-01: record the FAILED provider attempt in the execution
+            # ledger. Provider errors (rate-limit/auth/outage/generic) were
+            # invisible to the ledger — only accepted/rejected attempts emitted —
+            # so cost/savings dashboards under-counted real attempts. Fail-open.
+            import types as _types_a01
+            _emit_ledger_attempt(
+                _types_a01.SimpleNamespace(
+                    provider=provider, cost_usd=0.0, input_tokens=0,
+                    output_tokens=0, model=model, latency_ms=0.0,
+                ),
+                model, task_type, profile,
+                event_type="attempt_failed",
+                correlation_id=correlation_id,
+                rejection_reason=f"{type(e).__name__}: {e}"[:200],
+            )
             last_error = e
             chain_errors.append((model, f"{type(e).__name__}: {e}"))
             continue
