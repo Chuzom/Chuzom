@@ -220,8 +220,8 @@ def _accepted_route_id(ledger_path: Path, session_id: str) -> str | None:
     Before this fix, rows dispatched via the exhaustion-floor path looked
     like a dispatch failure to the soak harness (no matching route_id found),
     even though the route genuinely succeeded -- inflating
-    ``mis_route_rate``/``soak_dispatch_failure_rate`` with harness artifacts
-    rather than real failures.
+    ``soak_dispatch_failure_rate`` with harness artifacts rather than real
+    failures.
     """
     conn = sqlite3.connect(str(ledger_path))
     try:

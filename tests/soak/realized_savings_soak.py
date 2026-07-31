@@ -33,7 +33,8 @@ REQUIRED_REPORT_KEYS = {
     "host_mode_split",
     "net_realized_savings_usd",
     "realized_quota_tokens_saved",
-    "mis_route_rate",
+    "effective_sample_size",
+    "soak_dispatch_failure_rate",
     "quality_delta_p50",
     "quality_delta_p95",
     "gate_false_negative_rate",
@@ -161,10 +162,23 @@ def test_report_defensibility_is_honestly_labeled(soak_report):
 
 
 def test_quality_and_adoption_fractions_are_valid_rates(soak_report):
-    for key in ("mis_route_rate", "gate_false_negative_rate", "adoption_unknown_fraction"):
+    for key in ("soak_dispatch_failure_rate", "gate_false_negative_rate", "adoption_unknown_fraction"):
         assert 0.0 <= soak_report[key] <= 1.0, f"{key} out of [0,1]: {soak_report[key]}"
     for key in ("quality_delta_p50", "quality_delta_p95"):
         assert 0.0 <= soak_report[key] <= 1.0, f"{key} out of [0,1]: {soak_report[key]}"
+
+
+def test_effective_sample_size_matches_host_mode_split(soak_report):
+    """Phase 0.1 FIX 6: effective_sample_size must reflect the actual number
+    of rows feeding each headline CI, not an aspirational count -- since
+    every corpus row currently contributes to its host mode's CI, this
+    equals host_mode_split, but the two are computed independently (one from
+    the raw RowResult list feeding bootstrap_ci, the other from a simple
+    per-row tally) so this pins them together against silent drift."""
+    ess = soak_report["effective_sample_size"]
+    split = soak_report["host_mode_split"]
+    assert ess["metered"] == split.get("metered", 0)
+    assert ess["subscription"] == split.get("subscription", 0)
 
 
 def test_report_metadata_fields_are_populated(soak_report):

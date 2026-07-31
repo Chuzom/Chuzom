@@ -95,7 +95,8 @@ def cmd_soak(args: list[str]) -> int:
     overhead = report["overhead_as_pct_of_gross"]
     overhead_label = "null (not measured -- hook overhead requires the external PreToolUse hook, not exercised here)" if overhead is None else overhead
     print(f"  overhead_as_pct_of_gross={overhead_label}")
-    print(f"  mis_route_rate={report['mis_route_rate']}  adoption_unknown_fraction={report['adoption_unknown_fraction']}")
+    print(f"  soak_dispatch_failure_rate={report['soak_dispatch_failure_rate']}  adoption_unknown_fraction={report['adoption_unknown_fraction']}")
+    print(f"  effective_sample_size={report['effective_sample_size']}")
     # Phase 0.1 FIX 3: never surface only the point estimate -- state plainly
     # whether the CI lower bound actually supports a savings claim.
     if report["savings_claim_supported"]:

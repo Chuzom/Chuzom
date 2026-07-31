@@ -3,10 +3,20 @@
 Pulls the headline $/quota-token figures from
 ``chuzom.execution_ledger.get_period_accounting`` (the ONLY cost totals
 surface per INV-COST-004), and computes the remaining report keys
-(``mis_route_rate``, ``quality_delta_p50/p95``, ``gate_false_negative_rate``,
-``adoption_unknown_fraction``, ``host_mode_split``) directly from the raw
-per-row ``RowResult`` list, since those have no ``Accounting`` field --
-they are soak-harness-level QA metrics, not ledger accounting.
+(``soak_dispatch_failure_rate``, ``quality_delta_p50/p95``,
+``gate_false_negative_rate``, ``adoption_unknown_fraction``,
+``host_mode_split``) directly from the raw per-row ``RowResult`` list, since
+those have no ``Accounting`` field -- they are soak-harness-level QA
+metrics, not ledger accounting.
+
+Phase 0.1 FIX 6: ``mis_route_rate`` was renamed to
+``soak_dispatch_failure_rate`` -- the old name collided in meaning with
+``chuzom.routing_quality``'s ``mis_route_rate_inferred`` (a *ledger-derived*
+routing-quality signal computed from real production traffic), even though
+this harness's figure is a much narrower thing: the fraction of corpus rows
+where the mocked dispatch chain itself failed to produce an accepted route.
+The rename makes clear this is a soak-harness dispatch-failure rate, not a
+claim about routing quality in general.
 
 Phase 0.1 FIX 3: ``savings_claim_supported`` is the exit-gate verdict --
 True only if at least one headline metric's 95% CI LOWER BOUND clears 0.
@@ -70,7 +80,7 @@ def build_report(run: ReplayRun) -> dict[str, Any]:
         host_mode_split[r.host_mode] = host_mode_split.get(r.host_mode, 0) + 1
 
     dispatch_failures = sum(1 for r in results if r.dispatch_failed)
-    mis_route_rate = (dispatch_failures / n_routes) if n_routes else 0.0
+    soak_dispatch_failure_rate = (dispatch_failures / n_routes) if n_routes else 0.0
 
     quality_deltas = [r.quality_delta for r in results if not r.dispatch_failed]
     quality_delta_p50 = round(_percentile(quality_deltas, 50), 6)
@@ -113,6 +123,15 @@ def build_report(run: ReplayRun) -> dict[str, Any]:
         float(r.realized_quota_tokens_saved) for r in results if r.host_mode == "subscription"
     ]
 
+    # Phase 0.1 FIX 6: how many data points actually fed each headline CI --
+    # a CI computed from a handful of rows deserves less trust than one from
+    # dozens, and this makes that visible instead of implying uniform
+    # confidence across both host modes' figures.
+    effective_sample_size = {
+        "metered": len(metered_net_values),
+        "subscription": len(subscription_quota_values),
+    }
+
     net_metered_ci = bootstrap_ci(metered_net_values)
     quota_subscription_ci = bootstrap_ci(subscription_quota_values)
     # Quota tokens are counts, not fractional dollars -- round the CI/point
@@ -139,7 +158,8 @@ def build_report(run: ReplayRun) -> dict[str, Any]:
         "host_mode_split": host_mode_split,
         "net_realized_savings_usd": {"metered": net_metered_ci},
         "realized_quota_tokens_saved": {"subscription": quota_subscription_ci},
-        "mis_route_rate": round(mis_route_rate, 6),
+        "effective_sample_size": effective_sample_size,
+        "soak_dispatch_failure_rate": round(soak_dispatch_failure_rate, 6),
         "quality_delta_p50": quality_delta_p50,
         "quality_delta_p95": quality_delta_p95,
         "gate_false_negative_rate": round(gate_false_negative_rate, 6),
