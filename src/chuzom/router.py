@@ -1592,7 +1592,9 @@ async def _cli_prompt_with_context(
         return prompt
     try:
         context_msgs = await build_context_messages(
-            caller_context=caller_context,
+            # CHZ-AUD-B-01: fall back to the LIVE prompt so keyword-relevance
+            # retrieval fires even when the caller passes no explicit context.
+            caller_context=caller_context or prompt,
             max_session_messages=getattr(config, "context_max_messages", 5),
             max_previous_sessions=getattr(config, "context_max_previous_sessions", 3),
             max_context_tokens=getattr(config, "context_max_tokens", 1500),
@@ -4198,7 +4200,9 @@ async def _call_text(
         _is_free = model.startswith("ollama/") or model.startswith("codex/") or model.startswith("gemini_cli/")
         _target_provider = model.split("/", 1)[0] if "/" in model else None
         context_msgs = await build_context_messages(
-            caller_context=caller_context,
+            # CHZ-AUD-B-01: fall back to the LIVE prompt so keyword-relevance
+            # retrieval fires even when the caller passes no explicit context.
+            caller_context=caller_context or prompt,
             max_session_messages=getattr(config, "context_max_messages", 5),
             max_previous_sessions=getattr(config, "context_max_previous_sessions", 3),
             max_context_tokens=getattr(config, "context_max_tokens", 1500),
@@ -4507,10 +4511,18 @@ async def route_and_stream(
             }
 
             try:
+                # CHZ-AUD-B-07: build_context_messages is async + keyword-only; the
+                # previous synchronous POSITIONAL call always raised TypeError, so
+                # streaming was structurally broken. Await it with keyword args,
+                # matching the non-streaming path (B-01: fall back to live prompt).
+                _stream_msgs = await build_context_messages(
+                    caller_context=caller_context or prompt,
+                    target_provider=provider,
+                )
                 # Stream provider events and map to router-level events
                 async for provider_event in providers.call_llm_stream_events(
                     model=model,
-                    messages=build_context_messages(prompt, system_prompt, caller_context),
+                    messages=_stream_msgs,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 ):
