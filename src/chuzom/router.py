@@ -2666,6 +2666,11 @@ async def _dispatch_model_loop(
                 )
             except Exception:
                 _baseline_equivalent_cost_usd = None
+            # Phase 0 (Gap 2): baseline_tokens is the actual_proxy for
+            # quota-tokens-saved — the actual input+output token count on
+            # this accepted attempt, used downstream (subscription host_mode)
+            # in place of a fabricated $ baseline.
+            _baseline_tokens = (response.input_tokens or 0) + (response.output_tokens or 0)
             _emit_ledger_attempt(
                 response, model, task_type, profile,
                 event_type="attempt_completed", accepted=True,
@@ -2673,6 +2678,7 @@ async def _dispatch_model_loop(
                 classifier_cost_usd=_classifier_cost_usd,
                 failed_attempt_cost_usd=_failed_attempt_cost,
                 baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd,
+                baseline_tokens=_baseline_tokens,
             )
             _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
             # P1-7: the token reservation is released in this attempt's finally.
@@ -2945,6 +2951,9 @@ async def _dispatch_model_loop(
                         )
                     except Exception:
                         _baseline_equivalent_cost_usd_eb = None
+                    # Phase 0 (Gap 2): symmetric with the primary accepted-attempt
+                    # site above — actual_proxy baseline_tokens.
+                    _baseline_tokens_eb = (response.input_tokens or 0) + (response.output_tokens or 0)
                     _emit_ledger_attempt(
                         response, model, task_type, RoutingProfile.BUDGET,
                         event_type="attempt_completed", accepted=True,
@@ -2952,6 +2961,7 @@ async def _dispatch_model_loop(
                         classifier_cost_usd=_classifier_cost_usd_eb,
                         failed_attempt_cost_usd=_failed_attempt_cost,
                         baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd_eb,
+                        baseline_tokens=_baseline_tokens_eb,
                     )
                     _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
 
