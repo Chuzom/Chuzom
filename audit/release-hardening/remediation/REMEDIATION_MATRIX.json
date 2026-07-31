@@ -1,10 +1,14 @@
 [
   {
     "id": "D-01",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "1-sensitive-content-lifecycle",
     "proposed_fix": "Wire a shared persist_redact() helper (enterprise/redaction.py + broadened prose-secret patterns) into result_cache.store_result() and semantic_cache.store(); default file perms to 0600; gate behind new CHUZOM_PERSIST_REDACTION=on default.",
-    "files_symbols": ["src/chuzom/result_cache.py:store_result", "src/chuzom/semantic_cache.py:store", "src/chuzom/enterprise/redaction.py"],
+    "files_symbols": [
+      "src/chuzom/result_cache.py:store_result",
+      "src/chuzom/semantic_cache.py:store",
+      "src/chuzom/enterprise/redaction.py"
+    ],
     "failing_test_to_add": "test_result_cache_redacts_prose_secret_and_sets_0600_perms",
     "acceptance_criteria": "A prompt containing an unredacted-looking secret (e.g. 'here is my key sk-abc123...') stored via result_cache/semantic_cache is retrievable only in redacted form; db file mode is 0600 after creation.",
     "migration_impact": "One-time migration command required to re-redact pre-existing db rows; destructive to historical exact text by design.",
@@ -13,78 +17,132 @@
     "docs_impact": "Document CHUZOM_PERSIST_REDACTION/CHUZOM_PERSIST_RAW/CHUZOM_PERSIST_TTL_DAYS and the migration command in Docs/configuration.md.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "M"
+    "scope_estimate": "M",
+    "closure": {
+      "commit": "0160ff3",
+      "regression_test": "tests/test_cluster1_persistence_hardening.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "D-02",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "1-sensitive-content-lifecycle",
     "proposed_fix": "Same shared fix as D-01 (persist_redact + 0600 perms); D-02 is the perms/hardening half of the same defect surface as D-01.",
-    "files_symbols": ["src/chuzom/result_cache.py", "src/chuzom/semantic_cache.py", "src/chuzom/cost.py:_get_db (reference correct 0o600 pattern, line ~542)"],
+    "files_symbols": [
+      "src/chuzom/result_cache.py",
+      "src/chuzom/semantic_cache.py",
+      "src/chuzom/cost.py:_get_db (reference correct 0o600 pattern, line ~542)"
+    ],
     "failing_test_to_add": "test_result_cache_db_created_with_0600 (shared with D-01's test)",
     "acceptance_criteria": "result_cache.db and semantic_cache.db are created with mode 0600, matching cost.py's existing correct pattern.",
     "migration_impact": "chmod existing db files as part of the same migration command from D-01.",
     "backcompat_impact": "None.",
     "security_impact": "Removes world-readable exposure of cached prompt/response content.",
     "docs_impact": "Covered by D-01's docs update.",
-    "dependencies": ["D-01"],
+    "dependencies": [
+      "D-01"
+    ],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "0160ff3",
+      "regression_test": "tests/test_cluster1_persistence_hardening.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "D-04",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "1-sensitive-content-lifecycle",
     "proposed_fix": "Add regression test coverage for redaction/perms/TTL across all three persistence layers as part of the D-01/D-02/B-02/B-03 fix PRs, not a standalone change.",
-    "files_symbols": ["tests/test_result_cache.py", "tests/test_semantic_cache.py", "tests/test_session_store.py"],
+    "files_symbols": [
+      "tests/test_result_cache.py",
+      "tests/test_semantic_cache.py",
+      "tests/test_session_store.py"
+    ],
     "failing_test_to_add": "test_persist_redaction_covers_all_three_stores (parametrized across result_cache/semantic_cache/session_store)",
     "acceptance_criteria": "CI fails if any of the three persistence layers stores an unredacted known-secret-shaped string, or a record older than CHUZOM_PERSIST_TTL_DAYS survives compaction.",
     "migration_impact": "None (test-only).",
     "backcompat_impact": "None.",
     "security_impact": "Prevents regression of D-01/D-02/B-02/B-03 fixes.",
     "docs_impact": "None beyond D-01's.",
-    "dependencies": ["D-01", "D-02", "B-02", "B-03"],
+    "dependencies": [
+      "D-01",
+      "D-02",
+      "B-02",
+      "B-03"
+    ],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "0160ff3",
+      "regression_test": "tests/test_cluster1_persistence_hardening.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "B-02",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "1-sensitive-content-lifecycle",
     "proposed_fix": "session_store.record_event() persists full scrubbed-but-not-fully-redacted content indefinitely; replace _scrub_secrets() narrow regex with the shared persist_redact() helper and add TTL-based physical deletion during _maybe_compact().",
-    "files_symbols": ["src/chuzom/session_store.py:record_event", "src/chuzom/session_store.py:_maybe_compact", "src/chuzom/secret_scrubber.py"],
+    "files_symbols": [
+      "src/chuzom/session_store.py:record_event",
+      "src/chuzom/session_store.py:_maybe_compact",
+      "src/chuzom/secret_scrubber.py"
+    ],
     "failing_test_to_add": "test_session_store_ttl_physically_deletes_expired_records",
     "acceptance_criteria": "Records older than CHUZOM_PERSIST_TTL_DAYS (default 30) are absent from the JSONL file after a compaction pass, not merely filtered at read time.",
-    "migration_impact": "Existing JSONL history has no TTL metadata; first compaction after upgrade applies TTL from record timestamp going forward — document as a behavior change in release notes.",
+    "migration_impact": "Existing JSONL history has no TTL metadata; first compaction after upgrade applies TTL from record timestamp going forward \u2014 document as a behavior change in release notes.",
     "backcompat_impact": "session_store JSONL schema unchanged; only retention behavior changes.",
     "security_impact": "Bounds indefinite retention of persisted session content.",
     "docs_impact": "Covered by D-01's docs update.",
-    "dependencies": ["C-01"],
+    "dependencies": [
+      "C-01"
+    ],
     "regression_risk": "medium",
-    "scope_estimate": "M"
+    "scope_estimate": "M",
+    "closure": {
+      "commit": "0160ff3",
+      "regression_test": "tests/test_cluster1_persistence_hardening.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "B-03",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "1-sensitive-content-lifecycle",
     "proposed_fix": "_scrub_secrets()/_SECRET_PATTERNS in secret_scrubber.py are [:=]-anchored only and miss prose-form secrets; replace with the shared persist_redact() helper (broadened patterns + enterprise/redaction.py) used across all three persistence layers.",
-    "files_symbols": ["src/chuzom/secret_scrubber.py:_scrub_secrets", "src/chuzom/secret_scrubber.py:_SECRET_PATTERNS"],
+    "files_symbols": [
+      "src/chuzom/secret_scrubber.py:_scrub_secrets",
+      "src/chuzom/secret_scrubber.py:_SECRET_PATTERNS"
+    ],
     "failing_test_to_add": "test_scrub_secrets_catches_prose_form_api_key",
     "acceptance_criteria": "A prompt like 'my openai key is sk-abc123...' (no '=' or ':' anchor) is redacted in session_store output.",
     "migration_impact": "Covered by D-01's migration command.",
     "backcompat_impact": "None.",
     "security_impact": "Closes the prose-secret bypass gap that made the [:=]-anchored regex ineffective for a large class of real-world secret phrasing.",
     "docs_impact": "Covered by D-01's docs update.",
-    "dependencies": ["C-01"],
+    "dependencies": [
+      "C-01"
+    ],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "0160ff3",
+      "regression_test": "tests/test_cluster1_persistence_hardening.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "B-04",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "2-scope-identity",
     "proposed_fix": "Convert context.py's module-level SessionBuffer singleton into a registry keyed by (project_id, session_id); require both keys in get_session_buffer(); add idle/LRU eviction to bound registry growth.",
-    "files_symbols": ["src/chuzom/context.py:get_session_buffer", "src/chuzom/context.py:SessionBuffer (lines ~96,161,164-169,220,255,473)"],
+    "files_symbols": [
+      "src/chuzom/context.py:get_session_buffer",
+      "src/chuzom/context.py:SessionBuffer (lines ~96,161,164-169,220,255,473)"
+    ],
     "failing_test_to_add": "test_session_buffer_isolated_across_projects_in_same_process",
     "acceptance_criteria": "Two SessionBuffer.record() calls with different (project_id, session_id) in the same process never appear in each other's context reinjection.",
     "migration_impact": "None (in-process state only, no persisted format).",
@@ -93,30 +151,51 @@
     "docs_impact": "None required beyond code comments.",
     "dependencies": [],
     "regression_risk": "medium",
-    "scope_estimate": "M"
+    "scope_estimate": "M",
+    "closure": {
+      "commit": "eb36301",
+      "regression_test": "tests/test_session_buffer_scope.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "B-05",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "3-successful-turn-finalization",
     "proposed_fix": "Extract finalize_successful_turn() containing the primary path's full post-success side effects (session_spend, routing_quality.record_route, buf.record, session_store.record_event, ledger terminal); call it from both the primary success path and the BUDGET-fallback success path.",
-    "files_symbols": ["src/chuzom/router.py:2252,2311,2329,2334 (primary emits)", "src/chuzom/router.py:2712,2767,2772,2775 (fallback trigger/emits)"],
+    "files_symbols": [
+      "src/chuzom/router.py:2252,2311,2329,2334 (primary emits)",
+      "src/chuzom/router.py:2712,2767,2772,2775 (fallback trigger/emits)"
+    ],
     "failing_test_to_add": "test_budget_fallback_success_records_spend_and_quality_and_context",
     "acceptance_criteria": "A turn that succeeds only via BUDGET emergency fallback produces the same session_spend/routing_quality/buf/session_store side effects as a turn that succeeds via the primary chain.",
     "migration_impact": "None.",
     "backcompat_impact": "None (internal control-flow consolidation).",
     "security_impact": "None direct.",
     "docs_impact": "None.",
-    "dependencies": ["A-01", "A-02", "C-02", "C-03"],
+    "dependencies": [
+      "A-01",
+      "A-02",
+      "C-02",
+      "C-03"
+    ],
     "regression_risk": "medium",
-    "scope_estimate": "M"
+    "scope_estimate": "M",
+    "closure": {
+      "commit": "9210b06",
+      "regression_test": "tests/test_b05_shared_finalization.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "A-01",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "4-attempt-fallback-state-machine",
     "proposed_fix": "Emit execution_ledger's attempt_failed event type at every dispatch-loop exception/failure branch that currently falls through without a ledger call.",
-    "files_symbols": ["src/chuzom/router.py (dispatch loop exception handlers)", "src/chuzom/execution_ledger.py (attempt_failed schema)"],
+    "files_symbols": [
+      "src/chuzom/router.py (dispatch loop exception handlers)",
+      "src/chuzom/execution_ledger.py (attempt_failed schema)"
+    ],
     "failing_test_to_add": "test_failed_attempt_emits_attempt_failed_ledger_event",
     "acceptance_criteria": "Forcing a model call to raise in the dispatch loop results in an attempt_failed row in the ledger for that attempt.",
     "migration_impact": "None (additive event emission, existing schema field already defined).",
@@ -125,14 +204,22 @@
     "docs_impact": "None.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "65606e1",
+      "regression_test": "tests/test_a01_attempt_failed_ledger.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "A-02",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "4-attempt-fallback-state-machine",
     "proposed_fix": "Thread agent_session_id into execution_ledger's session_id field at all _emit_ledger_attempt/_emit_ledger_terminal call sites, so get_session_accounting() can attribute ledger rows to the calling agent session.",
-    "files_symbols": ["src/chuzom/router.py:2927 (agent_session_id param), 3727-3740, 4085-4089", "src/chuzom/execution_ledger.py:359 get_session_accounting"],
+    "files_symbols": [
+      "src/chuzom/router.py:2927 (agent_session_id param), 3727-3740, 4085-4089",
+      "src/chuzom/execution_ledger.py:359 get_session_accounting"
+    ],
     "failing_test_to_add": "test_get_session_accounting_reflects_agent_session_id",
     "acceptance_criteria": "route_and_call(agent_session_id=X, ...) results in ledger rows whose session_id resolves via get_session_accounting(X).",
     "migration_impact": "Additive column population; no schema migration needed if column already exists (verify at implementation time).",
@@ -141,30 +228,47 @@
     "docs_impact": "None.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "cd76393",
+      "regression_test": "tests/test_a02_agent_session_ledger.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "C-02",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "4-attempt-fallback-state-machine",
     "proposed_fix": "Bypass should_skip_model() when the dispatch candidate came from an explicit model_override single-element chain; as defense-in-depth, scope _quality_store per (project_id, session_id) reusing Cluster 2's keyed-registry pattern.",
-    "files_symbols": ["src/chuzom/router.py:1995-1996 (should_skip_model call), 387 (_build_and_filter_chain)", "src/chuzom/quality_feedback.py:247 should_skip_model, _quality_store"],
+    "files_symbols": [
+      "src/chuzom/router.py:1995-1996 (should_skip_model call), 387 (_build_and_filter_chain)",
+      "src/chuzom/quality_feedback.py:247 should_skip_model, _quality_store"
+    ],
     "failing_test_to_add": "test_model_override_not_silently_swapped_after_quality_breaker_trips",
     "acceptance_criteria": "Calling route_and_call(model_override=X) still dispatches to X even after 3+ recorded low-quality calls for (X, task_type, complexity).",
     "migration_impact": "None.",
     "backcompat_impact": "Callers relying on the (buggy) silent-override-swap behavior would see a behavior change; treated as a bugfix, not a contract break, since model_override is documented as an explicit caller choice.",
     "security_impact": "Closes an enforcement-honesty gap: explicit caller model choices (often compliance/cost-driven) are now actually honored.",
     "docs_impact": "None required; existing model_override docs already imply this should hold.",
-    "dependencies": ["B-04"],
+    "dependencies": [
+      "B-04"
+    ],
     "regression_risk": "medium",
-    "scope_estimate": "M"
+    "scope_estimate": "M",
+    "closure": {
+      "commit": "69bab9c",
+      "regression_test": "tests/test_c02_model_override_honored.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "C-03",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "4-attempt-fallback-state-machine",
     "proposed_fix": "Introduce a fallback_reason enum (quality_skip | length_gate | chain_exhausted) recorded on every BUDGET-fallback dispatch, distinguishing the output-length gate's silent re-dispatch from the quality breaker's (C-02) and from genuine chain exhaustion.",
-    "files_symbols": ["src/chuzom/router.py (output-length gate <20 chars branch, BUDGET fallback trigger ~2712)"],
+    "files_symbols": [
+      "src/chuzom/router.py (output-length gate <20 chars branch, BUDGET fallback trigger ~2712)"
+    ],
     "failing_test_to_add": "test_length_gate_fallback_recorded_with_distinct_reason_code",
     "acceptance_criteria": "A response shorter than the length-gate threshold results in a ledger/log entry with fallback_reason=length_gate, distinguishable from fallback_reason=quality_skip.",
     "migration_impact": "Additive nullable ledger field fallback_reason; no migration needed for existing rows.",
@@ -173,14 +277,22 @@
     "docs_impact": "None.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "01c6620",
+      "regression_test": "tests/test_c03_length_gate_short_answers.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "A-03",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "5-enforcement-guarantee-contract",
     "proposed_fix": "Derive auto-route.py's banner text from a single per-mode label table in enforce_config.py instead of hand-maintained prose, so it accurately reflects blocking behavior for the active mode.",
-    "files_symbols": ["hooks/chuzom-auto-route.py", "src/chuzom/enforce_config.py"],
+    "files_symbols": [
+      "hooks/chuzom-auto-route.py",
+      "src/chuzom/enforce_config.py"
+    ],
     "failing_test_to_add": "test_auto_route_banner_matches_enforce_config_label_for_smart_mode",
     "acceptance_criteria": "Banner text for CHUZOM_ENFORCE=smart states that Edit/Write/MultiEdit are blocked, matching actual enforce_route.py behavior.",
     "migration_impact": "None.",
@@ -189,14 +301,21 @@
     "docs_impact": "Primary deliverable of this cluster.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "0b63150",
+      "regression_test": "tests/test_cluster5_enforcement_honesty.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "A-04",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "5-enforcement-guarantee-contract",
     "proposed_fix": "Fix enforce-route.py's malformed-JSON-on-stdin early-exit to fail closed (block) instead of fail open (approve).",
-    "files_symbols": ["hooks/chuzom-enforce-route.py (early-exit on malformed JSON)"],
+    "files_symbols": [
+      "hooks/chuzom-enforce-route.py (early-exit on malformed JSON)"
+    ],
     "failing_test_to_add": "test_enforce_route_fails_closed_on_malformed_hook_input",
     "acceptance_criteria": "Feeding malformed JSON to chuzom-enforce-route.py's stdin under CHUZOM_ENFORCE=smart results in decision=block, not decision=approve.",
     "migration_impact": "None.",
@@ -205,62 +324,98 @@
     "docs_impact": "Note the fail-closed behavior in Docs/configuration.md.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "025ca89",
+      "regression_test": "tests/test_a04_malformed_hook_stdin.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "A-05",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "5-enforcement-guarantee-contract",
     "proposed_fix": "Update session-start.py's _enforce_label() to derive from the same single per-mode table as A-03/A-06, replacing its incorrect 'no mode blocks file/shell tools' claim.",
-    "files_symbols": ["hooks/chuzom-session-start.py:_enforce_label"],
+    "files_symbols": [
+      "hooks/chuzom-session-start.py:_enforce_label"
+    ],
     "failing_test_to_add": "test_enforce_label_smart_mode_states_blocking_behavior",
     "acceptance_criteria": "_enforce_label('smart') no longer claims no blocking; text matches enforce_config.py's actual smart-mode tool blocklist.",
     "migration_impact": "None.",
     "backcompat_impact": "None (messaging only).",
     "security_impact": "None direct; closes a trust/honesty gap.",
     "docs_impact": "Covered by A-03's shared label table.",
-    "dependencies": ["A-03"],
+    "dependencies": [
+      "A-03"
+    ],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "0b63150",
+      "regression_test": "tests/test_cluster5_enforcement_honesty.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "A-06",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "5-enforcement-guarantee-contract",
     "proposed_fix": "Audit and correct any remaining enforcement-claim strings (CLI output, --help text, in-app messaging) not already covered by A-03/A-05, deriving from the same single label table.",
-    "files_symbols": ["src/chuzom/commands/*.py (enforcement-related CLI output)"],
+    "files_symbols": [
+      "src/chuzom/commands/*.py (enforcement-related CLI output)"
+    ],
     "failing_test_to_add": "test_cli_enforce_status_output_matches_actual_mode_behavior",
     "acceptance_criteria": "chuzom status / chuzom verify output describing enforcement mode matches the derived label table for the active CHUZOM_ENFORCE value.",
     "migration_impact": "None.",
     "backcompat_impact": "None (messaging only).",
     "security_impact": "None direct; closes remaining trust/honesty gaps.",
     "docs_impact": "Covered by A-03's shared label table.",
-    "dependencies": ["A-03"],
+    "dependencies": [
+      "A-03"
+    ],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "9c349bf",
+      "regression_test": "tests/test_cluster5_enforcement_honesty.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "D-05",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "5-enforcement-guarantee-contract",
     "proposed_fix": "Update Docs/configuration.md and both copies of rules/chuzom.md (src/chuzom/rules/chuzom.md and the installed ~/.claude/rules/chuzom.md template) to state plainly which modes block which tools, matching the derived label table.",
-    "files_symbols": ["Docs/configuration.md", "src/chuzom/rules/chuzom.md"],
+    "files_symbols": [
+      "Docs/configuration.md",
+      "src/chuzom/rules/chuzom.md"
+    ],
     "failing_test_to_add": "test_docs_enforcement_claims_match_enforce_config_table (doc-lint style check comparing doc text against the table)",
     "acceptance_criteria": "Docs/configuration.md and rules/chuzom.md no longer claim 'never blocks' for modes that do block (smart, hard); text is generated from or checked against the same source-of-truth table as A-03/A-05/A-06.",
     "migration_impact": "None.",
     "backcompat_impact": "None (docs only).",
     "security_impact": "None direct; closes the audit's most visible instance of the enforcement-honesty gap, since rules/chuzom.md is also the file installed as global standing instructions for calling agents.",
     "docs_impact": "Primary deliverable of this cluster.",
-    "dependencies": ["A-03"],
+    "dependencies": [
+      "A-03"
+    ],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "5b48069",
+      "regression_test": "tests/test_cluster5_enforcement_honesty.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "C-01",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "6-concurrent-persistence",
     "proposed_fix": "Add an fcntl.flock() advisory exclusive lock (via a sibling .lock file) around the append + _maybe_compact() critical section in session_store.record_event(), so a compacting process can't os.replace() the file out from under a concurrent appender.",
-    "files_symbols": ["src/chuzom/session_store.py:record_event (line ~290)", "src/chuzom/session_store.py:_maybe_compact (line ~362)"],
+    "files_symbols": [
+      "src/chuzom/session_store.py:record_event (line ~290)",
+      "src/chuzom/session_store.py:_maybe_compact (line ~362)"
+    ],
     "failing_test_to_add": "test_session_store_concurrency (extend existing tests/test_session_store_concurrency.py to assert zero writes lost under 6-process concurrent load)",
     "acceptance_criteria": "Re-running the audit's 6-process, 1200-write concurrency test shows 0 lost writes (down from 22/1200, 1.83%).",
     "migration_impact": "None.",
@@ -269,14 +424,22 @@
     "docs_impact": "None.",
     "dependencies": [],
     "regression_risk": "medium",
-    "scope_estimate": "M"
+    "scope_estimate": "M",
+    "closure": {
+      "commit": "0a87dd4",
+      "regression_test": "tests/test_session_store_concurrency.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "B-01",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "7-reachability-neglected-paths",
     "proposed_fix": "Default caller_context.query to the live prompt at router.py's build_context_messages() call sites, actually activating session_store.build_session_context()'s keyword-relevance fallback.",
-    "files_symbols": ["src/chuzom/router.py:1594,4173 (build_context_messages call sites)", "src/chuzom/session_store.py:build_session_context"],
+    "files_symbols": [
+      "src/chuzom/router.py:1594,4173 (build_context_messages call sites)",
+      "src/chuzom/session_store.py:build_session_context"
+    ],
     "failing_test_to_add": "test_keyword_relevance_fallback_fires_with_live_prompt",
     "acceptance_criteria": "A route_and_call() invocation whose context lookup falls back to keyword relevance actually receives the live prompt as the query, not an empty/unset caller_context.query.",
     "migration_impact": "None.",
@@ -285,14 +448,22 @@
     "docs_impact": "None.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "014eeaa",
+      "regression_test": "tests/test_b0107_context_wiring.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "B-07",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "7-reachability-neglected-paths",
     "proposed_fix": "Fix route_and_stream()'s call to build_context_messages() to use await and correct keyword arguments (currently 3 positional args, unawaited, guaranteed TypeError); add an end-to-end smoke test for route_and_stream() so this class of defect can't reappear silently.",
-    "files_symbols": ["src/chuzom/router.py:4486 (route_and_stream)", "src/chuzom/context.py:390 async def build_context_messages"],
+    "files_symbols": [
+      "src/chuzom/router.py:4486 (route_and_stream)",
+      "src/chuzom/context.py:390 async def build_context_messages"
+    ],
     "failing_test_to_add": "test_route_and_stream_end_to_end_smoke",
     "acceptance_criteria": "route_and_stream() completes without raising TypeError when it reaches the context-building call.",
     "migration_impact": "None.",
@@ -301,14 +472,22 @@
     "docs_impact": "None.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "014eeaa",
+      "regression_test": "tests/test_b0107_context_wiring.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   },
   {
     "id": "C-04",
-    "repro_status": "still-reproducible",
+    "repro_status": "closed",
     "cluster": "7-reachability-neglected-paths",
     "proposed_fix": "Derive chuzom verify's check_hooks() expected filename list from the same source install_hooks.py uses, instead of a separately hand-maintained 3-item list, closing the 10-hook coverage blind spot structurally.",
-    "files_symbols": ["src/chuzom/commands/verify.py:158-183 check_hooks", "src/chuzom/install_hooks.py:~309-350"],
+    "files_symbols": [
+      "src/chuzom/commands/verify.py:158-183 check_hooks",
+      "src/chuzom/install_hooks.py:~309-350"
+    ],
     "failing_test_to_add": "test_verify_checks_all_installed_hooks",
     "acceptance_criteria": "chuzom verify reports health status for all 13 hooks installed by install_hooks.py, not just 3.",
     "migration_impact": "None.",
@@ -317,6 +496,11 @@
     "docs_impact": "None required.",
     "dependencies": [],
     "regression_risk": "low",
-    "scope_estimate": "S"
+    "scope_estimate": "S",
+    "closure": {
+      "commit": "6252338",
+      "regression_test": "tests/test_c04_verify_all_hooks.py",
+      "method": "root-cause class fix + data-based regression test"
+    }
   }
 ]
