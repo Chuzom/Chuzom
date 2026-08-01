@@ -52,9 +52,11 @@ async def _drive(**overrides):
         p(patch.dict(os.environ, {"CHUZOM_ENFORCE": "smart"}))
         es.enter_context(_hermetic_env(es))
         p(patch("chuzom.router.get_config", return_value=t._Cfg()))
-        tr = MagicMock(); tr.is_healthy.return_value = True
+        tr = MagicMock()
+        tr.is_healthy.return_value = True
         p(patch("chuzom.router.get_tracker", return_value=tr))
-        ml = MagicMock(); ml.bind.return_value = MagicMock()
+        ml = MagicMock()
+        ml.bind.return_value = MagicMock()
         p(patch("chuzom.router.log", ml))
         p(patch("chuzom.router._native_notify", lambda *a, **k: None))
         p(patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0))
@@ -106,7 +108,7 @@ async def test_no_leak_on_cache_hit_fast_path():
                          cost_usd=0.0, latency_ms=1.0, provider="ollama")
     with patch("chuzom.semantic_cache.check", new_callable=AsyncMock, return_value=cached):
         before = router._pending_spend
-        resp = await _drive(
+        _resp = await _drive(
             reserve_envelope={"new_callable": AsyncMock, "return_value": (None, True, "k")},
             _build_and_filter_chain={"new_callable": AsyncMock, "return_value": ["openai/gpt-4o"]},
         )
@@ -140,9 +142,11 @@ async def test_envelope_released_on_all_models_failed():
         p(patch.dict(os.environ, {"CHUZOM_ENFORCE": "smart"}))
         es.enter_context(_hermetic_env(es))
         p(patch("chuzom.router.get_config", return_value=t._Cfg()))
-        tr = MagicMock(); tr.is_healthy.return_value = True
+        tr = MagicMock()
+        tr.is_healthy.return_value = True
         p(patch("chuzom.router.get_tracker", return_value=tr))
-        ml = MagicMock(); ml.bind.return_value = MagicMock()
+        ml = MagicMock()
+        ml.bind.return_value = MagicMock()
         p(patch("chuzom.router.log", ml))
         p(patch("chuzom.router._native_notify", lambda *a, **k: None))
         p(patch("chuzom.router.cost.get_monthly_spend", new_callable=AsyncMock, return_value=0.0))

@@ -1,9 +1,7 @@
 """Regression: RED2-8-01 — uninstall must remove home-scoped `--host` MCP
 registrations (codex/cursor/gemini/vscode/…), leaving other servers intact."""
 import json
-import sys
 import pathlib
-import pytest
 
 from chuzom.commands.install import (
     uninstall_host_integrations,
@@ -26,7 +24,7 @@ def test_removes_chuzom_from_all_json_hosts(tmp_path, monkeypatch):
     codex.parent.mkdir(parents=True)
     codex.write_text('[model_providers.chuzom]\nname = "Chuzom"\nbase_url = "x"\n\n[other]\nk = 1\n')
 
-    actions = uninstall_host_integrations()
+    uninstall_host_integrations()
 
     assert "chuzom" not in json.loads(gem.read_text())["mcpServers"], "gemini chuzom not removed"
     assert "keep" in json.loads(gem.read_text())["mcpServers"], "other server dropped"

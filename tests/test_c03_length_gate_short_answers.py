@@ -2,7 +2,6 @@
 valid answers (which caused a silent post-dispatch re-route), and a length-gate
 fallback must be observable for ALL complexities, not only premium.
 """
-import logging
 
 import pytest
 

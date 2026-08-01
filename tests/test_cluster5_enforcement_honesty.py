@@ -28,7 +28,6 @@ def test_enforce_label_is_honest_for_enforcing_modes():
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     # _enforce_label() reads the resolved mode; drive it via resolve_enforce_mode.
-    import re
     import chuzom.enforce_config as ec
     orig = ec.resolve_enforce_mode
     try:

@@ -1,7 +1,5 @@
 """Regression: RED2-10-01 (absolute paths) + RED2-10-03 (windsurf host)."""
-import json
 import pathlib
-import pytest
 from chuzom import install_manifest as im
 from chuzom.commands import install as I
 

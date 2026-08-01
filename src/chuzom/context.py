@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3  # noqa: F401 — referenced by string annotations + local imports below
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -357,7 +358,6 @@ async def save_session_summary(
             omitted, so existing callers are unaffected.
         session_id: Same scoping, for session identity.
     """
-    import sqlite3
     from datetime import datetime, timezone
 
     db_path = _get_db_path()

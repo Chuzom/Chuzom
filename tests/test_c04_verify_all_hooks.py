@@ -2,7 +2,6 @@
 derived from the install manifest (_HOOK_DEFS), not a hardcoded subset."""
 import os
 import pathlib
-import pytest
 
 from chuzom.install_hooks import _HOOK_DEFS
 from chuzom.commands.verify import check_hooks

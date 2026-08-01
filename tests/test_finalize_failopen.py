@@ -26,9 +26,11 @@ def _common_patches(es, ledger_db):
                               "CHUZOM_EXECUTION_LEDGER_DB": str(ledger_db),
                               "CHUZOM_SESSION_ID": "finalsess"}))
     p(patch("chuzom.router.get_config", return_value=t._Cfg()))
-    tr = MagicMock(); tr.is_healthy.return_value = True
+    tr = MagicMock()
+    tr.is_healthy.return_value = True
     p(patch("chuzom.router.get_tracker", return_value=tr))
-    ml = MagicMock(); ml.bind.return_value = MagicMock()
+    ml = MagicMock()
+    ml.bind.return_value = MagicMock()
     p(patch("chuzom.router.log", ml))
     p(patch("chuzom.router._native_notify", lambda *a, **k: None))
     for fn in ("get_monthly_spend", "get_daily_spend", "get_daily_spend_by_task_type"):

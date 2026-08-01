@@ -447,7 +447,7 @@ def test_session_store_ttl_physically_deletes_expired_records(monkeypatch):
     assert b"OLDSESSIONMARKER789" in path.read_bytes()
 
     # Backdate the record directly in the JSONL.
-    lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert len(lines) == 1
     rec = json.loads(lines[0])
     rec["ts"] = time.time() - (31 * 86400)

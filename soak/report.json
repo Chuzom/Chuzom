@@ -1,0 +1,82 @@
+{
+  "adoption_unknown_fraction": 0.075,
+  "adoption_unknown_fraction_spread": [
+    0.075,
+    0.075
+  ],
+  "baseline_tokens_method": "claude_tokens_avoided",
+  "chuzom_version": "1.0.0",
+  "corpus_version": "v1",
+  "effective_sample_size": {
+    "metered": 15,
+    "subscription": 25
+  },
+  "gate_false_negative_rate": 0.025,
+  "gate_false_negative_rate_spread": [
+    0.025,
+    0.025
+  ],
+  "generated_at": "2026-07-31T22:52:25Z",
+  "host_mode_split": {
+    "metered": 15,
+    "subscription": 25
+  },
+  "n_routes": 40,
+  "n_soak_runs": 11,
+  "net_realized_savings_usd": {
+    "metered": {
+      "ci95": [
+        0.000691,
+        0.002914
+      ],
+      "conservative_ci_lower": 0.000691,
+      "point": 0.001853,
+      "point_median": 0.001853,
+      "run_spread": [
+        0.001853,
+        0.001853
+      ]
+    }
+  },
+  "nondeterminism_note": "Phase 0.2: a single soak run is not run-to-run reproducible despite the seeded RNG (random.Random(seed=0) in soak/replay.py). Ruled OUT as sole causes, via direct instrumentation of the real (non-mocked) route_and_call dispatch path: PYTHONHASHSEED / hash-ordering; correlation_id- or session_id-derived branching; the P2 quality-gated escalation path (its outer guard `attempt < len(models_to_try)` is always False against the soak's single-element mocked model chain, so it can never fire); OKF alone (A/B tested with CHUZOM_OKF=off, difference persisted); concurrent or out-of-order row dispatch (rows are replayed strictly sequentially); corpus row ordering (load_corpus reads deterministically); and -- decisively, via direct monkeypatching of chuzom.router._call_text and chuzom.router.run_gates -- a contract-gate failure triggering a same-model or emergency-fallback retry that re-invokes _call_text for the same row (measured: _call_text is invoked exactly once per row across all 40 rows in every run, even in runs where real, content-dependent gate failures occurred). Remaining, unconfirmed suspects: chuzom.quality_feedback's process-global _quality_store (confirmed written on every successful dispatch via record_quality/score_response in the P2 escalation-scoring code path, but not confirmed as the leak); and _spawn_bg/store_receipt background-task timing. Conclusion: MITIGATE, not PIN -- rely on point_median + conservative_ci_lower across n_soak_runs independent runs as the citeable figure, never a single run's point estimate.",
+  "overhead_as_pct_of_gross": null,
+  "price_table_version": "unknown",
+  "quality_delta_p50": 0.0,
+  "quality_delta_p50_spread": [
+    0.0,
+    0.0
+  ],
+  "quality_delta_p95": 0.763759,
+  "quality_delta_p95_spread": [
+    0.763759,
+    0.763759
+  ],
+  "realized_quota_tokens_saved": {
+    "subscription": {
+      "ci95": [
+        141,
+        253
+      ],
+      "conservative_ci_lower": 141,
+      "point": 188,
+      "point_median": 188,
+      "run_spread": [
+        188,
+        188
+      ]
+    }
+  },
+  "savings_claim_supported": true,
+  "soak_dispatch_failure_rate": 0.0,
+  "soak_dispatch_failure_rate_spread": [
+    0.0,
+    0.0
+  ],
+  "variable_across_runs": {
+    "adoption_unknown_fraction": true,
+    "gate_false_negative_rate": true,
+    "quality_delta_p50": false,
+    "quality_delta_p95": true,
+    "soak_dispatch_failure_rate": false
+  }
+}

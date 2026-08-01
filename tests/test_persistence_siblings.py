@@ -60,7 +60,8 @@ async def test_session_summary_ttl_physically_deletes(tmp_path, monkeypatch):
         "VALUES (?,?,?,?,?)",
         (old, old, "OLD_MARKER_XYZ_9f3", 1, "[]"),
     )
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
     # A fresh save triggers the TTL purge of rows older than the retention window.
     await context.save_session_summary(
         summary="fresh", message_count=1, task_types=[], project_id="p", session_id="s")
@@ -99,7 +100,8 @@ def test_idempotency_raw_optin_preserves_exact_replay(tmp_path, monkeypatch):
     idempotency.reset_store_for_tests()
     r = LLMResponse(content=f"the key is {CANARY}", model="m", provider="p",
                     input_tokens=1, output_tokens=1, cost_usd=0.0, latency_ms=1.0)
-    st = idempotency.get_store(); st.store("k2", r)
+    st = idempotency.get_store()
+    st.store("k2", r)
     got = st.lookup("k2")
     assert got is not None and CANARY in got.content, \
         "raw opt-in must preserve exact replay for callers that need it"
@@ -130,7 +132,6 @@ def test_execution_ledger_creates_usage_db_0600(tmp_path, monkeypatch):
     when it is the first/only writer of the shared file."""
     db = tmp_path / "usage.db"
     monkeypatch.setenv("CHUZOM_EXECUTION_LEDGER_DB", str(db))
-    from chuzom import execution_ledger
     from chuzom.execution_ledger import LedgerEvent, record_event
     record_event(LedgerEvent(session_id="s", route_id="r", event_type="route_completed",
                              terminal_state="accepted"))

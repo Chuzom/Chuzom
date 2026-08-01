@@ -18,7 +18,6 @@ import uuid
 import pytest
 
 from chuzom.execution_ledger import (
-    _DDL,
     LedgerEvent,
     _connect,
     get_route_accounting,

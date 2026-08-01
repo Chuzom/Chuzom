@@ -13,7 +13,6 @@ import importlib.util
 import types
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK_PATH = ROOT / "src" / "chuzom" / "hooks" / "session-start.py"

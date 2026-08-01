@@ -4,7 +4,6 @@ RED2-11-03 (mode-line local branch), RED2-11-04 (no guaranteed-savings claim).""
 import json
 import importlib.util
 import pathlib
-import pytest
 import chuzom.install_hooks as ih
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -12,9 +11,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 def test_uninstall_ide_configs_surgical(tmp_path):
     """RED2-11-01/02: shared mcp.json must keep the user's own servers."""
-    vs = tmp_path / ".vscode" / "mcp.json"; vs.parent.mkdir(parents=True)
+    vs = tmp_path / ".vscode" / "mcp.json"
+    vs.parent.mkdir(parents=True)
     vs.write_text(json.dumps({"servers": {"chuzom": {}, "mine": {"command": "x"}}}))
-    ws = tmp_path / ".windsurf" / "mcp.json"; ws.parent.mkdir(parents=True)
+    ws = tmp_path / ".windsurf" / "mcp.json"
+    ws.parent.mkdir(parents=True)
     ws.write_text(json.dumps({"mcpServers": {"chuzom": {}, "mine": {"command": "y"}}}))
     ih.uninstall_ide_configs(tmp_path)
     assert json.loads(vs.read_text())["servers"] == {"mine": {"command": "x"}}
@@ -23,7 +24,8 @@ def test_uninstall_ide_configs_surgical(tmp_path):
 
 
 def test_uninstall_ide_configs_noop_when_no_chuzom(tmp_path):
-    vs = tmp_path / ".vscode" / "mcp.json"; vs.parent.mkdir(parents=True)
+    vs = tmp_path / ".vscode" / "mcp.json"
+    vs.parent.mkdir(parents=True)
     vs.write_text(json.dumps({"servers": {"mine": {"command": "x"}}}))
     ih.uninstall_ide_configs(tmp_path)
     assert json.loads(vs.read_text())["servers"] == {"mine": {"command": "x"}}
@@ -31,7 +33,10 @@ def test_uninstall_ide_configs_noop_when_no_chuzom(tmp_path):
 
 def test_install_rules_skips_overwrite_when_backup_fails(tmp_path, monkeypatch):
     """RED1-11-01: hand-edited chuzom.md must not be destroyed if backup fails."""
-    src = tmp_path / "src"; dst = tmp_path / "rules"; src.mkdir(); dst.mkdir()
+    src = tmp_path / "src"
+    dst = tmp_path / "rules"
+    src.mkdir()
+    dst.mkdir()
     (src / "chuzom.md").write_text("<!-- chuzom-rules-version: 9 -->\nBUNDLED\n")
     user = "<!-- chuzom-rules-version: 9 -->\nMY EDIT\n"
     (dst / "chuzom.md").write_text(user)
@@ -41,19 +46,23 @@ def test_install_rules_skips_overwrite_when_backup_fails(tmp_path, monkeypatch):
     # Drive only the rules block by calling install() with the heavy parts stubbed.
     for fn in ("_install_claude_desktop", "_install_claude_code_cli", "_migrate_remove_legacy_llm_router"):
         monkeypatch.setattr(ih, fn, lambda *a, **k: [])
-    monkeypatch.setattr(ih, "_HOOKS_SRC", tmp_path / "hsrc"); (tmp_path / "hsrc").mkdir()
-    monkeypatch.setattr(ih, "_HOOKS_DST", tmp_path / "hdst"); (tmp_path / "hdst").mkdir()
+    monkeypatch.setattr(ih, "_HOOKS_SRC", tmp_path / "hsrc")
+    (tmp_path / "hsrc").mkdir()
+    monkeypatch.setattr(ih, "_HOOKS_DST", tmp_path / "hdst")
+    (tmp_path / "hdst").mkdir()
     monkeypatch.setattr(ih, "_SETTINGS_PATH", tmp_path / "settings.json")
     try:
-        acts = ih.install()
+        _acts =ih.install()
     except Exception:
-        acts = []  # heavy install may still error on unstubbed bits; we only assert the file
+        _acts =[]  # heavy install may still error on unstubbed bits; we only assert the file
     assert (dst / "chuzom.md").read_text() == user, "RED1-11-01: user rules destroyed on backup failure"
 
 
 def _load_ss():
     spec = importlib.util.spec_from_file_location("ss11", ROOT / "src/chuzom/hooks/session-start.py")
-    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
 
 
 def test_mode_label_has_local_branch(monkeypatch):

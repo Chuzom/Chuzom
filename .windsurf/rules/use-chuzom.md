@@ -7,7 +7,8 @@ alwaysApply: true
 # Chuzom routing — use MCP tools before answering directly
 
 Chuzom MCP tools route each task to the cheapest model that can handle it.
-Calling them before generating your own answer saves 60–90% of token cost.
+Calling them before generating your own answer routes to a cheaper capable model,
+conserving Claude quota.
 
 > **Important — pull routing:** Unlike Claude Code (which intercepts prompts
 > automatically via hooks), Windsurf uses pull routing: YOU must call the tool.

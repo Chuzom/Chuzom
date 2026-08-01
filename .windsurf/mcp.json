@@ -2,8 +2,7 @@
   "mcpServers": {
     "chuzom": {
       "command": "chuzom",
-      "args": [],
-      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call saves 60-90% vs sending directly to Claude."
+      "args": []
     }
   }
 }
