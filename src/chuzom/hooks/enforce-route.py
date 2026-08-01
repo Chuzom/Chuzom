@@ -808,6 +808,44 @@ def main() -> None:
     # or logs a violation. "Route through the right model all the time, without
     # blocking itself."
     if enforce in ("advise", "advisory"):
+        # T6/Edit 6 (Phase 0.5): advise never blocks, but it must still RECORD
+        # adoption when the host happens to call the routed door anyway — else
+        # every advise-mode session shows realized_savings_usd == 0 even when
+        # routing was honored every single turn. This early-exit skips the
+        # rest of main() (where session_id/tool_name/pending are normally
+        # read), so duplicate those guarded reads here and reuse the IDENTICAL
+        # "routing satisfied" predicate as the hard/smart path (~1147-1166:
+        # llm_* prefix, exact expected-tool match, or expected-MCP-server
+        # match) so advise and hard/smart agree on what counts as honored.
+        # Fail-open at every step; never blocks regardless of outcome. Dedup
+        # is via _record_realization_used's own content-stable event_id
+        # (INSERT OR IGNORE), so a retried hook invocation can't double-count.
+        try:
+            _adv_session_id = hook_input.get("session_id", "")
+            _adv_tool_name = hook_input.get("tool_name", "")
+            if _adv_session_id and _adv_tool_name:
+                _adv_pending = _read_pending(_adv_session_id)
+                if _adv_pending is not None:
+                    _adv_expected_tool = _door_for(_adv_pending.get("expected_tool", "llm_route"))
+                    _adv_expected_server = _adv_pending.get("expected_server", "")
+                    _adv_bare_name = (
+                        _adv_tool_name.split("__")[-1]
+                        if "__" in _adv_tool_name else _adv_tool_name
+                    )
+                    _adv_satisfied = (
+                        _adv_bare_name.startswith("llm_")
+                        or _adv_tool_name == _adv_expected_tool
+                        or _adv_bare_name == _adv_expected_tool.split("__")[-1]
+                        or bool(
+                            _adv_expected_server
+                            and _adv_tool_name.startswith(f"mcp__{_adv_expected_server}__")
+                        )
+                    )
+                    if _adv_satisfied:
+                        _record_realization_used(_adv_session_id, _adv_pending)  # CHZ-EXT-204
+                        _clear_pending(_adv_session_id)
+        except Exception:  # noqa: BLE001 — advise must NEVER block or crash on this
+            pass
         sys.exit(0)
     # suggest = soft (log violation but never block)
     if enforce == "suggest":
