@@ -1476,7 +1476,26 @@ def main() -> None:
     # only knowable by reading the source.
     _log_violation(session_id, tool_name, expected_tool,
                    outcome="BLOCKED(strict)" if _strict else "BLOCKED")
-    json.dump({"decision": "block", "reason": block_reason}, sys.stdout)
+    # CLAUDE-CODE-CONFORMANCE (P0): the CURRENT PreToolUse deny contract is
+    # hookSpecificOutput.permissionDecision="deny" (+ permissionDecisionReason);
+    # the top-level {"decision":"block"} form is deprecated for PreToolUse and
+    # only still works via a compat shim (block→deny). We emit BOTH: the current
+    # field so a newer Claude Code blocks via the documented path, and the legacy
+    # field so an older Claude Code still blocks. Without the current field, if
+    # the shim is ever dropped every block would silently no-op while this hook's
+    # log still records "BLOCKED" — a real enforcement + honesty failure.
+    json.dump(
+        {
+            "decision": "block",
+            "reason": block_reason,
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": block_reason,
+            },
+        },
+        sys.stdout,
+    )
 
     # ── Per-session violation nudge ───────────────────────────────────────────
     # After 3+ violations, output a strong nudge to stderr (visible as hook message)

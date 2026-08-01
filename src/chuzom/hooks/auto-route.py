@@ -2604,11 +2604,15 @@ def _debug_log(msg: str) -> None:
 
 
 # ─── v9.3.0: Platform detection for Codex CLI vs Claude Code ─────────────────
-# Codex CLI's UserPromptSubmit hook output schema ONLY supports
-# `additionalContext` — emitting `contextForAgent` is rejected (schema is
-# additionalProperties: false). Claude Code prefers `contextForAgent` for
-# higher-priority directives but accepts both. So we detect platform from
-# hook_input["model"] and normalize the output key just-in-time.
+# CLAUDE-CODE-CONFORMANCE (P1): the CURRENT Claude Code docs document exactly one
+# UserPromptSubmit context field — `additionalContext` (inside hookSpecificOutput).
+# `contextForAgent` is NOT in the Claude Code hooks docs; a prior comment here
+# claimed "Claude Code prefers contextForAgent", but that is unsupported — Claude
+# Code would ignore an unknown key, so any path emitting `contextForAgent` fails to
+# inject its context. Codex/Gemini likewise only accept `additionalContext`. So the
+# normalizer now renames `contextForAgent` → `additionalContext` for ALL platforms
+# (it used to skip the rename for Claude Code, which is exactly the drift). Model
+# detection is still used elsewhere, but the context-key rename is unconditional.
 
 _OPENAI_MODEL_PREFIXES = ("gpt-", "o3", "o4", "o5", "codex-")
 _GEMINI_MODEL_PREFIXES = ("gemini-", "gemini/", "google/gemini")
@@ -2635,15 +2639,16 @@ def _is_gemini_session(hook_input: dict) -> bool:
 
 
 def _normalize_output_for_platform(output: dict, hook_input: dict) -> dict:
-    """In-place rename `contextForAgent` → `additionalContext` for non-Claude platforms.
+    """In-place rename `contextForAgent` → `additionalContext` for ALL platforms.
 
-    Codex's hookSpecificOutput schema rejects unknown fields. Gemini accepts
-    `additionalContext` via its hookTranslator. Only Claude Code prefers
-    `contextForAgent` (higher priority). Single rename covers both Codex and
-    Gemini cases.
+    CLAUDE-CODE-CONFORMANCE (P1): `additionalContext` is the only documented
+    UserPromptSubmit context field for Claude Code, Codex, and Gemini alike;
+    `contextForAgent` is undocumented and ignored/rejected everywhere. This used to
+    rename only for Codex/Gemini and leave `contextForAgent` intact for Claude Code,
+    so the two early-exit hint paths silently failed to inject their context into a
+    Claude Code session. The rename is now unconditional; `hook_input` is retained
+    for signature stability (platform is no longer needed for the context key).
     """
-    if not (_is_codex_session(hook_input) or _is_gemini_session(hook_input)):
-        return output
     hso = output.get("hookSpecificOutput")
     if isinstance(hso, dict) and "contextForAgent" in hso:
         hso["additionalContext"] = hso.pop("contextForAgent")
