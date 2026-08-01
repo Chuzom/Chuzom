@@ -540,6 +540,7 @@ async def llm_query(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "query", effective)
     _record_quality(resp, "query", effective)
@@ -631,6 +632,7 @@ async def llm_research(
         temperature=0.3,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "research", "moderate")
     _record_quality(resp, "research", "moderate")
@@ -678,6 +680,7 @@ async def llm_generate(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "generate", effective)
     _record_quality(resp, "generate", effective)
@@ -721,6 +724,7 @@ async def llm_analyze(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "analyze", effective_complexity)
     _record_quality(resp, "analyze", effective_complexity)
@@ -764,6 +768,7 @@ async def llm_reason(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "analyze", "deep_reasoning")
     _record_quality(resp, "analyze", "deep_reasoning")
@@ -838,6 +843,7 @@ async def llm_code(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "code", effective)
     _record_quality(resp, "code", effective)
@@ -906,6 +912,7 @@ async def llm_edit(
         ),
         temperature=0.1,
         ctx=ctx,
+        route_directive_id=_read_hook_route_directive(),
     )
 
     instructions, warnings = parse_edit_response(resp.content)

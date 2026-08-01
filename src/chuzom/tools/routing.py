@@ -23,6 +23,7 @@ from chuzom.profiles import complexity_to_profile
 from chuzom.provider_budget import get_provider_budgets, rank_external_models
 from chuzom.router import route_and_call
 from chuzom.statusline_hud import record_routing_decision
+from chuzom.tools.text import _read_hook_route_directive
 from chuzom.types import (
     ClassificationResult, Complexity, QualityMode,
     RoutingProfile, RoutingRecommendation, TaskType, _budget_bar,
@@ -394,6 +395,7 @@ async def llm_route(
         caller_context=context,
         ctx=ctx,
         classification_data=_classification_data,
+        route_directive_id=_read_hook_route_directive(),
     )
 
     # Record routing decision for HUD visibility. Supply the task-aware Claude
@@ -577,6 +579,7 @@ async def llm_auto(
         caller_context=context,
         ctx=ctx,
         classification_data=_classification_data,
+        route_directive_id=_read_hook_route_directive(),
     )
 
     total_cost = classification.classifier_cost_usd + resp.cost_usd
