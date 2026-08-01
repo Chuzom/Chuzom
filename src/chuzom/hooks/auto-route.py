@@ -3501,11 +3501,28 @@ def main() -> None:
         except OSError:
             pass
 
+    # ── Shared directive-id mint (Phase 0.5 Option A) ────────────────────────────
+    # Minted once per turn, before either write block below, so the pending-state
+    # write and the last-classification sidecar carry the IDENTICAL route id. The
+    # sidecar is what the MCP llm_* tools read and thread into route_and_call as
+    # route_directive_id; the pending file is what enforce-route.py's
+    # _record_realization_used() reads pending['route_id'] from when recording the
+    # adoption row. Before this fix those were two independently-minted ids
+    # (pending['route_id'] here vs. router.py's own correlation_id) that never
+    # matched, so execution_ledger._aggregate's route_id join never fired and
+    # realized_savings_usd stayed 0 in production. Sharing one id across both
+    # writes closes that gap without touching the join itself.
+    _directive_now = time.time()
+    _directive_id = (
+        f"{_safe_sid(session_id)}:{int(_directive_now)}:{tool}:"
+        f"{_secrets_module.token_hex(4)}"
+    ) if session_id else None
+
     # ── Write enforcement state for enforce-route.py (PreToolUse hook) ──────────
     if write_pending and session_id:
         _state_path = _pending_state_path(session_id)
         try:
-            _now = time.time()
+            _now = _directive_now
             _write_json_atomic(
                 _state_path,
                 {
@@ -3545,10 +3562,7 @@ def main() -> None:
                     # identical ids and the second ledger row was dropped by
                     # INSERT OR IGNORE. A random nonce makes each decision's id
                     # unique regardless of wall-clock timing.
-                    "route_id": (
-                        f"{_safe_sid(session_id)}:{int(_now)}:{tool}:"
-                        f"{_secrets_module.token_hex(4)}"
-                    ),
+                    "route_id": _directive_id,
                 },
             )
         except OSError:
@@ -3585,6 +3599,12 @@ def main() -> None:
                     "method": method,
                     "issued_at": time.time(),
                     "session_id": session_id,
+                    # Phase 0.5 Option A: same id minted above and, when
+                    # write_pending fired, also stored at pending['route_id'].
+                    # Additive keys — readers written before this change simply
+                    # never look at them, so this is backward compatible.
+                    "route_id": _directive_id,
+                    "turn_id": int(_directive_now),
                 },
             )
         except OSError:
