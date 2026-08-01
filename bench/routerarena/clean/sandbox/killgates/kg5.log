@@ -1,0 +1,12 @@
+KG5: 250 traps
+  50/250 (64s)
+  100/250 (134s)
+  150/250 (201s)
+  200/250 (258s)
+  250/250 (457s)
+
+=== KG5 RESULT ===
+  cheap fail rate: 0.164
+  SEPARATION (flag→fail) = 0.023  GATE(>=0.30): FAIL
+  FALSE-POSITIVE rate (flag|correct) = 0.215  GATE(<=0.25): PASS
+  P(fail|flag)=0.182 (n=55); P(fail|noflag)=0.159 (n=195)

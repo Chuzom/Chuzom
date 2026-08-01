@@ -1,0 +1,27 @@
+total rows 8400 | already have deepseek 3652 | to generate 4748
+  200/4748 (124s) errs=0
+  400/4748 (396s) errs=0
+  600/4748 (517s) errs=0
+  800/4748 (591s) errs=0
+  1000/4748 (664s) errs=0
+  1200/4748 (747s) errs=0
+  1400/4748 (842s) errs=0
+  1600/4748 (918s) errs=0
+  1800/4748 (987s) errs=0
+  2000/4748 (1062s) errs=0
+  2200/4748 (1148s) errs=0
+  2400/4748 (1230s) errs=0
+  2600/4748 (1315s) errs=0
+  2800/4748 (1442s) errs=0
+  3000/4748 (1543s) errs=0
+  3200/4748 (1640s) errs=0
+  3400/4748 (1715s) errs=0
+  3600/4748 (1790s) errs=0
+  3800/4748 (1862s) errs=0
+  4000/4748 (1940s) errs=0
+  4200/4748 (2010s) errs=0
+  4400/4748 (2081s) errs=0
+  4600/4748 (2170s) errs=0
+
+wrote /private/tmp/claude-501/-Users-yaliandrona-Projects-Chuzom/c9a5b736-0e27-4199-8854-b3c25f17e7b5/scratchpad/RA/router_inference/predictions/chuzom-solo-v32.json
+rows with generated_result: 8400/8400 | errors: 0

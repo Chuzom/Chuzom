@@ -1,0 +1,2335 @@
+{
+  "report": {
+    "approach": "solo-grok-4.3",
+    "n": 253,
+    "accuracy": 0.5594,
+    "cost_per_1k_RA_pricing": 0.454,
+    "arena_score": 0.5601,
+    "escalation_rate": 0.0,
+    "calls_per_query": 1.0
+  },
+  "by_dataset": {
+    "AIME": 0.667,
+    "ChessInstruct": 0.167,
+    "Ethics_justice": 0.25,
+    "FinQA": 0.429,
+    "GeoGraphyData_100k": 0.0,
+    "LiveCodeBench": 0.0,
+    "OpenTDB_Animals": 1.0,
+    "OpenTDB_Art": 1.0,
+    "OpenTDB_Celebrities": 1.0,
+    "OpenTDB_Entertainment: Board Games": 1.0,
+    "OpenTDB_Entertainment: Books": 1.0,
+    "OpenTDB_Entertainment: Cartoon & Animations": 1.0,
+    "OpenTDB_Entertainment: Comics": 1.0,
+    "OpenTDB_Entertainment: Film": 1.0,
+    "OpenTDB_Entertainment: Japanese Anime & Manga": 1.0,
+    "OpenTDB_Entertainment: Music": 1.0,
+    "OpenTDB_Entertainment: Musicals & Theatres": 1.0,
+    "OpenTDB_Entertainment: Television": 1.0,
+    "OpenTDB_Entertainment: Video Games": 0.857,
+    "OpenTDB_General Knowledge": 1.0,
+    "OpenTDB_Geography": 1.0,
+    "OpenTDB_History": 1.0,
+    "OpenTDB_Science & Nature": 1.0,
+    "OpenTDB_Science: Computers": 0.929,
+    "OpenTDB_Science: Mathematics": 1.0,
+    "OpenTDB_Sports": 1.0,
+    "OpenTDB_Vehicles": 1.0,
+    "QANTA_Fine Arts": 0.429,
+    "QANTA_Geography": 0.6,
+    "QANTA_History": 0.364,
+    "QANTA_Literature": 0.286,
+    "QANTA_Philosophy": 0.0,
+    "QANTA_Science": 0.143,
+    "QANTA_Social Science": 0.25,
+    "SuperGLUE-ClozeTest": 0.8,
+    "WMT19-cs-en": 0.386,
+    "WMT19-de-en": 0.641,
+    "WMT19-fi-en": 0.338,
+    "WMT19-gu-en": 0.712,
+    "WMT19-kk-en": 0.196,
+    "WMT19-lt-en": 0.352,
+    "WMT19-ru-en": 0.612,
+    "WMT19-zh-en": 0.673
+  },
+  "results": [
+    {
+      "gi": "Ethics_justice_45",
+      "dataset": "Ethics_justice",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0002314
+    },
+    {
+      "gi": "Ethics_justice_76",
+      "dataset": "Ethics_justice",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00023019999999999998
+    },
+    {
+      "gi": "Ethics_justice_1",
+      "dataset": "Ethics_justice",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003846
+    },
+    {
+      "gi": "AIME_106",
+      "dataset": "AIME",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0005231
+    },
+    {
+      "gi": "FinQA_172",
+      "dataset": "FinQA",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00043139999999999997
+    },
+    {
+      "gi": "ChessInstruct_144",
+      "dataset": "ChessInstruct",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008902000000000001
+    },
+    {
+      "gi": "Ethics_justice_84",
+      "dataset": "Ethics_justice",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00036930000000000003
+    },
+    {
+      "gi": "ChessInstruct_145",
+      "dataset": "ChessInstruct",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008983
+    },
+    {
+      "gi": "FinQA_149",
+      "dataset": "FinQA",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007708
+    },
+    {
+      "gi": "ChessInstruct_84",
+      "dataset": "ChessInstruct",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0008440999999999999
+    },
+    {
+      "gi": "FinQA_56",
+      "dataset": "FinQA",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000435
+    },
+    {
+      "gi": "ChessInstruct_148",
+      "dataset": "ChessInstruct",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0010584000000000001
+    },
+    {
+      "gi": "FinQA_255",
+      "dataset": "FinQA",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008207
+    },
+    {
+      "gi": "FinQA_273",
+      "dataset": "FinQA",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0005030999999999999
+    },
+    {
+      "gi": "GeoGraphyData_100k_28",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00015939999999999997
+    },
+    {
+      "gi": "GeoGraphyData_100k_27",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000195
+    },
+    {
+      "gi": "FinQA_208",
+      "dataset": "FinQA",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008133999999999999
+    },
+    {
+      "gi": "GeoGraphyData_100k_48",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00024319999999999998
+    },
+    {
+      "gi": "GeoGraphyData_100k_42",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0002043
+    },
+    {
+      "gi": "FinQA_60",
+      "dataset": "FinQA",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0006753
+    },
+    {
+      "gi": "ChessInstruct_107",
+      "dataset": "ChessInstruct",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0013510999999999998
+    },
+    {
+      "gi": "LiveCodeBench_105",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006067000000000001
+    },
+    {
+      "gi": "LiveCodeBench_14",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003855
+    },
+    {
+      "gi": "LiveCodeBench_16",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006102000000000001
+    },
+    {
+      "gi": "LiveCodeBench_136",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007318
+    },
+    {
+      "gi": "LiveCodeBench_149",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007892
+    },
+    {
+      "gi": "LiveCodeBench_137",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0010257999999999999
+    },
+    {
+      "gi": "LiveCodeBench_181",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004249
+    },
+    {
+      "gi": "LiveCodeBench_169",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001007
+    },
+    {
+      "gi": "LiveCodeBench_183",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00038839999999999995
+    },
+    {
+      "gi": "LiveCodeBench_118",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001141
+    },
+    {
+      "gi": "AIME_112",
+      "dataset": "AIME",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0020169000000000003
+    },
+    {
+      "gi": "LiveCodeBench_271",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000456
+    },
+    {
+      "gi": "ChessInstruct_102",
+      "dataset": "ChessInstruct",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0021701
+    },
+    {
+      "gi": "LiveCodeBench_277",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000638
+    },
+    {
+      "gi": "LiveCodeBench_131",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0013085999999999998
+    },
+    {
+      "gi": "LiveCodeBench_317",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004829
+    },
+    {
+      "gi": "LiveCodeBench_237",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0010031
+    },
+    {
+      "gi": "LiveCodeBench_211",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0009343999999999999
+    },
+    {
+      "gi": "LiveCodeBench_18",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0010599000000000001
+    },
+    {
+      "gi": "LiveCodeBench_177",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0012010999999999999
+    },
+    {
+      "gi": "AIME_58",
+      "dataset": "AIME",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0022415
+    },
+    {
+      "gi": "LiveCodeBench_390",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00034060000000000004
+    },
+    {
+      "gi": "LiveCodeBench_114",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001672
+    },
+    {
+      "gi": "LiveCodeBench_344",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008795
+    },
+    {
+      "gi": "LiveCodeBench_34",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008619
+    },
+    {
+      "gi": "LiveCodeBench_431",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0005739
+    },
+    {
+      "gi": "LiveCodeBench_476",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000435
+    },
+    {
+      "gi": "LiveCodeBench_355",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0010271
+    },
+    {
+      "gi": "LiveCodeBench_43",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007936
+    },
+    {
+      "gi": "LiveCodeBench_386",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008893999999999999
+    },
+    {
+      "gi": "LiveCodeBench_499",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003245
+    },
+    {
+      "gi": "LiveCodeBench_473",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007772
+    },
+    {
+      "gi": "LiveCodeBench_49",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000541
+    },
+    {
+      "gi": "LiveCodeBench_437",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0009293999999999999
+    },
+    {
+      "gi": "LiveCodeBench_84",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003706
+    },
+    {
+      "gi": "OpenTDB_Animals_1199",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00022939999999999997
+    },
+    {
+      "gi": "LiveCodeBench_64",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004988
+    },
+    {
+      "gi": "OpenTDB_Animals_262",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020930000000000002
+    },
+    {
+      "gi": "OpenTDB_Animals_2545",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023239999999999998
+    },
+    {
+      "gi": "OpenTDB_Art_1429",
+      "dataset": "OpenTDB_Art",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002361
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1078",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002523
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1456",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000274
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3577",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001978
+    },
+    {
+      "gi": "LiveCodeBench_491",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008859
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3896",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00019969999999999998
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3968",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002245
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_219",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001862
+    },
+    {
+      "gi": "LiveCodeBench_6",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0009189
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2835",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001962
+    },
+    {
+      "gi": "OpenTDB_Celebrities_4085",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003184
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2879",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002106
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1100",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002314
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_3779",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002547
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2995",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00022769999999999998
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3106",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001978
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3056",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00022009999999999998
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_30",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002245
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3886",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002236
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Cartoon & Animations_1700",
+      "dataset": "OpenTDB_Entertainment: Cartoon & Animations",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00025610000000000005
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1580",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002979
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Comics_1888",
+      "dataset": "OpenTDB_Entertainment: Comics",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023
+    },
+    {
+      "gi": "LiveCodeBench_405",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0014107
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1983",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002292
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Music_1103",
+      "dataset": "OpenTDB_Entertainment: Music",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00019639999999999998
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_1019",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000209
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1244",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000257
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_4061",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002937
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_3026",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002888
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Musicals & Theatres_3818",
+      "dataset": "OpenTDB_Entertainment: Musicals & Theatres",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002604
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_270",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000188
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_1177",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003045
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_3760",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002555
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2238",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003265
+    },
+    {
+      "gi": "LiveCodeBench_350",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0019137
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1178",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002686
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1957",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001657
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1807",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002162
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2933",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00030869999999999997
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1639",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00024180000000000002
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_4047",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00026460000000000003
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_2181",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001881
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_235",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004632
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Television_3479",
+      "dataset": "OpenTDB_Entertainment: Television",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004258
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3306",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001885
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3727",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002102
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3627",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00024389999999999997
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3404",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001871
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_836",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00019669999999999998
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3461",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002545
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_4019",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023019999999999998
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_883",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000252
+    },
+    {
+      "gi": "OpenTDB_Geography_1664",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001743
+    },
+    {
+      "gi": "OpenTDB_Geography_2088",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00017839999999999997
+    },
+    {
+      "gi": "OpenTDB_Geography_3207",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00019789999999999999
+    },
+    {
+      "gi": "OpenTDB_Geography_2346",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020639999999999998
+    },
+    {
+      "gi": "OpenTDB_History_1092",
+      "dataset": "OpenTDB_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002236
+    },
+    {
+      "gi": "OpenTDB_Geography_2099",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00026880000000000003
+    },
+    {
+      "gi": "OpenTDB_History_1162",
+      "dataset": "OpenTDB_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00029580000000000003
+    },
+    {
+      "gi": "OpenTDB_History_2840",
+      "dataset": "OpenTDB_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001953
+    },
+    {
+      "gi": "OpenTDB_History_3902",
+      "dataset": "OpenTDB_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002126
+    },
+    {
+      "gi": "OpenTDB_Geography_3880",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003238
+    },
+    {
+      "gi": "OpenTDB_History_3712",
+      "dataset": "OpenTDB_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000236
+    },
+    {
+      "gi": "OpenTDB_Geography_792",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003784
+    },
+    {
+      "gi": "OpenTDB_History_857",
+      "dataset": "OpenTDB_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001969
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_2942",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002095
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1560",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002343
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_3716",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00017969999999999998
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1175",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002247
+    },
+    {
+      "gi": "OpenTDB_History_2026",
+      "dataset": "OpenTDB_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002951
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_476",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001776
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1306",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002427
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1015",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002095
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3259",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001653
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1863",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020280000000000002
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2133",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00016319999999999998
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1694",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00022
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3013",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023339999999999998
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021219999999999998
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1977",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002675
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023339999999999998
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_638",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001851
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1870",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020889999999999998
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_87",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002457
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1530",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023009999999999998
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_297",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002052
+    },
+    {
+      "gi": "OpenTDB_Sports_2289",
+      "dataset": "OpenTDB_Sports",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002008
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1419",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001827
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1173",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021119999999999998
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_922",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003055
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2519",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002107
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2597",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001926
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2568",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004695
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3564",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021339999999999998
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3234",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000215
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2943",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004957
+    },
+    {
+      "gi": "QANTA_Fine Arts_1686",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002327
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2154",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020030000000000002
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3616",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00034760000000000005
+    },
+    {
+      "gi": "LiveCodeBench_485",
+      "dataset": "LiveCodeBench",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0028081
+    },
+    {
+      "gi": "QANTA_Geography_1100",
+      "dataset": "QANTA_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002069
+    },
+    {
+      "gi": "QANTA_Fine Arts_528",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003752
+    },
+    {
+      "gi": "QANTA_Geography_1023",
+      "dataset": "QANTA_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002271
+    },
+    {
+      "gi": "QANTA_Fine Arts_828",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00032439999999999997
+    },
+    {
+      "gi": "QANTA_Geography_1812",
+      "dataset": "QANTA_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00022730000000000002
+    },
+    {
+      "gi": "QANTA_Geography_1555",
+      "dataset": "QANTA_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000234
+    },
+    {
+      "gi": "QANTA_Fine Arts_1548",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0005351
+    },
+    {
+      "gi": "QANTA_Fine Arts_865",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004351
+    },
+    {
+      "gi": "QANTA_Geography_304",
+      "dataset": "QANTA_Geography",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002355
+    },
+    {
+      "gi": "QANTA_Fine Arts_1212",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004986
+    },
+    {
+      "gi": "QANTA_History_1190",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021039999999999996
+    },
+    {
+      "gi": "QANTA_History_133",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002968
+    },
+    {
+      "gi": "QANTA_History_433",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00027610000000000004
+    },
+    {
+      "gi": "QANTA_History_1084",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004037
+    },
+    {
+      "gi": "QANTA_History_404",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002471
+    },
+    {
+      "gi": "QANTA_Fine Arts_1702",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007061
+    },
+    {
+      "gi": "QANTA_History_776",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0001936
+    },
+    {
+      "gi": "QANTA_History_473",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0002888
+    },
+    {
+      "gi": "QANTA_History_926",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000217
+    },
+    {
+      "gi": "QANTA_Literature_1073",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00020669999999999998
+    },
+    {
+      "gi": "QANTA_History_612",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003396
+    },
+    {
+      "gi": "QANTA_History_1696",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00046439999999999996
+    },
+    {
+      "gi": "QANTA_History_1154",
+      "dataset": "QANTA_History",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0005023
+    },
+    {
+      "gi": "QANTA_Literature_1239",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00028139999999999996
+    },
+    {
+      "gi": "QANTA_Literature_1464",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003328
+    },
+    {
+      "gi": "QANTA_Literature_1508",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003401
+    },
+    {
+      "gi": "QANTA_Literature_1735",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002821
+    },
+    {
+      "gi": "QANTA_Literature_1398",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000431
+    },
+    {
+      "gi": "QANTA_Literature_386",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002585
+    },
+    {
+      "gi": "QANTA_Literature_1843",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003653
+    },
+    {
+      "gi": "QANTA_Literature_210",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003453
+    },
+    {
+      "gi": "QANTA_Literature_475",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003462
+    },
+    {
+      "gi": "QANTA_Literature_740",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003035
+    },
+    {
+      "gi": "QANTA_Literature_1727",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006368
+    },
+    {
+      "gi": "QANTA_Literature_1045",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008202000000000001
+    },
+    {
+      "gi": "QANTA_Literature_833",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003151
+    },
+    {
+      "gi": "QANTA_Philosophy_1270",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0002815
+    },
+    {
+      "gi": "QANTA_Literature_795",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003637
+    },
+    {
+      "gi": "QANTA_Literature_1653",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006925
+    },
+    {
+      "gi": "QANTA_Literature_885",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003572
+    },
+    {
+      "gi": "QANTA_Philosophy_499",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00030510000000000004
+    },
+    {
+      "gi": "QANTA_Literature_369",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002644
+    },
+    {
+      "gi": "QANTA_Science_1236",
+      "dataset": "QANTA_Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000319
+    },
+    {
+      "gi": "QANTA_Science_1473",
+      "dataset": "QANTA_Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002326
+    },
+    {
+      "gi": "QANTA_Literature_408",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007662000000000001
+    },
+    {
+      "gi": "QANTA_Science_198",
+      "dataset": "QANTA_Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00028389999999999996
+    },
+    {
+      "gi": "QANTA_Philosophy_91",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003393
+    },
+    {
+      "gi": "QANTA_Science_1360",
+      "dataset": "QANTA_Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0003187
+    },
+    {
+      "gi": "QANTA_Literature_758",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006797999999999999
+    },
+    {
+      "gi": "QANTA_Science_492",
+      "dataset": "QANTA_Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00037989999999999996
+    },
+    {
+      "gi": "QANTA_Literature_1326",
+      "dataset": "QANTA_Literature",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0012304
+    },
+    {
+      "gi": "QANTA_Social Science_77",
+      "dataset": "QANTA_Social Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002493
+    },
+    {
+      "gi": "QANTA_Science_619",
+      "dataset": "QANTA_Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004658
+    },
+    {
+      "gi": "QANTA_Social Science_2",
+      "dataset": "QANTA_Social Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00037810000000000003
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_15955",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004242
+    },
+    {
+      "gi": "QANTA_Social Science_1438",
+      "dataset": "QANTA_Social Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004987
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_12894",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00044029999999999997
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18766",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00040979999999999993
+    },
+    {
+      "gi": "QANTA_Social Science_1847",
+      "dataset": "QANTA_Social Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006315
+    },
+    {
+      "gi": "WMT19-de-en_130",
+      "dataset": "WMT19-de-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6571428571428571,
+      "cost": 0.00031739999999999996
+    },
+    {
+      "gi": "WMT19-cs-en_246",
+      "dataset": "WMT19-cs-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.2848200312989045,
+      "cost": 0.0005257
+    },
+    {
+      "gi": "WMT19-cs-en_568",
+      "dataset": "WMT19-cs-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.48809523809523814,
+      "cost": 0.00039789999999999997
+    },
+    {
+      "gi": "WMT19-de-en_883",
+      "dataset": "WMT19-de-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6051948051948052,
+      "cost": 0.000321
+    },
+    {
+      "gi": "QANTA_Science_308",
+      "dataset": "QANTA_Science",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007578
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18477",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006895
+    },
+    {
+      "gi": "WMT19-cs-en_156",
+      "dataset": "WMT19-cs-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3862433862433863,
+      "cost": 0.0006674
+    },
+    {
+      "gi": "WMT19-de-en_46",
+      "dataset": "WMT19-de-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8151285671501305,
+      "cost": 0.0005012
+    },
+    {
+      "gi": "WMT19-de-en_715",
+      "dataset": "WMT19-de-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.84,
+      "cost": 0.0005325
+    },
+    {
+      "gi": "WMT19-de-en_90",
+      "dataset": "WMT19-de-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.595,
+      "cost": 0.0003947
+    },
+    {
+      "gi": "WMT19-de-en_516",
+      "dataset": "WMT19-de-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5886077390848838,
+      "cost": 0.0006387999999999999
+    },
+    {
+      "gi": "WMT19-de-en_97",
+      "dataset": "WMT19-de-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3888888888888889,
+      "cost": 0.0005292999999999999
+    },
+    {
+      "gi": "WMT19-fi-en_222",
+      "dataset": "WMT19-fi-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.45408163265306123,
+      "cost": 0.000545
+    },
+    {
+      "gi": "WMT19-fi-en_610",
+      "dataset": "WMT19-fi-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.22222222222222218,
+      "cost": 0.0005143
+    },
+    {
+      "gi": "WMT19-gu-en_191",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8217592592592592,
+      "cost": 0.0003775
+    },
+    {
+      "gi": "WMT19-gu-en_36",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6666666666666666,
+      "cost": 0.00044560000000000004
+    },
+    {
+      "gi": "WMT19-gu-en_116",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7613969608104507,
+      "cost": 0.00047
+    },
+    {
+      "gi": "WMT19-gu-en_123",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7376033057851239,
+      "cost": 0.0005671000000000001
+    },
+    {
+      "gi": "WMT19-gu-en_491",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6559806034482758,
+      "cost": 0.0006635
+    },
+    {
+      "gi": "WMT19-gu-en_505",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.9223296614542437,
+      "cost": 0.0005981000000000001
+    },
+    {
+      "gi": "WMT19-gu-en_638",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4027042915931805,
+      "cost": 0.00045910000000000005
+    },
+    {
+      "gi": "WMT19-lt-en_135",
+      "dataset": "WMT19-lt-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.37777777777777777,
+      "cost": 0.00033860000000000004
+    },
+    {
+      "gi": "WMT19-gu-en_968",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8054419628814092,
+      "cost": 0.000455
+    },
+    {
+      "gi": "WMT19-gu-en_543",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8252656434474616,
+      "cost": 0.0004749
+    },
+    {
+      "gi": "WMT19-kk-en_528",
+      "dataset": "WMT19-kk-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.26071428571428573,
+      "cost": 0.0005172
+    },
+    {
+      "gi": "WMT19-lt-en_269",
+      "dataset": "WMT19-lt-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.38750000000000007,
+      "cost": 0.0005296
+    },
+    {
+      "gi": "WMT19-ru-en_222",
+      "dataset": "WMT19-ru-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6124999999999999,
+      "cost": 0.0003701
+    },
+    {
+      "gi": "WMT19-lt-en_636",
+      "dataset": "WMT19-lt-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.29166666666666663,
+      "cost": 0.0004072
+    },
+    {
+      "gi": "WMT19-zh-en_59",
+      "dataset": "WMT19-zh-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7360404280618311,
+      "cost": 0.0002743
+    },
+    {
+      "gi": "WMT19-kk-en_826",
+      "dataset": "WMT19-kk-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.13114754098360656,
+      "cost": 0.0005512000000000001
+    },
+    {
+      "gi": "WMT19-gu-en_986",
+      "dataset": "WMT19-gu-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.516150936075274,
+      "cost": 0.0005541
+    },
+    {
+      "gi": "WMT19-zh-en_252",
+      "dataset": "WMT19-zh-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8012559674473743,
+      "cost": 0.0004555
+    },
+    {
+      "gi": "WMT19-zh-en_218",
+      "dataset": "WMT19-zh-en",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.48268423507462677,
+      "cost": 0.0004898
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_17965",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "x-ai/grok-4.3",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004408
+    }
+  ]
+}

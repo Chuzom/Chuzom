@@ -1,0 +1,54 @@
+Phase A: self-gen calibration (300)
+  A 100/300 (238s)
+  A 200/300 (452s)
+  A 300/300 (682s)
+  self-gen arena-optimal tau* = 8 (self-gen arena 0.8510)
+Phase B: sub_10 eval (809), locked tau*=8
+  B 100/809 (165s)
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: \boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: New York City is known as the Big Apple.
+
+\boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: \boxed{Dubai}...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London. It is the most common and widely recognized answer. \bo...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: \boxed{Mumbai}...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is Mumbai. However, if considering metropolitan area, Delhi ...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: The Burj Khalifa is located in Dubai, United Arab Emirates.
+
+\boxed{Dubai}...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London.
+
+\boxed{London}...
+  B 200/809 (413s)
+  B 300/809 (572s)
+  B 400/809 (712s)
+  B 500/809 (856s)
+  B 600/809 (949s)
+  B 700/809 (1050s)
+  B 800/809 (1196s)
+
+=== CALIBRATED #2 ROUTER (sub_10, RA metrics+pricing) ===
+  always-cheap   acc=0.696 $0.173/1k arena=0.6923
+  always-strong  acc=0.695 $0.111/1k arena=0.6951
+  ORACLE         acc=0.761 $0.163/1k arena=0.7513
+  CALIBRATED-#2  acc=0.717 $0.125/1k arena=0.7142  tau*=8 esc=0.168
+
+  (transparency) full tau-sweep on sub_10 — tau IS LOCKED from self-gen, this is not used to pick:
+    tau= 1: arena=0.7013 acc=0.705 esc=0.06
+    tau= 2: arena=0.7013 acc=0.705 esc=0.06
+    tau= 3: arena=0.7013 acc=0.705 esc=0.06
+    tau= 4: arena=0.7013 acc=0.705 esc=0.06
+    tau= 5: arena=0.7023 acc=0.706 esc=0.06
+    tau= 6: arena=0.7087 acc=0.712 esc=0.09
+    tau= 7: arena=0.7131 acc=0.716 esc=0.14
+    tau= 8: arena=0.7142 acc=0.717 esc=0.17 <- locked tau*
+    tau= 9: arena=0.7136 acc=0.716 esc=0.32
+    tau=10: arena=0.7115 acc=0.713 esc=0.43

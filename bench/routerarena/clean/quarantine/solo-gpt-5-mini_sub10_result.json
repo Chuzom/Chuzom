@@ -1,0 +1,2335 @@
+{
+  "report": {
+    "approach": "solo-gpt-5-mini",
+    "n": 253,
+    "accuracy": 0.534,
+    "cost_per_1k_RA_pricing": 1.3527,
+    "arena_score": 0.527,
+    "escalation_rate": 0.0,
+    "calls_per_query": 1.0
+  },
+  "by_dataset": {
+    "AIME": 0.333,
+    "ChessInstruct": 0.0,
+    "Ethics_justice": 0.5,
+    "FinQA": 0.143,
+    "GeoGraphyData_100k": 0.0,
+    "LiveCodeBench": 0.0,
+    "OpenTDB_Animals": 1.0,
+    "OpenTDB_Art": 1.0,
+    "OpenTDB_Celebrities": 1.0,
+    "OpenTDB_Entertainment: Board Games": 1.0,
+    "OpenTDB_Entertainment: Books": 1.0,
+    "OpenTDB_Entertainment: Cartoon & Animations": 1.0,
+    "OpenTDB_Entertainment: Comics": 1.0,
+    "OpenTDB_Entertainment: Film": 1.0,
+    "OpenTDB_Entertainment: Japanese Anime & Manga": 1.0,
+    "OpenTDB_Entertainment: Music": 1.0,
+    "OpenTDB_Entertainment: Musicals & Theatres": 1.0,
+    "OpenTDB_Entertainment: Television": 1.0,
+    "OpenTDB_Entertainment: Video Games": 0.714,
+    "OpenTDB_General Knowledge": 1.0,
+    "OpenTDB_Geography": 1.0,
+    "OpenTDB_History": 1.0,
+    "OpenTDB_Science & Nature": 1.0,
+    "OpenTDB_Science: Computers": 1.0,
+    "OpenTDB_Science: Mathematics": 1.0,
+    "OpenTDB_Sports": 1.0,
+    "OpenTDB_Vehicles": 1.0,
+    "QANTA_Fine Arts": 0.429,
+    "QANTA_Geography": 0.8,
+    "QANTA_History": 0.364,
+    "QANTA_Literature": 0.143,
+    "QANTA_Philosophy": 0.0,
+    "QANTA_Science": 0.143,
+    "QANTA_Social Science": 0.0,
+    "SuperGLUE-ClozeTest": 0.8,
+    "WMT19-cs-en": 0.219,
+    "WMT19-de-en": 0.694,
+    "WMT19-fi-en": 0.419,
+    "WMT19-gu-en": 0.606,
+    "WMT19-kk-en": 0.311,
+    "WMT19-lt-en": 0.385,
+    "WMT19-ru-en": 0.893,
+    "WMT19-zh-en": 0.671
+  },
+  "results": [
+    {
+      "gi": "Ethics_justice_1",
+      "dataset": "Ethics_justice",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00057175
+    },
+    {
+      "gi": "Ethics_justice_45",
+      "dataset": "Ethics_justice",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00068825
+    },
+    {
+      "gi": "Ethics_justice_76",
+      "dataset": "Ethics_justice",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000725
+    },
+    {
+      "gi": "AIME_106",
+      "dataset": "AIME",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.001255
+    },
+    {
+      "gi": "FinQA_172",
+      "dataset": "FinQA",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006355
+    },
+    {
+      "gi": "Ethics_justice_84",
+      "dataset": "Ethics_justice",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00093175
+    },
+    {
+      "gi": "FinQA_149",
+      "dataset": "FinQA",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0012725
+    },
+    {
+      "gi": "FinQA_208",
+      "dataset": "FinQA",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00108625
+    },
+    {
+      "gi": "FinQA_56",
+      "dataset": "FinQA",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0005535
+    },
+    {
+      "gi": "FinQA_255",
+      "dataset": "FinQA",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00172975
+    },
+    {
+      "gi": "FinQA_60",
+      "dataset": "FinQA",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00086
+    },
+    {
+      "gi": "FinQA_273",
+      "dataset": "FinQA",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00185325
+    },
+    {
+      "gi": "GeoGraphyData_100k_28",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00050725
+    },
+    {
+      "gi": "ChessInstruct_144",
+      "dataset": "ChessInstruct",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00315025
+    },
+    {
+      "gi": "GeoGraphyData_100k_27",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008245
+    },
+    {
+      "gi": "ChessInstruct_148",
+      "dataset": "ChessInstruct",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00314125
+    },
+    {
+      "gi": "GeoGraphyData_100k_42",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00072475
+    },
+    {
+      "gi": "ChessInstruct_107",
+      "dataset": "ChessInstruct",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00322875
+    },
+    {
+      "gi": "ChessInstruct_84",
+      "dataset": "ChessInstruct",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0031575
+    },
+    {
+      "gi": "GeoGraphyData_100k_48",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00082025
+    },
+    {
+      "gi": "AIME_58",
+      "dataset": "AIME",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00298175
+    },
+    {
+      "gi": "ChessInstruct_145",
+      "dataset": "ChessInstruct",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00314575
+    },
+    {
+      "gi": "ChessInstruct_102",
+      "dataset": "ChessInstruct",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.003345
+    },
+    {
+      "gi": "LiveCodeBench_105",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00312725
+    },
+    {
+      "gi": "LiveCodeBench_149",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0013095
+    },
+    {
+      "gi": "LiveCodeBench_131",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00202175
+    },
+    {
+      "gi": "LiveCodeBench_14",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001696
+    },
+    {
+      "gi": "AIME_112",
+      "dataset": "AIME",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.003022
+    },
+    {
+      "gi": "LiveCodeBench_16",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0015465
+    },
+    {
+      "gi": "LiveCodeBench_183",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00091625
+    },
+    {
+      "gi": "LiveCodeBench_169",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00225875
+    },
+    {
+      "gi": "LiveCodeBench_181",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00141275
+    },
+    {
+      "gi": "LiveCodeBench_211",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00260675
+    },
+    {
+      "gi": "LiveCodeBench_136",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00286675
+    },
+    {
+      "gi": "LiveCodeBench_277",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001567
+    },
+    {
+      "gi": "LiveCodeBench_114",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00306575
+    },
+    {
+      "gi": "LiveCodeBench_317",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00206725
+    },
+    {
+      "gi": "LiveCodeBench_118",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0030705
+    },
+    {
+      "gi": "LiveCodeBench_177",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00306575
+    },
+    {
+      "gi": "LiveCodeBench_137",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00305475
+    },
+    {
+      "gi": "LiveCodeBench_271",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001971
+    },
+    {
+      "gi": "LiveCodeBench_34",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00313575
+    },
+    {
+      "gi": "LiveCodeBench_237",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00249075
+    },
+    {
+      "gi": "LiveCodeBench_431",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0009
+    },
+    {
+      "gi": "LiveCodeBench_390",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00116975
+    },
+    {
+      "gi": "LiveCodeBench_18",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00311825
+    },
+    {
+      "gi": "LiveCodeBench_344",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00285425
+    },
+    {
+      "gi": "LiveCodeBench_476",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00139775
+    },
+    {
+      "gi": "LiveCodeBench_499",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00086025
+    },
+    {
+      "gi": "LiveCodeBench_43",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.002119
+    },
+    {
+      "gi": "LiveCodeBench_49",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00200275
+    },
+    {
+      "gi": "LiveCodeBench_84",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006945
+    },
+    {
+      "gi": "LiveCodeBench_491",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00243675
+    },
+    {
+      "gi": "LiveCodeBench_64",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0015485
+    },
+    {
+      "gi": "OpenTDB_Animals_262",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000409
+    },
+    {
+      "gi": "OpenTDB_Animals_1199",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00071675
+    },
+    {
+      "gi": "LiveCodeBench_350",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00321125
+    },
+    {
+      "gi": "OpenTDB_Animals_2545",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0007485
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3577",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00030075
+    },
+    {
+      "gi": "LiveCodeBench_355",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00312675
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1078",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0005025
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3896",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000302
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1456",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000458
+    },
+    {
+      "gi": "OpenTDB_Art_1429",
+      "dataset": "OpenTDB_Art",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00040575
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3968",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00056075
+    },
+    {
+      "gi": "LiveCodeBench_386",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00317625
+    },
+    {
+      "gi": "OpenTDB_Celebrities_4085",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000688
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1100",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00043325
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_3779",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00039025
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2835",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000387
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_219",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00059375
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1580",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0007895
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2879",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000399
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_30",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000393
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3886",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001795
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3056",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000516
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2995",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00034075
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3106",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000395
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Comics_1888",
+      "dataset": "OpenTDB_Entertainment: Comics",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00049075
+    },
+    {
+      "gi": "LiveCodeBench_437",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00312925
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1983",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00045575
+    },
+    {
+      "gi": "LiveCodeBench_405",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00306775
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1244",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00037825
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_1019",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00039625
+    },
+    {
+      "gi": "LiveCodeBench_485",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0030415
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_3026",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0005855
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Cartoon & Animations_1700",
+      "dataset": "OpenTDB_Entertainment: Cartoon & Animations",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00097975
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Music_1103",
+      "dataset": "OpenTDB_Entertainment: Music",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00048125
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_270",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000624
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_4061",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00116725
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_3760",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00049625
+    },
+    {
+      "gi": "LiveCodeBench_473",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00303425
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2933",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0008895
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1178",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00065425
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Musicals & Theatres_3818",
+      "dataset": "OpenTDB_Entertainment: Musicals & Theatres",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00082575
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Television_3479",
+      "dataset": "OpenTDB_Entertainment: Television",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00135675
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1957",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00043375
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1639",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00059075
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_1177",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00184925
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3404",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00033275
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_235",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.001569
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_2181",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00038125
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_4047",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00100925
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1807",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00061175
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3306",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00043875
+    },
+    {
+      "gi": "LiveCodeBench_6",
+      "dataset": "LiveCodeBench",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00231925
+    },
+    {
+      "gi": "OpenTDB_Geography_2088",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003135
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3461",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0007295
+    },
+    {
+      "gi": "OpenTDB_Geography_1664",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003305
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3727",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00057775
+    },
+    {
+      "gi": "OpenTDB_Geography_2346",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023775
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_4019",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0006965
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_883",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00049825
+    },
+    {
+      "gi": "OpenTDB_Geography_3207",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00025875
+    },
+    {
+      "gi": "OpenTDB_Geography_2099",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004735
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3627",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00069325
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_836",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000644
+    },
+    {
+      "gi": "OpenTDB_Geography_792",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000456
+    },
+    {
+      "gi": "OpenTDB_History_1162",
+      "dataset": "OpenTDB_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000615
+    },
+    {
+      "gi": "OpenTDB_History_3712",
+      "dataset": "OpenTDB_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00039175
+    },
+    {
+      "gi": "OpenTDB_History_2026",
+      "dataset": "OpenTDB_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0007335
+    },
+    {
+      "gi": "OpenTDB_History_1092",
+      "dataset": "OpenTDB_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00047025
+    },
+    {
+      "gi": "OpenTDB_History_2840",
+      "dataset": "OpenTDB_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00051075
+    },
+    {
+      "gi": "OpenTDB_History_3902",
+      "dataset": "OpenTDB_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00035925
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1175",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00040375
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_476",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000329
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1560",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00039775
+    },
+    {
+      "gi": "OpenTDB_History_857",
+      "dataset": "OpenTDB_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000871
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_3716",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00044175
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1015",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00051925
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1863",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00036875
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1694",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004795
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_2942",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000656
+    },
+    {
+      "gi": "OpenTDB_Geography_3880",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0015835
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1306",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00104225
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000455
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2133",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000578
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00052475
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3013",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00040275
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2568",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0006775
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_638",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00035875
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1977",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0006445
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3259",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00040475
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1530",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00039725
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_922",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00054775
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1870",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00042575
+    },
+    {
+      "gi": "OpenTDB_Sports_2289",
+      "dataset": "OpenTDB_Sports",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00048625
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_297",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000308
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1419",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002975
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_87",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00051825
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2519",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0003065
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2943",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00089225
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2154",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0009965
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2597",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0004185
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3234",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000584
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3564",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00063425
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1173",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000834
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3616",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00098275
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2238",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.002971
+    },
+    {
+      "gi": "QANTA_Fine Arts_828",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00094575
+    },
+    {
+      "gi": "QANTA_Geography_1100",
+      "dataset": "QANTA_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0006385
+    },
+    {
+      "gi": "QANTA_Geography_1555",
+      "dataset": "QANTA_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000647
+    },
+    {
+      "gi": "QANTA_Fine Arts_1686",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00119575
+    },
+    {
+      "gi": "QANTA_Geography_1023",
+      "dataset": "QANTA_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0007975
+    },
+    {
+      "gi": "QANTA_Geography_304",
+      "dataset": "QANTA_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00101875
+    },
+    {
+      "gi": "QANTA_History_133",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000724
+    },
+    {
+      "gi": "QANTA_Fine Arts_1212",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0024965
+    },
+    {
+      "gi": "QANTA_Fine Arts_1548",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0026005
+    },
+    {
+      "gi": "QANTA_History_1190",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0011365
+    },
+    {
+      "gi": "QANTA_History_1084",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0017165
+    },
+    {
+      "gi": "QANTA_History_404",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00110025
+    },
+    {
+      "gi": "QANTA_History_473",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000778
+    },
+    {
+      "gi": "QANTA_Fine Arts_865",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00251875
+    },
+    {
+      "gi": "QANTA_Fine Arts_1702",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00302325
+    },
+    {
+      "gi": "QANTA_History_1154",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0019905
+    },
+    {
+      "gi": "QANTA_History_776",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0005635
+    },
+    {
+      "gi": "QANTA_History_926",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00066825
+    },
+    {
+      "gi": "QANTA_Literature_1073",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00072025
+    },
+    {
+      "gi": "QANTA_History_433",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00171125
+    },
+    {
+      "gi": "QANTA_Literature_1239",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0007125
+    },
+    {
+      "gi": "QANTA_Geography_1812",
+      "dataset": "QANTA_Geography",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0029645
+    },
+    {
+      "gi": "QANTA_History_612",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0030195
+    },
+    {
+      "gi": "QANTA_Literature_1045",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.002108
+    },
+    {
+      "gi": "QANTA_History_1696",
+      "dataset": "QANTA_History",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0029845
+    },
+    {
+      "gi": "QANTA_Fine Arts_528",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00296525
+    },
+    {
+      "gi": "QANTA_Literature_1843",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00150725
+    },
+    {
+      "gi": "QANTA_Literature_1653",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0
+    },
+    {
+      "gi": "QANTA_Literature_1508",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00252325
+    },
+    {
+      "gi": "QANTA_Literature_1727",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001113
+    },
+    {
+      "gi": "QANTA_Literature_1398",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00296575
+    },
+    {
+      "gi": "QANTA_Literature_369",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00093775
+    },
+    {
+      "gi": "QANTA_Literature_1735",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0029765
+    },
+    {
+      "gi": "QANTA_Literature_758",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0014945
+    },
+    {
+      "gi": "QANTA_Literature_1464",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00296875
+    },
+    {
+      "gi": "QANTA_Literature_386",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.002411
+    },
+    {
+      "gi": "QANTA_Literature_475",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0011535
+    },
+    {
+      "gi": "QANTA_Philosophy_1270",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001084
+    },
+    {
+      "gi": "QANTA_Literature_1326",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.002971
+    },
+    {
+      "gi": "QANTA_Philosophy_499",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.001044
+    },
+    {
+      "gi": "QANTA_Science_1473",
+      "dataset": "QANTA_Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00107675
+    },
+    {
+      "gi": "QANTA_Literature_210",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00296725
+    },
+    {
+      "gi": "QANTA_Philosophy_91",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00178025
+    },
+    {
+      "gi": "QANTA_Science_198",
+      "dataset": "QANTA_Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.000728
+    },
+    {
+      "gi": "QANTA_Science_1360",
+      "dataset": "QANTA_Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00143875
+    },
+    {
+      "gi": "QANTA_Literature_795",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00282575
+    },
+    {
+      "gi": "QANTA_Literature_740",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.002966
+    },
+    {
+      "gi": "QANTA_Science_492",
+      "dataset": "QANTA_Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007825
+    },
+    {
+      "gi": "QANTA_Literature_833",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0023675
+    },
+    {
+      "gi": "QANTA_Science_308",
+      "dataset": "QANTA_Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00222425
+    },
+    {
+      "gi": "QANTA_Social Science_1847",
+      "dataset": "QANTA_Social Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0011565
+    },
+    {
+      "gi": "QANTA_Social Science_2",
+      "dataset": "QANTA_Social Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0013035
+    },
+    {
+      "gi": "QANTA_Social Science_77",
+      "dataset": "QANTA_Social Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.002147
+    },
+    {
+      "gi": "QANTA_Science_619",
+      "dataset": "QANTA_Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00140175
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18477",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00079575
+    },
+    {
+      "gi": "QANTA_Literature_408",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0029655
+    },
+    {
+      "gi": "QANTA_Literature_885",
+      "dataset": "QANTA_Literature",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00296525
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_17965",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00085075
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_15955",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000859
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18766",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.001029
+    },
+    {
+      "gi": "WMT19-de-en_130",
+      "dataset": "WMT19-de-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5535714285714286,
+      "cost": 0.00056025
+    },
+    {
+      "gi": "WMT19-cs-en_156",
+      "dataset": "WMT19-cs-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3956639566395663,
+      "cost": 0.00100925
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_12894",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0012995
+    },
+    {
+      "gi": "QANTA_Science_1236",
+      "dataset": "QANTA_Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00297375
+    },
+    {
+      "gi": "WMT19-de-en_715",
+      "dataset": "WMT19-de-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.77,
+      "cost": 0.001426
+    },
+    {
+      "gi": "WMT19-de-en_46",
+      "dataset": "WMT19-de-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8070588235294117,
+      "cost": 0.0015175
+    },
+    {
+      "gi": "WMT19-cs-en_568",
+      "dataset": "WMT19-cs-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.26153846153846155,
+      "cost": 0.001442
+    },
+    {
+      "gi": "WMT19-de-en_90",
+      "dataset": "WMT19-de-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.796,
+      "cost": 0.001565
+    },
+    {
+      "gi": "WMT19-fi-en_222",
+      "dataset": "WMT19-fi-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.45408163265306123,
+      "cost": 0.0015725
+    },
+    {
+      "gi": "WMT19-de-en_97",
+      "dataset": "WMT19-de-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.47780126849894294,
+      "cost": 0.00116525
+    },
+    {
+      "gi": "WMT19-gu-en_116",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.9264053254437871,
+      "cost": 0.00103475
+    },
+    {
+      "gi": "WMT19-gu-en_191",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5507544581618657,
+      "cost": 0.001352
+    },
+    {
+      "gi": "QANTA_Social Science_1438",
+      "dataset": "QANTA_Social Science",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00296775
+    },
+    {
+      "gi": "WMT19-fi-en_610",
+      "dataset": "WMT19-fi-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.38333333333333325,
+      "cost": 0.0014175
+    },
+    {
+      "gi": "WMT19-de-en_516",
+      "dataset": "WMT19-de-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8268229166666667,
+      "cost": 0.0017885
+    },
+    {
+      "gi": "WMT19-gu-en_123",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.43526881720430105,
+      "cost": 0.002217
+    },
+    {
+      "gi": "WMT19-de-en_883",
+      "dataset": "WMT19-de-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6283783783783783,
+      "cost": 0.00121075
+    },
+    {
+      "gi": "WMT19-gu-en_505",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.826431543491183,
+      "cost": 0.00134575
+    },
+    {
+      "gi": "WMT19-gu-en_968",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7845203488372092,
+      "cost": 0.00110575
+    },
+    {
+      "gi": "WMT19-gu-en_543",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5593869731800767,
+      "cost": 0.00126225
+    },
+    {
+      "gi": "WMT19-gu-en_36",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8126839849196923,
+      "cost": 0.00203025
+    },
+    {
+      "gi": "WMT19-gu-en_638",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.21578947368421053,
+      "cost": 0.00189125
+    },
+    {
+      "gi": "WMT19-ru-en_222",
+      "dataset": "WMT19-ru-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.89296875,
+      "cost": 0.00067875
+    },
+    {
+      "gi": "WMT19-cs-en_246",
+      "dataset": "WMT19-cs-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0029645
+    },
+    {
+      "gi": "WMT19-lt-en_135",
+      "dataset": "WMT19-lt-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.37777777777777777,
+      "cost": 0.0008675
+    },
+    {
+      "gi": "WMT19-gu-en_491",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5241830065359477,
+      "cost": 0.00166775
+    },
+    {
+      "gi": "WMT19-zh-en_218",
+      "dataset": "WMT19-zh-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3989076012744651,
+      "cost": 0.00122525
+    },
+    {
+      "gi": "WMT19-zh-en_59",
+      "dataset": "WMT19-zh-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8212132352941177,
+      "cost": 0.00097575
+    },
+    {
+      "gi": "WMT19-lt-en_636",
+      "dataset": "WMT19-lt-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.15384615384615383,
+      "cost": 0.001478
+    },
+    {
+      "gi": "WMT19-lt-en_269",
+      "dataset": "WMT19-lt-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6228070175438597,
+      "cost": 0.00218275
+    },
+    {
+      "gi": "WMT19-gu-en_986",
+      "dataset": "WMT19-gu-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4222074468085106,
+      "cost": 0.00301125
+    },
+    {
+      "gi": "WMT19-kk-en_528",
+      "dataset": "WMT19-kk-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4069767441860465,
+      "cost": 0.002619
+    },
+    {
+      "gi": "WMT19-zh-en_252",
+      "dataset": "WMT19-zh-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7931947069943289,
+      "cost": 0.0015065
+    },
+    {
+      "gi": "WMT19-kk-en_826",
+      "dataset": "WMT19-kk-en",
+      "chosen": "openai/gpt-5-mini",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.21458333333333332,
+      "cost": 0.0020635
+    }
+  ]
+}

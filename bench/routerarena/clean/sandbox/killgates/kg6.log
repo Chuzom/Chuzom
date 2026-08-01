@@ -1,0 +1,10 @@
+KG6: 300 sub_10 | code-as-reasoning
+  fetched 75/300 (154s)
+  fetched 150/300 (308s)
+  fetched 225/300 (437s)
+  fetched 300/300 (649s)
+
+=== KG6 RESULT ===
+  non-trivial code coverage: 136/300 = 0.453   GATE(>=0.25): PASS
+  runnable non-trivial: 128/300 = 0.427
+  code-as-reasoning accuracy on runnable slice: 0.648

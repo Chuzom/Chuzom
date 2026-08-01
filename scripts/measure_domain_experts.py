@@ -10,7 +10,7 @@ Grading is local MCQ letter-match (MMLU-Pro ships answer keys) — no LLM judge.
 
 Output:
   * domain_expert_measurements.json — per (domain, model): accuracy, cost, arena
-  * routerarena_clean/domain_model_map.json — REBUILT from the measurements
+  * bench/routerarena/clean/domain_model_map.json — REBUILT from the measurements
 """
 from __future__ import annotations
 
@@ -182,7 +182,7 @@ def main() -> int:
         "default": best_overall,
         "domain": new_map,
     }
-    Path("routerarena_clean/domain_model_map.json").write_text(json.dumps(out, indent=2))
+    Path("bench/routerarena/clean/domain_model_map.json").write_text(json.dumps(out, indent=2))
 
     print("\n=== per-domain winner (measured) ===")
     for dom in sorted(new_map):

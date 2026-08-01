@@ -1,0 +1,31 @@
+{
+  "reports": [
+    {
+      "policy": "always-cheap",
+      "acc": 0.6996,
+      "c1k": 0.1622,
+      "arena": 0.6962
+    },
+    {
+      "policy": "always-strong",
+      "acc": 0.6959,
+      "c1k": 0.1117,
+      "arena": 0.6961
+    },
+    {
+      "policy": "ORACLE",
+      "acc": 0.7602,
+      "c1k": 0.1535,
+      "arena": 0.7509
+    },
+    {
+      "policy": "MCTS-coh",
+      "acc": 0.7046,
+      "c1k": 0.1551,
+      "arena": 0.7011,
+      "esc_rate": 0.04
+    }
+  ],
+  "ra_separation": 0.6633687258687259,
+  "tau": 3
+}

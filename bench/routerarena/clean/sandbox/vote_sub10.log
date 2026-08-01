@@ -1,0 +1,50 @@
+vote_diverse sub_10: 809 RA prompts (workers=10) [RA-DATA TOUCH — fixed design]
+  50/809 (143s)
+  100/809 (377s)
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: The city known as the Big Apple is New York City. This nickname became popular in the 1970s through ...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital city of the United Kingdom is London. It is the largest city in the UK and serves as its...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: The Burj Khalifa is located in Dubai, United Arab Emirates. It is the tallest building in the world ...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is Mumbai. It is the financial capital of the country and lo...
+  150/809 (710s)
+  200/809 (966s)
+  250/809 (1147s)
+  300/809 (1332s)
+  350/809 (1458s)
+  400/809 (1590s)
+  450/809 (1706s)
+  500/809 (1847s)
+  550/809 (1957s)
+  600/809 (2017s)
+  650/809 (2082s)
+  700/809 (2217s)
+  750/809 (2388s)
+  800/809 (2569s)
+
+=== vote_diverse sub_10 (RA metrics + RA pricing) ===
+{
+  "approach": "vote_diverse",
+  "n": 809,
+  "accuracy": 0.7237,
+  "cost_per_1k_RA_pricing": 0.204,
+  "arena_score": 0.7155,
+  "escalation_rate": 0.158,
+  "calls_per_query": 3.16
+}
+
+worst datasets:
+  0.00  Ethics_justice
+  0.00  GeoGraphyData_100k
+  0.00  LiveCodeBench
+  0.00  QANTA_Philosophy
+  0.00  SuperGLUE-ClozeTest
+  0.14  QANTA_Science
+  0.17  ChessInstruct
+  0.23  WMT19-kk-en
+  0.26  WMT19-lt-en
+  0.33  WMT19-fi-en
+  0.33  AIME
+  0.33  QANTA_Literature

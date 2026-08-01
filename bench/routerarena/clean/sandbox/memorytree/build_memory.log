@@ -1,0 +1,8 @@
+memory corpus: 600 traps | running deepseek/deepseek-v4-flash...
+  150/600 (307s)
+  300/600 (598s)
+  450/600 (840s)
+  600/600 (1110s)
+cheap failure rate: 0.170
+embedding memory...
+saved memory.npz (emb (600, 384), fail (600,)) + memory_meta.json

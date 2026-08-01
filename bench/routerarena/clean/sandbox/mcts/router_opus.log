@@ -1,0 +1,21 @@
+router=anthropic/claude-opus-4.8  pool={cheap, strong, opus}  subset=150
+  25/150 (7s)
+  50/150 (13s)
+  75/150 (19s)
+  100/150 (26s)
+  125/150 (34s)
+  150/150 (41s)
+
+=== LLM-ROUTER (opus) on 150 (RA metrics; answering cost only) ===
+  always-cheap         acc=0.733  $0.169/1k  arena=0.7260
+  always-strong        acc=0.707  $0.103/1k  arena=0.7066
+  always-opus          acc=0.780  $4.526/1k  arena=0.7028
+  coherence@8          acc=0.753  $0.131/1k  arena=0.7464
+  LLM-ROUTER(opus)     acc=0.733  $0.791/1k  arena=0.7063  <<<
+  ORACLE (3-model)     acc=0.813  $0.305/1k  arena=0.7886
+
+  router choice distribution: A(cheap)=97 B(strong)=39 C(opus)=14
+  router OPERATING cost (NOT in RA arena): $3.153/1k queries  [tok in=92341 out=450]
+  reference bars: coherence-judge=0.7142(full809)  clean-submission=0.7061  target=0.76
+
+  saved router_eval_opus.json

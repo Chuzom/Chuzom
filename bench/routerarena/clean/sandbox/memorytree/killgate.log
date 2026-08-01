@@ -1,0 +1,19 @@
+traps: 500 | running deepseek/deepseek-v4-flash...
+  100/500 (203s)
+  200/500 (416s)
+  300/500 (607s)
+  400/500 (798s)
+  500/500 (1058s)
+
+cheap-model FAILURE rate: 0.196  (need 0.10-0.50 for a signal)
+embedding...
+embedder: bge-small-en, dim=384
+
+=== KILL-GATE RESULT ===
+  cheap failure rate : 0.196   gate(0.10-0.50): PASS
+  P(fail | density>0.5)  = 0.917  (n=24)
+  P(fail | density<=0.5) = 0.056  (n=126)
+  SEPARATION = 0.861   gate(>=0.30): PASS   (agreement=0.01, grounded-verify=1.00)
+  ROC-AUC(density→fail) = 0.947   (0.5=useless, >0.7=useful)
+
+  VERDICT: PROMISING — build the pipeline

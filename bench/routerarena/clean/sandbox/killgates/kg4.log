@@ -1,0 +1,13 @@
+KG4: 200 traps | swarm=5 models
+  40/200 (354s)
+  80/200 (667s)
+  120/200 (1010s)
+  160/200 (1324s)
+  200/200 (1842s)
+
+=== KG4 RESULT ===
+  consensus fail rate: 0.155  (n=200)
+  P(consensus wrong | agree<0.8) = 0.222  (n=54)
+  P(consensus wrong | agree>=0.8)= 0.130  (n=146)
+  SEPARATION = 0.092  GATE(>=0.30): FAIL
+  (prior: diverse-vote plateaued 0.7155; agreement wall=0.01)

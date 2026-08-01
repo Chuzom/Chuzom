@@ -31,7 +31,7 @@ Usage::
 
     .venv/bin/python scripts/routerarena_submit.py \\
         --split sub_10 \\
-        --output-root routerarena_submission/
+        --output-root bench/routerarena/submission/
 
     .venv/bin/python scripts/routerarena_submit.py \\
         --split sub_10 --limit 50          # smoke run
@@ -41,7 +41,7 @@ Usage::
 The output directory mirrors RouterArena's repo layout so the files can
 be copied directly into a fork::
 
-    routerarena_submission/
+    bench/routerarena/submission/
     ├── config/
     │   └── chuzom-router.json
     └── predictions/
@@ -207,7 +207,7 @@ def _load_inline_classifier():
     The same module RouterArena's evaluator loads is the source of truth
     for our routing decisions — generating predictions from a *different*
     classifier would leave the inline router and the JSON drift-prone.
-    By importing from ``routerarena_submission/router/chuzom_router.py``
+    By importing from ``bench/routerarena/submission/router/chuzom_router.py``
     here, the two artifacts agree by construction: any regex change there
     automatically reflects in the next re-generated predictions JSON.
 
@@ -249,7 +249,7 @@ def _load_inline_classifier():
     spec = importlib.util.spec_from_file_location(
         "chuzom_routerarena_inline_classifier",
         Path(__file__).resolve().parent.parent
-        / "routerarena_submission" / "router" / "chuzom_router.py",
+        / "bench" / "routerarena" / "submission" / "router" / "chuzom_router.py",
     )
     if spec is None or spec.loader is None:
         raise ImportError("could not load inline ChuzomRouter classifier")
@@ -286,7 +286,7 @@ def _generate_predictions(
     """Return RouterArena-shaped predictions plus a model-frequency tally.
 
     Uses the *inline* classifier from
-    ``routerarena_submission/router/chuzom_router.py`` so generated
+    ``bench/routerarena/submission/router/chuzom_router.py`` so generated
     predictions match the routing decisions RouterArena's evaluator
     will make from the same module. Subject is inferred from prompt
     text (same regex pass) rather than the dataset's Domain field —
@@ -409,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--output-root",
         type=Path,
-        default=Path("routerarena_submission"),
+        default=Path("bench/routerarena/submission"),
         help="Output directory; mirrors RouterArena's repo layout.",
     )
     args = p.parse_args(argv)

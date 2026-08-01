@@ -8,7 +8,7 @@ snapshot, silently orphaning this process's just-written record even though
 the write itself succeeded on disk moments earlier.
 
 Methodology (ported from the original audit's ad hoc reproduction,
-``audit/C-packaging-concurrency-soak.md``): N real OS processes each call
+``Docs/audit/C-packaging-concurrency-soak.md``): N real OS processes each call
 ``record_event()`` repeatedly against the *same* session_id, with a unique
 marker per write. Immediately after each write, the writing process re-scans
 the file's raw bytes for its own marker. This is deliberately NOT "does the

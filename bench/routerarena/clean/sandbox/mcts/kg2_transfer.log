@@ -1,0 +1,42 @@
+#2 MCTS RA-transfer: 809 sub_10 | cheap+judge+strong
+  100/809 (167s)
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: \boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: The Burj Khalifa, the world's tallest building, is located in Dubai, United Arab Emirates. It is a i...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London. This is the most widely recognized and correct answer. ...
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: The nickname "Big Apple" is most famously associated with New York City.  
+
+\boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: \boxed{Mumbai}  
+Mumbai is India's most populous city and its financial capital, making it the large...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London.
+
+\boxed{London}...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: The Burj Khalifa is located in Dubai, United Arab Emirates.
+
+\boxed{Dubai}...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is Mumbai, though Delhi has a larger metropolitan area. Howe...
+  200/809 (449s)
+  300/809 (618s)
+  400/809 (763s)
+  500/809 (911s)
+  600/809 (1010s)
+  700/809 (1117s)
+  800/809 (1276s)
+
+=== #2 MCTS RA-transfer (RA metrics + RA pricing) ===
+  always-cheap   acc=0.700 $0.162/1k arena=0.6962
+  always-strong  acc=0.696 $0.112/1k arena=0.6961
+  ORACLE         acc=0.760 $0.153/1k arena=0.7509
+  MCTS-coh       acc=0.705 $0.155/1k arena=0.7011 esc=0.04
+
+  RA SEPARATION (coherence<3 → cheap-fail) = 0.663   (self-gen KG2 was 0.388; agreement wall 0.01)
+    P(cheap fail | coh<3)=0.938 (n=32); P(fail|coh>=3)=0.274 (n=777)
+  judge probe cost (disclosed, not scored) = $0.0253/1k

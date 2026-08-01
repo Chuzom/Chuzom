@@ -1,0 +1,40 @@
+council=['deepseek/deepseek-v4-flash', 'qwen/qwen3-235b-a22b-2507', 'meta-llama/llama-3.3-70b-instruct', 'mistralai/mistral-small-3.2-24b-instruct'] (+gemini variant)  subset=150
+  25/150 (85s)
+  50/150 (167s)
+  75/150 (257s)
+  100/150 (338s)
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is Mumbai, which is also the financial and entertainment cap...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is Mumbai. It is the financial capital of the country and lo...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India is typically measured by population, and according to this metric, the cor...
+  125/150 (405s)
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is \boxed{Mumbai}.
+
+Mumbai is the capital of Maharashtra and...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The correct answer is **Mumbai**.
+
+\boxed{Mumbai}
+Mumbai is the most populous city in India and is c...
+  150/150 (909s)
+
+=== COUNCIL kill-gate (150 queries, RA metrics) ===
+  single deepseek/deepseek-v4-flash                 acc=0.733 $0.153/1k arena=0.7270
+  single qwen/qwen3-235b-a22b-2507                  acc=0.693 $0.034/1k arena=0.7025
+  single meta-llama/llama-3.3-70b-instruct          acc=0.620 $0.056/1k arena=0.6308
+  single mistralai/mistral-small-3.2-24b-instruct   acc=0.600 $0.037/1k arena=0.6140
+  single google/gemini-2.5-flash                    acc=0.640 $0.392/1k arena=0.6342
+
+  [4-cheap] council-VOTE   acc=0.733 $0.280/1k arena=0.7204
+  [4-cheap] council-ORACLE acc=0.793 $0.280/1k arena=0.7726  (any-member-correct upper bound)
+
+  [5-with-gemini] council-VOTE   acc=0.747 $0.672/1k arena=0.7201
+  [5-with-gemini] council-ORACLE acc=0.813 $0.672/1k arena=0.7758  (any-member-correct upper bound)
+
+  bars: always-cheap=0.7260  coherence@8=0.7464  best-single≈0.733  target=0.76
+  GATE(council-vote arena >= 0.7464): FAIL   clears 0.76: no   (best vote arena=0.7204)
+
+  saved council_killgate.json

@@ -1,0 +1,73 @@
+TYPE router (#1) sub_10: 809 RA prompts (workers=8) [RA-DATA TOUCH — fixed design]
+  50/809 (26s) errs=0
+  100/809 (46s) errs=0
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: The city known as the Big Apple is New York City.
+
+\boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: The Burj Khalifa is located in Dubai, United Arab Emirates.
+
+\boxed{Dubai}...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London.
+
+\boxed{London}...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: Mumbai is the most populous city in India.  
+It is followed by Delhi and Bengaluru in terms of popul...
+  150/809 (107s) errs=0
+  200/809 (152s) errs=0
+  250/809 (178s) errs=0
+  300/809 (210s) errs=0
+  350/809 (232s) errs=0
+  400/809 (260s) errs=0
+  450/809 (291s) errs=0
+  500/809 (316s) errs=0
+  550/809 (341s) errs=0
+  600/809 (364s) errs=0
+  650/809 (388s) errs=0
+  700/809 (411s) errs=0
+  750/809 (431s) errs=0
+  800/809 (441s) errs=0
+
+=== TYPE ROUTER (#1) sub_10 (RA metrics + RA pricing) ===
+{
+  "approach": "type_router_#1",
+  "n": 809,
+  "accuracy": 0.685,
+  "cost_per_1k_RA_pricing": 0.097,
+  "arena_score": 0.6873,
+  "errors": 0,
+  "by_type": {
+    "default": {
+      "n": 708,
+      "acc": 0.731,
+      "err": 0
+    },
+    "code": {
+      "n": 68,
+      "acc": 0.252,
+      "err": 0
+    },
+    "translation": {
+      "n": 33,
+      "acc": 0.589,
+      "err": 0
+    }
+  }
+}
+
+worst datasets:
+  0.00  ChessInstruct
+  0.00  Ethics_justice
+  0.00  GeoGraphyData_100k
+  0.00  LiveCodeBench
+  0.00  OpenTDB_Entertainment: Musicals & Theatres
+  0.00  OpenTDB_Entertainment: Television
+  0.00  QANTA_Philosophy
+  0.00  SuperGLUE-ClozeTest
+  0.14  QANTA_Science
+  0.24  WMT19-lt-en
+  0.25  QANTA_Social Science
+  0.26  WMT19-kk-en

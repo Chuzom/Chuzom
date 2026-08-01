@@ -1,0 +1,7375 @@
+{
+  "report": {
+    "approach": "vote_diverse",
+    "n": 809,
+    "accuracy": 0.7237,
+    "cost_per_1k_RA_pricing": 0.204,
+    "arena_score": 0.7155,
+    "escalation_rate": 0.158,
+    "calls_per_query": 3.16
+  },
+  "by_dataset": {
+    "AIME": 0.333,
+    "ArcMMLU": 0.872,
+    "AsDiv": 0.571,
+    "ChessInstruct": 0.167,
+    "ChessInstruct_mcq": 0.429,
+    "Ethics_commonsense": 1.0,
+    "Ethics_deontology": 0.8,
+    "Ethics_justice": 0.0,
+    "Ethics_virtue": 1.0,
+    "FinQA": 0.429,
+    "GSM8K": 1.0,
+    "GeoBench": 0.867,
+    "GeoGraphyData_100k": 0.0,
+    "LiveCodeBench": 0.0,
+    "MATH": 1.0,
+    "MMLUPro_biology": 0.923,
+    "MMLUPro_business": 0.867,
+    "MMLUPro_chemistry": 1.0,
+    "MMLUPro_computer science": 0.865,
+    "MMLUPro_economics": 0.941,
+    "MMLUPro_engineering": 0.786,
+    "MMLUPro_health": 0.714,
+    "MMLUPro_history": 0.727,
+    "MMLUPro_law": 0.812,
+    "MMLUPro_math": 0.778,
+    "MMLUPro_philosophy": 1.0,
+    "MMLUPro_physics": 0.889,
+    "MMLUPro_psychology": 0.875,
+    "MMLU_formal_logic": 0.909,
+    "MMLU_management": 0.875,
+    "MathQA": 0.867,
+    "MedMCQA": 0.793,
+    "MusicTheoryBench": 0.6,
+    "NarrativeQA": 0.57,
+    "OpenTDB_Animals": 1.0,
+    "OpenTDB_Art": 1.0,
+    "OpenTDB_Celebrities": 1.0,
+    "OpenTDB_Entertainment: Board Games": 1.0,
+    "OpenTDB_Entertainment: Books": 1.0,
+    "OpenTDB_Entertainment: Cartoon & Animations": 1.0,
+    "OpenTDB_Entertainment: Comics": 1.0,
+    "OpenTDB_Entertainment: Film": 1.0,
+    "OpenTDB_Entertainment: Japanese Anime & Manga": 1.0,
+    "OpenTDB_Entertainment: Music": 1.0,
+    "OpenTDB_Entertainment: Musicals & Theatres": 1.0,
+    "OpenTDB_Entertainment: Television": 1.0,
+    "OpenTDB_Entertainment: Video Games": 0.714,
+    "OpenTDB_General Knowledge": 1.0,
+    "OpenTDB_Geography": 1.0,
+    "OpenTDB_History": 1.0,
+    "OpenTDB_Science & Nature": 1.0,
+    "OpenTDB_Science: Computers": 0.857,
+    "OpenTDB_Science: Mathematics": 0.8,
+    "OpenTDB_Sports": 1.0,
+    "OpenTDB_Vehicles": 1.0,
+    "PubMedQA": 0.87,
+    "QANTA_Fine Arts": 0.571,
+    "QANTA_Geography": 0.8,
+    "QANTA_History": 0.636,
+    "QANTA_Literature": 0.333,
+    "QANTA_Philosophy": 0.0,
+    "QANTA_Science": 0.143,
+    "QANTA_Social Science": 0.5,
+    "SocialiQA": 0.714,
+    "SuperGLUE-CausalReasoning": 1.0,
+    "SuperGLUE-ClozeTest": 0.0,
+    "SuperGLUE-Entailment": 0.833,
+    "SuperGLUE-QA": 0.714,
+    "SuperGLUE-RC": 0.333,
+    "SuperGLUE-Wic": 0.7,
+    "SuperGLUE-Wsc": 1.0,
+    "WMT19-cs-en": 0.405,
+    "WMT19-de-en": 0.757,
+    "WMT19-fi-en": 0.328,
+    "WMT19-gu-en": 0.6,
+    "WMT19-kk-en": 0.228,
+    "WMT19-lt-en": 0.255,
+    "WMT19-ru-en": 0.893,
+    "WMT19-zh-en": 0.656
+  },
+  "results": [
+    {
+      "gi": "ArcMMLU_12",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7765e-05
+    },
+    {
+      "gi": "ArcMMLU_182",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3942e-05
+    },
+    {
+      "gi": "ArcMMLU_191",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.3942e-05
+    },
+    {
+      "gi": "ArcMMLU_123",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1515999999999998e-05
+    },
+    {
+      "gi": "ArcMMLU_16",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7259000000000002e-05
+    },
+    {
+      "gi": "ArcMMLU_115",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5049e-05
+    },
+    {
+      "gi": "ArcMMLU_173",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5639e-05
+    },
+    {
+      "gi": "ArcMMLU_358",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1687000000000002e-05
+    },
+    {
+      "gi": "ArcMMLU_364",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4323e-05
+    },
+    {
+      "gi": "ArcMMLU_293",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4167999999999999e-05
+    },
+    {
+      "gi": "ArcMMLU_378",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.3641999999999999e-05
+    },
+    {
+      "gi": "ArcMMLU_366",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5061999999999999e-05
+    },
+    {
+      "gi": "ArcMMLU_349",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5129999999999999e-05
+    },
+    {
+      "gi": "ArcMMLU_230",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1241999999999998e-05
+    },
+    {
+      "gi": "ArcMMLU_395",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5782e-05
+    },
+    {
+      "gi": "ArcMMLU_443",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2971e-05
+    },
+    {
+      "gi": "ArcMMLU_468",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1360000000000005e-05
+    },
+    {
+      "gi": "ArcMMLU_493",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7163e-05
+    },
+    {
+      "gi": "ArcMMLU_393",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5878e-05
+    },
+    {
+      "gi": "ArcMMLU_538",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3897000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_496",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6698000000000002e-05
+    },
+    {
+      "gi": "ArcMMLU_555",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.3794e-05
+    },
+    {
+      "gi": "ArcMMLU_611",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3809999999999998e-05
+    },
+    {
+      "gi": "ArcMMLU_632",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.351e-05
+    },
+    {
+      "gi": "ArcMMLU_631",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00010430000000000001
+    },
+    {
+      "gi": "ArcMMLU_649",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3009999999999999e-05
+    },
+    {
+      "gi": "ArcMMLU_646",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2042e-05
+    },
+    {
+      "gi": "ArcMMLU_674",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7156e-05
+    },
+    {
+      "gi": "ArcMMLU_636",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.2445e-05
+    },
+    {
+      "gi": "ArcMMLU_676",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.31e-05
+    },
+    {
+      "gi": "AIME_106",
+      "dataset": "AIME",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 9.4781e-05
+    },
+    {
+      "gi": "ArcMMLU_685",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5413e-05
+    },
+    {
+      "gi": "ArcMMLU_659",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5094e-05
+    },
+    {
+      "gi": "ArcMMLU_694",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7378e-05
+    },
+    {
+      "gi": "ArcMMLU_702",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1187e-05
+    },
+    {
+      "gi": "ArcMMLU_689",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4297e-05
+    },
+    {
+      "gi": "ArcMMLU_65",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8405e-05
+    },
+    {
+      "gi": "AsDiv_1165",
+      "dataset": "AsDiv",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.9256e-05
+    },
+    {
+      "gi": "AsDiv_1835",
+      "dataset": "AsDiv",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4029e-05
+    },
+    {
+      "gi": "ArcMMLU_98",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3878e-05
+    },
+    {
+      "gi": "AsDiv_472",
+      "dataset": "AsDiv",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5975000000000002e-05
+    },
+    {
+      "gi": "AsDiv_733",
+      "dataset": "AsDiv",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1758e-05
+    },
+    {
+      "gi": "AsDiv_1347",
+      "dataset": "AsDiv",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.8752e-05
+    },
+    {
+      "gi": "AsDiv_1044",
+      "dataset": "AsDiv",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.9552999999999997e-05
+    },
+    {
+      "gi": "ArcMMLU_713",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2655e-05
+    },
+    {
+      "gi": "ArcMMLU_729",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6184e-05
+    },
+    {
+      "gi": "AsDiv_843",
+      "dataset": "AsDiv",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2795e-05
+    },
+    {
+      "gi": "ChessInstruct_0",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1167999999999998e-05
+    },
+    {
+      "gi": "AIME_58",
+      "dataset": "AIME",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0010889200000000002
+    },
+    {
+      "gi": "ChessInstruct_36",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.652099999999998e-05
+    },
+    {
+      "gi": "ChessInstruct_5",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00015079400000000002
+    },
+    {
+      "gi": "ChessInstruct_71",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 6.4865e-05
+    },
+    {
+      "gi": "ChessInstruct_58",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.685799999999999e-05
+    },
+    {
+      "gi": "Ethics_commonsense_0",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0702999999999999e-05
+    },
+    {
+      "gi": "ChessInstruct_102",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0014994000000000001
+    },
+    {
+      "gi": "Ethics_commonsense_28",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2087e-05
+    },
+    {
+      "gi": "Ethics_commonsense_13",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3060999999999999e-05
+    },
+    {
+      "gi": "Ethics_commonsense_51",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0935e-05
+    },
+    {
+      "gi": "ChessInstruct_107",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0013692
+    },
+    {
+      "gi": "Ethics_commonsense_42",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.2200000000000003e-05
+    },
+    {
+      "gi": "AIME_112",
+      "dataset": "AIME",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011367999999999999
+    },
+    {
+      "gi": "Ethics_commonsense_62",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0919e-05
+    },
+    {
+      "gi": "Ethics_commonsense_70",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3786999999999999e-05
+    },
+    {
+      "gi": "ChessInstruct_42",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0013543600000000002
+    },
+    {
+      "gi": "Ethics_commonsense_90",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.4092e-05
+    },
+    {
+      "gi": "Ethics_commonsense_85",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3366e-05
+    },
+    {
+      "gi": "Ethics_commonsense_6",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1632e-05
+    },
+    {
+      "gi": "Ethics_commonsense_99",
+      "dataset": "Ethics_commonsense",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6908e-05
+    },
+    {
+      "gi": "Ethics_deontology_56",
+      "dataset": "Ethics_deontology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5717e-05
+    },
+    {
+      "gi": "Ethics_deontology_31",
+      "dataset": "Ethics_deontology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6074999999999998e-05
+    },
+    {
+      "gi": "Ethics_deontology_0",
+      "dataset": "Ethics_deontology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7024e-05
+    },
+    {
+      "gi": "Ethics_justice_1",
+      "dataset": "Ethics_justice",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.2526e-05
+    },
+    {
+      "gi": "ChessInstruct_84",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00014140000000000002
+    },
+    {
+      "gi": "Ethics_justice_76",
+      "dataset": "Ethics_justice",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.2142e-05
+    },
+    {
+      "gi": "Ethics_virtue_14",
+      "dataset": "Ethics_virtue",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2526e-05
+    },
+    {
+      "gi": "Ethics_justice_84",
+      "dataset": "Ethics_justice",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.1718999999999999e-05
+    },
+    {
+      "gi": "Ethics_justice_45",
+      "dataset": "Ethics_justice",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.0861e-05
+    },
+    {
+      "gi": "Ethics_virtue_51",
+      "dataset": "Ethics_virtue",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3136e-05
+    },
+    {
+      "gi": "Ethics_virtue_30",
+      "dataset": "Ethics_virtue",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4397e-05
+    },
+    {
+      "gi": "Ethics_virtue_48",
+      "dataset": "Ethics_virtue",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2367999999999999e-05
+    },
+    {
+      "gi": "FinQA_149",
+      "dataset": "FinQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 9.839099999999999e-05
+    },
+    {
+      "gi": "ChessInstruct_49",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00132048
+    },
+    {
+      "gi": "Ethics_deontology_32",
+      "dataset": "Ethics_deontology",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00034271999999999997
+    },
+    {
+      "gi": "FinQA_172",
+      "dataset": "FinQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 6.6937e-05
+    },
+    {
+      "gi": "FinQA_56",
+      "dataset": "FinQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.9593e-05
+    },
+    {
+      "gi": "FinQA_60",
+      "dataset": "FinQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00011155599999999999
+    },
+    {
+      "gi": "GSM8K_174",
+      "dataset": "GSM8K",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1483e-05
+    },
+    {
+      "gi": "GSM8K_43",
+      "dataset": "GSM8K",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9685000000000002e-05
+    },
+    {
+      "gi": "Ethics_virtue_26",
+      "dataset": "Ethics_virtue",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1884e-05
+    },
+    {
+      "gi": "FinQA_273",
+      "dataset": "FinQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.673899999999999e-05
+    },
+    {
+      "gi": "GeoBench_1093",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8012e-05
+    },
+    {
+      "gi": "GeoBench_1094",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6394999999999998e-05
+    },
+    {
+      "gi": "GeoBench_1018",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.9376e-05
+    },
+    {
+      "gi": "GeoBench_1113",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5046e-05
+    },
+    {
+      "gi": "GeoBench_1102",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5259e-05
+    },
+    {
+      "gi": "GeoBench_1002",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8840999999999998e-05
+    },
+    {
+      "gi": "GeoBench_124",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5416999999999998e-05
+    },
+    {
+      "gi": "GeoBench_1379",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5872e-05
+    },
+    {
+      "gi": "GeoBench_1123",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00021952
+    },
+    {
+      "gi": "GeoBench_199",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4238999999999999e-05
+    },
+    {
+      "gi": "GeoBench_1243",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.7004e-05
+    },
+    {
+      "gi": "FinQA_255",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00143892
+    },
+    {
+      "gi": "GeoBench_220",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3451999999999998e-05
+    },
+    {
+      "gi": "GeoBench_308",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.271e-05
+    },
+    {
+      "gi": "GeoBench_368",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5175000000000001e-05
+    },
+    {
+      "gi": "GeoBench_289",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3768000000000001e-05
+    },
+    {
+      "gi": "GeoBench_390",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3397e-05
+    },
+    {
+      "gi": "GeoBench_502",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3451999999999998e-05
+    },
+    {
+      "gi": "GeoBench_378",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3168e-05
+    },
+    {
+      "gi": "GeoBench_526",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7123e-05
+    },
+    {
+      "gi": "GeoBench_571",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4309999999999999e-05
+    },
+    {
+      "gi": "GeoBench_604",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7097999999999998e-05
+    },
+    {
+      "gi": "GeoBench_30",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7427e-05
+    },
+    {
+      "gi": "GeoBench_689",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7024e-05
+    },
+    {
+      "gi": "ChessInstruct_148",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0012703600000000001
+    },
+    {
+      "gi": "GeoBench_87",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2881000000000001e-05
+    },
+    {
+      "gi": "GeoBench_864",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7052999999999997e-05
+    },
+    {
+      "gi": "GeoBench_915",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2981e-05
+    },
+    {
+      "gi": "GeoGraphyData_100k_27",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.1928000000000002e-05
+    },
+    {
+      "gi": "GeoBench_968",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4975000000000001e-05
+    },
+    {
+      "gi": "GeoGraphyData_100k_42",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.599e-06
+    },
+    {
+      "gi": "GeoGraphyData_100k_28",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.741e-06
+    },
+    {
+      "gi": "GeoBench_944",
+      "dataset": "GeoBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6872e-05
+    },
+    {
+      "gi": "GeoGraphyData_100k_48",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.157e-06
+    },
+    {
+      "gi": "Ethics_deontology_2",
+      "dataset": "Ethics_deontology",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0010250799999999998
+    },
+    {
+      "gi": "GeoBench_766",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00071638
+    },
+    {
+      "gi": "LiveCodeBench_105",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.6852e-05
+    },
+    {
+      "gi": "GeoBench_591",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00021602000000000004
+    },
+    {
+      "gi": "LiveCodeBench_136",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.9845e-05
+    },
+    {
+      "gi": "LiveCodeBench_14",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.1577e-05
+    },
+    {
+      "gi": "LiveCodeBench_131",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00115724
+    },
+    {
+      "gi": "LiveCodeBench_118",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 7.923599999999998e-05
+    },
+    {
+      "gi": "LiveCodeBench_16",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 5.9134e-05
+    },
+    {
+      "gi": "LiveCodeBench_149",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.7302e-05
+    },
+    {
+      "gi": "LiveCodeBench_181",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.532599999999999e-05
+    },
+    {
+      "gi": "LiveCodeBench_183",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.8870999999999994e-05
+    },
+    {
+      "gi": "ChessInstruct_144",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0036225
+    },
+    {
+      "gi": "LiveCodeBench_271",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 5.206e-05
+    },
+    {
+      "gi": "LiveCodeBench_114",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00118552
+    },
+    {
+      "gi": "LiveCodeBench_18",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.5574e-05
+    },
+    {
+      "gi": "LiveCodeBench_317",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.0495000000000004e-05
+    },
+    {
+      "gi": "LiveCodeBench_211",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00014163900000000002
+    },
+    {
+      "gi": "LiveCodeBench_277",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00033025999999999997
+    },
+    {
+      "gi": "LiveCodeBench_137",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011732000000000001
+    },
+    {
+      "gi": "LiveCodeBench_34",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00061614
+    },
+    {
+      "gi": "LiveCodeBench_237",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00120232
+    },
+    {
+      "gi": "ChessInstruct_145",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0012754
+    },
+    {
+      "gi": "LiveCodeBench_390",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.9094e-05
+    },
+    {
+      "gi": "LiveCodeBench_350",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00016059800000000002
+    },
+    {
+      "gi": "LiveCodeBench_431",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.6024e-05
+    },
+    {
+      "gi": "LiveCodeBench_386",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0013048
+    },
+    {
+      "gi": "LiveCodeBench_177",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.669e-05
+    },
+    {
+      "gi": "LiveCodeBench_476",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.8820000000000002e-05
+    },
+    {
+      "gi": "LiveCodeBench_49",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 5.436199999999999e-05
+    },
+    {
+      "gi": "LiveCodeBench_344",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0012488
+    },
+    {
+      "gi": "LiveCodeBench_499",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.4590000000000005e-05
+    },
+    {
+      "gi": "FinQA_208",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00127568
+    },
+    {
+      "gi": "LiveCodeBench_43",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011578
+    },
+    {
+      "gi": "LiveCodeBench_84",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.1519e-05
+    },
+    {
+      "gi": "LiveCodeBench_64",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.5904e-05
+    },
+    {
+      "gi": "LiveCodeBench_169",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00287728
+    },
+    {
+      "gi": "MATH_108",
+      "dataset": "MATH",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.876e-05
+    },
+    {
+      "gi": "MATH_442",
+      "dataset": "MATH",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0629000000000002e-05
+    },
+    {
+      "gi": "MATH_479",
+      "dataset": "MATH",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9620000000000002e-05
+    },
+    {
+      "gi": "LiveCodeBench_491",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00118496
+    },
+    {
+      "gi": "MATH_53",
+      "dataset": "MATH",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8471e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2808",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4927e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2792",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7038e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2934",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8979999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2822",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00022288000000000003
+    },
+    {
+      "gi": "MATH_150",
+      "dataset": "MATH",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.6184e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2912",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.197899999999999e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2958",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8731e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2941",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8276e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2980",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00010234
+    },
+    {
+      "gi": "MMLUPro_biology_3188",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.019e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2985",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.2043e-05
+    },
+    {
+      "gi": "LiveCodeBench_6",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0012527200000000001
+    },
+    {
+      "gi": "MMLUPro_biology_3225",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3077999999999999e-05
+    },
+    {
+      "gi": "MMLUPro_biology_3215",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.5363e-05
+    },
+    {
+      "gi": "MMLUPro_business_126",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1531999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_business_294",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4281e-05
+    },
+    {
+      "gi": "MMLUPro_business_226",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.593299999999999e-05
+    },
+    {
+      "gi": "MMLUPro_biology_3310",
+      "dataset": "MMLUPro_biology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.6402e-05
+    },
+    {
+      "gi": "MMLUPro_business_430",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8557e-05
+    },
+    {
+      "gi": "MMLUPro_business_382",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3856e-05
+    },
+    {
+      "gi": "MMLUPro_business_378",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.8225999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_business_516",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6403999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_business_6",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8347e-05
+    },
+    {
+      "gi": "MMLUPro_business_445",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.9403999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_business_507",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.7556e-05
+    },
+    {
+      "gi": "MMLUPro_business_742",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3239e-05
+    },
+    {
+      "gi": "MMLUPro_business_614",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.2160999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_business_503",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.9585000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_business_784",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6473e-05
+    },
+    {
+      "gi": "MMLUPro_business_616",
+      "dataset": "MMLUPro_business",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.5479e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_3974",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2845e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_3356",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9166e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_3796",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8463000000000003e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_3837",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.1355999999999994e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_4407",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7870999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_4187",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.9022999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_4354",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3273e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_4067",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.7903999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9075",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8634e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9114",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2968e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9086",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7321e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9110",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.0573e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9149",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3151999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9195",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9735e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9125",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.282e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9136",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.077e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9138",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2180999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9222",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4495000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9257",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7619999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9200",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.5813e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9236",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9195000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9212",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.9076e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9260",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4169000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9239",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.9528e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9289",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6935e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9315",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8637e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9330",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3061999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9285",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.7723e-05
+    },
+    {
+      "gi": "LiveCodeBench_473",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00340508
+    },
+    {
+      "gi": "MMLUPro_computer science_9325",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00045682000000000003
+    },
+    {
+      "gi": "MMLUPro_computer science_9394",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2732e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9264",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.8093e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9376",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0220999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9414",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0448999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9380",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8842e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9404",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8931e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9362",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.9171999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9430",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5527e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9426",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0240999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9437",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1363e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9452",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8621e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9456",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6107999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5765",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8768e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5661",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6033e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9475",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.0002191
+    },
+    {
+      "gi": "MMLUPro_economics_5769",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.5115e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5888",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.4634e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5907",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7463000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5931",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8498999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5949",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0781e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5951",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6201999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5965",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5853e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6122",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.9664999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9283",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011510799999999999
+    },
+    {
+      "gi": "MMLUPro_economics_6056",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.0144999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6135",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00010248000000000001
+    },
+    {
+      "gi": "MMLUPro_economics_6224",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1457999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9471",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00026208
+    },
+    {
+      "gi": "MMLUPro_economics_6251",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1429e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6353",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0399999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6114",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.3148e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6325",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.434000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10074",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.1549e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10076",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8241999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10125",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0334e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10199",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.7624e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10195",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 8.969499999999999e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10237",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.4462e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10179",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.0750999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10292",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3878e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10309",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.8515999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10342",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.0005745600000000001
+    },
+    {
+      "gi": "MMLUPro_engineering_10347",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.0536e-05
+    },
+    {
+      "gi": "LiveCodeBench_355",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00577514
+    },
+    {
+      "gi": "MMLUPro_engineering_10431",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6737000000000003e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10395",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.9018e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10428",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.2974000000000005e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10432",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8086e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10298",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 8.0747e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10473",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7137e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10372",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011312
+    },
+    {
+      "gi": "MMLUPro_engineering_10560",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2806999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10818",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.453e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10823",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8063e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10542",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00044492000000000007
+    },
+    {
+      "gi": "MMLUPro_engineering_10537",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00014489100000000002
+    },
+    {
+      "gi": "MMLUPro_engineering_10701",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.147799999999999e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10103",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00125468
+    },
+    {
+      "gi": "MMLUPro_engineering_10886",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 9.915999999999998e-06
+    },
+    {
+      "gi": "MMLUPro_health_4923",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1027e-05
+    },
+    {
+      "gi": "MMLUPro_health_4973",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 6.482e-05
+    },
+    {
+      "gi": "MMLUPro_health_4864",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.0003332
+    },
+    {
+      "gi": "MMLUPro_health_4885",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.2572000000000006e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10897",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.2366999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_health_4990",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5229999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_health_5064",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3403999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_health_5144",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.8783e-05
+    },
+    {
+      "gi": "MMLUPro_health_5152",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8321e-05
+    },
+    {
+      "gi": "MMLUPro_health_5093",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.8449999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_health_5116",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.1190999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_health_5215",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8086e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9415",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0028138599999999996
+    },
+    {
+      "gi": "MMLUPro_health_5182",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.7723e-05
+    },
+    {
+      "gi": "MMLUPro_health_5214",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.7398e-05
+    },
+    {
+      "gi": "MMLUPro_health_5261",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3585000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_health_5472",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2139e-05
+    },
+    {
+      "gi": "MMLUPro_health_5338",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.5606000000000004e-05
+    },
+    {
+      "gi": "MMLUPro_health_5203",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.0002e-05
+    },
+    {
+      "gi": "MMLUPro_health_5473",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6601999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_history_4480",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9828e-05
+    },
+    {
+      "gi": "MMLUPro_health_5514",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.1975e-05
+    },
+    {
+      "gi": "MMLUPro_health_5224",
+      "dataset": "MMLUPro_health",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1964e-05
+    },
+    {
+      "gi": "MMLUPro_history_4490",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.2959999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_history_4486",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.202199999999999e-05
+    },
+    {
+      "gi": "MMLUPro_history_4498",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.9070999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_history_4510",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2843e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10864",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 5.6145e-05
+    },
+    {
+      "gi": "MMLUPro_history_4502",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7705999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_history_4509",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8387e-05
+    },
+    {
+      "gi": "MMLUPro_history_4497",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.3327999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_history_4517",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.9439e-05
+    },
+    {
+      "gi": "MMLUPro_history_4572",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.4544e-05
+    },
+    {
+      "gi": "MMLUPro_history_4581",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8098e-05
+    },
+    {
+      "gi": "MMLUPro_history_4573",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.9985e-05
+    },
+    {
+      "gi": "MMLUPro_history_4629",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.929599999999999e-05
+    },
+    {
+      "gi": "MMLUPro_history_4645",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.782899999999999e-05
+    },
+    {
+      "gi": "MMLUPro_history_4605",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3505e-05
+    },
+    {
+      "gi": "MMLUPro_history_4523",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 7.112000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_history_4638",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0214999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_history_4749",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00013874000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4717",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.7455e-05
+    },
+    {
+      "gi": "MMLUPro_history_4654",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.1071999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_history_4752",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.8873e-05
+    },
+    {
+      "gi": "MMLUPro_history_4743",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3592e-05
+    },
+    {
+      "gi": "MMLUPro_history_4582",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3842e-05
+    },
+    {
+      "gi": "MMLUPro_history_4790",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.9206999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_history_4774",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.5366999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_history_4816",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.2415999999999994e-05
+    },
+    {
+      "gi": "MMLUPro_history_4753",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.9827e-05
+    },
+    {
+      "gi": "MMLUPro_history_4810",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.5007999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_history_4833",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00010262
+    },
+    {
+      "gi": "LiveCodeBench_437",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0075264
+    },
+    {
+      "gi": "MMLUPro_history_4844",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.6577e-05
+    },
+    {
+      "gi": "MMLUPro_history_4836",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.7559999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_history_4841",
+      "dataset": "MMLUPro_history",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.6097000000000004e-05
+    },
+    {
+      "gi": "MMLUPro_law_1265",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.493e-05
+    },
+    {
+      "gi": "MMLUPro_law_1242",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.4040000000000004e-05
+    },
+    {
+      "gi": "MMLUPro_law_1031",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.953e-05
+    },
+    {
+      "gi": "MMLUPro_law_1370",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.9735e-05
+    },
+    {
+      "gi": "MMLUPro_law_1386",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.952e-05
+    },
+    {
+      "gi": "MMLUPro_law_1530",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3929e-05
+    },
+    {
+      "gi": "MMLUPro_law_1462",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.4271000000000004e-05
+    },
+    {
+      "gi": "MMLUPro_law_1805",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.3998e-05
+    },
+    {
+      "gi": "MMLUPro_history_4819",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00061124
+    },
+    {
+      "gi": "MMLUPro_law_806",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.36e-05
+    },
+    {
+      "gi": "MMLUPro_law_1818",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.2878e-05
+    },
+    {
+      "gi": "MMLUPro_law_858",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.4531e-05
+    },
+    {
+      "gi": "MMLUPro_health_5453",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00110628
+    },
+    {
+      "gi": "MMLUPro_law_861",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3069e-05
+    },
+    {
+      "gi": "MMLUPro_law_899",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.5442e-05
+    },
+    {
+      "gi": "MMLUPro_math_6429",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.5696999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_math_6526",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9024999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_math_6623",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.5631e-05
+    },
+    {
+      "gi": "MMLUPro_law_1484",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.641999999999999e-05
+    },
+    {
+      "gi": "MMLUPro_math_6848",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2332999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_math_7173",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3205e-05
+    },
+    {
+      "gi": "MMLUPro_math_6947",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.5570999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_math_7221",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.8399e-05
+    },
+    {
+      "gi": "MMLUPro_math_6607",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00110292
+    },
+    {
+      "gi": "MMLUPro_math_7284",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1555e-05
+    },
+    {
+      "gi": "MMLUPro_math_7306",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.256e-05
+    },
+    {
+      "gi": "MMLUPro_math_7101",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.6686e-05
+    },
+    {
+      "gi": "MMLUPro_math_7249",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3073999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_math_7649",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6314e-05
+    },
+    {
+      "gi": "MMLUPro_math_7422",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7363e-05
+    },
+    {
+      "gi": "MMLUPro_law_1007",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011508
+    },
+    {
+      "gi": "MMLUPro_math_7758",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6031999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9536",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.806e-05
+    },
+    {
+      "gi": "MMLUPro_math_7451",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 5.334e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9672",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7014e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9663",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2329e-05
+    },
+    {
+      "gi": "MMLUPro_physics_7773",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2994e-05
+    },
+    {
+      "gi": "MMLUPro_math_7577",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.9456999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9943",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00010892000000000001
+    },
+    {
+      "gi": "MMLUPro_math_7462",
+      "dataset": "MMLUPro_math",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.4662999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_physics_7893",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.202e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8316",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0257e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8888",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3509999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8719",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.310299999999999e-05
+    },
+    {
+      "gi": "MMLUPro_physics_9017",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1474999999999997e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8466",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.6185e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9510",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5849e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_1858",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6826999999999997e-05
+    },
+    {
+      "gi": "LiveCodeBench_485",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00864752
+    },
+    {
+      "gi": "MMLUPro_psychology_1904",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9484e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2084",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9968e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2133",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8040999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2099",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1426e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2005",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00017598
+    },
+    {
+      "gi": "MMLUPro_physics_8624",
+      "dataset": "MMLUPro_physics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.8948999999999995e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2186",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7089e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2420",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4375e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2406",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.062e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2220",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00021616000000000002
+    },
+    {
+      "gi": "MMLUPro_psychology_2329",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6786e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2450",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2236e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2457",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6267e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2524",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8095e-05
+    },
+    {
+      "gi": "MMLUPro_law_1518",
+      "dataset": "MMLUPro_law",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.593e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2497",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0331999999999998e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2029",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1645999999999995e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_105",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5581e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_116",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5332999999999997e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_32",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6153e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_7",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8866999999999997e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_29",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2695999999999998e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_16",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6072e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_70",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7005999999999995e-05
+    },
+    {
+      "gi": "MMLU_management_32",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3981e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_63",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5196999999999999e-05
+    },
+    {
+      "gi": "MMLU_management_4",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8568e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_121",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.939e-05
+    },
+    {
+      "gi": "MMLU_management_41",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1497e-05
+    },
+    {
+      "gi": "MMLU_management_90",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4006999999999998e-05
+    },
+    {
+      "gi": "MMLU_management_80",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5714e-05
+    },
+    {
+      "gi": "MMLU_management_91",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2125999999999999e-05
+    },
+    {
+      "gi": "MMLU_management_93",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4254999999999998e-05
+    },
+    {
+      "gi": "MathQA_1215",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7475e-05
+    },
+    {
+      "gi": "MMLU_management_77",
+      "dataset": "MMLU_management",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.23e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_85",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0198e-05
+    },
+    {
+      "gi": "MathQA_1619",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0626999999999997e-05
+    },
+    {
+      "gi": "MathQA_158",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9872e-05
+    },
+    {
+      "gi": "MathQA_2851",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4888e-05
+    },
+    {
+      "gi": "MathQA_202",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00051646
+    },
+    {
+      "gi": "MathQA_348",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3082e-05
+    },
+    {
+      "gi": "MathQA_436",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8346999999999998e-05
+    },
+    {
+      "gi": "MathQA_2092",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.4582e-05
+    },
+    {
+      "gi": "MathQA_827",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1896999999999998e-05
+    },
+    {
+      "gi": "MathQA_84",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3219999999999999e-05
+    },
+    {
+      "gi": "MathQA_1742",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1927999999999997e-05
+    },
+    {
+      "gi": "MathQA_782",
+      "dataset": "MathQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8796e-05
+    },
+    {
+      "gi": "MedMCQA_1005",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7454999999999998e-05
+    },
+    {
+      "gi": "MedMCQA_1227",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.5323e-05
+    },
+    {
+      "gi": "MedMCQA_1298",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4867999999999999e-05
+    },
+    {
+      "gi": "MedMCQA_1054",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6694e-05
+    },
+    {
+      "gi": "MedMCQA_1201",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.511e-05
+    },
+    {
+      "gi": "MedMCQA_1494",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4454999999999998e-05
+    },
+    {
+      "gi": "MedMCQA_145",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6794000000000002e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_103",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0010892
+    },
+    {
+      "gi": "MedMCQA_1362",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2428999999999999e-05
+    },
+    {
+      "gi": "MedMCQA_1309",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.7061999999999997e-05
+    },
+    {
+      "gi": "MedMCQA_2010",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2771e-05
+    },
+    {
+      "gi": "MedMCQA_1697",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8253e-05
+    },
+    {
+      "gi": "MedMCQA_1822",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.504e-05
+    },
+    {
+      "gi": "MedMCQA_2072",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00011032
+    },
+    {
+      "gi": "MedMCQA_1816",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00019432000000000002
+    },
+    {
+      "gi": "MedMCQA_2346",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4410000000000001e-05
+    },
+    {
+      "gi": "MedMCQA_2323",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6788e-05
+    },
+    {
+      "gi": "MedMCQA_2546",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00010878000000000001
+    },
+    {
+      "gi": "MedMCQA_2581",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1145e-05
+    },
+    {
+      "gi": "MedMCQA_2366",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.831e-05
+    },
+    {
+      "gi": "MedMCQA_326",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.451e-05
+    },
+    {
+      "gi": "MedMCQA_2727",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5971e-05
+    },
+    {
+      "gi": "MedMCQA_419",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3954999999999998e-05
+    },
+    {
+      "gi": "MathQA_630",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00047040000000000005
+    },
+    {
+      "gi": "MathQA_1606",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 9.520000000000002e-05
+    },
+    {
+      "gi": "MedMCQA_59",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.5123e-05
+    },
+    {
+      "gi": "MedMCQA_643",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.6732999999999997e-05
+    },
+    {
+      "gi": "MedMCQA_793",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.6146e-05
+    },
+    {
+      "gi": "MedMCQA_511",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9201e-05
+    },
+    {
+      "gi": "MedMCQA_853",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6865000000000002e-05
+    },
+    {
+      "gi": "MedMCQA_433",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5549e-05
+    },
+    {
+      "gi": "MedMCQA_985",
+      "dataset": "MedMCQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7846e-05
+    },
+    {
+      "gi": "MusicTheoryBench_147",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.3939e-05
+    },
+    {
+      "gi": "MusicTheoryBench_188",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3904e-05
+    },
+    {
+      "gi": "MusicTheoryBench_14",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.502e-05
+    },
+    {
+      "gi": "MusicTheoryBench_189",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.4086e-05
+    },
+    {
+      "gi": "MusicTheoryBench_152",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.6720999999999997e-05
+    },
+    {
+      "gi": "MusicTheoryBench_126",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00108416
+    },
+    {
+      "gi": "MusicTheoryBench_240",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5584e-05
+    },
+    {
+      "gi": "MMLUPro_physics_7887",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.0042301000000000005
+    },
+    {
+      "gi": "MusicTheoryBench_248",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3838999999999999e-05
+    },
+    {
+      "gi": "MusicTheoryBench_286",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.6985e-05
+    },
+    {
+      "gi": "MusicTheoryBench_320",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.1685000000000003e-05
+    },
+    {
+      "gi": "MusicTheoryBench_215",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00027594
+    },
+    {
+      "gi": "MusicTheoryBench_33",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4381e-05
+    },
+    {
+      "gi": "MusicTheoryBench_119",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9292e-05
+    },
+    {
+      "gi": "MusicTheoryBench_98",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5814e-05
+    },
+    {
+      "gi": "MusicTheoryBench_324",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.4293999999999998e-05
+    },
+    {
+      "gi": "MusicTheoryBench_70",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6905e-05
+    },
+    {
+      "gi": "NarrativeQA_10085",
+      "dataset": "NarrativeQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.875,
+      "cost": 3.9537e-05
+    },
+    {
+      "gi": "NarrativeQA_131",
+      "dataset": "NarrativeQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.875,
+      "cost": 3.631999999999999e-05
+    },
+    {
+      "gi": "NarrativeQA_1683",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00011018000000000002
+    },
+    {
+      "gi": "NarrativeQA_2474",
+      "dataset": "NarrativeQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.7,
+      "cost": 3.4992999999999995e-05
+    },
+    {
+      "gi": "MusicTheoryBench_208",
+      "dataset": "MusicTheoryBench",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.4427e-05
+    },
+    {
+      "gi": "NarrativeQA_286",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.5833333333333334,
+      "cost": 0.00044380000000000005
+    },
+    {
+      "gi": "NarrativeQA_1766",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.36904761904761907,
+      "cost": 0.00039774
+    },
+    {
+      "gi": "LiveCodeBench_405",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.012157600000000001
+    },
+    {
+      "gi": "NarrativeQA_3933",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.7000000000000001,
+      "cost": 0.00021686
+    },
+    {
+      "gi": "NarrativeQA_4128",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.20588235294117646,
+      "cost": 0.0003346
+    },
+    {
+      "gi": "NarrativeQA_3282",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.21428571428571427,
+      "cost": 0.00041566000000000004
+    },
+    {
+      "gi": "NarrativeQA_4347",
+      "dataset": "NarrativeQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.6666666666666666,
+      "cost": 6.983199999999999e-05
+    },
+    {
+      "gi": "MusicTheoryBench_340",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0010777200000000001
+    },
+    {
+      "gi": "NarrativeQA_4540",
+      "dataset": "NarrativeQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.875,
+      "cost": 6.7101e-05
+    },
+    {
+      "gi": "NarrativeQA_2820",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.4375,
+      "cost": 0.00051352
+    },
+    {
+      "gi": "NarrativeQA_4722",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.9046153846153845,
+      "cost": 0.00033166
+    },
+    {
+      "gi": "NarrativeQA_5323",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.0001218
+    },
+    {
+      "gi": "NarrativeQA_4102",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.07469512195121951,
+      "cost": 0.0003724
+    },
+    {
+      "gi": "NarrativeQA_5022",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.8095238095238094,
+      "cost": 0.00035182000000000003
+    },
+    {
+      "gi": "NarrativeQA_6070",
+      "dataset": "NarrativeQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.8166666666666667,
+      "cost": 8.567399999999999e-05
+    },
+    {
+      "gi": "NarrativeQA_4708",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.2,
+      "cost": 0.0002653
+    },
+    {
+      "gi": "NarrativeQA_6786",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 6.552000000000001e-05
+    },
+    {
+      "gi": "NarrativeQA_5894",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.3333333333333333,
+      "cost": 0.00041244000000000003
+    },
+    {
+      "gi": "NarrativeQA_533",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.11764705882352942,
+      "cost": 0.00033572
+    },
+    {
+      "gi": "NarrativeQA_5259",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.3365384615384615,
+      "cost": 0.0008005200000000001
+    },
+    {
+      "gi": "NarrativeQA_6829",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.35000000000000003,
+      "cost": 0.00016324000000000004
+    },
+    {
+      "gi": "NarrativeQA_6248",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.20535714285714285,
+      "cost": 0.00043582000000000007
+    },
+    {
+      "gi": "NarrativeQA_6523",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.96875,
+      "cost": 0.00039690000000000005
+    },
+    {
+      "gi": "MusicTheoryBench_254",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011087999999999998
+    },
+    {
+      "gi": "NarrativeQA_7447",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.775,
+      "cost": 0.00027034000000000004
+    },
+    {
+      "gi": "NarrativeQA_7107",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.6666666666666666,
+      "cost": 0.00030478
+    },
+    {
+      "gi": "NarrativeQA_6978",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.5185185185185184,
+      "cost": 0.00046858
+    },
+    {
+      "gi": "NarrativeQA_6875",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.7083333333333333,
+      "cost": 0.0007873600000000001
+    },
+    {
+      "gi": "NarrativeQA_7670",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.2672413793103448,
+      "cost": 0.00019810000000000002
+    },
+    {
+      "gi": "NarrativeQA_7678",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.8151260504201682,
+      "cost": 0.00025186
+    },
+    {
+      "gi": "NarrativeQA_7594",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.1796875,
+      "cost": 0.00026838
+    },
+    {
+      "gi": "NarrativeQA_9378",
+      "dataset": "NarrativeQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 6.719e-05
+    },
+    {
+      "gi": "NarrativeQA_8215",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00010668000000000002
+    },
+    {
+      "gi": "NarrativeQA_7964",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.2484848484848485,
+      "cost": 0.00033866
+    },
+    {
+      "gi": "OpenTDB_Animals_2545",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4968e-05
+    },
+    {
+      "gi": "OpenTDB_Animals_262",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2873999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Animals_1199",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5439e-05
+    },
+    {
+      "gi": "OpenTDB_Art_1429",
+      "dataset": "OpenTDB_Art",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4355e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3577",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.442e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1456",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0828999999999999e-05
+    },
+    {
+      "gi": "NarrativeQA_927",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.21025641025641026,
+      "cost": 0.00037645999999999996
+    },
+    {
+      "gi": "NarrativeQA_9563",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00033558000000000004
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3896",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2229e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1078",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2496999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3968",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1574e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_4085",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.5580000000000007e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1580",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3006999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1100",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3719999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2879",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1241999999999998e-05
+    },
+    {
+      "gi": "NarrativeQA_8269",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.2419753086419753,
+      "cost": 0.00056014
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2835",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2812999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_3779",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3697e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_219",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_30",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3864999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2995",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4913000000000001e-05
+    },
+    {
+      "gi": "NarrativeQA_8598",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.98,
+      "cost": 0.00048776
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3106",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3052e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3886",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3552e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3056",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3326e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_1019",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.34e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Cartoon & Animations_1700",
+      "dataset": "OpenTDB_Entertainment: Cartoon & Animations",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3454999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Comics_1888",
+      "dataset": "OpenTDB_Entertainment: Comics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4038999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_3026",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3783999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1983",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2026e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Musicals & Theatres_3818",
+      "dataset": "OpenTDB_Entertainment: Musicals & Theatres",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0250999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1244",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3128999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Music_1103",
+      "dataset": "OpenTDB_Entertainment: Music",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4312999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_4061",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0019999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Television_3479",
+      "dataset": "OpenTDB_Entertainment: Television",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6346e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_1177",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.7948999999999997e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2933",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4312999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_3760",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5649000000000002e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_270",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3657999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1807",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.24e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1957",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1086999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1639",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4109999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_235",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.6826e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1178",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5978000000000002e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_4047",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3713e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3404",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0448e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_2181",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3306",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1703e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3727",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3494e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_4019",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5193999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3461",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4489999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3627",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4223e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_2088",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2615999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_883",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6717e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_1664",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0064e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_836",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0021999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_3207",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2671e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_2346",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2257999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_2099",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4925999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_History_1092",
+      "dataset": "OpenTDB_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4375e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_792",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5297e-05
+    },
+    {
+      "gi": "OpenTDB_History_1162",
+      "dataset": "OpenTDB_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6309999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_History_3902",
+      "dataset": "OpenTDB_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0945000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_History_2026",
+      "dataset": "OpenTDB_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5915999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2238",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00040418
+    },
+    {
+      "gi": "OpenTDB_Geography_3880",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6265e-05
+    },
+    {
+      "gi": "OpenTDB_History_2840",
+      "dataset": "OpenTDB_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3835e-05
+    },
+    {
+      "gi": "OpenTDB_History_3712",
+      "dataset": "OpenTDB_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6697e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1175",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6297e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_3716",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3487e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1560",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3318999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_History_857",
+      "dataset": "OpenTDB_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 9.806e-06
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1306",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6058e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5983999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1015",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4413e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_476",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2406000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1694",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5013999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1863",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2671e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_2942",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4355e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2133",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 9.722e-06
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_87",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3651999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3771e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_638",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4571e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1977",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.6036e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2568",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2013e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3259",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 9.364e-06
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3013",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3771e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2154",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0263999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_297",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 9.521999999999998e-06
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1870",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3384000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Sports_2289",
+      "dataset": "OpenTDB_Sports",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4993999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1530",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9104e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2943",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.878e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2597",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3229e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1419",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0858e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_922",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4626e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3564",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0361000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2519",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4099999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3234",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2457999999999998e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1173",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0622e-05
+    },
+    {
+      "gi": "PubMedQA_0",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.1573e-05
+    },
+    {
+      "gi": "PubMedQA_143",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2491e-05
+    },
+    {
+      "gi": "PubMedQA_19",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.9594999999999996e-05
+    },
+    {
+      "gi": "PubMedQA_154",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.4405e-05
+    },
+    {
+      "gi": "PubMedQA_18",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3676999999999996e-05
+    },
+    {
+      "gi": "PubMedQA_100",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.7751999999999994e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3616",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3634999999999999e-05
+    },
+    {
+      "gi": "PubMedQA_238",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7241e-05
+    },
+    {
+      "gi": "PubMedQA_250",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.6094000000000004e-05
+    },
+    {
+      "gi": "PubMedQA_276",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1576e-05
+    },
+    {
+      "gi": "PubMedQA_404",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1127e-05
+    },
+    {
+      "gi": "PubMedQA_378",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.0183999999999998e-05
+    },
+    {
+      "gi": "PubMedQA_337",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.0727999999999994e-05
+    },
+    {
+      "gi": "PubMedQA_323",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.768e-05
+    },
+    {
+      "gi": "PubMedQA_437",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8232e-05
+    },
+    {
+      "gi": "PubMedQA_457",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.3649e-05
+    },
+    {
+      "gi": "PubMedQA_398",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.8905e-05
+    },
+    {
+      "gi": "PubMedQA_517",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.5181999999999997e-05
+    },
+    {
+      "gi": "PubMedQA_499",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.0193999999999996e-05
+    },
+    {
+      "gi": "PubMedQA_510",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.0153e-05
+    },
+    {
+      "gi": "PubMedQA_575",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.8374e-05
+    },
+    {
+      "gi": "PubMedQA_362",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.2081999999999995e-05
+    },
+    {
+      "gi": "PubMedQA_557",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.897499999999999e-05
+    },
+    {
+      "gi": "PubMedQA_520",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 5.523399999999999e-05
+    },
+    {
+      "gi": "PubMedQA_582",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.8463999999999995e-05
+    },
+    {
+      "gi": "PubMedQA_35",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00029106
+    },
+    {
+      "gi": "MathQA_2102",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0030792999999999997
+    },
+    {
+      "gi": "PubMedQA_588",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7544999999999998e-05
+    },
+    {
+      "gi": "PubMedQA_63",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 4.1683e-05
+    },
+    {
+      "gi": "PubMedQA_610",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.0575e-05
+    },
+    {
+      "gi": "PubMedQA_603",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.4948e-05
+    },
+    {
+      "gi": "PubMedQA_687",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.5467e-05
+    },
+    {
+      "gi": "PubMedQA_643",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1475e-05
+    },
+    {
+      "gi": "PubMedQA_726",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.4863e-05
+    },
+    {
+      "gi": "PubMedQA_694",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2981999999999998e-05
+    },
+    {
+      "gi": "PubMedQA_85",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.3973e-05
+    },
+    {
+      "gi": "PubMedQA_722",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.7183999999999995e-05
+    },
+    {
+      "gi": "PubMedQA_8",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1938999999999994e-05
+    },
+    {
+      "gi": "PubMedQA_73",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.2013999999999995e-05
+    },
+    {
+      "gi": "PubMedQA_720",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.7155e-05
+    },
+    {
+      "gi": "PubMedQA_81",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.7348e-05
+    },
+    {
+      "gi": "PubMedQA_871",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.6842e-05
+    },
+    {
+      "gi": "PubMedQA_905",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.2318e-05
+    },
+    {
+      "gi": "PubMedQA_891",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.9137e-05
+    },
+    {
+      "gi": "PubMedQA_968",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.7599e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_1686",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.6091000000000002e-05
+    },
+    {
+      "gi": "PubMedQA_94",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.6694000000000005e-05
+    },
+    {
+      "gi": "PubMedQA_854",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.3406999999999994e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_828",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2350999999999999e-05
+    },
+    {
+      "gi": "PubMedQA_755",
+      "dataset": "PubMedQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.5053000000000002e-05
+    },
+    {
+      "gi": "QANTA_Geography_1555",
+      "dataset": "QANTA_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1338e-05
+    },
+    {
+      "gi": "QANTA_Geography_1023",
+      "dataset": "QANTA_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.308e-05
+    },
+    {
+      "gi": "QANTA_Geography_1100",
+      "dataset": "QANTA_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1373999999999998e-05
+    },
+    {
+      "gi": "QANTA_Geography_1812",
+      "dataset": "QANTA_Geography",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 7.784e-05
+    },
+    {
+      "gi": "QANTA_Geography_304",
+      "dataset": "QANTA_Geography",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2515999999999998e-05
+    },
+    {
+      "gi": "QANTA_History_1190",
+      "dataset": "QANTA_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0966999999999999e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_865",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00019922
+    },
+    {
+      "gi": "QANTA_History_133",
+      "dataset": "QANTA_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.8091e-05
+    },
+    {
+      "gi": "QANTA_History_404",
+      "dataset": "QANTA_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2231999999999999e-05
+    },
+    {
+      "gi": "QANTA_History_1154",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00023338
+    },
+    {
+      "gi": "QANTA_Fine Arts_1702",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0005303199999999999
+    },
+    {
+      "gi": "QANTA_History_1696",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00023842
+    },
+    {
+      "gi": "QANTA_History_433",
+      "dataset": "QANTA_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1870000000000002e-05
+    },
+    {
+      "gi": "QANTA_History_1084",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0003367
+    },
+    {
+      "gi": "QANTA_History_776",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.08e-05
+    },
+    {
+      "gi": "QANTA_History_612",
+      "dataset": "QANTA_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.2750999999999999e-05
+    },
+    {
+      "gi": "QANTA_Literature_1073",
+      "dataset": "QANTA_Literature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3634999999999999e-05
+    },
+    {
+      "gi": "QANTA_History_926",
+      "dataset": "QANTA_History",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3763999999999999e-05
+    },
+    {
+      "gi": "QANTA_Literature_1239",
+      "dataset": "QANTA_Literature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3545e-05
+    },
+    {
+      "gi": "QANTA_History_473",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.0002121
+    },
+    {
+      "gi": "QANTA_Fine Arts_1548",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00080612
+    },
+    {
+      "gi": "QANTA_Literature_1508",
+      "dataset": "QANTA_Literature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.451e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_1212",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0010808
+    },
+    {
+      "gi": "QANTA_Fine Arts_528",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00107324
+    },
+    {
+      "gi": "QANTA_Literature_1045",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00017878
+    },
+    {
+      "gi": "QANTA_Literature_1326",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0002415
+    },
+    {
+      "gi": "QANTA_Literature_369",
+      "dataset": "QANTA_Literature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5428999999999997e-05
+    },
+    {
+      "gi": "QANTA_Literature_1727",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00038248000000000004
+    },
+    {
+      "gi": "QANTA_Literature_475",
+      "dataset": "QANTA_Literature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2861000000000001e-05
+    },
+    {
+      "gi": "QANTA_Literature_1398",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0006545
+    },
+    {
+      "gi": "QANTA_Literature_386",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00085792
+    },
+    {
+      "gi": "QANTA_Literature_1653",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00043665999999999996
+    },
+    {
+      "gi": "QANTA_Literature_1735",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.0005464199999999999
+    },
+    {
+      "gi": "QANTA_Literature_740",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00022078
+    },
+    {
+      "gi": "QANTA_Literature_795",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.290000000000001e-05
+    },
+    {
+      "gi": "QANTA_Literature_833",
+      "dataset": "QANTA_Literature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.118e-05
+    },
+    {
+      "gi": "QANTA_Philosophy_1270",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.5358e-05
+    },
+    {
+      "gi": "QANTA_Science_1236",
+      "dataset": "QANTA_Science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.8232999999999996e-05
+    },
+    {
+      "gi": "QANTA_Philosophy_499",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.5168e-05
+    },
+    {
+      "gi": "QANTA_Science_1360",
+      "dataset": "QANTA_Science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.0674e-05
+    },
+    {
+      "gi": "QANTA_Science_1473",
+      "dataset": "QANTA_Science",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0035e-05
+    },
+    {
+      "gi": "QANTA_Literature_1464",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0009839199999999999
+    },
+    {
+      "gi": "QANTA_Literature_1843",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0010822
+    },
+    {
+      "gi": "QANTA_Science_198",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 0.00026586000000000003
+    },
+    {
+      "gi": "QANTA_Literature_885",
+      "dataset": "QANTA_Literature",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.2919000000000001e-05
+    },
+    {
+      "gi": "QANTA_Literature_758",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0007179199999999999
+    },
+    {
+      "gi": "QANTA_Social Science_2",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.316e-05
+    },
+    {
+      "gi": "QANTA_Philosophy_91",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00025032
+    },
+    {
+      "gi": "SocialiQA_12968",
+      "dataset": "SocialiQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4733e-05
+    },
+    {
+      "gi": "QANTA_Social Science_77",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00011984
+    },
+    {
+      "gi": "SocialiQA_13810",
+      "dataset": "SocialiQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.271e-05
+    },
+    {
+      "gi": "SocialiQA_18511",
+      "dataset": "SocialiQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2271000000000002e-05
+    },
+    {
+      "gi": "QANTA_Literature_408",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00107352
+    },
+    {
+      "gi": "SocialiQA_22095",
+      "dataset": "SocialiQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1341999999999999e-05
+    },
+    {
+      "gi": "SocialiQA_24393",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.262e-05
+    },
+    {
+      "gi": "SocialiQA_26846",
+      "dataset": "SocialiQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.3751999999999998e-05
+    },
+    {
+      "gi": "QANTA_Social Science_1438",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00052122
+    },
+    {
+      "gi": "SuperGLUE-CausalReasoning_4526",
+      "dataset": "SuperGLUE-CausalReasoning",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2274000000000001e-05
+    },
+    {
+      "gi": "SuperGLUE-CausalReasoning_4506",
+      "dataset": "SuperGLUE-CausalReasoning",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5462e-05
+    },
+    {
+      "gi": "QANTA_Science_308",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00034818
+    },
+    {
+      "gi": "SocialiQA_7839",
+      "dataset": "SocialiQA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.4864999999999999e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_15955",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.176e-05
+    },
+    {
+      "gi": "QANTA_Social Science_1847",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00049224
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18477",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 4.83e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18766",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 9.212e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_12894",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.0098999999999995e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_17965",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.666e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_19410",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.1175e-05
+    },
+    {
+      "gi": "QANTA_Science_492",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00106988
+    },
+    {
+      "gi": "SuperGLUE-Entailment_19387",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.9883e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_522",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9874e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_767",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.2286e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_3137",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.2940999999999999e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_762",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 2.0147e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_1408",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.5639e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_3499",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.894e-06
+    },
+    {
+      "gi": "SuperGLUE-QA_4102",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1663e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_19567",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.9350999999999998e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_4160",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.1775999999999999e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_4732",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.5471e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_4780",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 0.00017570000000000002
+    },
+    {
+      "gi": "SuperGLUE-RC_7738",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.9674e-05
+    },
+    {
+      "gi": "MusicTheoryBench_337",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00442078
+    },
+    {
+      "gi": "SuperGLUE-Wic_19738",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.316e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_7393",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 2.9295000000000003e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_7725",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 3.1632e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19661",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.402999999999999e-06
+    },
+    {
+      "gi": "SuperGLUE-RC_8531",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 3.5536e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19695",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 8.184e-06
+    },
+    {
+      "gi": "SuperGLUE-Wic_20079",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.303e-06
+    },
+    {
+      "gi": "SuperGLUE-Wic_20019",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.047999999999999e-06
+    },
+    {
+      "gi": "SuperGLUE-Wic_20253",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.621999999999999e-06
+    },
+    {
+      "gi": "SuperGLUE-Wic_20189",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.4e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19953",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 6.258e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_20123",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 6.692999999999999e-06
+    },
+    {
+      "gi": "SuperGLUE-Wsc_20311",
+      "dataset": "SuperGLUE-Wsc",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 7.615999999999999e-06
+    },
+    {
+      "gi": "SuperGLUE-Wsc_20368",
+      "dataset": "SuperGLUE-Wsc",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 1.0882e-05
+    },
+    {
+      "gi": "SuperGLUE-Wsc_20370",
+      "dataset": "SuperGLUE-Wsc",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 1.0,
+      "cost": 8.293999999999999e-06
+    },
+    {
+      "gi": "WMT19-de-en_130",
+      "dataset": "WMT19-de-en",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.6571428571428571,
+      "cost": 4.484999999999999e-06
+    },
+    {
+      "gi": "SuperGLUE-QA_4046",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.0,
+      "cost": 1.2727999999999999e-05
+    },
+    {
+      "gi": "QANTA_Science_619",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.0011732
+    },
+    {
+      "gi": "WMT19-de-en_46",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.7571560480147738,
+      "cost": 0.00011774000000000001
+    },
+    {
+      "gi": "WMT19-de-en_516",
+      "dataset": "WMT19-de-en",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.7649297055326292,
+      "cost": 2.3296000000000002e-05
+    },
+    {
+      "gi": "WMT19-cs-en_156",
+      "dataset": "WMT19-cs-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.40058479532163743,
+      "cost": 0.00026432
+    },
+    {
+      "gi": "WMT19-cs-en_568",
+      "dataset": "WMT19-cs-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.26153846153846155,
+      "cost": 0.0003367
+    },
+    {
+      "gi": "WMT19-de-en_90",
+      "dataset": "WMT19-de-en",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.8426573426573427,
+      "cost": 6.507999999999999e-06
+    },
+    {
+      "gi": "WMT19-cs-en_246",
+      "dataset": "WMT19-cs-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.5528205128205128,
+      "cost": 0.0003409
+    },
+    {
+      "gi": "WMT19-de-en_883",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.7548262548262548,
+      "cost": 0.00031612000000000003
+    },
+    {
+      "gi": "WMT19-fi-en_222",
+      "dataset": "WMT19-fi-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.45408163265306123,
+      "cost": 3.542e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19794",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00089222
+    },
+    {
+      "gi": "WMT19-de-en_715",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.9965277777777778,
+      "cost": 0.00034426
+    },
+    {
+      "gi": "WMT19-fi-en_610",
+      "dataset": "WMT19-fi-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.20289855072463767,
+      "cost": 0.00031094
+    },
+    {
+      "gi": "SuperGLUE-QA_2695",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 1.0,
+      "cost": 0.00114954
+    },
+    {
+      "gi": "WMT19-de-en_97",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.5276234567901235,
+      "cost": 0.00042196
+    },
+    {
+      "gi": "WMT19-gu-en_116",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.6777419354838708,
+      "cost": 0.00033697999999999996
+    },
+    {
+      "gi": "WMT19-gu-en_543",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.6366666666666666,
+      "cost": 0.00021938000000000003
+    },
+    {
+      "gi": "WMT19-gu-en_638",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.28378378378378377,
+      "cost": 0.00055972
+    },
+    {
+      "gi": "WMT19-gu-en_491",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.601231593038822,
+      "cost": 0.00041594
+    },
+    {
+      "gi": "WMT19-lt-en_135",
+      "dataset": "WMT19-lt-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.37777777777777777,
+      "cost": 0.00011256000000000002
+    },
+    {
+      "gi": "WMT19-gu-en_36",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.7915548398640185,
+      "cost": 0.0006195
+    },
+    {
+      "gi": "WMT19-gu-en_505",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.7077429860188287,
+      "cost": 0.00048803999999999997
+    },
+    {
+      "gi": "WMT19-gu-en_986",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.5687538638170095,
+      "cost": 0.00046606
+    },
+    {
+      "gi": "WMT19-kk-en_826",
+      "dataset": "WMT19-kk-en",
+      "chosen": "qwen/qwen3-235b-a22b-2507",
+      "escalated": false,
+      "n_calls": 3,
+      "acc": 0.13114754098360656,
+      "cost": 5.5248e-05
+    },
+    {
+      "gi": "WMT19-gu-en_191",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.4303206997084549,
+      "cost": 0.0010339
+    },
+    {
+      "gi": "WMT19-zh-en_252",
+      "dataset": "WMT19-zh-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.7416339249424198,
+      "cost": 0.00018969999999999998
+    },
+    {
+      "gi": "WMT19-gu-en_968",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.7127272727272728,
+      "cost": 0.0008090599999999999
+    },
+    {
+      "gi": "WMT19-kk-en_528",
+      "dataset": "WMT19-kk-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.3253968253968254,
+      "cost": 0.00051744
+    },
+    {
+      "gi": "WMT19-zh-en_218",
+      "dataset": "WMT19-zh-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.4192049954310082,
+      "cost": 0.00045709999999999994
+    },
+    {
+      "gi": "WMT19-ru-en_222",
+      "dataset": "WMT19-ru-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.89296875,
+      "cost": 0.00059892
+    },
+    {
+      "gi": "WMT19-zh-en_59",
+      "dataset": "WMT19-zh-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.807202216066482,
+      "cost": 0.00025578
+    },
+    {
+      "gi": "WMT19-lt-en_269",
+      "dataset": "WMT19-lt-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.38750000000000007,
+      "cost": 0.00075292
+    },
+    {
+      "gi": "WMT19-lt-en_636",
+      "dataset": "WMT19-lt-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00106064
+    },
+    {
+      "gi": "WMT19-gu-en_123",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.5899459585552662,
+      "cost": 0.00171416
+    },
+    {
+      "gi": "QANTA_Literature_210",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-r1",
+      "escalated": true,
+      "n_calls": 4,
+      "acc": 0.0,
+      "cost": 0.00167972
+    }
+  ]
+}

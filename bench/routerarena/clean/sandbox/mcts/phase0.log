@@ -1,0 +1,30 @@
+subset: 150 queries across 76 datasets: {'WMT19-gu-en': 2, 'WMT19-lt-en': 1, 'MMLUPro_history': 5, 'GeoBench': 5, 'OpenTDB_General Knowledge': 2, 'Ethics_justice': 1, 'OpenTDB_History': 1, 'Ethics_virtue': 1, 'WMT19-de-en': 1, 'LiveCodeBench': 7, 'NarrativeQA': 6, 'SuperGLUE-ClozeTest': 1, 'ArcMMLU': 7, 'MedMCQA': 4, 'QANTA_Science': 1, 'QANTA_Literature': 4, 'MusicTheoryBench': 3, 'WMT19-zh-en': 1, 'MMLUPro_computer science': 7, 'OpenTDB_Science & Nature': 1, 'MathQA': 3, 'MMLUPro_math': 3, 'OpenTDB_Entertainment: Board Games': 1, 'MMLUPro_chemistry': 1, 'OpenTDB_Entertainment: Film': 1, 'MMLUPro_health': 4, 'PubMedQA': 8, 'OpenTDB_Sports': 1, 'OpenTDB_Entertainment: Comics': 1, 'Ethics_commonsense': 2, 'QANTA_Philosophy': 1, 'QANTA_Geography': 1, 'WMT19-kk-en': 1, 'MMLUPro_engineering': 5, 'SuperGLUE-RC': 1, 'OpenTDB_Science: Mathematics': 1, 'MMLUPro_biology': 2, 'MATH': 1, 'QANTA_Fine Arts': 1, 'OpenTDB_Vehicles': 1, 'SuperGLUE-QA': 1, 'Ethics_deontology': 1, 'MMLUPro_psychology': 2, 'OpenTDB_Science: Computers': 3, 'MMLUPro_economics': 2, 'OpenTDB_Art': 1, 'OpenTDB_Entertainment: Cartoon & Animations': 1, 'FinQA': 1, 'MMLU_formal_logic': 2, 'MMLUPro_law': 3, 'SuperGLUE-Entailment': 1, 'MMLUPro_philosophy': 1, 'AIME': 1, 'SuperGLUE-Wic': 2, 'ChessInstruct_mcq': 1, 'OpenTDB_Entertainment: Television': 1, 'OpenTDB_Entertainment: Japanese Anime & Manga': 1, 'OpenTDB_Entertainment: Books': 2, 'WMT19-fi-en': 1, 'MMLUPro_business': 3, 'ChessInstruct': 1, 'MMLU_management': 1, 'OpenTDB_Geography': 1, 'QANTA_History': 2, 'SuperGLUE-CausalReasoning': 1, 'MMLUPro_physics': 2, 'SuperGLUE-Wsc': 1, 'WMT19-cs-en': 1, 'GeoGraphyData_100k': 1, 'GSM8K': 1, 'SocialiQA': 1, 'OpenTDB_Celebrities': 1, 'OpenTDB_Entertainment: Video Games': 1, 'QANTA_Social Science': 1, 'OpenTDB_Entertainment: Music': 1, 'OpenTDB_Animals': 1}
+  25/150 (32s)
+  50/150 (60s)
+  75/150 (84s)
+  100/150 (114s)
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: \boxed{Mumbai}
+
+Mumbai is widely recognized as the largest city in India by population, serving as t...
+  125/150 (137s)
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: \boxed{Mumbai}
+
+Mumbai is the largest city in India by population, serving as the country's financia...
+  150/150 (163s)
+
+=== PHASE-0 ORACLE GATE (150-query stratified sub_10, RA metrics) ===
+  always-cheap           acc=0.733  $0.169/1k  arena=0.7260
+  always-strong          acc=0.707  $0.103/1k  arena=0.7066
+  always-sonnet          acc=0.747  $2.773/1k  arena=0.6918
+  always-opus            acc=0.780  $4.526/1k  arena=0.7028
+  ORACLE {c,s}           acc=0.773  $0.077/1k  arena=0.7695
+  ORACLE {c,s,sonnet}    acc=0.827  $0.227/1k  arena=0.8042
+  ORACLE {c,s,opus}      acc=0.813  $0.305/1k  arena=0.7886
+  ORACLE {c,s,son,opu}   acc=0.833  $0.307/1k  arena=0.8055
+
+  best 3-model oracle arena = 0.8055   GATE(>=0.78): PASS
+  (router can never beat this; PASS = 0.76 is reachable, proceed to Sonnet router)
+
+  saved phase0_oracle.json

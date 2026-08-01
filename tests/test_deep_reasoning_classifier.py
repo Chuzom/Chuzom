@@ -53,7 +53,7 @@ def _load_arena_regex() -> re.Pattern:
     import importlib.util
     arena_path = (
         Path(__file__).resolve().parent.parent
-        / "routerarena_submission" / "router" / "chuzom_router.py"
+        / "bench" / "routerarena" / "submission" / "router" / "chuzom_router.py"
     )
     spec = importlib.util.spec_from_file_location("chuzom_router_arena", arena_path)
     assert spec and spec.loader

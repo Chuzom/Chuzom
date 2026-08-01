@@ -76,7 +76,7 @@ def chuzom_router():
     spec = importlib.util.spec_from_file_location(
         "routerarena_submission_chuzom_router",
         Path(__file__).resolve().parents[1]
-        / "routerarena_submission"
+        / "bench" / "routerarena" / "submission"
         / "router"
         / "chuzom_router.py",
     )

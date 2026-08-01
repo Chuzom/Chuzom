@@ -1,0 +1,9 @@
+synthetic: 200 items | calling cheap+qwen+mistral+judge via CHUZOM (conc=24)...
+  50/200 (203s, 15/min, ETA 10m)
+  100/200 (206s, 29/min, ETA 3m)
+  150/200 (208s, 43/min, ETA 1m)
+  200/200 (247s, 49/min, ETA 0m)
+
+  cheap FAIL rate: 0.105  (trap=0.125 ml=0.025)
+  total Chuzom-routed cost: $0.8330
+  saved synth_features.json (200 rows)

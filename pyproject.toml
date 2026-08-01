@@ -162,13 +162,6 @@ exclude = [
     ".cursorignore",
     ".kimi/",
     ".windsurf/",
-    # Anchor with leading slash so this matches the top-level
-    # ``agents/`` (Claude agent definitions) ONLY — NOT the nested
-    # ``src/chuzom/agents/`` package, which IS shipped. Without the
-    # anchor, hatch matched ``agents/`` anywhere in the tree and
-    # silently stripped a critical runtime module (Loop-5 #5
-    # smoke gate caught this on first run).
-    "/agents/",
     "/skills/",
     # Internal docs (NEVER ship per CLAUDE.md)
     "Docs/",
@@ -196,8 +189,6 @@ exclude = [
     "demo/",
     "deprecation/",
     "bench/",
-    "routerarena_submission/",
-    "routerarena_clean/",
     # Local venvs — they contain absolute symlinks and break the build.
     ".venv/",
     ".venv-*/",

@@ -1,0 +1,21 @@
+router=anthropic/claude-sonnet-5  pool={cheap, strong, sonnet}  subset=150
+  25/150 (9s)
+  50/150 (16s)
+  75/150 (24s)
+  100/150 (33s)
+  125/150 (40s)
+  150/150 (51s)
+
+=== LLM-ROUTER (sonnet) on 150 (RA metrics; answering cost only) ===
+  always-cheap         acc=0.733  $0.169/1k  arena=0.7260
+  always-strong        acc=0.707  $0.103/1k  arena=0.7066
+  always-sonnet        acc=0.747  $2.773/1k  arena=0.6918
+  coherence@8          acc=0.753  $0.131/1k  arena=0.7464
+  LLM-ROUTER(sonnet)   acc=0.740  $0.396/1k  arena=0.7220  <<<
+  ORACLE (3-model)     acc=0.827  $0.227/1k  arena=0.8042
+
+  router choice distribution: A(cheap)=122 B(strong)=26 C(sonnet)=2
+  router OPERATING cost (NOT in RA arena): $1.272/1k queries  [tok in=92341 out=605]
+  reference bars: coherence-judge=0.7142(full809)  clean-submission=0.7061  target=0.76
+
+  saved router_eval_sonnet.json

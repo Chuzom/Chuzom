@@ -1,0 +1,11 @@
+KG2: 250 traps | solver=deepseek/deepseek-v4-flash judge=qwen/qwen3-235b-a22b-2507
+  50/250 (66s)
+  100/250 (160s)
+  150/250 (226s)
+  200/250 (282s)
+  250/250 (380s)
+
+=== KG2 RESULT ===
+  cheap fail rate: 0.124  (n=250)
+  BEST SEPARATION = 0.388 at coherence<3  GATE(>=0.30): PASS
+  (agreement wall=0.01; MemoryTree in-dist=0.861, RA-transfer=0.024)

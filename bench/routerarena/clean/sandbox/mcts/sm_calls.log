@@ -1,0 +1,26 @@
+  running gpt-5-mini (openrouter/openai/gpt-5-mini)...
+    gpt-5-mini 50/150 (30s)
+    gpt-5-mini 100/150 (60s)
+    gpt-5-mini 150/150 (192s)
+  saved gpt-5-mini
+  running glm-4.6 (openrouter/z-ai/glm-4.6)...
+    glm-4.6 50/150 (210s)
+    glm-4.6 100/150 (414s)
+    glm-4.6 150/150 (747s)
+  saved glm-4.6
+  running qwen3-max (openrouter/qwen/qwen3-max)...
+    qwen3-max 50/150 (15s)
+    qwen3-max 100/150 (29s)
+    qwen3-max 150/150 (53s)
+  saved qwen3-max
+  running kimi-k2-thinking (openrouter/moonshotai/kimi-k2-thinking)...
+    kimi-k2-thinking 50/150 (44s)
+    kimi-k2-thinking 100/150 (75s)
+    kimi-k2-thinking 150/150 (187s)
+  saved kimi-k2-thinking
+  running gpt-5 (openrouter/openai/gpt-5)...
+    gpt-5 50/150 (13s)
+    gpt-5 100/150 (25s)
+    gpt-5 150/150 (35s)
+  saved gpt-5
+done.

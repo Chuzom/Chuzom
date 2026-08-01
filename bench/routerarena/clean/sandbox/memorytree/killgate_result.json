@@ -1,0 +1,10 @@
+{
+  "n": 500,
+  "cheap": "deepseek/deepseek-v4-flash",
+  "fail_rate": 0.196,
+  "embedder": "bge-small-en",
+  "separation": 0.861111111111111,
+  "auc": 0.9468509546879452,
+  "p_fail_hi": 0.9166666666666666,
+  "p_fail_lo": 0.05555555555555555
+}

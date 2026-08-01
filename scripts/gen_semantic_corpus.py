@@ -8,7 +8,7 @@ Every prompt is generated from hand-written templates + vocab lists that WE own
 are disjoint draws and de-duplicated by normalized hash so a prompt can never
 land in both splits (which would inflate held-out accuracy).
 
-This is deliberately distinct from ``routerarena_clean/synthetic_gen.py``: that
+This is deliberately distinct from ``bench/routerarena/clean/synthetic_gen.py``: that
 file produces *answer-calibration* prompts (computed pseudo-gold for the
 confidence cascade); this produces *classification labels* (task_type + subject)
 for the discriminative head. Different job, different corpus.

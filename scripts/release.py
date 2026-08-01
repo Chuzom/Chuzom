@@ -107,7 +107,7 @@ def bump_versions(version: str, *, root: Path = ROOT) -> None:
         _write_json(marketplace_path, update_marketplace_data(marketplace_data, version))
 
     # Keep the RouterArena submission router version tag in sync.
-    routerarena_path = root / "routerarena_submission" / "router" / "chuzom_router.py"
+    routerarena_path = root / "bench" / "routerarena" / "submission" / "router" / "chuzom_router.py"
     if routerarena_path.exists():
         text = routerarena_path.read_text(encoding="utf-8")
         updated = _ROUTERARENA_VERSION_RE.sub(rf"\g<1>v{version}", text)
@@ -238,7 +238,7 @@ def perform_release(
             ".claude-plugin/",
             ".codex-plugin/",
             ".factory-plugin/",
-            "routerarena_submission/router/chuzom_router.py",
+            "bench/routerarena/submission/router/chuzom_router.py",
             "CHANGELOG.md",
             "README.md",
             "docs/",

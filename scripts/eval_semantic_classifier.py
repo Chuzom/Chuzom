@@ -5,7 +5,7 @@
 This measures the levers our changes actually move — task_type classification
 accuracy, coverage (non-abstain rate), and confidence calibration — on the
 self-generated HELD-OUT split. It is NOT a RouterArena leaderboard score:
-per routerarena_clean/STATUS.md the RA number is bound by escalation economics,
+per bench/routerarena/clean/STATUS.md the RA number is bound by escalation economics,
 and query-surface classifiers do not transfer to RA's prompt surface (measured:
 MemoryTree transfer 0.024). This eval tells us whether the production classifier
 is sound; it does not claim an arena gain.

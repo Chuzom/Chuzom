@@ -1,0 +1,7375 @@
+{
+  "report": {
+    "approach": "chuzom-domain",
+    "n": 809,
+    "accuracy": 0.6852,
+    "cost_per_1k_RA_pricing": 0.107,
+    "arena_score": 0.6867,
+    "escalation_rate": 0.0,
+    "calls_per_query": 1.0
+  },
+  "by_dataset": {
+    "AIME": 0.333,
+    "ArcMMLU": 0.821,
+    "AsDiv": 0.571,
+    "ChessInstruct": 0.167,
+    "ChessInstruct_mcq": 0.429,
+    "Ethics_commonsense": 0.818,
+    "Ethics_deontology": 0.6,
+    "Ethics_justice": 0.25,
+    "Ethics_virtue": 1.0,
+    "FinQA": 0.571,
+    "GSM8K": 0.5,
+    "GeoBench": 0.833,
+    "GeoGraphyData_100k": 0.0,
+    "LiveCodeBench": 0.0,
+    "MATH": 1.0,
+    "MMLUPro_biology": 1.0,
+    "MMLUPro_business": 0.867,
+    "MMLUPro_chemistry": 1.0,
+    "MMLUPro_computer science": 0.73,
+    "MMLUPro_economics": 0.941,
+    "MMLUPro_engineering": 0.607,
+    "MMLUPro_health": 0.667,
+    "MMLUPro_history": 0.636,
+    "MMLUPro_law": 0.688,
+    "MMLUPro_math": 0.778,
+    "MMLUPro_philosophy": 1.0,
+    "MMLUPro_physics": 0.778,
+    "MMLUPro_psychology": 0.75,
+    "MMLU_formal_logic": 0.818,
+    "MMLU_management": 0.875,
+    "MathQA": 0.867,
+    "MedMCQA": 0.655,
+    "MusicTheoryBench": 0.6,
+    "NarrativeQA": 0.557,
+    "OpenTDB_Animals": 1.0,
+    "OpenTDB_Art": 1.0,
+    "OpenTDB_Celebrities": 1.0,
+    "OpenTDB_Entertainment: Board Games": 1.0,
+    "OpenTDB_Entertainment: Books": 1.0,
+    "OpenTDB_Entertainment: Cartoon & Animations": 1.0,
+    "OpenTDB_Entertainment: Comics": 1.0,
+    "OpenTDB_Entertainment: Film": 1.0,
+    "OpenTDB_Entertainment: Japanese Anime & Manga": 1.0,
+    "OpenTDB_Entertainment: Music": 1.0,
+    "OpenTDB_Entertainment: Musicals & Theatres": 0.0,
+    "OpenTDB_Entertainment: Television": 0.0,
+    "OpenTDB_Entertainment: Video Games": 0.714,
+    "OpenTDB_General Knowledge": 1.0,
+    "OpenTDB_Geography": 0.857,
+    "OpenTDB_History": 1.0,
+    "OpenTDB_Science & Nature": 1.0,
+    "OpenTDB_Science: Computers": 0.929,
+    "OpenTDB_Science: Mathematics": 0.8,
+    "OpenTDB_Sports": 1.0,
+    "OpenTDB_Vehicles": 1.0,
+    "PubMedQA": 0.87,
+    "QANTA_Fine Arts": 0.286,
+    "QANTA_Geography": 1.0,
+    "QANTA_History": 0.545,
+    "QANTA_Literature": 0.381,
+    "QANTA_Philosophy": 0.0,
+    "QANTA_Science": 0.143,
+    "QANTA_Social Science": 0.25,
+    "SocialiQA": 0.714,
+    "SuperGLUE-CausalReasoning": 1.0,
+    "SuperGLUE-ClozeTest": 0.0,
+    "SuperGLUE-Entailment": 1.0,
+    "SuperGLUE-QA": 0.714,
+    "SuperGLUE-RC": 0.333,
+    "SuperGLUE-Wic": 0.8,
+    "SuperGLUE-Wsc": 0.667,
+    "WMT19-cs-en": 0.477,
+    "WMT19-de-en": 0.747,
+    "WMT19-fi-en": 0.307,
+    "WMT19-gu-en": 0.582,
+    "WMT19-kk-en": 0.335,
+    "WMT19-lt-en": 0.338,
+    "WMT19-ru-en": 0.893,
+    "WMT19-zh-en": 0.644
+  },
+  "results": [
+    {
+      "gi": "ArcMMLU_123",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.808000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_16",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.953e-05
+    },
+    {
+      "gi": "ArcMMLU_230",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.256e-05
+    },
+    {
+      "gi": "ArcMMLU_173",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.914e-05
+    },
+    {
+      "gi": "AIME_112",
+      "dataset": "AIME",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00011354
+    },
+    {
+      "gi": "ArcMMLU_191",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.690000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_293",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.592e-05
+    },
+    {
+      "gi": "ArcMMLU_115",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.698000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_182",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.224000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_364",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.951e-05
+    },
+    {
+      "gi": "ArcMMLU_378",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.138e-05
+    },
+    {
+      "gi": "ArcMMLU_493",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.936000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_358",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.922e-05
+    },
+    {
+      "gi": "ArcMMLU_393",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.544e-05
+    },
+    {
+      "gi": "ArcMMLU_12",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.8560000000000004e-05
+    },
+    {
+      "gi": "ArcMMLU_349",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.3400000000000005e-05
+    },
+    {
+      "gi": "ArcMMLU_555",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.494e-05
+    },
+    {
+      "gi": "ArcMMLU_631",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.7040000000000004e-05
+    },
+    {
+      "gi": "ArcMMLU_538",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.012e-05
+    },
+    {
+      "gi": "ArcMMLU_468",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.307e-05
+    },
+    {
+      "gi": "ArcMMLU_611",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.424e-05
+    },
+    {
+      "gi": "ArcMMLU_366",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.878e-05
+    },
+    {
+      "gi": "ArcMMLU_632",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.4970000000000006e-05
+    },
+    {
+      "gi": "ArcMMLU_496",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.02e-05
+    },
+    {
+      "gi": "ArcMMLU_443",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.7040000000000005e-05
+    },
+    {
+      "gi": "ArcMMLU_395",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.991e-05
+    },
+    {
+      "gi": "AIME_106",
+      "dataset": "AIME",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014966
+    },
+    {
+      "gi": "ArcMMLU_646",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.5079999999999995e-05
+    },
+    {
+      "gi": "ArcMMLU_649",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.508e-05
+    },
+    {
+      "gi": "ArcMMLU_636",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.3060000000000004e-05
+    },
+    {
+      "gi": "ArcMMLU_685",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.544e-05
+    },
+    {
+      "gi": "ArcMMLU_659",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3060000000000004e-05
+    },
+    {
+      "gi": "ArcMMLU_674",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.376000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_676",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.5159999999999994e-05
+    },
+    {
+      "gi": "ArcMMLU_702",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.6200000000000005e-05
+    },
+    {
+      "gi": "ArcMMLU_713",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.0400000000000005e-05
+    },
+    {
+      "gi": "AsDiv_1044",
+      "dataset": "AsDiv",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.14e-05
+    },
+    {
+      "gi": "ArcMMLU_694",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.067e-05
+    },
+    {
+      "gi": "ArcMMLU_689",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.341000000000001e-05
+    },
+    {
+      "gi": "AsDiv_1835",
+      "dataset": "AsDiv",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.774e-05
+    },
+    {
+      "gi": "ArcMMLU_98",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3200000000000006e-05
+    },
+    {
+      "gi": "AIME_58",
+      "dataset": "AIME",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00021056
+    },
+    {
+      "gi": "AsDiv_1165",
+      "dataset": "AsDiv",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.196000000000001e-05
+    },
+    {
+      "gi": "ArcMMLU_65",
+      "dataset": "ArcMMLU",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.973000000000001e-05
+    },
+    {
+      "gi": "AsDiv_733",
+      "dataset": "AsDiv",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.354000000000001e-05
+    },
+    {
+      "gi": "AsDiv_1347",
+      "dataset": "AsDiv",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.384e-05
+    },
+    {
+      "gi": "AsDiv_472",
+      "dataset": "AsDiv",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.342e-05
+    },
+    {
+      "gi": "AsDiv_843",
+      "dataset": "AsDiv",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.254e-05
+    },
+    {
+      "gi": "ChessInstruct_0",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.664e-05
+    },
+    {
+      "gi": "ChessInstruct_145",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00025046
+    },
+    {
+      "gi": "ChessInstruct_107",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00037366000000000005
+    },
+    {
+      "gi": "ChessInstruct_102",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004912600000000001
+    },
+    {
+      "gi": "ChessInstruct_42",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00032396000000000004
+    },
+    {
+      "gi": "ChessInstruct_144",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00012558
+    },
+    {
+      "gi": "ChessInstruct_58",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00029638
+    },
+    {
+      "gi": "ChessInstruct_49",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00028798
+    },
+    {
+      "gi": "ChessInstruct_71",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00062328
+    },
+    {
+      "gi": "ChessInstruct_148",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00011802000000000001
+    },
+    {
+      "gi": "ChessInstruct_36",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00026894000000000006
+    },
+    {
+      "gi": "Ethics_commonsense_0",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.1700000000000002e-05
+    },
+    {
+      "gi": "Ethics_commonsense_13",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.122e-05
+    },
+    {
+      "gi": "Ethics_commonsense_42",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.284e-05
+    },
+    {
+      "gi": "ChessInstruct_5",
+      "dataset": "ChessInstruct_mcq",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00022554
+    },
+    {
+      "gi": "Ethics_commonsense_70",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.6200000000000005e-05
+    },
+    {
+      "gi": "ChessInstruct_84",
+      "dataset": "ChessInstruct",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00027790000000000003
+    },
+    {
+      "gi": "Ethics_commonsense_28",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.774000000000001e-05
+    },
+    {
+      "gi": "Ethics_deontology_2",
+      "dataset": "Ethics_deontology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.262e-05
+    },
+    {
+      "gi": "Ethics_commonsense_62",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.674e-05
+    },
+    {
+      "gi": "Ethics_commonsense_6",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.7160000000000004e-05
+    },
+    {
+      "gi": "Ethics_commonsense_90",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00011032
+    },
+    {
+      "gi": "Ethics_commonsense_99",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00015792
+    },
+    {
+      "gi": "Ethics_justice_76",
+      "dataset": "Ethics_justice",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.304e-05
+    },
+    {
+      "gi": "Ethics_deontology_56",
+      "dataset": "Ethics_deontology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.392000000000001e-05
+    },
+    {
+      "gi": "Ethics_justice_45",
+      "dataset": "Ethics_justice",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.7020000000000002e-05
+    },
+    {
+      "gi": "Ethics_deontology_31",
+      "dataset": "Ethics_deontology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.514e-05
+    },
+    {
+      "gi": "ArcMMLU_729",
+      "dataset": "ArcMMLU",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.008e-05
+    },
+    {
+      "gi": "Ethics_commonsense_51",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.846e-05
+    },
+    {
+      "gi": "Ethics_justice_84",
+      "dataset": "Ethics_justice",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.066e-05
+    },
+    {
+      "gi": "Ethics_justice_1",
+      "dataset": "Ethics_justice",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.996e-05
+    },
+    {
+      "gi": "Ethics_commonsense_85",
+      "dataset": "Ethics_commonsense",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00017892000000000003
+    },
+    {
+      "gi": "Ethics_deontology_0",
+      "dataset": "Ethics_deontology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020328
+    },
+    {
+      "gi": "Ethics_virtue_14",
+      "dataset": "Ethics_virtue",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.076000000000001e-05
+    },
+    {
+      "gi": "Ethics_virtue_26",
+      "dataset": "Ethics_virtue",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.194000000000001e-05
+    },
+    {
+      "gi": "Ethics_virtue_30",
+      "dataset": "Ethics_virtue",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.554000000000001e-05
+    },
+    {
+      "gi": "FinQA_172",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00022890000000000003
+    },
+    {
+      "gi": "Ethics_virtue_51",
+      "dataset": "Ethics_virtue",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.872000000000001e-05
+    },
+    {
+      "gi": "FinQA_60",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00038906
+    },
+    {
+      "gi": "FinQA_149",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00034622
+    },
+    {
+      "gi": "FinQA_208",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00026208
+    },
+    {
+      "gi": "GSM8K_174",
+      "dataset": "GSM8K",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 9.716e-05
+    },
+    {
+      "gi": "GeoBench_1002",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.832000000000001e-05
+    },
+    {
+      "gi": "Ethics_virtue_48",
+      "dataset": "Ethics_virtue",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.442000000000001e-05
+    },
+    {
+      "gi": "FinQA_56",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0002695
+    },
+    {
+      "gi": "FinQA_273",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00025522
+    },
+    {
+      "gi": "FinQA_255",
+      "dataset": "FinQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00041776000000000004
+    },
+    {
+      "gi": "GSM8K_43",
+      "dataset": "GSM8K",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.468000000000001e-05
+    },
+    {
+      "gi": "GeoBench_1093",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.252e-05
+    },
+    {
+      "gi": "GeoBench_124",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.208e-05
+    },
+    {
+      "gi": "GeoBench_1113",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.978e-05
+    },
+    {
+      "gi": "GeoBench_1102",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.5580000000000007e-05
+    },
+    {
+      "gi": "GeoBench_1018",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.336e-05
+    },
+    {
+      "gi": "GeoBench_1123",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.95e-05
+    },
+    {
+      "gi": "GeoBench_1094",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.916e-05
+    },
+    {
+      "gi": "GeoBench_199",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.144e-05
+    },
+    {
+      "gi": "GeoBench_30",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.664e-05
+    },
+    {
+      "gi": "GeoBench_1379",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.928e-05
+    },
+    {
+      "gi": "Ethics_deontology_32",
+      "dataset": "Ethics_deontology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00043974
+    },
+    {
+      "gi": "GeoBench_1243",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.25e-05
+    },
+    {
+      "gi": "GeoBench_378",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.382000000000001e-05
+    },
+    {
+      "gi": "GeoBench_368",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.348e-05
+    },
+    {
+      "gi": "GeoBench_289",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.516e-05
+    },
+    {
+      "gi": "GeoBench_390",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.4800000000000005e-05
+    },
+    {
+      "gi": "GeoBench_591",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.8800000000000006e-05
+    },
+    {
+      "gi": "GeoBench_220",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.0400000000000005e-05
+    },
+    {
+      "gi": "GeoBench_502",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.760000000000001e-05
+    },
+    {
+      "gi": "GeoBench_526",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.138e-05
+    },
+    {
+      "gi": "GeoBench_571",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.418e-05
+    },
+    {
+      "gi": "GeoBench_766",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.02e-05
+    },
+    {
+      "gi": "GeoBench_308",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.481999999999999e-05
+    },
+    {
+      "gi": "GeoBench_915",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.5299999999999996e-05
+    },
+    {
+      "gi": "GeoBench_604",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.952000000000001e-05
+    },
+    {
+      "gi": "GeoGraphyData_100k_28",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.758e-05
+    },
+    {
+      "gi": "GeoGraphyData_100k_42",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.4500000000000003e-05
+    },
+    {
+      "gi": "GeoBench_689",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.468000000000001e-05
+    },
+    {
+      "gi": "GeoBench_87",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.082e-05
+    },
+    {
+      "gi": "GeoBench_968",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.788e-05
+    },
+    {
+      "gi": "GeoBench_944",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.329999999999999e-05
+    },
+    {
+      "gi": "GeoBench_864",
+      "dataset": "GeoBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.852e-05
+    },
+    {
+      "gi": "GeoGraphyData_100k_27",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.724e-05
+    },
+    {
+      "gi": "GeoGraphyData_100k_48",
+      "dataset": "GeoGraphyData_100k",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.6120000000000007e-05
+    },
+    {
+      "gi": "LiveCodeBench_16",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00022400000000000002
+    },
+    {
+      "gi": "LiveCodeBench_149",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00015875999999999998
+    },
+    {
+      "gi": "LiveCodeBench_14",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013104
+    },
+    {
+      "gi": "LiveCodeBench_183",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 9.125000000000001e-05
+    },
+    {
+      "gi": "LiveCodeBench_136",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013972
+    },
+    {
+      "gi": "LiveCodeBench_181",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.458000000000001e-05
+    },
+    {
+      "gi": "LiveCodeBench_118",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00044112
+    },
+    {
+      "gi": "LiveCodeBench_169",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00041202000000000003
+    },
+    {
+      "gi": "LiveCodeBench_211",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00046163
+    },
+    {
+      "gi": "LiveCodeBench_137",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007534800000000001
+    },
+    {
+      "gi": "LiveCodeBench_317",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.25e-05
+    },
+    {
+      "gi": "LiveCodeBench_131",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00017904000000000002
+    },
+    {
+      "gi": "LiveCodeBench_105",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006468
+    },
+    {
+      "gi": "LiveCodeBench_344",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00045701
+    },
+    {
+      "gi": "LiveCodeBench_355",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00045932
+    },
+    {
+      "gi": "LiveCodeBench_390",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00018184
+    },
+    {
+      "gi": "LiveCodeBench_237",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00018219999999999998
+    },
+    {
+      "gi": "LiveCodeBench_431",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010232000000000001
+    },
+    {
+      "gi": "LiveCodeBench_114",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0007674800000000001
+    },
+    {
+      "gi": "LiveCodeBench_18",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0006085800000000001
+    },
+    {
+      "gi": "LiveCodeBench_34",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00017525000000000003
+    },
+    {
+      "gi": "LiveCodeBench_386",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00040823000000000004
+    },
+    {
+      "gi": "LiveCodeBench_476",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00012348
+    },
+    {
+      "gi": "LiveCodeBench_499",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.5110000000000006e-05
+    },
+    {
+      "gi": "LiveCodeBench_405",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00017426000000000003
+    },
+    {
+      "gi": "LiveCodeBench_43",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00016192000000000002
+    },
+    {
+      "gi": "LiveCodeBench_473",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013808
+    },
+    {
+      "gi": "LiveCodeBench_84",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.1540000000000005e-05
+    },
+    {
+      "gi": "LiveCodeBench_64",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00017892000000000003
+    },
+    {
+      "gi": "LiveCodeBench_271",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00035566000000000005
+    },
+    {
+      "gi": "LiveCodeBench_491",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00015721000000000002
+    },
+    {
+      "gi": "LiveCodeBench_277",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00036851
+    },
+    {
+      "gi": "MATH_442",
+      "dataset": "MATH",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.895999999999999e-05
+    },
+    {
+      "gi": "MATH_53",
+      "dataset": "MATH",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.936e-05
+    },
+    {
+      "gi": "MATH_479",
+      "dataset": "MATH",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.336000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2792",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.030000000000001e-05
+    },
+    {
+      "gi": "LiveCodeBench_177",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0004393
+    },
+    {
+      "gi": "MMLUPro_biology_2808",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.146000000000001e-05
+    },
+    {
+      "gi": "LiveCodeBench_49",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00020610000000000002
+    },
+    {
+      "gi": "MMLUPro_biology_2912",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.154000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2822",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012964
+    },
+    {
+      "gi": "MMLUPro_biology_2941",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.664e-05
+    },
+    {
+      "gi": "MATH_108",
+      "dataset": "MATH",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00018522
+    },
+    {
+      "gi": "MMLUPro_biology_2958",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.216e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2934",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012124000000000001
+    },
+    {
+      "gi": "MMLUPro_biology_2985",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.734e-05
+    },
+    {
+      "gi": "MMLUPro_business_126",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.084e-05
+    },
+    {
+      "gi": "MMLUPro_biology_3188",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.646000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_biology_3215",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.1940000000000014e-05
+    },
+    {
+      "gi": "MMLUPro_biology_3225",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.488000000000001e-05
+    },
+    {
+      "gi": "MATH_150",
+      "dataset": "MATH",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000273
+    },
+    {
+      "gi": "MMLUPro_business_294",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.606e-05
+    },
+    {
+      "gi": "MMLUPro_business_430",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.272000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_business_378",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001372
+    },
+    {
+      "gi": "MMLUPro_biology_3310",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00022008000000000002
+    },
+    {
+      "gi": "MMLUPro_business_226",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014686
+    },
+    {
+      "gi": "MMLUPro_business_445",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.716e-05
+    },
+    {
+      "gi": "MMLUPro_business_507",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.142e-05
+    },
+    {
+      "gi": "MMLUPro_business_6",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.476000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_biology_2980",
+      "dataset": "MMLUPro_biology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.2980000000000005e-05
+    },
+    {
+      "gi": "LiveCodeBench_350",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00048158000000000006
+    },
+    {
+      "gi": "MMLUPro_business_503",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010303999999999999
+    },
+    {
+      "gi": "MMLUPro_business_382",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.824000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_business_516",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.825999999999999e-05
+    },
+    {
+      "gi": "MMLUPro_business_614",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.484000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_business_616",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.440000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_business_742",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013874000000000002
+    },
+    {
+      "gi": "MMLUPro_chemistry_3356",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.07e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_4354",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001092
+    },
+    {
+      "gi": "MMLUPro_chemistry_3796",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.978e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_4407",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010276000000000003
+    },
+    {
+      "gi": "MMLUPro_chemistry_3974",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00017178000000000004
+    },
+    {
+      "gi": "MMLUPro_chemistry_4187",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021854000000000003
+    },
+    {
+      "gi": "MMLUPro_computer science_9086",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.272000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_4067",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014924
+    },
+    {
+      "gi": "MMLUPro_computer science_9114",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.016e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9110",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.972e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9149",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.198000000000001e-05
+    },
+    {
+      "gi": "LiveCodeBench_437",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00046002
+    },
+    {
+      "gi": "MMLUPro_computer science_9138",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.134e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9075",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.236000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9195",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.995e-05
+    },
+    {
+      "gi": "MMLUPro_chemistry_3837",
+      "dataset": "MMLUPro_chemistry",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00038976000000000006
+    },
+    {
+      "gi": "MMLUPro_computer science_9125",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.534e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9200",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.66e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9222",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.418e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9260",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.258e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9257",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.937999999999999e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9264",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.303000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9283",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.575000000000001e-05
+    },
+    {
+      "gi": "LiveCodeBench_485",
+      "dataset": "LiveCodeBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00074032
+    },
+    {
+      "gi": "MMLUPro_computer science_9136",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00015862
+    },
+    {
+      "gi": "MMLUPro_computer science_9239",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001281
+    },
+    {
+      "gi": "MMLUPro_computer science_9212",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.546000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9315",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.7400000000000006e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9330",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.2550000000000005e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9236",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.798000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9285",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.994e-05
+    },
+    {
+      "gi": "MMLUPro_business_784",
+      "dataset": "MMLUPro_business",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00035070000000000007
+    },
+    {
+      "gi": "MMLUPro_computer science_9394",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.406e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9426",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.329e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9362",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.986e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9414",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.369e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9452",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.846e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9430",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.132e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9380",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013076
+    },
+    {
+      "gi": "MMLUPro_computer science_9456",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.759e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9325",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.608000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9404",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.728e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9415",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00023856000000000002
+    },
+    {
+      "gi": "MMLUPro_computer science_9376",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.6470000000000007e-05
+    },
+    {
+      "gi": "LiveCodeBench_6",
+      "dataset": "LiveCodeBench",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00039986000000000004
+    },
+    {
+      "gi": "MMLUPro_computer science_9289",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.398e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5907",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.146000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5769",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.114e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5765",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010304
+    },
+    {
+      "gi": "MMLUPro_economics_5661",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010696
+    },
+    {
+      "gi": "MMLUPro_economics_5949",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.086000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5951",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.982e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5931",
+      "dataset": "MMLUPro_economics",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.843000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5888",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012012000000000001
+    },
+    {
+      "gi": "MMLUPro_economics_6224",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.5640000000000003e-05
+    },
+    {
+      "gi": "MMLUPro_economics_5965",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.0060000000000004e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6056",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013131999999999998
+    },
+    {
+      "gi": "MMLUPro_computer science_9471",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.669000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6122",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.77e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6114",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.302000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6251",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.308000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9475",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012754
+    },
+    {
+      "gi": "MMLUPro_economics_6325",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001309
+    },
+    {
+      "gi": "MMLUPro_engineering_10103",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00021966
+    },
+    {
+      "gi": "MMLUPro_economics_6135",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.928e-05
+    },
+    {
+      "gi": "MMLUPro_computer science_9437",
+      "dataset": "MMLUPro_computer science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00028056
+    },
+    {
+      "gi": "MMLUPro_engineering_10199",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.944e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10125",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.784e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10074",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014238
+    },
+    {
+      "gi": "MMLUPro_engineering_10292",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010696
+    },
+    {
+      "gi": "MMLUPro_engineering_10342",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.366e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10195",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00032438
+    },
+    {
+      "gi": "MMLUPro_engineering_10076",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.078e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10432",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.95e-05
+    },
+    {
+      "gi": "MMLUPro_economics_6353",
+      "dataset": "MMLUPro_economics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.644e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10309",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00014154
+    },
+    {
+      "gi": "MMLUPro_engineering_10431",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.132e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10347",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.716e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10560",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.138e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10537",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013286000000000003
+    },
+    {
+      "gi": "MMLUPro_engineering_10179",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00016478
+    },
+    {
+      "gi": "MMLUPro_engineering_10372",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00020901999999999997
+    },
+    {
+      "gi": "MMLUPro_engineering_10823",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.734e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10818",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.7260000000000004e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10473",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001155
+    },
+    {
+      "gi": "MMLUPro_engineering_10428",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00015232
+    },
+    {
+      "gi": "MMLUPro_engineering_10395",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.204e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10237",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00018578
+    },
+    {
+      "gi": "MMLUPro_engineering_10298",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014196
+    },
+    {
+      "gi": "MMLUPro_engineering_10886",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.1020000000000004e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10701",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001309
+    },
+    {
+      "gi": "MMLUPro_engineering_10897",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.000161
+    },
+    {
+      "gi": "MMLUPro_health_4923",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011312
+    },
+    {
+      "gi": "MMLUPro_health_4864",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.916e-05
+    },
+    {
+      "gi": "MMLUPro_health_5116",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.994e-05
+    },
+    {
+      "gi": "MMLUPro_health_4973",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.126e-05
+    },
+    {
+      "gi": "MMLUPro_health_4990",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.132e-05
+    },
+    {
+      "gi": "MMLUPro_health_5215",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.258e-05
+    },
+    {
+      "gi": "MMLUPro_health_4885",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001477
+    },
+    {
+      "gi": "MMLUPro_health_5203",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.402e-05
+    },
+    {
+      "gi": "MMLUPro_health_5093",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.274000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_health_5064",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010556
+    },
+    {
+      "gi": "MMLUPro_health_5152",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.664e-05
+    },
+    {
+      "gi": "MMLUPro_health_5214",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.664e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10864",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00023646000000000002
+    },
+    {
+      "gi": "MMLUPro_health_5472",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.546000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_history_4486",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00014504
+    },
+    {
+      "gi": "MMLUPro_health_5144",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.354000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_health_5224",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001659
+    },
+    {
+      "gi": "MMLUPro_health_5338",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.706e-05
+    },
+    {
+      "gi": "MMLUPro_health_5261",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010458
+    },
+    {
+      "gi": "MMLUPro_history_4480",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.832000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_engineering_10542",
+      "dataset": "MMLUPro_engineering",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00019222
+    },
+    {
+      "gi": "MMLUPro_history_4502",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.848e-05
+    },
+    {
+      "gi": "MMLUPro_history_4490",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014308000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4517",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013118
+    },
+    {
+      "gi": "MMLUPro_history_4498",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010304000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4497",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00015428
+    },
+    {
+      "gi": "MMLUPro_history_4510",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.974e-05
+    },
+    {
+      "gi": "MMLUPro_history_4523",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013048
+    },
+    {
+      "gi": "MMLUPro_history_4509",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00011466000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4573",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013846
+    },
+    {
+      "gi": "MMLUPro_history_4572",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020706
+    },
+    {
+      "gi": "MMLUPro_history_4582",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.532e-05
+    },
+    {
+      "gi": "MMLUPro_history_4581",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.678000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_history_4654",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013454000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4645",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012824
+    },
+    {
+      "gi": "MMLUPro_health_5473",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00017038000000000003
+    },
+    {
+      "gi": "MMLUPro_history_4629",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00020944000000000003
+    },
+    {
+      "gi": "MMLUPro_history_4638",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.848e-05
+    },
+    {
+      "gi": "MMLUPro_history_4605",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013622
+    },
+    {
+      "gi": "MMLUPro_history_4743",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00012446
+    },
+    {
+      "gi": "MMLUPro_history_4774",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012446
+    },
+    {
+      "gi": "MMLUPro_history_4717",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00014406
+    },
+    {
+      "gi": "MMLUPro_health_5453",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00044828000000000007
+    },
+    {
+      "gi": "MMLUPro_history_4790",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010752000000000001
+    },
+    {
+      "gi": "MMLUPro_history_4749",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00015386000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4752",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00018732000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4819",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021126
+    },
+    {
+      "gi": "MMLUPro_history_4810",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.044000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_history_4833",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.5160000000000014e-05
+    },
+    {
+      "gi": "MMLUPro_history_4816",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021042
+    },
+    {
+      "gi": "MMLUPro_history_4844",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00024066000000000002
+    },
+    {
+      "gi": "MMLUPro_history_4836",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.258e-05
+    },
+    {
+      "gi": "MMLUPro_history_4841",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013776
+    },
+    {
+      "gi": "MMLUPro_health_5514",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.33e-05
+    },
+    {
+      "gi": "MMLUPro_law_1007",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00014434
+    },
+    {
+      "gi": "MMLUPro_law_1031",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00012992
+    },
+    {
+      "gi": "MMLUPro_law_1242",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.226e-05
+    },
+    {
+      "gi": "MMLUPro_law_1265",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.454e-05
+    },
+    {
+      "gi": "MMLUPro_law_1370",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011214000000000002
+    },
+    {
+      "gi": "MMLUPro_law_1462",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00017108000000000002
+    },
+    {
+      "gi": "MMLUPro_law_1530",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010976
+    },
+    {
+      "gi": "MMLUPro_law_1386",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012278000000000001
+    },
+    {
+      "gi": "MMLUPro_law_858",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00017682
+    },
+    {
+      "gi": "MMLUPro_history_4753",
+      "dataset": "MMLUPro_history",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00018424
+    },
+    {
+      "gi": "MMLUPro_law_899",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.784e-05
+    },
+    {
+      "gi": "MMLUPro_law_806",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3620000000000005e-05
+    },
+    {
+      "gi": "MMLUPro_law_1484",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00022750000000000003
+    },
+    {
+      "gi": "MMLUPro_math_6526",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.106e-05
+    },
+    {
+      "gi": "MMLUPro_math_6623",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012194000000000001
+    },
+    {
+      "gi": "MMLUPro_math_6848",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010262
+    },
+    {
+      "gi": "MMLUPro_law_1805",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00032144000000000004
+    },
+    {
+      "gi": "MMLUPro_math_7101",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.204000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_math_6429",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00011662
+    },
+    {
+      "gi": "MMLUPro_math_7173",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.958000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_math_7306",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.358000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_math_7422",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.128000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_law_1518",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00045164000000000006
+    },
+    {
+      "gi": "MMLUPro_math_7284",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.106e-05
+    },
+    {
+      "gi": "MMLUPro_health_5182",
+      "dataset": "MMLUPro_health",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00020006
+    },
+    {
+      "gi": "MMLUPro_math_7249",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.1e-05
+    },
+    {
+      "gi": "MMLUPro_math_7221",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001337
+    },
+    {
+      "gi": "MMLUPro_math_7649",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.4659999999999996e-05
+    },
+    {
+      "gi": "MMLUPro_math_7758",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.162000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9672",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.054000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_math_7577",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00011284
+    },
+    {
+      "gi": "MMLUPro_philosophy_9943",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.796e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9536",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.388e-05
+    },
+    {
+      "gi": "MMLUPro_math_7462",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00018928000000000003
+    },
+    {
+      "gi": "MMLUPro_philosophy_9510",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012726000000000003
+    },
+    {
+      "gi": "MMLUPro_physics_7773",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.372e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8316",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.384e-05
+    },
+    {
+      "gi": "MMLUPro_physics_7893",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.52e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8466",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.992e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8719",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011214000000000002
+    },
+    {
+      "gi": "MMLUPro_math_7451",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00017863999999999998
+    },
+    {
+      "gi": "MMLUPro_physics_8888",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.182000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_physics_8624",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.506e-05
+    },
+    {
+      "gi": "MMLUPro_math_6947",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00068236
+    },
+    {
+      "gi": "MMLUPro_physics_9017",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.643999999999999e-05
+    },
+    {
+      "gi": "MMLUPro_philosophy_9663",
+      "dataset": "MMLUPro_philosophy",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00039494000000000004
+    },
+    {
+      "gi": "MMLUPro_psychology_2005",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.174e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2084",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.302000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2029",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010920000000000001
+    },
+    {
+      "gi": "MMLUPro_psychology_1858",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.280000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2099",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.574e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2133",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.428000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2220",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 9.128000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2450",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.616000000000002e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2329",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.492e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2406",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.246e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2420",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.244e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2457",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00015120000000000002
+    },
+    {
+      "gi": "MMLUPro_math_6607",
+      "dataset": "MMLUPro_math",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0005969599999999999
+    },
+    {
+      "gi": "MMLUPro_psychology_2497",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.853999999999999e-05
+    },
+    {
+      "gi": "MMLUPro_law_861",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00040334
+    },
+    {
+      "gi": "MMLUPro_psychology_2186",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.120000000000002e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_105",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.25e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_116",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.824000000000001e-05
+    },
+    {
+      "gi": "MMLUPro_law_1818",
+      "dataset": "MMLUPro_law",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00046242000000000006
+    },
+    {
+      "gi": "MMLUPro_psychology_1904",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.026e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_32",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.034e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_121",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 9.214e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_7",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.012e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_70",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.386000000000001e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_85",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.426000000000001e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_63",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.7820000000000005e-05
+    },
+    {
+      "gi": "MMLU_management_32",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.508e-05
+    },
+    {
+      "gi": "MMLU_management_41",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.690000000000001e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_16",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.308e-05
+    },
+    {
+      "gi": "MMLUPro_psychology_2524",
+      "dataset": "MMLUPro_psychology",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00016464000000000002
+    },
+    {
+      "gi": "MMLU_management_4",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.858e-05
+    },
+    {
+      "gi": "MMLU_management_77",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.326e-05
+    },
+    {
+      "gi": "MMLU_management_90",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.592e-05
+    },
+    {
+      "gi": "MMLU_management_93",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.096e-05
+    },
+    {
+      "gi": "MMLU_management_80",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.806000000000001e-05
+    },
+    {
+      "gi": "MMLU_management_91",
+      "dataset": "MMLU_management",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.67e-05
+    },
+    {
+      "gi": "MathQA_202",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.376000000000001e-05
+    },
+    {
+      "gi": "MathQA_1619",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3200000000000006e-05
+    },
+    {
+      "gi": "MathQA_1215",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.125999999999999e-05
+    },
+    {
+      "gi": "MathQA_158",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.372e-05
+    },
+    {
+      "gi": "MathQA_2851",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.9980000000000006e-05
+    },
+    {
+      "gi": "MathQA_348",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.806000000000001e-05
+    },
+    {
+      "gi": "MathQA_2102",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.114e-05
+    },
+    {
+      "gi": "MathQA_436",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.198000000000001e-05
+    },
+    {
+      "gi": "MathQA_2092",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.756e-05
+    },
+    {
+      "gi": "MathQA_1742",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011452
+    },
+    {
+      "gi": "MathQA_827",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.516e-05
+    },
+    {
+      "gi": "MathQA_84",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3200000000000006e-05
+    },
+    {
+      "gi": "MedMCQA_1298",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.9680000000000004e-05
+    },
+    {
+      "gi": "MedMCQA_1054",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.194e-05
+    },
+    {
+      "gi": "MathQA_782",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.8e-05
+    },
+    {
+      "gi": "MedMCQA_1227",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.71e-05
+    },
+    {
+      "gi": "MedMCQA_1005",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.97e-05
+    },
+    {
+      "gi": "MedMCQA_1697",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.088000000000001e-05
+    },
+    {
+      "gi": "MedMCQA_145",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.1240000000000004e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_29",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00023642000000000002
+    },
+    {
+      "gi": "MedMCQA_1362",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.796e-05
+    },
+    {
+      "gi": "MedMCQA_1309",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.132e-05
+    },
+    {
+      "gi": "MedMCQA_1494",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.39e-05
+    },
+    {
+      "gi": "MedMCQA_2010",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.144e-05
+    },
+    {
+      "gi": "MedMCQA_2072",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.808000000000001e-05
+    },
+    {
+      "gi": "MMLU_formal_logic_103",
+      "dataset": "MMLU_formal_logic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00029904000000000004
+    },
+    {
+      "gi": "MedMCQA_1822",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.978e-05
+    },
+    {
+      "gi": "MedMCQA_2323",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.076000000000001e-05
+    },
+    {
+      "gi": "MedMCQA_1816",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00015176000000000002
+    },
+    {
+      "gi": "MMLUPro_physics_7887",
+      "dataset": "MMLUPro_physics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00045626
+    },
+    {
+      "gi": "MedMCQA_2346",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.938000000000002e-05
+    },
+    {
+      "gi": "MedMCQA_2581",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.64e-05
+    },
+    {
+      "gi": "MedMCQA_2727",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.1660000000000003e-05
+    },
+    {
+      "gi": "MedMCQA_2546",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.4460000000000004e-05
+    },
+    {
+      "gi": "MedMCQA_2366",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.88e-05
+    },
+    {
+      "gi": "MedMCQA_326",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.928e-05
+    },
+    {
+      "gi": "MedMCQA_1201",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00037688
+    },
+    {
+      "gi": "MedMCQA_433",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.0400000000000005e-05
+    },
+    {
+      "gi": "MedMCQA_511",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.552000000000001e-05
+    },
+    {
+      "gi": "MedMCQA_793",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.928e-05
+    },
+    {
+      "gi": "MedMCQA_643",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.7260000000000004e-05
+    },
+    {
+      "gi": "MusicTheoryBench_119",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.95e-05
+    },
+    {
+      "gi": "MedMCQA_419",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.558e-05
+    },
+    {
+      "gi": "MedMCQA_59",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.346e-05
+    },
+    {
+      "gi": "MusicTheoryBench_147",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.196000000000001e-05
+    },
+    {
+      "gi": "MathQA_630",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021769999999999998
+    },
+    {
+      "gi": "MedMCQA_853",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.554000000000001e-05
+    },
+    {
+      "gi": "MusicTheoryBench_126",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.538e-05
+    },
+    {
+      "gi": "MusicTheoryBench_152",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.562000000000001e-05
+    },
+    {
+      "gi": "MusicTheoryBench_189",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.14e-05
+    },
+    {
+      "gi": "MedMCQA_985",
+      "dataset": "MedMCQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012586000000000002
+    },
+    {
+      "gi": "MusicTheoryBench_208",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010724000000000001
+    },
+    {
+      "gi": "MusicTheoryBench_188",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.112000000000001e-05
+    },
+    {
+      "gi": "MusicTheoryBench_215",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.042000000000001e-05
+    },
+    {
+      "gi": "MusicTheoryBench_248",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.8299999999999995e-05
+    },
+    {
+      "gi": "MusicTheoryBench_14",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.406e-05
+    },
+    {
+      "gi": "MusicTheoryBench_286",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.636e-05
+    },
+    {
+      "gi": "MusicTheoryBench_320",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.0480000000000004e-05
+    },
+    {
+      "gi": "MusicTheoryBench_254",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010318000000000001
+    },
+    {
+      "gi": "MusicTheoryBench_70",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.314e-05
+    },
+    {
+      "gi": "MusicTheoryBench_340",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.054e-05
+    },
+    {
+      "gi": "MusicTheoryBench_98",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.622e-05
+    },
+    {
+      "gi": "MusicTheoryBench_33",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.272e-05
+    },
+    {
+      "gi": "NarrativeQA_131",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.875,
+      "cost": 0.00011970000000000001
+    },
+    {
+      "gi": "NarrativeQA_1683",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00019572000000000003
+    },
+    {
+      "gi": "MusicTheoryBench_324",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.778e-05
+    },
+    {
+      "gi": "NarrativeQA_10085",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.875,
+      "cost": 0.00015204000000000001
+    },
+    {
+      "gi": "NarrativeQA_3933",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7000000000000001,
+      "cost": 0.00015232000000000003
+    },
+    {
+      "gi": "NarrativeQA_2820",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7083333333333333,
+      "cost": 0.00011424
+    },
+    {
+      "gi": "NarrativeQA_2474",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7,
+      "cost": 0.00012600000000000003
+    },
+    {
+      "gi": "MusicTheoryBench_337",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.91e-05
+    },
+    {
+      "gi": "NarrativeQA_3282",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.14285714285714285,
+      "cost": 0.00024108000000000002
+    },
+    {
+      "gi": "NarrativeQA_286",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.36363636363636365,
+      "cost": 0.00032046000000000006
+    },
+    {
+      "gi": "NarrativeQA_4540",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.875,
+      "cost": 0.00024794
+    },
+    {
+      "gi": "NarrativeQA_4722",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.98,
+      "cost": 0.0002324
+    },
+    {
+      "gi": "NarrativeQA_4102",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.32916666666666666,
+      "cost": 0.00019362000000000003
+    },
+    {
+      "gi": "NarrativeQA_4128",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3148148148148147,
+      "cost": 0.00028350000000000006
+    },
+    {
+      "gi": "NarrativeQA_4347",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6666666666666666,
+      "cost": 0.00026754000000000003
+    },
+    {
+      "gi": "NarrativeQA_5323",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00021532000000000002
+    },
+    {
+      "gi": "NarrativeQA_4708",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.16,
+      "cost": 0.00013664
+    },
+    {
+      "gi": "NarrativeQA_5022",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4047619047619047,
+      "cost": 0.00023408000000000004
+    },
+    {
+      "gi": "NarrativeQA_533",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.1,
+      "cost": 0.00012936000000000002
+    },
+    {
+      "gi": "NarrativeQA_5259",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.2393162393162393,
+      "cost": 0.00065282
+    },
+    {
+      "gi": "MusicTheoryBench_240",
+      "dataset": "MusicTheoryBench",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.572e-05
+    },
+    {
+      "gi": "NarrativeQA_5894",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.43589743589743585,
+      "cost": 0.00030044
+    },
+    {
+      "gi": "NarrativeQA_6875",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.98,
+      "cost": 0.0006902000000000001
+    },
+    {
+      "gi": "NarrativeQA_6248",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.14583333333333334,
+      "cost": 0.00028238000000000004
+    },
+    {
+      "gi": "NarrativeQA_6070",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4666666666666667,
+      "cost": 0.0003304
+    },
+    {
+      "gi": "NarrativeQA_6829",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.9444444444444444,
+      "cost": 0.00034888
+    },
+    {
+      "gi": "NarrativeQA_6786",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001519
+    },
+    {
+      "gi": "NarrativeQA_6523",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8611111111111112,
+      "cost": 0.00027314000000000006
+    },
+    {
+      "gi": "NarrativeQA_7107",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6666666666666666,
+      "cost": 0.00023016000000000003
+    },
+    {
+      "gi": "NarrativeQA_7670",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.31,
+      "cost": 0.00013020000000000002
+    },
+    {
+      "gi": "NarrativeQA_6978",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3111111111111111,
+      "cost": 0.00034104000000000003
+    },
+    {
+      "gi": "NarrativeQA_7594",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.14583333333333334,
+      "cost": 0.00012362
+    },
+    {
+      "gi": "NarrativeQA_7678",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6598639455782314,
+      "cost": 0.0001428
+    },
+    {
+      "gi": "NarrativeQA_8215",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011872000000000002
+    },
+    {
+      "gi": "NarrativeQA_9378",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00026460000000000003
+    },
+    {
+      "gi": "NarrativeQA_7447",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.25,
+      "cost": 0.00010150000000000001
+    },
+    {
+      "gi": "NarrativeQA_8269",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.14743589743589744,
+      "cost": 0.00028392
+    },
+    {
+      "gi": "NarrativeQA_7964",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3620689655172414,
+      "cost": 0.00014196
+    },
+    {
+      "gi": "OpenTDB_Animals_2545",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.928e-05
+    },
+    {
+      "gi": "NarrativeQA_9563",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00018592
+    },
+    {
+      "gi": "OpenTDB_Art_1429",
+      "dataset": "OpenTDB_Art",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.718e-05
+    },
+    {
+      "gi": "NarrativeQA_1766",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.31,
+      "cost": 0.00013286000000000003
+    },
+    {
+      "gi": "NarrativeQA_8598",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.98,
+      "cost": 0.00023982000000000002
+    },
+    {
+      "gi": "NarrativeQA_927",
+      "dataset": "NarrativeQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.3223684210526316,
+      "cost": 0.00019488
+    },
+    {
+      "gi": "OpenTDB_Animals_1199",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.502e-05
+    },
+    {
+      "gi": "OpenTDB_Animals_262",
+      "dataset": "OpenTDB_Animals",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.648e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3577",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.4380000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1456",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.864e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_1078",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.39e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_219",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.746e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3968",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.906e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_3896",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.228e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2835",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.9620000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_Celebrities_4085",
+      "dataset": "OpenTDB_Celebrities",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.026e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Board Games_3779",
+      "dataset": "OpenTDB_Entertainment: Board Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.3e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1100",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.9420000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2879",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.9200000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_1580",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.334e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3106",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.466e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_30",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.690000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_2995",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.788e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3056",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.872e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Books_3886",
+      "dataset": "OpenTDB_Entertainment: Books",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.488e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_4061",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.1800000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Cartoon & Animations_1700",
+      "dataset": "OpenTDB_Entertainment: Cartoon & Animations",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.4739999999999994e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Comics_1888",
+      "dataset": "OpenTDB_Entertainment: Comics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.9840000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1983",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.788e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Film_1244",
+      "dataset": "OpenTDB_Entertainment: Film",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.8660000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_3026",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3060000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Music_1103",
+      "dataset": "OpenTDB_Entertainment: Music",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.376000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Japanese Anime & Manga_1019",
+      "dataset": "OpenTDB_Entertainment: Japanese Anime & Manga",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.11e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Musicals & Theatres_3818",
+      "dataset": "OpenTDB_Entertainment: Musicals & Theatres",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.55e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2238",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.544e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_2933",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.5640000000000003e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_270",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.41e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_235",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.565999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Television_3479",
+      "dataset": "OpenTDB_Entertainment: Television",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.776e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_3760",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.5020000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_2181",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.3960000000000006e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_1177",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.706e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1807",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.9840000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_Entertainment: Video Games_4047",
+      "dataset": "OpenTDB_Entertainment: Video Games",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.264e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1178",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3620000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1957",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.948e-05
+    },
+    {
+      "gi": "MathQA_1606",
+      "dataset": "MathQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00041734
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3306",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.1299999999999994e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_1664",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.584e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3404",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.696e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_1639",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3060000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3461",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.4380000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_836",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.696e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_2088",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.172e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3727",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.746000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_3627",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.7400000000000006e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_2346",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.0039999999999996e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_2099",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.152e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_4019",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.4040000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_General Knowledge_883",
+      "dataset": "OpenTDB_General Knowledge",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.426000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_3207",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.606e-05
+    },
+    {
+      "gi": "OpenTDB_History_3902",
+      "dataset": "OpenTDB_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.228e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_3880",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.516e-05
+    },
+    {
+      "gi": "OpenTDB_History_1092",
+      "dataset": "OpenTDB_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.8099999999999996e-05
+    },
+    {
+      "gi": "OpenTDB_Geography_792",
+      "dataset": "OpenTDB_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.852e-05
+    },
+    {
+      "gi": "OpenTDB_History_3712",
+      "dataset": "OpenTDB_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.908e-05
+    },
+    {
+      "gi": "OpenTDB_History_1162",
+      "dataset": "OpenTDB_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.348e-05
+    },
+    {
+      "gi": "OpenTDB_History_857",
+      "dataset": "OpenTDB_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.018e-05
+    },
+    {
+      "gi": "OpenTDB_History_2840",
+      "dataset": "OpenTDB_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.326e-05
+    },
+    {
+      "gi": "OpenTDB_History_2026",
+      "dataset": "OpenTDB_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.194e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1560",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.648e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_3716",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.4800000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1863",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.867e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_476",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.0600000000000004e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_1175",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.173999999999999e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1306",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.152e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.867e-05
+    },
+    {
+      "gi": "OpenTDB_Science & Nature_2942",
+      "dataset": "OpenTDB_Science & Nature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.9980000000000006e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2133",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.018e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1977",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.4800000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3259",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.906e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1694",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.244e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1613",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.544e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_638",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.76e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_3013",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.494e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_1015",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.032e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_2568",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.421e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_297",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.2760000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_87",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.7180000000000006e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2597",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.1160000000000006e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2154",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.878e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Computers_922",
+      "dataset": "OpenTDB_Science: Computers",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.2079999999999996e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1419",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.088e-05
+    },
+    {
+      "gi": "OpenTDB_Sports_2289",
+      "dataset": "OpenTDB_Sports",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.3620000000000005e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1870",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.642e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_2519",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.256e-05
+    },
+    {
+      "gi": "PubMedQA_0",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.232000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_1173",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.990000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3564",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.256e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_1530",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.790000000000001e-05
+    },
+    {
+      "gi": "OpenTDB_Science: Mathematics_2943",
+      "dataset": "OpenTDB_Science: Mathematics",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.95e-05
+    },
+    {
+      "gi": "PubMedQA_154",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.972000000000002e-05
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3234",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.4380000000000005e-05
+    },
+    {
+      "gi": "PubMedQA_18",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011508
+    },
+    {
+      "gi": "OpenTDB_Vehicles_3616",
+      "dataset": "OpenTDB_Vehicles",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.494e-05
+    },
+    {
+      "gi": "PubMedQA_100",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012698
+    },
+    {
+      "gi": "PubMedQA_362",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.034e-05
+    },
+    {
+      "gi": "PubMedQA_238",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.478000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_19",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013538
+    },
+    {
+      "gi": "PubMedQA_337",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00014266
+    },
+    {
+      "gi": "PubMedQA_143",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.232000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_457",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.580000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_276",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012348000000000003
+    },
+    {
+      "gi": "PubMedQA_35",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00012992
+    },
+    {
+      "gi": "PubMedQA_510",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.238000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_323",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013034
+    },
+    {
+      "gi": "PubMedQA_404",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011858
+    },
+    {
+      "gi": "PubMedQA_398",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001575
+    },
+    {
+      "gi": "PubMedQA_378",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010682000000000001
+    },
+    {
+      "gi": "PubMedQA_499",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010374
+    },
+    {
+      "gi": "PubMedQA_437",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00010374
+    },
+    {
+      "gi": "PubMedQA_575",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.786000000000002e-05
+    },
+    {
+      "gi": "PubMedQA_588",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.356000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_517",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.1e-05
+    },
+    {
+      "gi": "PubMedQA_610",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.580000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_687",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.886000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_582",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00016394000000000003
+    },
+    {
+      "gi": "PubMedQA_722",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001232
+    },
+    {
+      "gi": "PubMedQA_694",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.8859999999999996e-05
+    },
+    {
+      "gi": "PubMedQA_720",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.924000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_250",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.46e-05
+    },
+    {
+      "gi": "PubMedQA_643",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001232
+    },
+    {
+      "gi": "PubMedQA_755",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.694000000000002e-05
+    },
+    {
+      "gi": "PubMedQA_726",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.240000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_73",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00011816
+    },
+    {
+      "gi": "PubMedQA_854",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.664000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_520",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014644
+    },
+    {
+      "gi": "PubMedQA_8",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.786000000000002e-05
+    },
+    {
+      "gi": "PubMedQA_603",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.624000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_81",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010402000000000001
+    },
+    {
+      "gi": "PubMedQA_891",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00014154000000000003
+    },
+    {
+      "gi": "PubMedQA_871",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.0001533
+    },
+    {
+      "gi": "PubMedQA_85",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.0001351
+    },
+    {
+      "gi": "PubMedQA_905",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.518000000000001e-05
+    },
+    {
+      "gi": "PubMedQA_557",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 9.771999999999999e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_1212",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.964e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_1686",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.97e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_1548",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.0899999999999996e-05
+    },
+    {
+      "gi": "PubMedQA_968",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012838000000000001
+    },
+    {
+      "gi": "QANTA_Fine Arts_1702",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.718e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_528",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.2420000000000004e-05
+    },
+    {
+      "gi": "QANTA_Geography_1555",
+      "dataset": "QANTA_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.08e-05
+    },
+    {
+      "gi": "PubMedQA_94",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014308000000000002
+    },
+    {
+      "gi": "QANTA_Geography_1100",
+      "dataset": "QANTA_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.0600000000000004e-05
+    },
+    {
+      "gi": "PubMedQA_63",
+      "dataset": "PubMedQA",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.588000000000001e-05
+    },
+    {
+      "gi": "QANTA_Geography_1023",
+      "dataset": "QANTA_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.85e-05
+    },
+    {
+      "gi": "QANTA_History_1154",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.878e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_828",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.2420000000000004e-05
+    },
+    {
+      "gi": "QANTA_Geography_1812",
+      "dataset": "QANTA_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.9e-05
+    },
+    {
+      "gi": "QANTA_Fine Arts_865",
+      "dataset": "QANTA_Fine Arts",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.8660000000000004e-05
+    },
+    {
+      "gi": "QANTA_History_404",
+      "dataset": "QANTA_History",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.776e-05
+    },
+    {
+      "gi": "QANTA_History_1190",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.7380000000000005e-05
+    },
+    {
+      "gi": "QANTA_History_1084",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.9200000000000004e-05
+    },
+    {
+      "gi": "QANTA_History_133",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.4739999999999994e-05
+    },
+    {
+      "gi": "QANTA_Geography_304",
+      "dataset": "QANTA_Geography",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.174e-05
+    },
+    {
+      "gi": "QANTA_History_473",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.7659999999999995e-05
+    },
+    {
+      "gi": "QANTA_History_433",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.948e-05
+    },
+    {
+      "gi": "QANTA_History_1696",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.46e-05
+    },
+    {
+      "gi": "QANTA_History_612",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.808e-05
+    },
+    {
+      "gi": "QANTA_Literature_1239",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.312000000000001e-05
+    },
+    {
+      "gi": "QANTA_History_776",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.214e-05
+    },
+    {
+      "gi": "QANTA_Literature_1073",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.346e-05
+    },
+    {
+      "gi": "QANTA_Literature_1508",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.186e-05
+    },
+    {
+      "gi": "QANTA_Literature_1326",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.9420000000000005e-05
+    },
+    {
+      "gi": "QANTA_Literature_1464",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.6200000000000005e-05
+    },
+    {
+      "gi": "QANTA_Literature_210",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.1020000000000004e-05
+    },
+    {
+      "gi": "QANTA_History_926",
+      "dataset": "QANTA_History",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.494e-05
+    },
+    {
+      "gi": "QANTA_Literature_369",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.906e-05
+    },
+    {
+      "gi": "QANTA_Literature_408",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.102e-05
+    },
+    {
+      "gi": "QANTA_Literature_1727",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.2e-05
+    },
+    {
+      "gi": "QANTA_Literature_1735",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.16e-05
+    },
+    {
+      "gi": "QANTA_Literature_475",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.858e-05
+    },
+    {
+      "gi": "QANTA_Literature_758",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.948e-05
+    },
+    {
+      "gi": "QANTA_Literature_1653",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.146e-05
+    },
+    {
+      "gi": "QANTA_Literature_1843",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00013664000000000002
+    },
+    {
+      "gi": "QANTA_Literature_885",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.794e-05
+    },
+    {
+      "gi": "QANTA_Literature_1398",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.578e-05
+    },
+    {
+      "gi": "QANTA_Literature_795",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.074e-05
+    },
+    {
+      "gi": "QANTA_Literature_833",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.284e-05
+    },
+    {
+      "gi": "QANTA_Philosophy_91",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.3200000000000006e-05
+    },
+    {
+      "gi": "QANTA_Philosophy_499",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.8859999999999996e-05
+    },
+    {
+      "gi": "QANTA_Science_1473",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.528e-05
+    },
+    {
+      "gi": "QANTA_Science_492",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.4780000000000003e-05
+    },
+    {
+      "gi": "QANTA_Social Science_1438",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.9760000000000006e-05
+    },
+    {
+      "gi": "QANTA_Literature_386",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.7860000000000008e-05
+    },
+    {
+      "gi": "QANTA_Science_619",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.3200000000000006e-05
+    },
+    {
+      "gi": "QANTA_Science_1236",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.1800000000000005e-05
+    },
+    {
+      "gi": "QANTA_Science_308",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.138e-05
+    },
+    {
+      "gi": "QANTA_Philosophy_1270",
+      "dataset": "QANTA_Philosophy",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.9640000000000005e-05
+    },
+    {
+      "gi": "QANTA_Science_1360",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.86e-05
+    },
+    {
+      "gi": "QANTA_Social Science_1847",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.794e-05
+    },
+    {
+      "gi": "QANTA_Social Science_77",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.57e-05
+    },
+    {
+      "gi": "QANTA_Literature_1045",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.1299999999999994e-05
+    },
+    {
+      "gi": "SocialiQA_22095",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.97e-05
+    },
+    {
+      "gi": "QANTA_Science_198",
+      "dataset": "QANTA_Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.396e-05
+    },
+    {
+      "gi": "QANTA_Social Science_2",
+      "dataset": "QANTA_Social Science",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.236e-05
+    },
+    {
+      "gi": "SocialiQA_12968",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.062e-05
+    },
+    {
+      "gi": "SocialiQA_13810",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.166e-05
+    },
+    {
+      "gi": "SocialiQA_26846",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.628e-05
+    },
+    {
+      "gi": "SocialiQA_18511",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.5020000000000005e-05
+    },
+    {
+      "gi": "SocialiQA_24393",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.054000000000001e-05
+    },
+    {
+      "gi": "SuperGLUE-CausalReasoning_4506",
+      "dataset": "SuperGLUE-CausalReasoning",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 4.088e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18477",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 4.83e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_12894",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 7.756e-05
+    },
+    {
+      "gi": "SocialiQA_7839",
+      "dataset": "SocialiQA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 5.964e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_17965",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 9.632000000000001e-05
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_15955",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010262000000000002
+    },
+    {
+      "gi": "SuperGLUE-ClozeTest_18766",
+      "dataset": "SuperGLUE-ClozeTest",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00010388000000000002
+    },
+    {
+      "gi": "SuperGLUE-Entailment_19387",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.084e-05
+    },
+    {
+      "gi": "SuperGLUE-CausalReasoning_4526",
+      "dataset": "SuperGLUE-CausalReasoning",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.906e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_1408",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.02e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_3499",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.444e-05
+    },
+    {
+      "gi": "QANTA_Literature_740",
+      "dataset": "QANTA_Literature",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00043232000000000003
+    },
+    {
+      "gi": "SuperGLUE-Entailment_19410",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00012446
+    },
+    {
+      "gi": "SuperGLUE-QA_4046",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.138e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_19567",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.965999999999999e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_3137",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.272000000000001e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_4160",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.4390000000000006e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_7725",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.232000000000001e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_522",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 8.82e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_762",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 7.181999999999999e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_7738",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 8.288e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_2695",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 9.59e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_7393",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 6.748e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_4780",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00014952000000000002
+    },
+    {
+      "gi": "SuperGLUE-Wic_19661",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.4780000000000003e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19695",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.206e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19738",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.632e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_4732",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00013482000000000001
+    },
+    {
+      "gi": "SuperGLUE-Wic_20019",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.3660000000000004e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19794",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.8840000000000005e-05
+    },
+    {
+      "gi": "SuperGLUE-Entailment_767",
+      "dataset": "SuperGLUE-Entailment",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 6.454e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_20079",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.9540000000000002e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_20123",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.464e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_19953",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.0380000000000004e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_20253",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 2.2260000000000004e-05
+    },
+    {
+      "gi": "SuperGLUE-Wsc_20370",
+      "dataset": "SuperGLUE-Wsc",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.5560000000000005e-05
+    },
+    {
+      "gi": "SuperGLUE-Wsc_20368",
+      "dataset": "SuperGLUE-Wsc",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 3.850000000000001e-05
+    },
+    {
+      "gi": "SuperGLUE-Wsc_20311",
+      "dataset": "SuperGLUE-Wsc",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 3.0520000000000006e-05
+    },
+    {
+      "gi": "SuperGLUE-Wic_20189",
+      "dataset": "SuperGLUE-Wic",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 2.632e-05
+    },
+    {
+      "gi": "SuperGLUE-QA_4102",
+      "dataset": "SuperGLUE-QA",
+      "chosen": "qwen/qwen3-coder-30b-a3b-instruct",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 5.148e-05
+    },
+    {
+      "gi": "WMT19-cs-en_568",
+      "dataset": "WMT19-cs-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4375,
+      "cost": 3.8219999999999997e-05
+    },
+    {
+      "gi": "SuperGLUE-RC_8531",
+      "dataset": "SuperGLUE-RC",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 1.0,
+      "cost": 0.00015176000000000002
+    },
+    {
+      "gi": "WMT19-de-en_130",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6571428571428571,
+      "cost": 1.862e-05
+    },
+    {
+      "gi": "WMT19-de-en_90",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8426573426573427,
+      "cost": 3.43e-05
+    },
+    {
+      "gi": "WMT19-cs-en_156",
+      "dataset": "WMT19-cs-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4729729729729729,
+      "cost": 5.152e-05
+    },
+    {
+      "gi": "WMT19-de-en_715",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.84,
+      "cost": 2.296e-05
+    },
+    {
+      "gi": "WMT19-de-en_46",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7571560480147738,
+      "cost": 5.3899999999999996e-05
+    },
+    {
+      "gi": "WMT19-de-en_516",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.783361746629801,
+      "cost": 5.5440000000000005e-05
+    },
+    {
+      "gi": "WMT19-de-en_97",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6029998623916333,
+      "cost": 5.4739999999999994e-05
+    },
+    {
+      "gi": "WMT19-gu-en_116",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5431034482758621,
+      "cost": 5.278e-05
+    },
+    {
+      "gi": "WMT19-cs-en_246",
+      "dataset": "WMT19-cs-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5198639503488901,
+      "cost": 9.337999999999999e-05
+    },
+    {
+      "gi": "WMT19-fi-en_610",
+      "dataset": "WMT19-fi-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.16,
+      "cost": 5.166e-05
+    },
+    {
+      "gi": "WMT19-fi-en_222",
+      "dataset": "WMT19-fi-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.45408163265306123,
+      "cost": 4.55e-05
+    },
+    {
+      "gi": "WMT19-gu-en_191",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.38309037900874643,
+      "cost": 5.572e-05
+    },
+    {
+      "gi": "WMT19-gu-en_638",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5018181818181817,
+      "cost": 7.685999999999998e-05
+    },
+    {
+      "gi": "WMT19-gu-en_36",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.8779411764705882,
+      "cost": 8.68e-05
+    },
+    {
+      "gi": "WMT19-gu-en_543",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5407407407407409,
+      "cost": 5.3060000000000004e-05
+    },
+    {
+      "gi": "WMT19-gu-en_123",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7879017013232514,
+      "cost": 0.00010654
+    },
+    {
+      "gi": "WMT19-lt-en_269",
+      "dataset": "WMT19-lt-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.38750000000000007,
+      "cost": 2.45e-05
+    },
+    {
+      "gi": "WMT19-lt-en_636",
+      "dataset": "WMT19-lt-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.25000000000000006,
+      "cost": 2.5620000000000002e-05
+    },
+    {
+      "gi": "WMT19-lt-en_135",
+      "dataset": "WMT19-lt-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.37777777777777777,
+      "cost": 2.982e-05
+    },
+    {
+      "gi": "WMT19-kk-en_528",
+      "dataset": "WMT19-kk-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.34146341463414637,
+      "cost": 0.00026796000000000003
+    },
+    {
+      "gi": "WMT19-zh-en_252",
+      "dataset": "WMT19-zh-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.6544908211653129,
+      "cost": 3.332e-05
+    },
+    {
+      "gi": "WMT19-ru-en_222",
+      "dataset": "WMT19-ru-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.89296875,
+      "cost": 3.64e-05
+    },
+    {
+      "gi": "WMT19-gu-en_986",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.5264116575591985,
+      "cost": 6.817999999999999e-05
+    },
+    {
+      "gi": "WMT19-gu-en_505",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.892062723580516,
+      "cost": 0.00012502
+    },
+    {
+      "gi": "WMT19-zh-en_218",
+      "dataset": "WMT19-zh-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.4789299242424243,
+      "cost": 4.3259999999999996e-05
+    },
+    {
+      "gi": "WMT19-zh-en_59",
+      "dataset": "WMT19-zh-en",
+      "chosen": "deepseek/deepseek-v3.2",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7997392862962358,
+      "cost": 5.74e-05
+    },
+    {
+      "gi": "WMT19-gu-en_491",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.7667915919830536,
+      "cost": 4.074e-05
+    },
+    {
+      "gi": "WMT19-de-en_883",
+      "dataset": "WMT19-de-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.749034749034749,
+      "cost": 0.00020216000000000003
+    },
+    {
+      "gi": "WMT19-kk-en_826",
+      "dataset": "WMT19-kk-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.328548644338118,
+      "cost": 0.00027524
+    },
+    {
+      "gi": "WMT19-gu-en_968",
+      "dataset": "WMT19-gu-en",
+      "chosen": "deepseek/deepseek-v4-flash",
+      "escalated": false,
+      "n_calls": 1,
+      "acc": 0.0,
+      "cost": 0.00042546000000000006
+    }
+  ]
+}

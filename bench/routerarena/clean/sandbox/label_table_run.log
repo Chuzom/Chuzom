@@ -1,0 +1,52 @@
+label table: 264 items × 4 models = 1056 calls (workers=8)
+  50/1056 (22s)
+  100/1056 (60s)
+  150/1056 (108s)
+  200/1056 (151s)
+  250/1056 (235s)
+  300/1056 (289s)
+  350/1056 (355s)
+  400/1056 (424s)
+  450/1056 (481s)
+  500/1056 (614s)
+  550/1056 (683s)
+  600/1056 (756s)
+  650/1056 (794s)
+  700/1056 (817s)
+  750/1056 (857s)
+  800/1056 (880s)
+  850/1056 (921s)
+  900/1056 (969s)
+  950/1056 (1013s)
+  1000/1056 (1100s)
+  1050/1056 (1202s)
+
+=== per-model summary ===
+{
+  "qwen/qwen3-235b-a22b-2507": {
+    "accuracy": 0.9394,
+    "cost_per_1k": 0.035,
+    "errors": 0,
+    "n": 264
+  },
+  "deepseek/deepseek-v4-flash": {
+    "accuracy": 0.9924,
+    "cost_per_1k": 0.0424,
+    "errors": 0,
+    "n": 264
+  },
+  "deepseek/deepseek-v3.2": {
+    "accuracy": 0.9924,
+    "cost_per_1k": 0.0896,
+    "errors": 0,
+    "n": 264
+  },
+  "qwen/qwen3.7-plus": {
+    "accuracy": 0.9924,
+    "cost_per_1k": 0.6114,
+    "errors": 0,
+    "n": 264
+  }
+}
+
+wrote /Users/yaliandrona/Projects/Chuzom/routerarena_clean/sandbox/label_table.json

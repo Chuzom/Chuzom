@@ -1,0 +1,34 @@
+{
+  "reports": [
+    {
+      "policy": "always-cheap",
+      "accuracy": 0.7046,
+      "cost_per_1k": 0.205,
+      "arena": 0.6984
+    },
+    {
+      "policy": "always-strong",
+      "accuracy": 0.7009,
+      "cost_per_1k": 0.1128,
+      "arena": 0.7006
+    },
+    {
+      "policy": "ORACLE",
+      "accuracy": 0.7627,
+      "cost_per_1k": 0.1931,
+      "arena": 0.7505
+    },
+    {
+      "policy": "MemoryTree",
+      "accuracy": 0.7009,
+      "cost_per_1k": 0.1128,
+      "arena": 0.7006,
+      "escalation_rate": 1.0,
+      "ood_rate": 1.0
+    }
+  ],
+  "ra_separation": -0.11404755138770484,
+  "tau_ood": 0.05532625690102577,
+  "cheap": "deepseek/deepseek-v4-flash",
+  "strong": "deepseek/deepseek-v3.2"
+}

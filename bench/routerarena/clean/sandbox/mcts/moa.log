@@ -1,0 +1,14 @@
+  25/150 (13s)
+  50/150 (24s)
+  75/150 (33s)
+  100/150 (45s)
+  125/150 (55s)
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The most populous city in India is Mumbai, but the largest by area and the capital is Delhi. However...
+  150/150 (66s)
+
+=== MoA AGGREGATOR (deepseek/deepseek-v3.2) on 150 ===
+  MoA-aggregator   acc=0.687  $0.393/1k  arena=0.6755
+  refs: council-vote=0.7204  pair-agree ceiling=0.7528  council-ORACLE(4)=0.7726  coherence@8=0.7464
+  bars: always-cheap=0.7260  target=0.76
+  GATE(>=0.76): FAIL  (vs council-oracle ceiling 0.7726)

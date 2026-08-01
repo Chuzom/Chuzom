@@ -1,0 +1,50 @@
+hedge_4 sub_10: 809 RA prompts (workers=8) [RA-DATA TOUCH — fixed design]
+  50/809 (45s)
+  100/809 (106s)
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: \boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: The Burj Khalifa, the world's tallest building, is located in Dubai, United Arab Emirates. It is a p...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London. This is the most common and well-known answer. Therefor...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: \boxed{Mumbai}...
+  150/809 (207s)
+  200/809 (292s)
+  250/809 (361s)
+  300/809 (452s)
+  350/809 (508s)
+  400/809 (559s)
+  450/809 (600s)
+  500/809 (670s)
+  550/809 (700s)
+  600/809 (727s)
+  650/809 (755s)
+  700/809 (816s)
+  750/809 (901s)
+  800/809 (971s)
+
+=== hedge_4 sub_10 (RA metrics + RA pricing) ===
+{
+  "approach": "hedge_4",
+  "n": 809,
+  "accuracy": 0.7204,
+  "cost_per_1k_RA_pricing": 0.1659,
+  "arena_score": 0.7146,
+  "escalation_rate": 0.073,
+  "calls_per_query": 1.07
+}
+
+worst datasets:
+  0.00  GeoGraphyData_100k
+  0.00  LiveCodeBench
+  0.00  QANTA_Philosophy
+  0.00  SuperGLUE-ClozeTest
+  0.14  QANTA_Science
+  0.25  Ethics_justice
+  0.25  QANTA_Social Science
+  0.31  WMT19-kk-en
+  0.31  WMT19-lt-en
+  0.33  AIME
+  0.33  ChessInstruct
+  0.33  SuperGLUE-RC

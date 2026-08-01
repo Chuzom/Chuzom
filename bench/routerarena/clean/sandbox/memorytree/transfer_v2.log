@@ -1,0 +1,43 @@
+memory: (600, 384) | fail-rate 0.128
+sub_10 items: 809 | running CHEAP+STRONG...
+  100/809 (134s)
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: \boxed{Dubai}...
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: The Burj Khalifa is located in Dubai, United Arab Emirates.
+
+\boxed{Dubai}...
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: \boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: The nickname "Big Apple" is most famously associated with New York City.  
+
+\boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London. This is the most commonly recognized answer. Thus, the ...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London.
+
+\boxed{London}...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is Mumbai, which is also the financial and commercial capita...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: The largest city in India by population is Mumbai, though Delhi has a larger population when countin...
+  200/809 (455s)
+  300/809 (658s)
+  400/809 (803s)
+  500/809 (981s)
+  600/809 (1080s)
+  700/809 (1173s)
+  800/809 (1317s)
+embedding sub_10 queries...
+tau_ood (90th pct self-gen NN dist) = 0.055
+
+=== MEMORYTREE sub_10 (RA metrics + RA pricing) ===
+  always-cheap   acc=0.705 $0.205/1k arena=0.6984
+  always-strong  acc=0.701 $0.113/1k arena=0.7006
+  ORACLE         acc=0.763 $0.193/1k arena=0.7505
+  MemoryTree     acc=0.701 $0.113/1k arena=0.7006  esc=1.0 ood=1.0
+
+  RA cross-distribution SEPARATION (density→cheap-fail on real RA) = -0.114
+    (kill-gate in-distribution was 0.861; this is the number that matters for RA)

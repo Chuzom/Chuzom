@@ -1,0 +1,54 @@
+selfconsistency_2 sub_10: 809 RA prompts (workers=8) [RA-DATA TOUCH — fixed design]
+  50/809 (129s)
+  100/809 (405s)
+    Warning: Error processing question 0: Invalid ground truth format: Dubai
+    Ground truth: Dubai, Prediction: \boxed{Dubai}...
+    Warning: Error processing question 0: Invalid ground truth format: New York City
+    Ground truth: New York City, Prediction: \boxed{New York City}...
+    Warning: Error processing question 0: Invalid ground truth format: London
+    Ground truth: London, Prediction: The capital of the United Kingdom is London. This is the most common and widely accepted answer. 
+
+\...
+    Warning: Error processing question 0: Invalid ground truth format: Mumbai
+    Ground truth: Mumbai, Prediction: \boxed{Mumbai}  
+
+Mumbai is the largest city in India by population, with over 12 million residents ...
+  150/809 (663s)
+  200/809 (904s)
+  250/809 (1057s)
+  300/809 (1231s)
+  350/809 (1404s)
+  400/809 (1540s)
+  450/809 (1699s)
+  500/809 (1909s)
+  550/809 (2008s)
+  600/809 (2094s)
+  650/809 (2165s)
+  700/809 (2317s)
+  750/809 (2574s)
+  800/809 (2771s)
+
+=== selfconsistency_2 sub_10 (RA metrics + RA pricing) ===
+{
+  "approach": "selfconsistency_2",
+  "n": 809,
+  "accuracy": 0.7244,
+  "cost_per_1k_RA_pricing": 0.1434,
+  "arena_score": 0.7196,
+  "escalation_rate": 0.182,
+  "calls_per_query": 3.18
+}
+
+worst datasets:
+  0.00  ChessInstruct
+  0.00  Ethics_justice
+  0.00  GeoGraphyData_100k
+  0.00  LiveCodeBench
+  0.00  QANTA_Philosophy
+  0.00  SuperGLUE-ClozeTest
+  0.14  QANTA_Science
+  0.29  QANTA_Fine Arts
+  0.30  WMT19-lt-en
+  0.30  WMT19-kk-en
+  0.31  WMT19-fi-en
+  0.33  AIME
