@@ -149,8 +149,18 @@ class PolicyManager:
         self._ensure_policy_dir()
 
     def _ensure_policy_dir(self) -> None:
-        """Create policy directory if it doesn't exist."""
-        self.DEFAULT_POLICY_DIR.mkdir(parents=True, exist_ok=True)
+        """Create policy directory if it doesn't exist.
+
+        CHZ-ST-003: fail OPEN. This runs at import time (a module-level
+        PolicyManager is constructed), so a read-only ``~/.chuzom`` raised
+        PermissionError here and crashed every hook — the worst failure mode for
+        code in front of every turn. A missing writable policy dir just means no
+        *user* policies; the bundled presets (PRESET_POLICY_DIR) still load.
+        """
+        try:
+            self.DEFAULT_POLICY_DIR.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
 
     def load_policy(self, name: str) -> RoutingPolicy:
         """Load a policy by name.

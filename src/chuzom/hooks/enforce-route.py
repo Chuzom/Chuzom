@@ -472,6 +472,76 @@ def _clear_pending(session_id: str) -> None:
     _pending_path(session_id).unlink(missing_ok=True)
 
 
+def _record_realization_used(session_id: str, pending: dict | None) -> None:
+    """CHZ-EXT-204: record that a routed directive was HONORED by the host.
+
+    Parity with stop-enforce._record_override (which writes verified_overridden
+    when the host answers in plain text). Without this positive counterpart,
+    every execution_events row stayed realization_status=NULL, so a run where
+    97.7% of directives were bypassed looked identical in telemetry to a perfect
+    one — the product could not measure its own bypass rate. Fully fail-open.
+    """
+    try:
+        pending = pending or {}
+        import hashlib
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        # RED1-05: content-stable event_id so a retried PreToolUse hook honoring
+        # the same route dedups under INSERT OR IGNORE (uuid4 default made dedup
+        # unreachable). RED1-06: route_id now actually present in the pending JSON.
+        _route_id = pending.get("route_id")
+        _eid = hashlib.sha256(
+            f"{session_id}|{_route_id or ''}|route_realized".encode()
+        ).hexdigest()[:32]
+        record_event(LedgerEvent(
+            event_id=_eid,
+            session_id=session_id,
+            route_id=_route_id,
+            turn_id=pending.get("turn_id"),
+            event_type="route_realized",
+            task_type=pending.get("task_type"),
+            realization_status="verified_used",
+            adoption_method="door_call",  # Phase 0: hook-observed PreToolUse door call
+            used_by_host=True,
+            accepted=True,
+        ))
+    except Exception:  # noqa: BLE001 — realization accounting must never break routing
+        pass
+
+
+def _record_agent_marked(session_id: str, pending: dict | None) -> None:
+    """Phase 0 (Gap 3): sibling of _record_realization_used for the soak harness.
+
+    Records a route as verified_used with adoption_method="agent_marked" — used
+    where the agent (not the PreToolUse door-call hook) is the one asserting the
+    routed directive was honored. Only exercised inside soak/replay.py for Phase 0;
+    the production agent-marks-adoption transport is Phase 1. Fully fail-open,
+    identical event shape to _record_realization_used aside from adoption_method
+    and the event_id salt (kept distinct so the two never collide/dedup together).
+    """
+    try:
+        pending = pending or {}
+        import hashlib
+        from chuzom.execution_ledger import LedgerEvent, record_event
+        _route_id = pending.get("route_id")
+        _eid = hashlib.sha256(
+            f"{session_id}|{_route_id or ''}|route_realized|agent_marked".encode()
+        ).hexdigest()[:32]
+        record_event(LedgerEvent(
+            event_id=_eid,
+            session_id=session_id,
+            route_id=_route_id,
+            turn_id=pending.get("turn_id"),
+            event_type="route_realized",
+            task_type=pending.get("task_type"),
+            realization_status="verified_used",
+            adoption_method="agent_marked",
+            used_by_host=True,
+            accepted=True,
+        ))
+    except Exception:  # noqa: BLE001 — realization accounting must never break routing
+        pass
+
+
 def _log_violation(
     session_id: str,
     tool: str,
@@ -738,6 +808,44 @@ def main() -> None:
     # or logs a violation. "Route through the right model all the time, without
     # blocking itself."
     if enforce in ("advise", "advisory"):
+        # T6/Edit 6 (Phase 0.5): advise never blocks, but it must still RECORD
+        # adoption when the host happens to call the routed door anyway — else
+        # every advise-mode session shows realized_savings_usd == 0 even when
+        # routing was honored every single turn. This early-exit skips the
+        # rest of main() (where session_id/tool_name/pending are normally
+        # read), so duplicate those guarded reads here and reuse the IDENTICAL
+        # "routing satisfied" predicate as the hard/smart path (~1147-1166:
+        # llm_* prefix, exact expected-tool match, or expected-MCP-server
+        # match) so advise and hard/smart agree on what counts as honored.
+        # Fail-open at every step; never blocks regardless of outcome. Dedup
+        # is via _record_realization_used's own content-stable event_id
+        # (INSERT OR IGNORE), so a retried hook invocation can't double-count.
+        try:
+            _adv_session_id = hook_input.get("session_id", "")
+            _adv_tool_name = hook_input.get("tool_name", "")
+            if _adv_session_id and _adv_tool_name:
+                _adv_pending = _read_pending(_adv_session_id)
+                if _adv_pending is not None:
+                    _adv_expected_tool = _door_for(_adv_pending.get("expected_tool", "llm_route"))
+                    _adv_expected_server = _adv_pending.get("expected_server", "")
+                    _adv_bare_name = (
+                        _adv_tool_name.split("__")[-1]
+                        if "__" in _adv_tool_name else _adv_tool_name
+                    )
+                    _adv_satisfied = (
+                        _adv_bare_name.startswith("llm_")
+                        or _adv_tool_name == _adv_expected_tool
+                        or _adv_bare_name == _adv_expected_tool.split("__")[-1]
+                        or bool(
+                            _adv_expected_server
+                            and _adv_tool_name.startswith(f"mcp__{_adv_expected_server}__")
+                        )
+                    )
+                    if _adv_satisfied:
+                        _record_realization_used(_adv_session_id, _adv_pending)  # CHZ-EXT-204
+                        _clear_pending(_adv_session_id)
+        except Exception:  # noqa: BLE001 — advise must NEVER block or crash on this
+            pass
         sys.exit(0)
     # suggest = soft (log violation but never block)
     if enforce == "suggest":
@@ -1075,12 +1183,14 @@ def main() -> None:
 
     # 1. Any llm_* tool honors routing (llm_code, llm_query, llm_route, etc.)
     if bare_name.startswith("llm_"):
+        _record_realization_used(session_id, pending)  # CHZ-EXT-204
         _clear_pending(session_id)
         _clear_violation_count(session_id)  # Reset violations on successful routing
         sys.exit(0)
 
     # 2. Exact match on the expected tool (e.g. mcp__obsidian__create_note)
     if tool_name == expected_tool or bare_name == expected_tool.split("__")[-1]:
+        _record_realization_used(session_id, pending)  # CHZ-EXT-204
         _clear_pending(session_id)
         _clear_violation_count(session_id)  # Reset violations on successful routing
         sys.exit(0)
@@ -1088,6 +1198,7 @@ def main() -> None:
     # 3. MCP server routing: any tool from the expected server satisfies the directive
     #    e.g. expected_server="obsidian" → mcp__obsidian__search clears state
     if expected_server and tool_name.startswith(f"mcp__{expected_server}__"):
+        _record_realization_used(session_id, pending)  # CHZ-EXT-204
         _clear_pending(session_id)
         _clear_violation_count(session_id)  # Reset violations on successful routing
         sys.exit(0)
@@ -1345,7 +1456,7 @@ def main() -> None:
         f"  Tool attempted: {tool_name}\n"
         f"  Session violations: {violation_count} this session\n\n"
         f"WHY THIS MATTERS:\n"
-        f"  Routing saves 50–100x on this task. Using {tool_name} instead of {expected_tool}\n"
+        f"  Routing to a cheaper capable model conserves quota. Using {tool_name} instead of {expected_tool}\n"
         f"  burns full model cost with no savings. For {complexity} tasks, that's expensive.\n\n"
         f"NEXT STEP (required):\n"
         f"{action}\n\n"
@@ -1365,7 +1476,26 @@ def main() -> None:
     # only knowable by reading the source.
     _log_violation(session_id, tool_name, expected_tool,
                    outcome="BLOCKED(strict)" if _strict else "BLOCKED")
-    json.dump({"decision": "block", "reason": block_reason}, sys.stdout)
+    # CLAUDE-CODE-CONFORMANCE (P0): the CURRENT PreToolUse deny contract is
+    # hookSpecificOutput.permissionDecision="deny" (+ permissionDecisionReason);
+    # the top-level {"decision":"block"} form is deprecated for PreToolUse and
+    # only still works via a compat shim (block→deny). We emit BOTH: the current
+    # field so a newer Claude Code blocks via the documented path, and the legacy
+    # field so an older Claude Code still blocks. Without the current field, if
+    # the shim is ever dropped every block would silently no-op while this hook's
+    # log still records "BLOCKED" — a real enforcement + honesty failure.
+    json.dump(
+        {
+            "decision": "block",
+            "reason": block_reason,
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": block_reason,
+            },
+        },
+        sys.stdout,
+    )
 
     # ── Per-session violation nudge ───────────────────────────────────────────
     # After 3+ violations, output a strong nudge to stderr (visible as hook message)

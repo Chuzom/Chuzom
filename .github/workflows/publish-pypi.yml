@@ -79,6 +79,30 @@ jobs:
           fi
           echo "✓ Version verified: $PACKAGE_VERSION"
 
+      # G1 (CHZ-PKG-003 gate): install the built wheel into a CLEAN venv with a
+      # FRESH dependency resolution — no uv.lock, exactly a new user's `pip
+      # install` against live PyPI — then import chuzom.server and start the MCP
+      # server far enough to list its tools. This is precisely the check whose
+      # absence let 1.0.0 ship with an unbounded `mcp>=1.0.0` that resolved to a
+      # 2.0.0 which deleted mcp.server.fastmcp. If this fails, DO NOT publish.
+      - name: "G1: fresh-resolver install + MCP server start"
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/g1venv
+          /tmp/g1venv/bin/pip install --upgrade pip >/dev/null
+          echo "=== fresh install of the built wheel (no lockfile) ==="
+          /tmp/g1venv/bin/pip install dist/*.whl
+          echo "=== resolved mcp version (must be 1.x, not 2.x) ==="
+          /tmp/g1venv/bin/pip show mcp | grep -i '^version'
+          echo "=== import chuzom.server + list MCP tools ==="
+          /tmp/g1venv/bin/python - <<'PYEOF'
+          import asyncio
+          import chuzom.server as s  # imports mcp.server.fastmcp — crashes on mcp 2.x
+          tools = asyncio.run(s.mcp.list_tools())
+          assert len(tools) > 0, "MCP server registered zero tools"
+          print(f"G1 PASS: chuzom.server imports and lists {len(tools)} MCP tools")
+          PYEOF
+
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__

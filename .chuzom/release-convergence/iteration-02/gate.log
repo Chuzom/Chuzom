@@ -1,0 +1,813 @@
+...............................................................F........ [  1%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+.....................................x.................................. [  5%]
+..................ss..ssss..s........................................... [  6%]
+........................................................................ [  7%]
+....ssssss...................ss.sssss.ss.ss.sssss.ss.ss.sssss.ss........ [  8%]
+.s...........s...........s..ss.ss.ssssssss.ss.ssssssss.ss.ssssssss.ss.ss [  9%]
+ssss.................................................................... [ 10%]
+..........................ss...ss.ss.ssssssss.ss.ssssssss.ss.ssssssss.ss [ 12%]
+.ssssssss.ss.ssssss..........................sss.....................sss [ 13%]
+ssssssssss.............................................................. [ 14%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+..................ssssssss.............................................. [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+.........s.............................................................. [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+.........................................s.............................. [ 38%]
+........................................................................ [ 39%]
+......................................................................ss [ 40%]
+s....................................................................... [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+.......................................................ssss............. [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+.s...................................................................... [ 61%]
+........................................................................ [ 62%]
+..............................................ss........................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+..........................s............................................. [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+...................                                                      [100%]
+📜 Scenario report written: /Users/yaliandrona/Projects/Chuzom/Docs/SCENARIO_REPORT.md (24 scenarios, 24 passed)
+
+=================================== FAILURES ===================================
+____________ test_enforce_mode_hard_blocks_soft_warns_and_proceeds _____________
+
+routed_runtime = <test_policy_switching._SimpleNamespace object at 0x110364750>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1119029d0>
+
+    @pytest.mark.asyncio
+    async def test_enforce_mode_hard_blocks_soft_warns_and_proceeds(
+        routed_runtime, monkeypatch
+    ):
+        """Regression test: CHUZOM_ENFORCE now has a real effect on route_and_call's
+        budget-enforcement path. With a task cap exceeded, "hard" (the default)
+        blocks the call with BudgetExceededError; "soft" logs a warning and lets
+        the call proceed instead. Previously neither mode had any effect at all.
+        """
+        from chuzom.policy import OrgPolicy
+    
+        with patch(
+            "chuzom.router.cost.get_daily_spend_by_task_type",
+            new_callable=AsyncMock,
+            return_value=20.0,
+        ), patch(
+            "chuzom.policy.load_org_policy",
+            return_value=OrgPolicy(task_caps={"code": 1000}, source="file"),  # $10 cap
+        ):
+            monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
+            with pytest.raises(BudgetExceededError, match="Task-type daily limit"):
+                await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
+    
+            monkeypatch.setenv("CHUZOM_ENFORCE", "soft")
+>           soft_response = await route_and_call(
+                TaskType.CODE, "hello", profile=RoutingProfile.BALANCED
+            )
+
+tests/audit/test_policy_switching.py:386: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+task_type = <TaskType.CODE: 'code'>, prompt = 'hello'
+
+    async def route_and_call(
+        task_type: TaskType,
+        prompt: str,
+        *,
+        profile: RoutingProfile | None = None,
+        complexity_hint: Complexity | str | None = None,
+        system_prompt: str | None = None,
+        model_override: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        media_params: dict | None = None,
+        ctx: Any | None = None,
+        classification_data: dict | None = None,
+        caller_context: str | None = None,
+        identity: TurnIdentity | None = None,
+        max_cost_per_task: float | None = None,
+        max_wall_clock_seconds: float | None = None,
+        deadline_monotonic: float | None = None,
+        idempotency_key: str | None = None,
+        agent_session_id: str | None = None,
+        suppress_ledger: bool = False,
+    ) -> LLMResponse:
+        """Route a request to the best available model and return the response.
+    
+        Full routing flow:
+          1. **Budget check** — if a monthly budget is configured and exceeded,
+             raise ``BudgetExceededError`` immediately (fail-fast).
+          2. **Model chain** — resolve the ordered list of candidate models from
+             the routing profile, or use ``model_override`` if provided.
+          3. **Provider filter** — drop any models whose provider has no API key.
+          4. **Health check** — skip providers the circuit breaker has marked
+             unhealthy (too many recent failures).
+          5. **Dispatch** — call the model via ``_call_text`` (LiteLLM) or
+             ``_call_media`` (direct API), depending on ``task_type``.
+          6. **Fallback** — on failure, record the error in the health tracker
+             and try the next model in the chain.
+          7. **Cost logging** — on success, log token usage and cost to SQLite.
+    
+        Args:
+            task_type: What kind of task this is (query, code, image, etc.).
+            prompt: The user's prompt text.
+            profile: Explicit routing profile override (budget/balanced/premium).
+                When omitted, profile is derived from complexity_hint. Prefer
+                passing complexity_hint and letting the router pick the profile.
+            complexity_hint: Task complexity — "simple", "moderate", or "complex".
+                Drives profile selection: simple→BUDGET, moderate→BALANCED,
+                complex→PREMIUM. Ignored when profile is explicitly set.
+                When both are None, falls back to a fast prompt-length heuristic.
+            system_prompt: Optional system prompt prepended to text LLM calls.
+            model_override: Force a specific model, bypassing the routing table.
+            temperature: Sampling temperature override for text calls.
+            max_tokens: Max output tokens override for text calls.
+            media_params: Extra keyword arguments forwarded to media generators
+                (e.g. image size, video duration).
+            ctx: MCP RequestContext for streaming progress notifications.
+            classification_data: Optional dict with classification and recommendation
+                metadata for quality logging. When provided, a routing decision is
+                logged to the ``routing_decisions`` table after a successful call.
+            caller_context: Optional context string from the MCP tool caller
+                (e.g. recent conversation summary). Injected alongside session
+                buffer and persistent history into the LLM messages.
+            deadline_monotonic: Track-3 agent-safety absolute deadline.
+                When set, the routed turn refuses to start if
+                ``time.monotonic()`` is already past this value (raises
+                ``DeadlineExceeded`` before any provider is contacted),
+                and otherwise caps its dispatch wall-clock at
+                ``min(deadline_remaining, max_wall_clock_seconds)`` so a
+                slow provider can't bleed past the workflow deadline.
+                Designed to be set by a parent workflow and passed verbatim
+                into every nested ``route_and_call`` so children inherit
+                the same deadline without each level having to recompute
+                it. Use ``time.monotonic()`` (not ``time.time()``) so the
+                deadline is wall-clock-jump-resistant.
+            idempotency_key: Track-3 agent-safety dedupe key. When the same
+                key is presented again within the store's TTL window (default
+                1 hour, override via ``CHUZOM_IDEMPOTENCY_PATH`` for the
+                store path), the original ``LLMResponse`` is returned
+                **without contacting any provider** — no cost incurred and
+                an audit row is written with
+                ``outcome="idempotency_dedupe"``. The default of ``None``
+                preserves pre-T3-M4 behaviour: every call hits the provider.
+                Agent platforms set this on logically-identical retries so a
+                crash-and-replay does not duplicate side effects or spend.
+                Keys are opaque to chuzom; callers choose the hashing
+                recipe that fits their workflow.
+            max_wall_clock_seconds: Track-3 agent-safety wall-clock cap. When
+                provided, the dispatch loop runs inside an ``asyncio.wait_for``
+                shield of ``max_wall_clock_seconds``; on timeout the budget
+                reservation is released, an audit row with
+                ``action="timeout"`` is written, and ``WallClockExceeded``
+                (a ``TimeoutError`` subclass carrying ``cap_seconds``) is
+                raised. Use on agent workloads that must abort rather than
+                burn provider time indefinitely. The cap covers the full
+                chain walk including emergency fallback — a per-model
+                timeout is not applied here.
+            max_cost_per_task: Tier-2 / Track-3 agent-safety hard cap. When
+                provided, the router computes a projected cost for each
+                candidate model before dispatch (input + estimated output
+                tokens × per-model rate) and **skips** any model whose
+                projected cost would exceed this cap. If no model in the
+                chain fits, ``CostBudgetExceeded`` is raised before any
+                provider is contacted, so the caller pays nothing for the
+                denial. Use this on agent workloads where a single turn
+                should not be allowed to spend more than $X regardless of
+                what the routing chain would otherwise pick.
+            identity: Tier-1 audit attribution (``user_id`` + ``user_email`` +
+                ``org_id``). When ``None`` (the default), the routing path
+                resolves identity from the operator's env via
+                :func:`chuzom.identity.current_identity` — so existing call
+                sites continue to work unchanged. Every successful routed
+                turn (cached hit included) appends one
+                ``AuditEventType.ROUTING_DECISION`` row attributed to this
+                identity. The write is best-effort: failures are logged at
+                WARNING and never break the turn. Set
+                ``CHUZOM_AUDIT_DISABLED=1`` to skip the append entirely.
+    
+        Returns:
+            An ``LLMResponse`` with the model output, cost, and latency.
+    
+        Raises:
+            BudgetExceededError: Monthly spend has reached the configured limit.
+            ValueError: No models available for the given task/profile combo.
+            RuntimeError: All candidate models failed (wraps the last error).
+        """
+        config = get_config()
+        correlation_id = uuid4().hex[:8]
+    
+        # Tier-1 identity resolution. Done once per turn before any model call
+        # so both the cached-hit and cold-fetched return paths share the same
+        # ``TurnIdentity``. Resolution is env-driven and never raises.
+        if identity is None:
+            identity = current_identity()
+    
+        # T1-M2 (G-001): RBAC gate on ``Permission.ROUTE_PROMPT``. Three modes
+        # via ``CHUZOM_RBAC_MODE``:
+        #   * off (default) — no-op, preserves Tier-1 env-trust behaviour.
+        #   * warn         — log + audit a denial signal but allow the turn.
+        #     Designed for the dual-write window: ship the check, observe
+        #     which call sites fail, then flip to strict.
+        #   * strict       — raise ``PermissionDenied`` BEFORE any reservation,
+        #     dispatch, or provider call. Caller pays nothing for the deny.
+        # See chuzom.rbac_routing for the policy implementation.
+        _rbac_mode, _rbac_has_perm = check_route_prompt(identity)
+        if _rbac_mode == "strict" and not _rbac_has_perm:
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                    model="(denied)",
+                    provider="(denied)",
+                    cost_usd=0.0,
+                    cached=False,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "rbac_denied",
+                        "permission": "route_prompt",
+                        "rbac_mode": _rbac_mode,
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_rbac_deny_write_failed", error=str(_audit_err))
+            raise raise_route_prompt_denied(identity)
+        elif _rbac_mode == "warn" and not _rbac_has_perm:
+            # Warn mode: still write a breadcrumb so operators can find
+            # which call sites lack the permission today. action remains
+            # "routed" downstream so the existing dashboard renders these
+            # alongside real routings; the outcome field distinguishes.
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                    model="(warn)",
+                    provider="(warn)",
+                    cost_usd=0.0,
+                    cached=False,
+                    detail_extras={
+                        "correlation_id": correlation_id,
+                        "outcome": "rbac_warn_missing_route_prompt",
+                        "permission": "route_prompt",
+                        "rbac_mode": _rbac_mode,
+                    },
+                )
+            except Exception as _audit_err:
+                log.warning("audit_rbac_warn_write_failed", error=str(_audit_err))
+    
+        # F4: per-identity quota gate. Enterprise-gated (CHUZOM_QUOTA_MODE; default
+        # strict under enterprise, off in developer). strict + already-over-cap →
+        # refuse BEFORE any reservation / dispatch / provider call (zero spend);
+        # warn → breadcrumb + proceed. Post-success spend is recorded via
+        # record_consumption() so the next over-cap call is refused.
+        # 🥷 Backslash-security: Enforce auth/authz to prevent unauthorized access.
+        _quota_mode, _quota_breached, _quota_info = check_quota(identity)
+        if _quota_breached and _quota_mode in ("strict", "warn"):
+            _quota_detail = {
+                "correlation_id": correlation_id,
+                "outcome": "quota_exceeded" if _quota_mode == "strict" else "quota_warn",
+                "quota_mode": _quota_mode,
+            }
+            for _k in ("scope", "identifier", "period", "cap_usd", "consumed_usd"):
+                if _k in _quota_info:
+                    _quota_detail[_k] = _quota_info[_k]
+            try:
+                audit_routing_turn(
+                    identity=identity,
+                    task_type=str(task_type),
+                    complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                    model="(quota)",
+                    provider="(quota)",
+                    cost_usd=0.0,
+                    cached=False,
+                    detail_extras=_quota_detail,
+                )
+            except Exception as _audit_err:
+                log.warning("audit_quota_write_failed", error=str(_audit_err))
+            if _quota_mode == "strict":
+                raise raise_quota_denied(_quota_info)
+    
+        # T3-M2: deadline pre-flight. If the parent workflow's deadline
+        # has already passed, refuse to start any work — write a
+        # best-effort audit row tagged ``outcome="deadline_exceeded"`` and
+        # raise immediately. Done BEFORE the idempotency lookup so a
+        # cached response isn't accidentally returned for a past-deadline
+        # call. Uses time.monotonic() to be jump-resistant.
+        if deadline_monotonic is not None:
+            import time as _t_dl
+            _dl_now = _t_dl.monotonic()
+            _dl_remaining = deadline_monotonic - _dl_now
+            if _dl_remaining <= 0:
+                try:
+                    audit_routing_turn(
+                        identity=identity,
+                        task_type=str(task_type),
+                        complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                        model="(deadline)",
+                        provider="(deadline)",
+                        cost_usd=0.0,
+                        cached=False,
+                        detail_extras={
+                            "correlation_id": correlation_id,
+                            "outcome": "deadline_exceeded",
+                            "deadline_monotonic": deadline_monotonic,
+                            "over_by_seconds": -_dl_remaining,
+                        },
+                    )
+                except Exception as _audit_err:
+                    log.warning("audit_deadline_write_failed", error=str(_audit_err))
+                raise DeadlineExceeded(
+                    f"Routed turn refused: workflow deadline "
+                    f"{deadline_monotonic:.3f} (monotonic) already passed "
+                    f"by {-_dl_remaining:.3f}s before dispatch.",
+                    deadline_monotonic=deadline_monotonic,
+                    over_by_seconds=-_dl_remaining,
+                )
+    
+        # T3-M4: idempotency dedupe BEFORE any reservation or dispatch.
+        # When the caller supplies a key, a prior result (if any) is
+        # returned immediately, no provider contacted, no spend incurred.
+        # A best-effort audit row is written so the SIEM can see that the
+        # turn was served from the dedupe store rather than the provider.
+        # Failures of the dedupe store are logged at WARNING and never
+        # break the turn — fail-open on the dedupe path.
+        if idempotency_key:
+            try:
+                _cached_resp = _get_idempotency_store().lookup(idempotency_key)
+            except Exception as _idem_err:  # noqa: BLE001 — fail-open
+                log.warning("idempotency_lookup_failed", error=str(_idem_err))
+                _cached_resp = None
+            if _cached_resp is not None:
+                try:
+                    audit_routing_turn(
+                        identity=identity,
+                        task_type=str(task_type),
+                        complexity=complexity_hint if isinstance(complexity_hint, str) else None,
+                        model=getattr(_cached_resp, "model", "unknown") or "unknown",
+                        provider=getattr(_cached_resp, "provider", "unknown") or "unknown",
+                        cost_usd=0.0,
+                        cached=True,
+                        detail_extras={
+                            "correlation_id": correlation_id,
+                            "outcome": "idempotency_dedupe",
+                            "idempotency_key": idempotency_key,
+                        },
+                    )
+                except Exception as _audit_err:
+                    log.warning("audit_idempotency_dedupe_write_failed", error=str(_audit_err))
+                # AC-6/INV-ROUTE-005: a cache hit is a real terminal outcome (no billable
+                # attempt) — record it so every route ends in exactly one recorded state.
+                _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
+                return _cached_resp
+    
+        # T4-M1: prompt redaction immediately before the prompt heads to any
+        # downstream component (context-prep, dispatcher, provider). Off by
+        # default (CHUZOM_REDACTION env unset / off); when on, the scrubbed
+        # prompt replaces the original variable used throughout the rest of
+        # the body. Counts are stashed for the success-path audit row.
+        prompt, _redaction_counts = _maybe_redact(prompt)
+    
+        # Tier-2 / partial OBS-001 — bind routing-turn identity into structlog
+        # contextvars so every log line emitted by this turn (and any nested
+        # call it makes) carries the same ``request_id`` / ``user_id`` /
+        # ``org_id`` / ``agent_id`` keys without manual threading.
+        #
+        # ``request_id`` is the existing 8-hex correlation_id — repurposed so
+        # operators have one consistent name across logs, audit rows, and any
+        # future OTel spans. tenant_id is intentionally absent here; it lands
+        # in Tier 3 once the multi-tenancy product decision is made.
+        import structlog
+        _ctx_payload = {
+            "request_id": correlation_id,
+            "user_id": identity.user_id,
+            "org_id": identity.org_id,
+        }
+        if identity.agent_id:
+            _ctx_payload["agent_id"] = identity.agent_id
+        # T1-M1 (Q-P-2 Phase 3a): tenant_id is bound into log contextvars
+        # when present. In Phase 3a ``current_identity()`` resolves it
+        # from ``CHUZOM_TENANT_ID`` env → ``org_id`` fallback so the field
+        # is always populated in production; the if-guard keeps direct
+        # ``TurnIdentity(...)`` callers (tests, internal helpers) honest.
+        if identity.tenant_id:
+            _ctx_payload["tenant_id"] = identity.tenant_id
+        structlog.contextvars.bind_contextvars(**_ctx_payload)
+    
+        # ── Profile resolution (foundational routing rule) ────────────────────────
+        profile, c, use_thinking = _resolve_profile(
+            profile, complexity_hint, classification_data, prompt, model_override, config
+        )
+        effective_complexity = c.value if hasattr(c, "value") else str(complexity_hint or "moderate")
+        available = config.available_providers
+        with traced_span(
+            "route_and_call",
+            tracer_name="chuzom.router",
+            correlation_id=correlation_id,
+            task_type=task_type,
+            complexity=effective_complexity,
+            profile=profile,
+            model_override=model_override,
+            prompt_chars=len(prompt),
+        ) as route_span:
+            route_log = log.bind(
+                correlation_id=correlation_id,
+                task_type=task_type.value,
+                profile=profile.value,
+                complexity=effective_complexity,
+            )
+    
+            # Budget enforcement — block calls if daily or monthly budget is exceeded.
+            # _pending_spend tracks in-flight estimated costs so concurrent callers
+            # see the full committed + pending total (prevents TOCTOU overrun).
+            global _pending_spend
+            _reservation: float = 0.0
+            # TQ-007: DAILY spend caps do NOT hard-block here. When a daily cap is
+            # exceeded we record the reason and, after the model chain is built,
+            # DOWNGRADE to free-local providers (Ollama/Codex/Gemini-CLI) so work
+            # keeps flowing at $0. Only if no free-local provider is available does
+            # enforce mode decide: `hard` blocks, `smart`/`soft` fall through to
+            # Claude. Caps apply whenever configured, independent of enforce mode
+            # (enforce mode only governs the no-free-fallback branch). The MONTHLY
+            # budget below is a separate, harder ceiling and still hard-blocks.
+            _enforce_mode = "smart"
+            _daily_cap_exc: BudgetExceededError | None = None
+            _cap_downgrade_applied: str = ""  # RED2-02: reason string when downgrade fired
+            async with _budget_lock():
+                from chuzom.repo_config import effective_config as _get_repo_config_for_budget
+                _repo_cfg_budget = _get_repo_config_for_budget()
+                _enforce_mode = _repo_cfg_budget.effective_enforce()
+    
+                def _enforce_or_warn(exc: BudgetExceededError) -> None:
+                    if _enforce_mode == "soft":
+                        route_log.warning("Budget cap exceeded (soft enforce — call proceeding): %s", exc)
+                    else:
+                        raise exc
+    
+                # Guard: chuzom_daily_spend_limit may be MagicMock in tests
+                _raw_daily = getattr(config, "chuzom_daily_spend_limit", 0.0)
+                _env_daily_limit = float(_raw_daily) if isinstance(_raw_daily, (int, float)) else 0.0
+                # routing.yaml daily_caps["_total"] is a second source for the same
+                # global cap. When both are set, use whichever is more restrictive —
+                # a cap is a safety ceiling, so the tighter of the two should win.
+                _yaml_daily_limit = _repo_cfg_budget.total_daily_cap() or 0.0
+                _daily_candidates = [v for v in (_env_daily_limit, _yaml_daily_limit) if v > 0]
+                _daily_limit = min(_daily_candidates) if _daily_candidates else 0.0
+                if _daily_limit > 0:
+                    daily_spend = await cost.get_daily_spend()
+                    if daily_spend + _pending_spend >= _daily_limit:
+                        # TQ-007: record for downgrade instead of blocking here.
+                        _daily_cap_exc = BudgetExceededError(
+                            f"Daily spend limit of ${_daily_limit:.2f} exceeded "
+                            f"(spent: ${daily_spend:.4f} today, local time). "
+                            "Resets at local midnight. "
+                            "To raise the limit: set CHUZOM_DAILY_SPEND_LIMIT env var "
+                            "or routing.yaml's daily_caps._total."
+                        )
+    
+                # Per-task daily cap enforcement — two sources: org-policy.yaml
+                # (cents, org-wide) and routing.yaml's daily_caps (dollars,
+                # per-user/repo). task_caps is stored in CENTS (see OrgPolicy.
+                # task_caps docstring in policy.py, and policy.py:569's
+                # `${v/100:.2f}` display formatting, which already treats it that
+                # way correctly). This comparison used to compare the raw cents
+                # value directly against a dollar-denominated spend without
+                # converting — task_caps: {code: 5000} meant as a $50/day cap was
+                # silently enforced as $5000/day, 100x too permissive. When both
+                # sources are set for a task, use whichever is more restrictive.
+                from chuzom.policy import get_task_cap, load_org_policy
+                org_policy = load_org_policy()
+                task_cap_cents = get_task_cap(task_type.value, org_policy)
+                _org_task_cap = (task_cap_cents / 100) if task_cap_cents else 0.0
+                _yaml_task_cap = _repo_cfg_budget.daily_cap_for(task_type.value) or 0.0
+                _task_cap_candidates = [v for v in (_org_task_cap, _yaml_task_cap) if v > 0]
+                task_cap = min(_task_cap_candidates) if _task_cap_candidates else 0.0
+                if task_cap > 0:
+                    task_daily_spend = await cost.get_daily_spend_by_task_type(task_type.value)
+                    if task_daily_spend + _pending_spend >= task_cap:
+                        # TQ-007: record for downgrade instead of blocking here. A
+                        # per-task cap is the tighter signal, so it wins over a
+                        # not-yet-hit total cap; if both are hit, either exc is fine.
+                        _daily_cap_exc = BudgetExceededError(
+                            f"Task-type daily limit for {task_type.value} (${task_cap:.2f}) exceeded "
+                            f"(spent: ${task_daily_spend:.4f} today, local time). "
+                            f"Resets at local midnight. "
+                            f"To raise the limit: update ~/.chuzom/org-policy.yaml task_caps "
+                            f"or routing.yaml's daily_caps.{task_type.value}."
+                        )
+    
+                if config.chuzom_monthly_budget > 0:
+                    monthly_spend = await cost.get_monthly_spend()
+                    budget = config.chuzom_monthly_budget
+                    if monthly_spend + _pending_spend >= budget:
+                        _enforce_or_warn(BudgetExceededError(
+                            f"Monthly budget of ${budget:.2f} exceeded "
+                            f"(spent: ${monthly_spend:.2f}). "
+                            "To continue: run llm_usage() to see the breakdown, or "
+                            "llm_set_profile(profile='budget') to switch to cheaper models. "
+                            "To raise the limit: set CHUZOM_MONTHLY_BUDGET env var."
+                        ))
+                    if (monthly_spend + _pending_spend) >= budget * 0.9:
+                        log.warning(
+                            "Monthly budget at %.0f%% ($%.2f / $%.2f)",
+                            100 * monthly_spend / budget, monthly_spend, budget,
+                        )
+                        set_span_attributes(route_span, monthly_budget_pressure=monthly_spend / budget)
+    
+                # Reserve estimated cost inside the lock so the next concurrent caller
+                # includes this call's expected spend in its budget check.
+                try:
+                    from chuzom.session_spend import _estimate_cost as _est_fn
+                    _reservation = _est_fn("gpt-4o", len(prompt) // 4, 500)
+                except Exception as e:
+                    log.debug("cost_estimation_failed", error=str(e))
+                    _reservation = 0.0
+                _pending_spend += _reservation
+                # P1-7: the in-process token-pressure reservation moved into the
+                # dispatch loop, where it's keyed to the ACTUAL provider and released
+                # symmetrically per attempt (was: two hardcoded
+                # reserve_tokens("anthropic", 500) here, asymmetrically released).
+    
+            # Structural compaction — shrink prompt before sending to external LLMs
+            # Guard: compaction_mode/threshold may be MagicMock in test mocks
+            compaction_mode = getattr(config, "compaction_mode", "structural")
+            compaction_threshold = getattr(config, "compaction_threshold", 4000)
+            if (
+                isinstance(compaction_mode, str)
+                and compaction_mode != "off"
+                and isinstance(compaction_threshold, int)
+                and task_type not in MEDIA_TASK_TYPES
+            ):
+                prompt, compaction_result = await compact_structural(
+                    prompt, compaction_threshold,
+                )
+                if compaction_result.tokens_saved_estimate > 0:
+                    log.info(
+                        "Compacted prompt: %d→%d chars (~%d tokens saved) [%s]",
+                        compaction_result.original_length,
+                        compaction_result.compacted_length,
+                        compaction_result.tokens_saved_estimate,
+                        ", ".join(compaction_result.strategies_applied),
+                    )
+                    set_span_attributes(
+                        route_span,
+                        compacted=True,
+                        compacted_chars=compaction_result.compacted_length,
+                        tokens_saved_estimate=compaction_result.tokens_saved_estimate,
+                    )
+    
+            models_to_try = await _build_and_filter_chain(
+                task_type, profile, model_override, complexity_hint, c, config
+            )
+    
+            # TQ-007 cap-downgrade is applied LAST (after precision-tier,
+            # subject-specialist and bandit reorder) — see below, just before the
+            # empty-chain check. Applying it here was a bug (RED1-01/RED1-02): those
+            # later steps re-prepend paid models, defeating the filter.
+    
+            # #27 / Option B — precision-tier routing. A short prompt demanding an exact,
+            # verifiable answer (arithmetic / code output / precise count) is the regime
+            # where cheap local models give confident-but-WRONG terse answers with no
+            # runtime signal to catch them (the Gate-16 non-robustness root cause). Front
+            # the reliable cheap metered model (gpt-4o-mini, ~$0.0003) for these so
+            # correctness is robust at negligible cost. Guarded by availability, not
+            # blocked, and no explicit override. Everything else stays cheap-local-first.
+            if (
+                models_to_try and not model_override
+                and _needs_precise_answer(prompt)
+                and "openai" in getattr(config, "available_providers", set())
+                and "openai" not in _blocked_providers()
+            ):
+                _ptier = "openai/gpt-4o-mini"
+                models_to_try = [_ptier] + [m for m in models_to_try if m != _ptier]
+                log.debug("Precision-tier: fronting %s for an exact-answer prompt", _ptier)
+    
+            # Subject specialist override (Plan 07 Phase 3 B.2b).
+            # If the active routing policy declares a specialist for the
+            # classifier's subject (e.g. {"code": "openrouter/qwen-coder"}),
+            # surface that specialist as the first model tried. Pure
+            # transformation; degrades to no-op on any error so routing always
+            # makes forward progress.
+            if models_to_try and not model_override:
+                try:
+                    from chuzom.policy import (
+                        apply_subject_specialist_by_subject,
+                        get_active_policy,
+                    )
+                    subject_str = (classification_data or {}).get("subject")
+                    if subject_str:
+                        models_to_try = apply_subject_specialist_by_subject(
+                            models_to_try, subject_str, get_active_policy()
+                        )
+                except Exception as _spec_err:
+                    log.debug(
+                        "Subject specialist override skipped (continuing): %s",
+                        _spec_err,
+                    )
+    
+            # Plan 07 Cat E — epsilon-greedy bandit reorder.
+            # Replaces judge.reorder_by_quality's hard < 0.7 threshold with a
+            # proper exploit/explore split over (profile, subject, model) outcome
+            # telemetry. Cold-starts to the static order until each candidate
+            # has telemetry.MIN_SAMPLES_FOR_SIGNAL samples, so the first weeks of
+            # routing behave identically to today.
+            #
+            # v10.0.0 migration knob: ``CHUZOM_BANDIT=off`` skips the reorder
+            # entirely so users who need byte-identical pre-v10 routing (e.g. for
+            # reproducible A/B comparisons against a v9 baseline) can opt out.
+            # Disabling forgoes the self-improvement gains the bandit provides.
+            _bandit_off = os.environ.get("CHUZOM_BANDIT", "on").lower() in {"off", "0", "false", "no"}
+            if models_to_try and not model_override and not _bandit_off:
+                try:
+                    from chuzom.bandit import EpsilonGreedyBandit
+                    _bandit = EpsilonGreedyBandit()
+                    _subject = (classification_data or {}).get("subject") or "general"
+                    models_to_try = await _bandit.reorder(
+                        models_to_try,
+                        profile=profile.value,
+                        subject=_subject,
+                    )
+                except Exception as _bandit_err:
+                    log.debug("Bandit reorder skipped (continuing): %s", _bandit_err)
+    
+            # TQ-007 (applied LAST — RED1-01/RED1-02 fix): a daily spend cap was
+            # exceeded → confine the FINAL chain to free-local providers. This runs
+            # after every chain-mutation step (precision-tier fronting, subject
+            # specialist, bandit reorder), each of which could otherwise re-prepend a
+            # paid model after an earlier filter. Keeping this as the last transform
+            # guarantees dispatch never sees a paid provider once the cap is hit.
+            # If ≥1 free-local model survives → run free ($0). If none → enforce mode
+            # decides: `hard` blocks (caller pays nothing); `smart`/`soft` fall
+            # through to Claude. Caps apply whenever configured; enforce mode governs
+            # only this no-free branch.
+            if _daily_cap_exc is not None:
+                _FREE_LOCAL_PROVIDERS = {"ollama", "codex", "gemini_cli"}
+                _free_chain = [
+                    m for m in models_to_try
+                    if provider_from_model(m) in _FREE_LOCAL_PROVIDERS
+                ]
+    
+                async def _release_cap_reservation() -> None:
+                    # Q-RESLEAK (RED1-2-02): a cap-block raise exits route_and_call
+                    # BEFORE _dispatch_model_loop (the only place that releases the
+                    # reservation), so the estimate added to _pending_spend would leak
+                    # forever and bias every future cap check. Release it here on every
+                    # raising exit. Guarded so a later dispatch-loop release can't
+                    # double-decrement.
+                    nonlocal _reservation
+                    if _reservation:
+                        async with _budget_lock():
+                            global _pending_spend
+                            _pending_spend -= _reservation
+                        _reservation = 0.0
+    
+                if _free_chain:
+                    route_log.warning(
+                        "Daily cap exceeded — downgrading to free-local providers "
+                        "(%d model(s), $0). %s",
+                        len(_free_chain), _daily_cap_exc,
+                    )
+                    models_to_try = _free_chain
+                    _cap_downgrade_applied = str(_daily_cap_exc)  # RED2-02: surface it
+                else:
+                    # No free-local survivor. Q-SMART-PAID (RED2-2-01): the previous
+                    # smart/soft branch left the (paid, non-Claude) chain untouched
+                    # and let it dispatch — a SILENT metered paid call under an
+                    # exceeded cap, despite the log saying "falling through to Claude".
+                    # Correct behavior: smart/soft genuinely falls through to Claude,
+                    # i.e. restrict to anthropic/Claude models if the chain has any;
+                    # otherwise (and always under hard) BLOCK — never silently call a
+                    # non-Claude paid provider once the cap is hit.
+                    _claude_chain = [
+                        m for m in models_to_try if provider_from_model(m) == "anthropic"
+                    ]
+                    if _enforce_mode != "hard" and _claude_chain:
+                        route_log.warning(
+                            "Daily cap exceeded, no free-local provider — falling "
+                            "through to Claude (enforce=%s): %s",
+                            _enforce_mode, _daily_cap_exc,
+                        )
+                        models_to_try = _claude_chain
+                        _cap_downgrade_applied = str(_daily_cap_exc)
+                    else:
+                        # hard, OR smart/soft with no Claude to fall through to →
+                        # block. Any remaining candidate is a metered paid provider
+                        # the cap forbids.
+                        await _release_cap_reservation()
+>                       raise _daily_cap_exc
+E                       chuzom.types.BudgetExceededError: Task-type daily limit for code ($10.00) exceeded (spent: $20.0000 today, local time). Resets at local midnight. To raise the limit: update ~/.chuzom/org-policy.yaml task_caps or routing.yaml's daily_caps.code.
+
+src/chuzom/router.py:3518: BudgetExceededError
+=============================== warnings summary ===============================
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_request_model
+  /Users/yaliandrona/Projects/Chuzom/src/chuzom/service.py:332: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_request_model
+  /Users/yaliandrona/Projects/Chuzom/.venv/lib/python3.11/site-packages/fastapi/applications.py:4656: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_endpoint_error_returns_original_order
+tests/test_error_sanitization.py::TestCreateUserErrorMessage::test_logs_internal_error
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_sanitizes_database_error
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_sanitizes_api_error
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_includes_http_status_when_available
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_skips_http_status_when_not_requested
+tests/test_oauth_token_rotation.py::TestTokenRefreshStrategy::test_refresh_handles_exceptions
+  /Users/yaliandrona/Projects/Chuzom/.venv/lib/python3.11/site-packages/structlog/stdlib.py:1166: UserWarning: Remove `format_exc_info` from your processor chain if you want pretty exceptions.
+    ed = p(logger, meth_name, ed)  # type: ignore[arg-type]
+
+tests/test_dashboard_auth.py::test_auth_middleware_allows_index_without_token
+  /Users/yaliandrona/Projects/Chuzom/tests/test_dashboard_auth.py:91: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_dashboard_auth.py::test_auth_middleware_blocks_api_without_token
+  /Users/yaliandrona/Projects/Chuzom/tests/test_dashboard_auth.py:125: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_dashboard_auth.py::test_auth_middleware_allows_api_with_valid_token
+  /Users/yaliandrona/Projects/Chuzom/tests/test_dashboard_auth.py:157: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_judge.py::test_store_judge_score
+  /Users/yaliandrona/Projects/Chuzom/.venv/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:258: RuntimeWarning: coroutine '_evaluate_background' was never awaited
+    return tuple(dict.fromkeys(alias_names)), is_alias_path_only
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/audit/test_policy_switching.py::test_enforce_mode_hard_blocks_soft_warns_and_proceeds
+1 failed, 6397 passed, 174 skipped, 30 deselected, 1 xfailed, 13 warnings in 221.09s (0:03:41)

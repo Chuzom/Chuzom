@@ -1,4 +1,4 @@
-# Chuzom — Extend Your Claude Quota. 3× Longer Sessions.
+# Chuzom — Route eligible prompts to local/free models before spending Claude quota.
 
 <!-- Package -->
 [![PyPI version](https://img.shields.io/pypi/v/chuzom-router?style=flat-square&color=4F46E5)](https://pypi.org/project/chuzom-router/)
@@ -34,7 +34,7 @@
 <p align="center">
   <em>A <strong>Chuzom</strong> is a <strong>confluence</strong> — the place where rivers meet.<br/>
   Fast rapids and deep water, converging, each stream finding its natural path.<br/>
-  That's the router: every prompt flows to the model that fits it, and your Claude quota is spent only where it counts.</em>
+  That's the router: on Claude Code a hook sees every prompt and routes the eligible ones to a local/free model, so Claude quota is spent where it counts. Context-dependent prompts (which a stateless local model can't answer) and provider outages fall back to Claude by design.</em>
 </p>
 
 <p align="center">
@@ -138,8 +138,8 @@ keep the same workflow. The router changes the model choice underneath.**
 <table align="center">
 <tr>
 <td align="center" width="25%">
-  <h3>⏱️ 3–5× Longer Sessions</h3>
-  <p>Route most prompts to free models — hit quota limits far less often</p>
+  <h3>⏱️ Fewer Quota Walls</h3>
+  <p>Route most prompts to free/local models — hit quota limits far less often</p>
 </td>
 <td align="center" width="25%">
   <h3>✅ Quality Preserved</h3>
@@ -150,8 +150,8 @@ keep the same workflow. The router changes the model choice underneath.**
   <p>Auto-downgrade near limits. No more rate-limit walls</p>
 </td>
 <td align="center" width="25%">
-  <h3>⚙️ Zero Config</h3>
-  <p>Works out of the box with a Claude Pro/Max subscription</p>
+  <h3>⚙️ Quick Setup</h3>
+  <p>Two commands (<code>pip install</code> + <code>chuzom install</code>); a local provider (e.g. Ollama) unlocks the free-routing savings</p>
 </td>
 </tr>
 </table>
@@ -286,8 +286,11 @@ Every prompt flows through a smart classification pipeline:
         ✅  Result              🎯 chuzom → <model> · <task> · <latency> · saved $<amount>
 ```
 
-**Zero data leaves your machine.** Chuzom is an MCP server on your workstation — no
-proxy, no cloud, no telemetry. Every routing decision is logged locally.
+**Local-first, no Chuzom telemetry.** Chuzom runs on your workstation and phones home to
+no Chuzom servers — every routing decision is logged locally. Note: if you configure cloud
+providers (e.g. `OPENAI_API_KEY`, `GEMINI_API_KEY`), the classifier and the routing chain
+send prompt text to *those* providers' APIs when they are selected. With only a local
+provider (Ollama) configured, prompt text stays on your machine.
 
 ---
 

@@ -104,7 +104,13 @@ class BudgetBackend(Protocol):
 
     async def release(self, key: BudgetKey, cost_usd: float) -> None: ...
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None: ...
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None: ...
+
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None: ...
 
     def tier_state(self, key: BudgetKey) -> dict[str, float | bool | None]: ...
 
@@ -388,16 +394,30 @@ class SqliteBudgetBackend:
     def _chain_rows(self, key: BudgetKey) -> list[tuple[BudgetKey, _EnvelopeRow]]:
         """Return [(key, row), (parent_key, parent_row), ...] for every
         registered envelope in the chain. Unregistered parents are
-        silently skipped — parity with the in-process manager."""
+        silently skipped — parity with the in-process manager.
+
+        RED1-6-01: walks the parent chain TRANSITIVELY (each registered row's
+        own ``parents`` are followed in turn, breadth-first with a cycle guard),
+        not just one hop. A cap registered 2+ levels above a reservation key
+        (e.g. org → user → agent, each pointing only at its immediate parent —
+        the shape ``BudgetKey.rolls_up_to`` builds) previously never saw the
+        spend and was silently unenforceable."""
         out: list[tuple[BudgetKey, _EnvelopeRow]] = []
-        row = self._load(key)
-        if row is None:
-            return out
-        out.append((key, row))
-        for parent_key in row.parents:
-            parent_row = self._load(parent_key)
-            if parent_row is not None:
-                out.append((parent_key, parent_row))
+        seen: set = set()
+        queue: list[BudgetKey] = [key]
+        while queue:
+            k = queue.pop(0)
+            sk = _serialise_key(k)
+            if sk in seen:
+                continue
+            seen.add(sk)
+            row = self._load(k)
+            if row is None:
+                continue
+            out.append((k, row))
+            for parent_key in row.parents:
+                if _serialise_key(parent_key) not in seen:
+                    queue.append(parent_key)
         return out
 
     async def try_reserve(self, key: BudgetKey, cost_usd: float) -> bool:
@@ -496,24 +516,40 @@ class SqliteBudgetBackend:
             self._conn.execute("ROLLBACK")
             raise
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None:
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None:
         if cost_usd <= 0:
             return
         async with self._lock:
-            await asyncio.to_thread(self._commit_sync, key, cost_usd)
+            await asyncio.to_thread(self._commit_sync, key, cost_usd, settle_pending)
 
-    def _commit_sync(self, key: BudgetKey, cost_usd: float) -> None:
+    def _commit_sync(
+        self, key: BudgetKey, cost_usd: float, settle_pending: bool = True
+    ) -> None:
+        # RED1-5-01: when settle_pending is False the caller (commit_envelope)
+        # has ALREADY released the reservation from pending_usd via release(est).
+        # Decrementing pending_usd a second time here erased a concurrent
+        # sibling's still-outstanding reservation on a shared key, letting a
+        # third caller be admitted past the hard cap. With settle_pending=False
+        # commit becomes a pure "record consumed" ledger write.
         self._begin_immediate_with_retry()
         try:
             chain = self._chain_rows(key)
             now = time.time()
+            _pending_sql = (
+                ", pending_usd = max(0.0, pending_usd - ?)" if settle_pending else ""
+            )
+            _params = (
+                (cost_usd, cost_usd) if settle_pending else (cost_usd,)
+            )
             for env_key, _ in chain:
                 self._conn.execute(
                     "UPDATE envelopes SET "
-                    "consumed_usd = consumed_usd + ?, "
-                    "pending_usd = max(0.0, pending_usd - ?) "
-                    "WHERE key_blob = ?",
-                    (cost_usd, cost_usd, _serialise_key(env_key)),
+                    "consumed_usd = consumed_usd + ?"
+                    + _pending_sql
+                    + " WHERE key_blob = ?",
+                    (*_params, _serialise_key(env_key)),
                 )
                 # T2-L2: record spend event under the same transaction so
                 # the burn-rate query observes consistent committed totals.
@@ -526,6 +562,51 @@ class SqliteBudgetBackend:
                         "(key_blob, amount_usd, committed_at) "
                         "VALUES (?, ?, ?)",
                         (_serialise_key(env_key), cost_usd, now),
+                    )
+            self._conn.execute("COMMIT")
+            for env_key, _ in chain:
+                self._maybe_flip_soft_state(env_key)
+        except Exception:
+            self._conn.execute("ROLLBACK")
+            raise
+
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None:
+        """RED1-7-01: atomically undo the reservation (pending -= est) AND record
+        the real spend (consumed += actual) in ONE lock-hold / ONE transaction.
+
+        commit_envelope previously did release(est) then commit(actual) as two
+        separate awaited, separately-transacted calls; a concurrent try_reserve
+        landing in the gap saw pending already decremented but consumed not yet
+        incremented, and could be admitted past a shared cap. Doing both in a
+        single BEGIN IMMEDIATE removes that window."""
+        if est_cost_usd <= 0 and actual_cost_usd <= 0:
+            return
+        async with self._lock:
+            await asyncio.to_thread(
+                self._settle_sync, key, float(est_cost_usd or 0.0), float(actual_cost_usd or 0.0)
+            )
+
+    def _settle_sync(self, key: BudgetKey, est: float, actual: float) -> None:
+        self._begin_immediate_with_retry()
+        try:
+            chain = self._chain_rows(key)
+            now = time.time()
+            for env_key, _ in chain:
+                self._conn.execute(
+                    "UPDATE envelopes SET "
+                    "consumed_usd = consumed_usd + ?, "
+                    "pending_usd = max(0.0, pending_usd - ?) "
+                    "WHERE key_blob = ?",
+                    (actual, est, _serialise_key(env_key)),
+                )
+                if env_key == key and actual > 0:
+                    self._conn.execute(
+                        "INSERT INTO budget_spend_events "
+                        "(key_blob, amount_usd, committed_at) "
+                        "VALUES (?, ?, ?)",
+                        (_serialise_key(env_key), actual, now),
                     )
             self._conn.execute("COMMIT")
             for env_key, _ in chain:
@@ -717,6 +798,29 @@ def get_budget_backend() -> BudgetBackend:
         try:
             from chuzom.budget_backend_postgres import PostgresBudgetBackend
             _backend = PostgresBudgetBackend()
+            # RED1-8-04: the Postgres backend has no T2-L2 forecast (burn-rate)
+            # tier. When the deployment expects "strict" forecast enforcement
+            # (the enterprise default), selecting Postgres silently disables that
+            # pre-emptive throttle — the hard cap still applies, but the early
+            # burn-rate refusal does not. Warn + alert so operators are not
+            # unknowingly missing a safety tier they believe is on.
+            if _forecast_mode() == "strict":
+                log.warning(
+                    "postgres_backend_no_forecast_tier",
+                    detail="CHUZOM_BUDGET_BACKEND=postgres has no burn-rate "
+                    "forecast tier; strict-forecast enforcement is inactive on "
+                    "this backend (hard cap still enforced). Set "
+                    "CHUZOM_BUDGET_FORECAST_MODE=off to acknowledge, or use the "
+                    "sqlite backend for forecast enforcement.",
+                )
+                try:
+                    from chuzom.alerts import BUDGET_POSTGRES_FALLBACK, emit_alert
+                    emit_alert(
+                        BUDGET_POSTGRES_FALLBACK,
+                        detail={"reason": "postgres_no_forecast_tier"},
+                    )
+                except Exception:
+                    pass
         except (ImportError, RuntimeError) as err:
             # Fail-open: a missing dep or DSN must not break boot.
             # Operators see the warning and can fix; routing continues

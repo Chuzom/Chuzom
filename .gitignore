@@ -140,9 +140,14 @@ mutants/
 .mutmut-cache
 html/
 
-# Local audit / self-review working artifacts — generated on-machine, never committed
+# Local audit / self-review working artifacts — generated on-machine, never committed.
+# On case-insensitive filesystems (macOS) Docs/ collides with docs/, so the
+# earlier `!docs/**` negation would otherwise re-include these — re-ignore both
+# casings explicitly by path.
 Docs/routing-audit-agent/
+docs/routing-audit-agent/
 Docs/self-audit-loop/
+docs/self-audit-loop/
 Docs/AUDIT_PROMPT_*.md
 
 # Re-ignore OS junk under Docs/ — the earlier `!docs/**` negation un-ignores it

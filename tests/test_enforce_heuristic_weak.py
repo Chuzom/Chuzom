@@ -194,3 +194,25 @@ def test_missing_method_treated_as_strong(tmp_path):
     assert result.returncode == 0
     out = json.loads(result.stdout)
     assert out["decision"] == "block"
+
+
+def test_block_output_carries_permission_decision_p0(tmp_path):
+    """CLAUDE-CODE-CONFORMANCE P0: a PreToolUse block must emit the CURRENT
+    hookSpecificOutput.permissionDecision='deny' contract, not only the deprecated
+    top-level decision:block (which relies on a compat shim). Without this, a newer
+    Claude Code that dropped the shim would silently no-op every block while the
+    enforcement log still records BLOCKED — an enforcement + honesty failure."""
+    session_id = "sess-p0-permdecision"
+    _write_pending(tmp_path, session_id, method="heuristic")
+    result = _run_hook(
+        {"session_id": session_id, "tool_name": "Bash",
+         "tool_input": {"command": "rm -rf /tmp/scratch"}},
+        home=tmp_path, extra_env={"CHUZOM_ENFORCE": "hard"},
+    )
+    assert result.returncode == 0
+    out = json.loads(result.stdout)
+    assert out["decision"] == "block"  # legacy field retained for older Claude Code
+    hso = out.get("hookSpecificOutput", {})
+    assert hso.get("hookEventName") == "PreToolUse"
+    assert hso.get("permissionDecision") == "deny"
+    assert hso.get("permissionDecisionReason"), "deny must carry a reason"

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Install LLM Router as an MCP server in Claude Code.
 # Usage: ./scripts/install.sh
+#
+# DEPRECATED (RED2-03): this legacy shell installer duplicates the maintained
+# Python installer and drifted out of parity (it lacked the settings.json
+# atomic-write + backup that install_hooks.py has). Prefer the documented path:
+#     pip install chuzom-router && chuzom install --host claude-code
+# This script's settings.json writes below have been brought to parity (resilient
+# load + timestamped backup of an unparseable file) so it is at least safe if run.
 
 set -euo pipefail
 
@@ -82,11 +89,19 @@ if [ -f "$HOOK_SRC" ]; then
 import json, os
 
 settings_path = os.path.expanduser('~/.claude/settings.json')
+settings = {}
 if os.path.exists(settings_path):
-    with open(settings_path) as f:
-        settings = json.load(f)
-else:
-    settings = {}
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        # RED2-03: back up an unparseable file before we overwrite it.
+        import shutil, time as _t
+        try:
+            shutil.copy(settings_path, settings_path + '.corrupt.%d.bak' % int(_t.time()))
+        except OSError:
+            pass
+        settings = {}
 
 hooks = settings.setdefault('hooks', {})
 ups_hooks = hooks.setdefault('UserPromptSubmit', [])
@@ -102,8 +117,10 @@ if not already:
         'matcher': '',
         'hooks': [{'type': 'command', 'command': hook_cmd}]
     })
-    with open(settings_path, 'w') as f:
+    _tmp = settings_path + '.tmp'
+    with open(_tmp, 'w') as f:
         json.dump(settings, f, indent=2)
+    os.replace(_tmp, settings_path)
     print('Installed auto-routing hook')
 else:
     print('Auto-routing hook already installed')
@@ -122,11 +139,19 @@ if [ -f "$USAGE_HOOK_SRC" ]; then
 import json, os
 
 settings_path = os.path.expanduser('~/.claude/settings.json')
+settings = {}
 if os.path.exists(settings_path):
-    with open(settings_path) as f:
-        settings = json.load(f)
-else:
-    settings = {}
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        # RED2-03: back up an unparseable file before we overwrite it.
+        import shutil, time as _t
+        try:
+            shutil.copy(settings_path, settings_path + '.corrupt.%d.bak' % int(_t.time()))
+        except OSError:
+            pass
+        settings = {}
 
 hooks = settings.setdefault('hooks', {})
 ptu_hooks = hooks.setdefault('PostToolUse', [])
@@ -142,8 +167,10 @@ if not already:
         'matcher': 'llm_',
         'hooks': [{'type': 'command', 'command': hook_cmd}]
     })
-    with open(settings_path, 'w') as f:
+    _tmp = settings_path + '.tmp'
+    with open(_tmp, 'w') as f:
         json.dump(settings, f, indent=2)
+    os.replace(_tmp, settings_path)
     print('Installed usage-refresh hook')
 else:
     print('Usage-refresh hook already installed')

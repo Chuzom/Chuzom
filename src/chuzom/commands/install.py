@@ -50,8 +50,26 @@ def _fail(label: str, fix: str | None = None) -> str:
 
 # ── Command entry point ────────────────────────────────────────────────────────
 
+_INSTALL_HELP = """\
+chuzom install — install Chuzom routing into a host
+
+Usage:
+  chuzom install                     Install for Claude Code (hooks + rules + MCP)
+  chuzom install --host <name>       Install/print config for a specific host
+                                     (claude-code, claude-desktop, cursor, copilot,
+                                     windsurf, gemini-cli, codex, …)
+  chuzom install --mode <mode>       Install mode (auto | gateway)
+  chuzom install --help, -h          Show this help and exit (no changes made)
+"""
+
+
 def cmd_install(args: list[str]) -> int:
     """Entry point for install command."""
+    # CHZ-PKG-007: `--help`/`-h` must be inert — previously it fell straight
+    # through to a real install (file modifications) instead of printing usage.
+    if any(a in ("--help", "-h", "help") for a in args):
+        print(_INSTALL_HELP)
+        return 0
     _run_install(args)
     return 0
 
@@ -372,6 +390,10 @@ Note: cost-routing is not available in Copilot (no hook system).
     "cursor": """\
 {bold}Cursor IDE{reset}  — writing config files…
 """,
+
+    "windsurf": """\
+{bold}Windsurf (MCP native){reset}  — writing config files…
+""",
 }
 
 
@@ -468,6 +490,11 @@ def _install_codex_gateway_config(codex_dir) -> list[str]:
                 _shutil.copy2(config_toml, config_toml.parent / "config.toml.chuzom-bak")
                 actions.append(f"✓ Backed up Codex config to {config_toml.parent / 'config.toml.chuzom-bak'}")
             config_toml.write_text(updated)
+            try:
+                from chuzom import install_manifest
+                install_manifest.record("toml_table", config_toml, header="model_providers.chuzom")
+            except Exception:
+                pass
         except OSError as e:
             actions.append(f"  Could not update Codex gateway config at {config_toml}: {e}")
             return actions
@@ -511,6 +538,11 @@ def _install_codex_files(mode: str = "gateway") -> list[str]:
         with config_yaml.open("a") as f:
             f.write(mcp_block)
         actions.append(f"✓ Added chuzom MCP server to {config_yaml}")
+        try:
+            from chuzom import install_manifest
+            install_manifest.record("text_block", config_yaml, block=mcp_block)
+        except Exception:
+            pass
     else:
         actions.append(f"  chuzom already in {config_yaml} (skipped)")
 
@@ -525,6 +557,11 @@ def _install_codex_files(mode: str = "gateway") -> list[str]:
         _shutil.copy2(src_hook, hook_script)
         hook_script.chmod(0o755)
         actions.append(f"✓ Installed hook script to {hook_script}")
+        try:
+            from chuzom import install_manifest
+            install_manifest.record("file", hook_script)
+        except Exception:
+            pass
 
     hook_entry = {
         "hooks": {
@@ -568,14 +605,25 @@ def _install_codex_files(mode: str = "gateway") -> list[str]:
         if instructions.exists():
             existing_inst = instructions.read_text()
             if "chuzom" not in existing_inst:
+                block = f"\n\n{rules_text}"
                 with instructions.open("a") as f:
-                    f.write(f"\n\n{rules_text}")
+                    f.write(block)
                 actions.append(f"✓ Appended routing rules to {instructions}")
+                try:
+                    from chuzom import install_manifest
+                    install_manifest.record("text_block", instructions, block=block)
+                except Exception:
+                    pass
             else:
                 actions.append(f"  Routing rules already in {instructions} (skipped)")
         else:
             instructions.write_text(rules_text)
             actions.append(f"✓ Created {instructions} with routing rules")
+            try:
+                from chuzom import install_manifest
+                install_manifest.record("created_file", instructions, block=rules_text)
+            except Exception:
+                pass
 
     if mode == "gateway":
         actions += _install_codex_gateway_config(codex_dir)
@@ -608,8 +656,176 @@ def _merge_json_mcp_block(
         servers[server_name] = server_entry
         config_path.write_text(_json.dumps(existing, indent=2))
         actions.append(f"✓ Added chuzom MCP server to {config_path}")
+        # RED2-9-*: record so uninstall reverses it automatically.
+        try:
+            from chuzom import install_manifest
+            install_manifest.record("json_mcp", config_path, root_key=root_key, server=server_name)
+        except Exception:
+            pass
     else:
         actions.append(f"  chuzom already in {config_path} (skipped)")
+    return actions
+
+
+def _remove_json_mcp_block(
+    config_path, server_name: str = "chuzom", root_key: str = "mcpServers"
+) -> list[str]:
+    """RED2-8-01: inverse of _merge_json_mcp_block — surgically remove the chuzom
+    MCP entry from a host's JSON config, leaving every other server intact."""
+    import json as _json
+    import pathlib
+
+    actions: list[str] = []
+    config_path = pathlib.Path(config_path)
+    if not config_path.exists():
+        return actions
+    try:
+        existing = _json.loads(config_path.read_text())
+    except Exception:
+        return actions
+    servers = existing.get(root_key)
+    if isinstance(servers, dict) and server_name in servers:
+        del servers[server_name]
+        try:
+            config_path.write_text(_json.dumps(existing, indent=2))
+            actions.append(f"✓ Removed chuzom MCP server from {config_path}")
+        except OSError as e:
+            actions.append(f"  Could not update {config_path}: {e}")
+    return actions
+
+
+def _remove_toml_table_block(text: str, header: str) -> str:
+    """Remove a `[header]` TOML table and its body (until the next table / EOF).
+
+    RED1-9-02: the body must consume only lines that do NOT begin a new [table].
+    The prior regex used a `(?!\\n\\[)` lookahead that, once the newline was
+    consumed, no longer guarded the next line — so adjacent tables NOT separated
+    by a blank line (valid TOML) were swallowed through EOF, destroying unrelated
+    provider config. The corrected body anchors each line at ^ (MULTILINE) and
+    stops at the first line starting with '['.
+    """
+    import re
+    pattern = re.compile(
+        rf'(?m)^\[{re.escape(header)}\][^\n]*\n(?:(?!\[).*(?:\n|$))*'
+    )
+    return pattern.sub("", text, count=1)
+
+
+def uninstall_host_integrations() -> list[str]:
+    """RED2-8-01: remove the live MCP registrations that `chuzom install --host
+    <codex|cursor|gemini-cli|vscode|copilot-cli|openclaw|trae>` wrote, so a
+    `chuzom uninstall` does not leave dangling `chuzom` entries that break those
+    tools after `pip uninstall`. Each remover is home-scoped and defensive — a
+    no-op when the host was never installed, and never aborts on one host's error.
+
+    NOTE: this is the enumerated LEGACY fallback for the home-directory MCP
+    registrations. New installs are covered authoritatively by the install
+    manifest (install_manifest.apply_uninstall), which also handles the
+    project-scoped writers (.github/copilot-instructions.md, Trae .rules) via
+    their recorded created/appended entries. uninstall_ide_configs() removes the
+    project MCP/rule files it knows (.vscode/mcp.json, .windsurf/mcp.json,
+    .cursor/rules/use-chuzom.mdc) against the cwd.
+    """
+    import pathlib
+    import shutil as _shutil
+    import sys
+
+    actions: list[str] = []
+    home = pathlib.Path.home()
+
+    # JSON MCP registrations (root_key varies by host).
+    json_targets = [
+        (home / ".gemini" / "settings.json", "mcpServers"),
+        (home / ".cursor" / "mcp.json", "mcpServers"),
+        (home / ".config" / "gh" / "copilot" / "mcp.json", "mcpServers"),
+        (home / ".openclaw" / "mcp.json", "mcpServers"),
+        (home / ".config" / "opencode" / "config.json", "mcpServers"),  # RED2-9-01
+    ]
+    if sys.platform == "darwin":
+        json_targets.append((home / "Library" / "Application Support" / "Code" / "User" / "mcp.json", "servers"))
+        json_targets.append((home / "Library" / "Application Support" / "Trae" / "mcp.json", "mcpServers"))
+    elif sys.platform == "win32":
+        appdata = pathlib.Path(home / "AppData" / "Roaming")
+        json_targets.append((appdata / "Code" / "User" / "mcp.json", "servers"))
+        json_targets.append((appdata / "Trae" / "mcp.json", "mcpServers"))
+    else:
+        json_targets.append((home / ".config" / "Code" / "User" / "mcp.json", "servers"))
+        json_targets.append((home / ".config" / "Trae" / "mcp.json", "mcpServers"))
+
+    for path, root_key in json_targets:
+        try:
+            actions += _remove_json_mcp_block(path, "chuzom", root_key)
+        except Exception as e:  # noqa: BLE001 — one host must never abort the rest
+            actions.append(f"  host cleanup skipped for {path}: {e}")
+
+    # Gemini CLI extension directory (whole chuzom extension).
+    try:
+        ext_dir = home / ".gemini" / "extensions" / "chuzom"
+        if ext_dir.exists():
+            _shutil.rmtree(ext_dir, ignore_errors=True)
+            actions.append(f"✓ Removed Gemini CLI extension dir {ext_dir}")
+    except Exception as e:  # noqa: BLE001
+        actions.append(f"  gemini extension cleanup skipped: {e}")
+
+    # Cursor routing-rules file chuzom authored.
+    try:
+        cursor_rules = home / ".cursor" / "rules" / "chuzom.md"
+        if cursor_rules.exists():
+            cursor_rules.unlink()
+            actions.append(f"✓ Removed {cursor_rules}")
+    except Exception as e:  # noqa: BLE001
+        actions.append(f"  cursor rules cleanup skipped: {e}")
+
+    # Codex: remove the gateway TOML table and the appended config.yaml MCP block.
+    try:
+        codex_dir = home / ".codex"
+        config_toml = codex_dir / "config.toml"
+        if config_toml.exists():
+            original = config_toml.read_text()
+            updated = _remove_toml_table_block(original, "model_providers.chuzom")
+            if updated != original:
+                # RED2-10-05: no persistent .chuzom-bak (uninstall leaves nothing
+                # chuzom-authored); the removal regex is ^-anchored + tested.
+                config_toml.write_text(updated)
+                actions.append(f"✓ Removed [model_providers.chuzom] from {config_toml}")
+        config_yaml = codex_dir / "config.yaml"
+        if config_yaml.exists():
+            y = config_yaml.read_text()
+            mcp_block = (
+                "\nmcp:\n"
+                "  servers:\n"
+                "    chuzom:\n"
+                "      command: chuzom\n"
+                "      args: []\n"
+            )
+            if mcp_block in y:
+                config_yaml.write_text(y.replace(mcp_block, ""))
+                actions.append(f"✓ Removed chuzom MCP block from {config_yaml}")
+        # RED2-9-02: strip the LIVE chuzom PostToolUse entry from ~/.codex/hooks.json
+        # (it invokes codex-post-tool.py on every Bash call — a phantom hook after
+        # uninstall). Filter out any PostToolUse entry that references chuzom's hook.
+        import json as _json
+        hooks_json = codex_dir / "hooks.json"
+        if hooks_json.exists():
+            try:
+                cur = _json.loads(hooks_json.read_text())
+                ptu = cur.get("hooks", {}).get("PostToolUse", [])
+                kept = [
+                    entry for entry in ptu
+                    if not any(
+                        "codex-post-tool.py" in str(h.get("command", "")) or ".chuzom/hooks" in str(h.get("command", ""))
+                        for h in entry.get("hooks", [])
+                    )
+                ]
+                if len(kept) != len(ptu):
+                    cur.setdefault("hooks", {})["PostToolUse"] = kept
+                    hooks_json.write_text(_json.dumps(cur, indent=2))
+                    actions.append(f"✓ Removed chuzom PostToolUse hook from {hooks_json}")
+            except (OSError, ValueError):
+                pass
+    except Exception as e:  # noqa: BLE001
+        actions.append(f"  codex cleanup skipped: {e}")
+
     return actions
 
 
@@ -626,15 +842,28 @@ def _append_routing_rules(dest_path, rules_filename: str) -> list[str]:
     if dest_path.exists():
         existing = dest_path.read_text()
         if "chuzom" not in existing:
+            block = f"\n\n{rules_text}"
             with dest_path.open("a") as f:
-                f.write(f"\n\n{rules_text}")
+                f.write(block)
             actions.append(f"✓ Appended routing rules to {dest_path}")
+            try:
+                from chuzom import install_manifest
+                install_manifest.record("text_block", dest_path, block=block)
+            except Exception:
+                pass
         else:
             actions.append(f"  Routing rules already in {dest_path} (skipped)")
     else:
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         dest_path.write_text(rules_text)
         actions.append(f"✓ Created {dest_path} with routing rules")
+        try:
+            from chuzom import install_manifest
+            # RED1-10-02: record the exact text so uninstall strips only chuzom's
+            # content and preserves anything the user appended later.
+            install_manifest.record("created_file", dest_path, block=rules_text)
+        except Exception:
+            pass
     return actions
 
 
@@ -652,6 +881,11 @@ def _copy_hook_script(hook_filename: str, dest_dir) -> tuple[str, list[str]]:
         _shutil.copy2(src, dest)
         dest.chmod(0o755)
         actions.append(f"✓ Installed hook script to {dest}")
+        try:
+            from chuzom import install_manifest
+            install_manifest.record("file", dest)
+        except Exception:
+            pass
     return str(dest), actions
 
 
@@ -696,7 +930,14 @@ def _install_gemini_cli_files() -> list[str]:
 
     # 2. Extension manifest + hooks directory
     ext_dir = gemini_dir / "extensions" / "chuzom"
+    _ext_existed = ext_dir.exists()
     ext_dir.mkdir(parents=True, exist_ok=True)
+    if not _ext_existed:
+        try:
+            from chuzom import install_manifest
+            install_manifest.record("dir", ext_dir)
+        except Exception:
+            pass
 
     ext_manifest = ext_dir / "gemini-extension.json"
     if not ext_manifest.exists():
@@ -912,6 +1153,19 @@ def _install_vscode_files() -> list[str]:
     return actions
 
 
+def _install_windsurf_files() -> list[str]:
+    """Write Windsurf MCP config (project-scoped .windsurf/mcp.json). RED2-10-03:
+    windsurf is documented in README/--help but had no installer, so
+    `chuzom install --host windsurf` was rejected as an unknown host."""
+    import pathlib
+
+    actions: list[str] = []
+    mcp_json = pathlib.Path.cwd() / ".windsurf" / "mcp.json"
+    server_entry = {"command": "chuzom", "args": []}
+    actions += _merge_json_mcp_block(mcp_json, "chuzom", server_entry, root_key="mcpServers")
+    return actions
+
+
 def _install_cursor_files() -> list[str]:
     """Write Cursor IDE MCP config and routing rules. Returns list of actions taken."""
     import pathlib
@@ -959,6 +1213,7 @@ def _install_host(host: str, mode: str = "auto") -> None:
         "factory":    (_install_factory_files,      "Run: factory plugin install ypollak2/chuzom"),
         "vscode":     (_install_vscode_files,       "Restart VS Code and enable MCP in Copilot settings."),
         "cursor":     (_install_cursor_files,       "Restart Cursor and run llm_savings to verify."),
+        "windsurf":   (_install_windsurf_files,     "Restart Windsurf and run llm_savings to verify."),
     }
 
     for h in hosts_to_show:

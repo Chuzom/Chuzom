@@ -1,10 +1,10 @@
 [project]
 name = "chuzom-router"
-version = "1.0.0"
-description = "Smart LLM router for Claude Code, Cursor & Copilot — 3× longer sessions, 60–90% token savings. Auto-routes to Ollama, Codex CLI, and Gemini CLI before burning Claude quota."
+version = "1.1.0"
+description = "LLM cost router. On Claude Code a UserPromptSubmit hook intercepts every prompt and can run eligible ones on local/free providers (Ollama, Codex CLI, Gemini CLI) before using Claude quota; on Cursor/Copilot/Windsurf a rules file asks the host model to route (best-effort, not guaranteed). Savings depend on a configured local provider and workload."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "ypollak2", email = "ypollak2@users.noreply.github.com" },
 ]
@@ -23,7 +23,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -34,7 +33,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.0.0,<2",
     "litellm>=1.50.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
@@ -255,7 +254,7 @@ addopts = "-m 'not slow and not requires_ollama and not requires_api_keys' -q --
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 # Explicit, curated rule set (the classic default) so CI is deterministic and

@@ -5,6 +5,172 @@
 _Nothing yet. Add a bullet here in your PR when you change routing behavior or a
 user-facing surface, then move it under the next version heading at release time._
 
+## v1.1.0 — 2026-08-01 — Honest realized-savings measurement + security/correctness hardening
+
+Independently audited across multiple adversarial review passes. No breaking API changes.
+
+- **Realized-savings ledger (measured, not claimed).** New `execution_events` accounting
+  computes `net_realized_savings_usd` (gross − classifier − failed-attempt − hook overhead) and,
+  for subscription hosts, `realized_quota_tokens_saved` ("Claude tokens not consumed"). Savings
+  are counted **only** for verified-adopted routes; a corroborating `content_match` stays
+  "likely", never "realized". A `chuzom soak --runs N` harness reports a **conservative floor
+  across N runs** (never a single-run point estimate). New `Docs/audit/…` + `Docs/design/VNEXT.md`
+  document the honest scope: today the meter reads a small, defensible positive number; a
+  production `route_id` reconciliation now makes live `chuzom summary` attribute realized savings.
+- **Security / correctness hardening (audit closure).** Plaintext-secret-at-rest sinks now
+  redact + `0600` + TTL-purge; budget-envelope races (cap breach, double-decrement, atomic settle,
+  single release), cross-process concurrency, and a shared-finalization double-spend/ledger-
+  corruption bug are fixed; dashboard unauth token leak (SEC-05), loopback CSRF/DNS-rebind guard
+  (SEC-04), and aiosqlite hang-at-exit (PY-004) resolved. Install/uninstall manifest hardened.
+- **Claude Code conformance.** PreToolUse blocks now emit the current
+  `hookSpecificOutput.permissionDecision:"deny"` alongside the legacy field (no longer reliant on a
+  deprecated shim); UserPromptSubmit context uses the documented `additionalContext`.
+- **Honesty.** Removed unmeasured marketing claims; enforcement-mode messaging (smart/hard/strict
+  banners + labels) corrected to describe what is actually held vs allowed.
+- **Chore.** `requires-python >=3.11` smoke matrix aligned; ruff lint clean.
+
+## v1.0.1 — 2026-07-29 — Hotfix: MCP server dead-on-arrival on fresh install (CHZ-PKG-003)
+
+- **Fix (critical): pin `mcp>=1.0.0,<2`.** The unbounded `mcp>=1.0.0` resolved to `mcp==2.0.0`
+  on any fresh `pip`/`uv pip`/`pipx` install, which removed `mcp.server.fastmcp`, crashing
+  `chuzom.server` at import. The maintainer `uv.lock` (pinned `mcp==1.26.0`) hid this from every
+  dev/CI environment. Reproduced and verified by fresh-resolver A/B test: old constraint →
+  `mcp 2.0.0` → `ModuleNotFoundError: mcp.server.fastmcp`; new constraint → `mcp 1.29.0` →
+  import OK. **1.0.0 should be yanked from PyPI.**
+- **Fix (critical): command injection in `statusline-command.sh` (CHZ-SEC-07).** Hook fields
+  (`transcript_path`, usage numbers, paths) were interpolated unescaped into `python3 -c`
+  source, so a crafted filename executed arbitrary commands on every status-line render. All
+  dynamic values now pass through the environment into single-quoted Python source; bash no
+  longer interpolates data into code. Regression tests: `tests/test_sec07_statusline_injection.py`
+  (behavioral PoC + structural guard against any double-quoted `python3 -c` block).
+- **Fix (critical): the routing latch (CHZ-EXT-201).** `_is_short_code_followup` inherited the
+  `code` classification for *every* ≤15-word prompt after a code turn — sweeping in
+  self-contained questions, disabling direct execution, and pinning `last_route` to `code`
+  permanently (measured 2.32% sustained external execution; 0% from per-session turn 10).
+  Inheritance now requires a real follow-up signal (anaphora/deixis, a definite reference to a
+  code artifact, an inherently-referential verb, or a discourse-marker prefix); self-contained
+  prompts fall through to fresh classification, route, and save a non-code `task_type`, so the
+  latch cannot accumulate. Regression: `tests/test_ext201_routing_latch.py` — labeled corpus +
+  end-to-end `[code] + [self-contained]×12` proving 0/12 inherit (was 0/13 routed).
+- **Fix: realization telemetry (CHZ-EXT-204).** The honor path now writes a `verified_used`
+  `execution_events` row (enforce-route.py `_record_realization_used`), matching the existing
+  `verified_overridden` write on the plain-text-override path. Previously every row had
+  NULL `realization_status`/`used_by_host`/`accepted`, so the product could not measure its own
+  bypass rate. Regression: `tests/test_ext204_realization_telemetry.py` proves a mixed run has
+  0 NULL-realization rows and a computable bypass rate. Related banner over-reporting
+  (CHZ-EXT-209) is substantially mitigated by the latch fix, which removes the phantom
+  `code-context-inherit` turns that displayed a model name for a call that never happened.
+- **Fix: `chuzom verify` exit code (CHZ-PKG-005).** `cli.py` discarded `verify.main()`'s return
+  value, so a broken install always exited 0. Now `sys.exit(_verify_main(...))`; a broken
+  install exits 1 (verified). _Deferred:_ a real end-to-end canary route inside `verify`
+  (CHZ-PKG-010) — tracked for a follow-up.
+- **Fix (critical): cross-project semantic-cache leak (CHZ-ST-004).** `semantic_cache` had no
+  project column, so a query in project B could return project A's cached response (observed at
+  similarity 1.000). Entries are now scoped by a project hash (cwd / `CHUZOM_PROJECT_DIR`), with
+  an idempotent column migration; legacy rows age out via TTL. Regression:
+  `tests/test_st004_semantic_cache_project_scope.py` — identical-embedding query in a different
+  project MISSES; same project still HITS.
+- **Fix (critical): fail-open on read-only `~/.chuzom` (CHZ-ST-003).** A module-level
+  `PolicyManager` mkdir'd `~/.chuzom/policies` at hook import; a read-only state dir raised
+  PermissionError and crashed the hook (exit 1). `_ensure_policy_dir` now fails open, and the
+  hook entrypoint wraps `main()` to exit 0 on any unexpected error. Verified: read-only dir →
+  exit 0, no traceback; healthy dir still routes.
+- **Fix: session_id path traversal (CHZ-ST-001/CHZ-SEC-08).** Per-session state files
+  (`last_route_`, `pending_route_`, `transcript_`, `session_`, `violations_`,
+  `last_classification_`) interpolated the raw session_id into a `~/.chuzom` path, so
+  `../../tmp/evil` escaped the state dir. All sinks now run `_safe_sid` (mirrors
+  `session_store._sanitize`: keep `[A-Za-z0-9._-]`, map `/`→`_`). Regression:
+  `tests/test_st001_st003_isolation_failopen.py`.
+- **Fix: one shared secret scrubber (CHZ-SEC-01/02/09, ST-006).** `secret_scrubber.scrub_text`
+  is now the single superset (merged the GitHub-token, `UPPER_KEY=value` and PEM patterns from
+  the drifted `session_store` scrubber). `transcript_*.jsonl` is scrubbed and written 0600 (was
+  full prompt+response at 0644); the `pending_route` prompt is scrubbed (ST-006); `session_store`
+  delegates to the canonical scrubber (its `password:` drift is closed). Regression:
+  `tests/test_sec01_shared_scrubber.py` — 8-secret battery, 0 unredacted, transcript 0600.
+- **Fix: SSRF via `CHUZOM_OLLAMA_URL` (CHZ-SEC-06).** `validate_ollama_url` (also a pydantic
+  field validator on `ollama_base_url`) rejects non-`http(s)` schemes (`file://`, `gopher://`)
+  and cloud-metadata / link-local / unspecified hosts before any `urlopen`. Regression:
+  `tests/test_sec06_ollama_url_ssrf.py`.
+- **Fix: env leak to child CLIs (CHZ-SEC-03).** `get_safe_env`'s blocklist missed
+  `AWS_ACCESS_KEY_ID`, `GH_PAT`, `DATABASE_URL`; broadened to the credential classes
+  (`AWS_*`, `*ACCESS_KEY*`, `*_PAT`, `*DATABASE_URL`, `*_DSN`, `*CONNECTION_STRING*`, …).
+  Regression: `tests/test_sec03_env_allowlist.py`. _Deferred:_ local-HTTP-server auth
+  (CHZ-SEC-04) and the dashboard token on the unauth index (CHZ-SEC-05) — server-hardening
+  tracked for a follow-up.
+- **Fix: `requires-python = ">=3.11"` (CHZ-PY-001/002).** The code uses `asyncio.timeout()`
+  (classifier.py, ensemble.py) and `import tomllib` unguarded — both 3.11+ — so `>=3.10` was
+  false. Floor raised, the 3.10 classifier dropped, `ruff target-version = py311`, and CI now
+  also runs 3.12 (previously omitted). Regression: `tests/test_pkg_python_and_install.py`.
+- **Fix: `chuzom install --help` is inert (CHZ-PKG-007).** It fell through to a real install
+  (file modifications); now it prints usage and exits 0 with no changes.
+- **Fix: back up a malformed `settings.json` before overwriting (CHZ-PKG-008).** `_load_settings`
+  silently returned `{}` on a parse error, so a user-authored-but-malformed file was overwritten
+  and lost. `_save_settings` now copies an unparseable file to `settings.json.corrupt.<ts>.bak`
+  first and writes atomically. Regression tests included.
+- **Docs: reworded overstated claims (CHZ-AUD-010).** The PyPI description and README hero no
+  longer assert unbacked magnitudes ("3× longer sessions", "60–90%") or unqualified absolutes
+  ("every prompt flows", "no cloud"); push (Claude Code, hook-intercepted) vs pull
+  (Cursor/Copilot, best-effort) is stated, and the cloud-provider data-flow caveat is explicit.
+  Guard: `tests/test_claims_no_fabricated_magnitudes.py`. _Deferred:_ wiring `routing.yaml`
+  `daily_caps` into `route_and_call` (CHZ-TQ-007, needs spend-ledger integration), the single
+  provider-name enum (CHZ-PRV-01/02), and the aiosqlite daemon-thread fix at the remaining 5
+  call sites (CHZ-PY-004) — tracked for a follow-up.
+- **CI: permanent recurrence gates (G1/G4/G5/G6).** G1 — `publish-pypi.yml` now installs the
+  built wheel into a clean venv with **fresh dependency resolution (no lockfile)** and starts the
+  MCP server / lists its tools before publishing (the exact check whose absence let CHZ-PKG-003
+  ship); proven locally: fresh install → `mcp 1.29` → 11 tools. G4 — a test-hygiene ratchet
+  (`scripts/quality_gate_test_hygiene.sh`) fails if new can't-fail (`except: pass`) tests are
+  added above the frozen baseline (33). G5 — a dedicated `quality-gates` CI job runs the full
+  audit regression suite for the six fixed criticals. G6 — the fabricated-claims guard runs in
+  CI. _Deferred:_ G2 (multi-turn canary soak) and G3 (telemetry-completeness in CI) require
+  vendoring the fake-provider harness into the repo. **G2 now shipped** — see below.
+- **CI: G2 multi-turn soak gate (CHZ-EXT-201).** `tests/test_g2_soak_no_decay.py` drives the real
+  hook across 4 sessions × 15 turns, interleaving code edits with self-contained questions, and
+  asserts self-contained prompts are routed *fresh* (never inherit `code`) at every turn position
+  including turn 10+ — the historically-dead zone. Runs in the `quality-gates` CI job (~8s). This
+  is the gate a single-turn test structurally cannot be.
+- **CI: G3 realization-telemetry gate (CHZ-EXT-204).** `tests/test_g3_realization_soak.py` drives
+  the *real* hooks — `enforce-route.py` on a routed tool call (honor → `verified_used`) and
+  `stop-enforce.py` on a plain-text turn (override → `verified_overridden`) — and asserts the
+  `execution_events` ledger has zero NULL realization rows, a computable bypass rate, and a
+  session_id on every row. Runs in the `quality-gates` CI job.
+- **Fix: aiosqlite hang-at-exit at all call sites (CHZ-PY-004).** The daemon-thread fix reached
+  only 1 of the `aiosqlite.connect()` sites; a dropped connection at loop shutdown left a
+  non-daemon worker keeping the interpreter alive. Extracted the marker to a single shared
+  `chuzom/aiosqlite_util.mark_worker_daemon` and applied it — crucially *before* the connection
+  is awaited (marking a started worker is a no-op) — at every site (budget, provider_budget,
+  receipt_store, quota_tracker, litellm_budget ×2); `cost.py` delegates to the shared helper.
+  Regression: `tests/test_py004_aiosqlite_daemon.py` — mechanism (daemon set before await) +
+  a subprocess that drops a connection and must exit cleanly within 15s.
+- **Fix: dashboard token leak on the unauth index (CHZ-SEC-05).** `auth_middleware` exempted
+  `/` from auth, and the index injects the dashboard token into the page — so any
+  unauthenticated request to the port received the token and could then call every API. The
+  exemption is removed (token compared with `secrets.compare_digest`); the launcher already logs
+  the tokenized URL, so a legitimate user still gets in and an unauthenticated `GET /` now
+  returns 401 with no token. Regression: `tests/test_sec05_dashboard_token.py` (live server on a
+  random port).
+- **Fix: CSRF / DNS-rebinding guard on the loopback model-call servers (CHZ-SEC-04).** Every POST
+  to `route_server` (127.0.0.1:7338) and the `gateway` (127.0.0.1:17900) can trigger a real,
+  possibly paid, model call, but there was no defense against a browser reaching them via CSRF or
+  DNS-rebinding. A single shared `route_server.is_forbidden_cross_origin` (also used by a FastAPI
+  middleware on the gateway) rejects requests whose `Host` is not loopback (defeats rebinding —
+  the browser still sends `Host: attacker.com`) or that carry a cross-site `Origin`/`Referer`.
+  CLI/SDK clients (`OPENAI_BASE_URL`/`ANTHROPIC_BASE_URL`) send a loopback Host and no browser
+  Origin, so they are unaffected; operators fronting the server behind a proxy can allow their
+  host via `CHUZOM_ALLOWED_HOSTS`. Regression: `tests/test_sec04_local_server_origin_guard.py`.
+
+- **Change: daily spend caps DOWNGRADE to free-local instead of hard-blocking (CHZ-TQ-007).**
+  routing.yaml `daily_caps` + org-policy `task_caps` were already wired (they blocked); they now
+  follow the signed-off graceful behavior: an exceeded daily cap drops paid providers and routes
+  to free-local (Ollama/Codex/Gemini-CLI) at $0. If no free-local provider is available, enforce
+  mode decides — `hard` blocks, `smart`/`soft` fall through to Claude. Caps apply whenever
+  configured, independent of enforce mode (enforce mode only governs the no-free branch). The
+  monthly budget remains a hard block. Rewrote the stale `_BUG` test (which passed for the wrong
+  reason — it patched the config object but never `effective_config`, masking that caps were
+  wired) into a correct positive test. Regression: `tests/test_tq007_daily_cap_downgrade.py`
+  (downgrade / hard-block / smart-fallthrough / no-cap / total-cap) + updated
+  `tests/audit/test_policy_switching.py`.
+
 ## v1.0.0 — 2026-07-28 — First stable release: measured, independently audited routing — non-breaking
 
 The 1.0 milestone. Routing quality and cost savings are no longer *assumed* — they are

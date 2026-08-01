@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import threading
 from pathlib import Path
 
 import aiosqlite
@@ -520,14 +519,10 @@ def _mark_worker_daemon(conn: "aiosqlite.Connection") -> None:
     Setting ``daemon`` on an already-started thread raises RuntimeError; that
     is fine — a started worker was already daemon-marked pre-await.
     """
-    worker = getattr(conn, "_thread", conn)
-    if not isinstance(worker, threading.Thread):
-        return
-    try:
-        worker.daemon = True
-    except RuntimeError:
-        # Thread already started — it was daemon-marked before it started.
-        pass
+    # CHZ-PY-004: delegate to the single shared implementation so every
+    # aiosqlite.connect() site marks its worker identically (no per-file drift).
+    from chuzom.aiosqlite_util import mark_worker_daemon
+    mark_worker_daemon(conn)
 
 
 async def _get_db() -> aiosqlite.Connection:
@@ -814,23 +809,89 @@ async def get_correction_count(tool: str) -> int:
 async def get_monthly_spend() -> float:
     """Get total USD spent on external LLMs in the current calendar month.
 
+    RED1-07: uses a LOCAL-time month boundary to match get_daily_spend* (both
+    reference the user's local calendar), so "today" for the daily cap is always
+    a consistent subset of "this month" for the monthly cap. Previously this used
+    a UTC 'start of month' while the daily functions used 'localtime', so at
+    non-UTC offsets the two caps' reset windows disagreed by up to the offset
+    around a month boundary.
+
     Returns:
         Total spend as a float. Returns 0.0 if no usage data exists.
     """
     db = await _get_db()
     try:
+        # Mirror get_daily_spend's frame exactly: convert the stored (UTC)
+        # timestamp to LOCAL, then compare the local year-month. Using
+        # strftime(..., 'localtime') on both sides keeps the reference frame
+        # identical to the daily function (which does date(timestamp,'localtime')
+        # = date('now','localtime')), so daily-today is always inside monthly-now.
         cursor = await db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) FROM usage "
-            "WHERE timestamp >= datetime('now', 'start of month')"
+            "WHERE strftime('%Y-%m', timestamp, 'localtime') = "
+            "strftime('%Y-%m', 'now', 'localtime')"
         )
         row = await cursor.fetchone()
-        return float(row[0]) if row else 0.0
+        winning = float(row[0]) if row else 0.0
+        # RED1-2-01: include this month's billable-but-rejected attempts, so the
+        # monthly hard-block ceiling sees the same real spend the daily cap does.
+        return winning + await _rejected_attempt_spend(db, "month")
     finally:
         await db.close()
 
 
+async def _rejected_attempt_spend(db, period: str = "day", task_type: str | None = None) -> float:
+    """RED1-08/RED1-2-01: sum billable-but-REJECTED provider attempts for a period.
+
+    ``cost.log_usage`` only records the WINNING attempt to the ``usage`` table,
+    so a paid model that was tried, billed, then rejected (by a contract gate or
+    quality escalation) is invisible to the cap-checks that read ``usage``. The
+    execution ledger records every attempt with ``rejected`` + ``measured_cost_usd``,
+    and the winning attempt is separately marked ``accepted`` — so summing only
+    ``rejected=1`` rows gives exactly the extra cost missing from ``usage``, with
+    no double-count.
+
+    ``period`` is "day" (local calendar day) or "month" (local calendar month),
+    matching the frames of get_daily_spend*/get_monthly_spend respectively.
+    Fail-open: any error returns 0.0 so the cap-check degrades to the previous
+    under-count rather than breaking routing.
+    """
+    try:
+        if period == "month":
+            time_pred = (
+                "strftime('%Y-%m', ts, 'unixepoch', 'localtime') = "
+                "strftime('%Y-%m', 'now', 'localtime')"
+            )
+        else:  # day
+            time_pred = "date(ts, 'unixepoch', 'localtime') = date('now','localtime')"
+        where = (
+            f"rejected = 1 AND COALESCE(measured_cost_usd, 0) > 0 AND {time_pred}"
+        )
+        params: tuple = ()
+        if task_type is not None:
+            where += " AND task_type = ?"
+            params = (task_type,)
+        cursor = await db.execute(
+            f"SELECT COALESCE(SUM(measured_cost_usd), 0) FROM execution_events WHERE {where}",
+            params,
+        )
+        row = await cursor.fetchone()
+        return float(row[0]) if row else 0.0
+    except Exception:  # noqa: BLE001 — cap-check must never break on ledger read
+        return 0.0
+
+
+async def _rejected_attempt_spend_today(db, task_type: str | None = None) -> float:
+    """Back-compat shim: today's rejected-attempt spend (delegates to _rejected_attempt_spend)."""
+    return await _rejected_attempt_spend(db, "day", task_type)
+
+
 async def get_daily_spend() -> float:
-    """Get total USD spent on external LLMs today (UTC calendar day).
+    """Get total USD spent on external LLMs today (local calendar day).
+
+    Includes both winning calls (``usage`` table) and billable-but-rejected
+    provider attempts (execution ledger, RED1-08), so the cap-check sees the real
+    cumulative spend — not just the spend of calls that happened to be accepted.
 
     Returns:
         Total spend as a float. Returns 0.0 if no usage data exists.
@@ -842,7 +903,8 @@ async def get_daily_spend() -> float:
             "WHERE date(timestamp,'localtime') = date('now','localtime')"
         )
         row = await cursor.fetchone()
-        return float(row[0]) if row else 0.0
+        winning = float(row[0]) if row else 0.0
+        return winning + await _rejected_attempt_spend_today(db)
     finally:
         await db.close()
 
@@ -864,7 +926,9 @@ async def get_daily_spend_by_task_type(task_type: str) -> float:
             (task_type,),
         )
         row = await cursor.fetchone()
-        return float(row[0]) if row else 0.0
+        winning = float(row[0]) if row else 0.0
+        # RED1-08: include rejected billable attempts for this task type.
+        return winning + await _rejected_attempt_spend_today(db, task_type)
     finally:
         await db.close()
 
@@ -3031,7 +3095,12 @@ async def get_cache_savings(period: str = "today") -> dict[str, float]:
         elif period == "week":
             time_filter = "timestamp >= datetime('now', '-7 days')"
         elif period == "month":
-            time_filter = "timestamp >= datetime('now', 'start of month')"
+            # RED1-07: local-frame month boundary, consistent with the "today"
+            # filter above (was a UTC 'start of month').
+            time_filter = (
+                "strftime('%Y-%m', timestamp, 'localtime') = "
+                "strftime('%Y-%m', 'now', 'localtime')"
+            )
         else:  # all
             time_filter = "1"
 

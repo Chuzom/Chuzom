@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from chuzom.compaction import collapse_whitespace, dedup_sections
+from chuzom.file_lock import exclusive_lock
 from chuzom.token_budget import truncate_to_budget
 
 # ── Self-injection guard ─────────────────────────────────────────────────────
@@ -84,9 +85,39 @@ _SECRET_PATTERNS = [
 
 
 def _scrub_secrets(text: str) -> str:
-    """Redact credential patterns from event content before persistence."""
-    for pat in _SECRET_PATTERNS:
-        text = pat.sub("[REDACTED]", text)
+    """Redact credential patterns from event content before persistence.
+
+    D-01/B-03: routes through the shared ``persist_redact()`` (layers the
+    structured PII patterns, the canonical ``secret_scrubber.scrub_text``,
+    and a broadened unanchored "prose secret" pass, e.g. "the launch code is
+    ORANGE-742"), gated by ``CHUZOM_PERSIST_RAW`` / ``CHUZOM_PERSIST_REDACTION``.
+    Falls back to calling ``secret_scrubber.scrub_text`` directly if the
+    redaction module can't be imported (config unavailable, etc).
+
+    The local ``_SECRET_PATTERNS`` belt-and-suspenders pass still runs
+    afterward — UNLESS ``CHUZOM_PERSIST_RAW=1``, in which case skipping it is
+    required for the raw opt-in escape hatch to actually mean raw.
+    """
+    try:
+        from chuzom.enterprise.redaction import persist_redact
+        text = persist_redact(text)
+    except Exception:
+        try:
+            from chuzom.secret_scrubber import scrub_text
+            text = scrub_text(text)
+        except Exception:
+            pass
+
+    try:
+        from chuzom.config import get_config
+        persist_raw = bool(getattr(get_config(), "chuzom_persist_raw", False))
+    except Exception:
+        persist_raw = False
+
+    if not persist_raw:
+        # Belt-and-suspenders: local patterns (PEM etc.) as a fallback / extra pass.
+        for pat in _SECRET_PATTERNS:
+            text = pat.sub("[REDACTED]", text)
     return text
 
 
@@ -133,6 +164,19 @@ def _sanitize(session_id: str) -> str:
 
 def _session_path(session_id: str) -> Path:
     return _project_dir() / f"session_context_{_sanitize(session_id)}.jsonl"
+
+
+def _lock_path(path: Path) -> Path:
+    """Sibling lock file for *path* (a JSONL data file).
+
+    Deliberately a *different* file from the data file itself: compaction
+    swaps the data file's inode via ``os.replace()``, and locking that inode
+    directly would leave a stale/orphaned lock on the replaced-away copy.
+    The lock file's own identity is never swapped, so it stays a stable
+    synchronization point across the whole append-then-maybe-compact
+    critical section (CHZ-AUD-C-01).
+    """
+    return path.with_name(path.name + ".lock")
 
 
 def _pointer_path() -> Path:
@@ -275,6 +319,65 @@ def _last_record(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def _first_record(path: Path) -> dict[str, Any] | None:
+    """Best-effort read of the FIRST well-formed JSON line in *path*.
+
+    Records are always appended in chronological order, so the first line's
+    age is a cheap proxy for "does this file contain ANY TTL-expired record"
+    — avoids a full-file scan on every append just to check retention.
+    """
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    return json.loads(line)
+                except Exception:
+                    continue
+        return None
+    except Exception:
+        return None
+
+
+def _persist_ttl_seconds() -> float:
+    """Global physical-retention TTL (``CHUZOM_PERSIST_TTL_DAYS``), in seconds.
+
+    B-02: independent of ``cleanup_old_sessions()``'s whole-FILE mtime-based
+    ``_TTL_DAYS`` sweep below — this governs per-RECORD physical deletion
+    during compaction, so a long-lived session file can't accumulate records
+    well past the retention window just because the session itself stays
+    active. 0 (or lower) disables purging.
+    """
+    try:
+        from chuzom.config import get_config
+        days = float(getattr(get_config(), "chuzom_persist_ttl_days", 30))
+    except Exception:
+        days = 30.0
+    return max(days, 0.0) * 86_400
+
+
+def purge_expired(session_id: str | None) -> None:
+    """Public helper: physically purge TTL-expired records for *session_id*.
+
+    Runs the same per-record TTL check ``_maybe_compact()`` performs
+    automatically after every ``record_event()`` call — exposed directly so
+    tests / external maintenance passes can force a purge without waiting
+    for (or synthesizing) another append.
+    """
+    try:
+        if not session_id:
+            return
+        path = _session_path(session_id)
+        if not path.exists():
+            return
+        with exclusive_lock(_lock_path(path)):
+            _maybe_compact(path)
+    except Exception:
+        pass
+
+
 def record_event(
     session_id: str | None,
     kind: str,
@@ -313,43 +416,62 @@ def record_event(
 
         content_hash = _content_hash(text)
         path = _session_path(session_id)
-
-        prev = _last_record(path)
-        if prev and prev.get("h") == content_hash:
-            return  # consecutive-duplicate dedupe
-
-        record = {
-            "ts": time.time(),
-            "kind": kind,
-            "role": role,
-            "task_type": task_type or "",
-            "tool": tool,
-            "model": model,
-            "content": text,
-            "h": content_hash,
-        }
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            # NB: `text` is secret-scrubbed by _scrub_secrets() above (~L309) and
-            # the file is chmod 0600 / local-only. Storing scrubbed session
-            # context in clear text is the accumulator's purpose (routed models
-            # read it back). The CodeQL py/clear-text-storage-sensitive-data alert
-            # here is a reviewed false positive (dismissed) — the regex scrubber
-            # just isn't modelled as a sanitizer by CodeQL.
-            fh.write(json.dumps(record) + "\n")
-        try:
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
 
-        _maybe_compact(path)
+        # CHZ-AUD-C-01: the append (dedupe-check + write) and any triggered
+        # compaction must run as one atomic unit across processes. Without
+        # this lock, a concurrent process's compaction can read a stale
+        # snapshot of the file (taken before this process's append lands),
+        # then os.replace() the file with that stale snapshot — silently
+        # dropping this process's just-written record even though the write
+        # itself succeeded. Held for the duration of both the append and any
+        # compaction it triggers; a sibling `.lock` file is used rather than
+        # locking the JSONL itself, so compaction's os.replace() swap of the
+        # data file's inode never disturbs the lock's identity.
+        with exclusive_lock(_lock_path(path)):
+            prev = _last_record(path)
+            if prev and prev.get("h") == content_hash:
+                return  # consecutive-duplicate dedupe
+
+            record = {
+                "ts": time.time(),
+                "kind": kind,
+                "role": role,
+                "task_type": task_type or "",
+                "tool": tool,
+                "model": model,
+                "content": text,
+                "h": content_hash,
+            }
+            with path.open("a", encoding="utf-8") as fh:
+                # NB: `text` is secret-scrubbed by _scrub_secrets() above
+                # (~L309) and the file is chmod 0600 / local-only. Storing
+                # scrubbed session context in clear text is the
+                # accumulator's purpose (routed models read it back). The
+                # CodeQL py/clear-text-storage-sensitive-data alert here is
+                # a reviewed false positive (dismissed) — the regex
+                # scrubber just isn't modelled as a sanitizer by CodeQL.
+                fh.write(json.dumps(record) + "\n")
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+
+            _maybe_compact(path)
     except Exception:
         pass
 
 
 def _maybe_compact(path: Path) -> None:
     """Rewrite *path* to keep only its newest ``_COMPACT_TO`` records once it
-    exceeds ``_MAX_FILE_BYTES`` or ``_MAX_RECORDS`` lines."""
+    exceeds ``_MAX_FILE_BYTES`` or ``_MAX_RECORDS`` lines, or once its oldest
+    record exceeds the persistence TTL.
+
+    B-02: TTL enforcement here is a PHYSICAL delete — expired lines are
+    dropped from the rewrite and are gone from the on-disk bytes, not just
+    filtered at read time. Survives a fresh process/store instance because
+    it operates on the file itself, not in-memory state.
+    """
     try:
         try:
             size = path.stat().st_size
@@ -361,6 +483,17 @@ def _maybe_compact(path: Path) -> None:
             with path.open("r", encoding="utf-8", errors="ignore") as fh:
                 count = sum(1 for _ in fh)
             need_compact = count > _MAX_RECORDS
+
+        ttl_seconds = _persist_ttl_seconds()
+        ttl_cutoff = time.time() - ttl_seconds if ttl_seconds > 0 else None
+        if not need_compact and ttl_cutoff is not None:
+            first = _first_record(path)
+            if first is not None:
+                try:
+                    if float(first.get("ts", 0)) < ttl_cutoff:
+                        need_compact = True
+                except Exception:
+                    pass
         if not need_compact:
             return
 
@@ -371,9 +504,15 @@ def _maybe_compact(path: Path) -> None:
                 if not line:
                     continue
                 try:
-                    json.loads(line)  # validate; keep raw line to avoid re-encoding cost
+                    parsed = json.loads(line)  # validate; keep raw line to avoid re-encoding cost
                 except Exception:
                     continue
+                if ttl_cutoff is not None:
+                    try:
+                        if float(parsed.get("ts", 0)) < ttl_cutoff:
+                            continue  # B-02: physically drop expired record
+                    except Exception:
+                        pass
                 records.append(line)
 
         newest = records[-_COMPACT_TO:]
@@ -469,7 +608,9 @@ def build_session_context(
         mode = get_mode()
         if mode == "off":
             return ""
-        if mode == "local" and target_provider in ("openai", "gemini"):
+        # RED2-04: block context egress to ANY non-free-local provider under
+        # `local` (was a two-provider allowlist that let Perplexity through).
+        if mode == "local" and target_provider not in ("ollama", "codex", "gemini_cli"):
             return ""
 
         records = load_events(session_id, limit=200)

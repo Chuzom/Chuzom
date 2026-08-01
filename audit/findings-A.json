@@ -1,0 +1,186 @@
+[
+  {
+    "id": "CHZ-AUD-A-01",
+    "title": "Failed provider dispatch attempts are never recorded in the execution ledger (attempt_failed event never emitted)",
+    "severity": "HIGH",
+    "confidence": "HIGH (source-confirmed + execution-confirmed)",
+    "component": "src/chuzom/router.py (dispatch loop), src/chuzom/execution_ledger.py (schema)",
+    "claim_affected": "Observability/telemetry accuracy — 'the ledger records every routing attempt' / cost & savings dashboards built on execution_events",
+    "evidence": [
+      "execution_ledger.py defines 'attempt_failed' as a recognized event_type in its schema / _BILLABLE_EVENTS constant.",
+      "grep -n \"attempt_failed\" src/chuzom/router.py returns zero matches.",
+      "router.py's two exception-handling blocks in the dispatch loop (~lines 2645-2692 and ~2799-2806) catch the provider exception, log it, and advance to the next model in the chain, without ever calling any ledger-emit function with event_type=\"attempt_failed\" or equivalent.",
+      "Executed reproduction (failure_ledger_probe.py): injected RuntimeError on first 2 dispatch attempts, 3rd succeeds. route_and_call() returns successfully; CALLS shows 3 acompletion invocations were made. execution_events table (real SQLite, hermetic tmp DB) contains only 1 attempt_completed row and 1 route_completed row — the 2 failed attempts produced zero ledger rows."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom",
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/failure_ledger_probe.py",
+      "Inspect printed 'raw execution_ledger rows' section: 3 acompletion calls logged in CALLS, but execution_events query returns only 1 row."
+    ],
+    "expected": "Each of the 3 dispatch attempts (2 failed + 1 succeeded) produces a corresponding execution_events row, with the 2 failures recorded as attempt_failed (or equivalent) carrying the error_message and failed model/provider.",
+    "actual": "Only the single successful attempt is recorded. The 2 failed attempts leave no trace in execution_events.",
+    "impact": "Any reporting, cost analysis, or reliability dashboard built on execution_events will systematically undercount real provider failures and retries. A provider with a high failure-then-retry rate looks identical, in the ledger, to a provider that succeeds on the first try every time — masking reliability problems and making retry-driven latency/cost invisible.",
+    "root_cause": "The dispatch loop's except blocks handle control flow (advance to next model) but were never wired to call the ledger's attempt-emission function for the failure case, even though the ledger schema already anticipates this event type.",
+    "recommended_fix": "In both exception-handling blocks in router.py's dispatch loop, call the ledger emit function with event_type=\"attempt_failed\", populating model/provider/error_message/route_id before continuing to the next candidate model.",
+    "regression_test": "Extend failure_ledger_probe.py (or a pytest equivalent) into the permanent test suite: inject N failures then a success, assert execution_events contains N attempt_failed rows plus 1 attempt_completed row plus 1 route_completed row."
+  },
+  {
+    "id": "CHZ-AUD-A-02",
+    "title": "agent_session_id is not threaded into the ledger's session_id column, causing get_session_accounting(agent_session_id) to silently return empty accounting",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed + execution-confirmed)",
+    "component": "src/chuzom/router.py (route_and_call signature), src/chuzom/execution_ledger.py (get_session_accounting)",
+    "claim_affected": "API contract of route_and_call(agent_session_id=...) / per-session cost & savings accounting",
+    "evidence": [
+      "route_and_call(agent_session_id=...) uses agent_session_id solely for agent-specific routing-policy lookup, not for the ledger's session_id column.",
+      "The ledger's session_id column is populated from CHUZOM_SESSION_ID env var or an auto-generated correlation_id — independent of whatever value is passed as agent_session_id.",
+      "Executed reproduction (failure_ledger_probe.py): route_and_call(..., agent_session_id=\"audit-a-failure-probe-session\") is called; ledger.get_session_accounting(\"audit-a-failure-probe-session\") is then queried directly and returns an empty/zeroed Accounting object despite real, billable activity having occurred during that call."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/failure_ledger_probe.py",
+      "Inspect printed 'get_route_accounting / get_session_accounting' section: session accounting for the exact agent_session_id string passed in is empty."
+    ],
+    "expected": "get_session_accounting(agent_session_id) reflects the cost/savings/attempt activity of calls made with that agent_session_id, since that is the only session-scoped identifier callers of route_and_call actually control.",
+    "actual": "get_session_accounting(agent_session_id) always returns empty accounting unless the caller separately, coincidentally, also set CHUZOM_SESSION_ID to the same value.",
+    "impact": "Any caller/integration that expects per-agent-session cost tracking via the documented agent_session_id parameter silently gets zeroed-out accounting with no error or warning — a correctness trap that could cause cost/savings reporting to under-report for entire integrations without any visible failure.",
+    "root_cause": "Two independent session identifiers exist (agent_session_id, used for routing-policy lookup; CHUZOM_SESSION_ID/correlation_id, used for ledger session_id) and were never reconciled or documented as distinct.",
+    "recommended_fix": "Either thread agent_session_id into the ledger's session_id field when provided (with CHUZOM_SESSION_ID as fallback/override), or rename/document the two identifiers clearly and raise a warning/error if get_session_accounting is called with a value that was never used as a ledger session_id.",
+    "regression_test": "Add a test that calls route_and_call with an explicit agent_session_id, then asserts get_session_accounting(that_same_id) reflects non-zero attempt_count/cost."
+  },
+  {
+    "id": "CHZ-AUD-A-03",
+    "title": "In the default (non-zero-Claude) configuration, the push hook never guarantees Claude's turn is replaced, even on successful real external execution — advisory-only by design",
+    "severity": "HIGH",
+    "confidence": "HIGH (source-confirmed + execution-confirmed across 9 real subprocess cells)",
+    "component": "src/chuzom/hooks/auto-route.py (_resolve_auto_render_mode, Direct Execution)",
+    "claim_affected": "Any claim that Chuzom 'always executes another model' or 'guarantees interception' for the Claude Code push-hook path",
+    "evidence": [
+      "_resolve_auto_render_mode()'s own docstring: \"Outside zero-Claude, 'auto' always resolves to advisory 'echo': the draft becomes context the assistant verifies, never a fabricated answer that replaces the turn.\"",
+      "Executed truth table (auto_route_hook_harness.py, 9 real subprocess cells, hermetic tmp HOME, real UserPromptSubmit stdin contract): advise/direct=1/normal, hard/direct=1/normal, and suggest/direct=1/normal cells all produced decision=\"approve\" with a genuine real-Ollama-generated draft (qwen3.5:latest, real TCP/UDP content, real elapsed-time ~1.3-2.1s and token counts ~264-302) delivered as additionalContext explicitly labeled \"UNVERIFIED DRAFT\" with instructions Claude may 'IGNORE the draft entirely and answer normally'.",
+      "Only the advise_direct1_zeroclaude and hard_direct1_zeroclaude cells produced decision=\"block\" (genuine turn replacement) — both require the non-default CHUZOM_ZERO_CLAUDE=1 configuration."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/auto_route_hook_harness.py",
+      "Inspect auto_route_hook_results.json: cells advise_direct1_normal / hard_direct1_normal / suggest_direct1_normal all have decision_field=\"approve\" despite real external content in stdout_raw; only *_zeroclaude cells show decision_field=\"block\"."
+    ],
+    "expected": "N/A for a well-documented system — this finding is about ensuring the distinction is not misrepresented, not that the behavior itself is wrong. A user/operator reading marketing or top-level claims should understand 'execution' in default mode means 'a real model was called and its draft was offered', not 'Claude's answer is guaranteed to come from that model'.",
+    "actual": "In the default configuration (zero_claude=False), a successful, real, on-topic external model response is downgraded to unverified advisory context; Claude retains full discretion to ignore it. This is true across advise, hard, and suggest enforce modes at the push-hook layer specifically.",
+    "impact": "Any external claim (marketing, README, onboarding docs) stating Chuzom 'always executes another model' for the push path is materially misleading unless immediately qualified with 'in advisory mode, Claude may discard the result' and 'guaranteed replacement only under zero-Claude'. This is the audit's central adversarial finding.",
+    "root_cause": "Deliberate design choice (see also the positive anti-injection framing noted in enforce-route.py comments) — advisory-only behavior is intentional, not a bug, but is easy to misstate externally.",
+    "recommended_fix": "No code fix required. Documentation/marketing fix: any 'execution guarantee' language must explicitly state the zero-Claude precondition for guaranteed turn replacement, and must describe default/advise/hard/suggest modes as 'advisory' at the push-hook layer.",
+    "regression_test": "Keep auto_route_hook_harness.py (or a pytest-ified version) as a permanent regression test asserting decision_field==\"approve\" for all non-zero-claude cells and decision_field==\"block\" only for zero-claude cells with direct execution successfully enabled."
+  },
+  {
+    "id": "CHZ-AUD-A-04",
+    "title": "Malformed/unparseable stdin JSON causes a full silent bypass of auto-route.py, even when zero-Claude/strict enforcement is explicitly configured",
+    "severity": "MEDIUM-HIGH",
+    "confidence": "HIGH (execution-confirmed)",
+    "component": "src/chuzom/hooks/auto-route.py (main(), stdin JSON parsing, ~lines 2661-2665)",
+    "claim_affected": "\"Every eligible prompt is intercepted\" / guaranteed interception under strict/zero-Claude configuration",
+    "evidence": [
+      "main()'s stdin-JSON-parse failure path calls sys.exit(0) immediately, before _zero_claude_enabled() (or any zero-Claude gate) is ever evaluated.",
+      "Executed reproduction (auto_route_hook_harness.py, cell skip_malformed_json_input): stdin bytes 'NOT VALID JSON {{{' sent to the real hook subprocess with CHUZOM_ZERO_CLAUDE=1 and CHUZOM_ENFORCE=hard explicitly set. Result: completely empty stdout, rc=0 — no block, no advisory, nothing."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/auto_route_hook_harness.py",
+      "Inspect auto_route_hook_results.json entry label=skip_malformed_json_input: env includes CHUZOM_ZERO_CLAUDE:1, stdout_raw is empty, decision_field is null."
+    ],
+    "expected": "Under an operator's explicit zero-Claude/strict configuration, a malformed stdin payload should fail closed (block with a diagnostic reason) rather than silently allowing Claude to proceed unrouted.",
+    "actual": "The hook exits 0 with no output whatsoever, before the zero-Claude gate is reached, effectively letting Claude answer the turn completely unrouted and unintercepted.",
+    "impact": "This is a genuine, execution-proven gap in any 'guaranteed interception' claim. Any condition that produces malformed stdin JSON (a Claude Code version skew, a hook-contract change, a transport glitch) bypasses routing entirely, silently, and cannot be prevented by any hook-level configuration since the check happens ahead of the configuration read.",
+    "root_cause": "The JSON-parse try/except is structured as an early-return fast-fail, ordered before the enforcement-mode/zero-Claude configuration is loaded and consulted.",
+    "recommended_fix": "Reorder main() so the zero-Claude/strict configuration is read before or independently of JSON parsing; on a parse failure under zero-Claude, emit a fail-closed block decision (as already done for other zero-Claude fail-closed paths) instead of a silent sys.exit(0).",
+    "regression_test": "Add a permanent test: send malformed stdin JSON to the hook subprocess with CHUZOM_ZERO_CLAUDE=1, assert non-empty stdout with a block decision, not empty output."
+  },
+  {
+    "id": "CHZ-AUD-A-05",
+    "title": "PreToolUse-based enforcement (enforce-route.py) cannot intercept a prose-only answer, under any enforcement mode including hard — structural limitation",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed)",
+    "component": "src/chuzom/hooks/enforce-route.py (PreToolUse hook trigger mechanism)",
+    "claim_affected": "\"Hard enforcement\" guaranteeing routing compliance for Q&A/query-type prompts",
+    "evidence": [
+      "enforce-route.py is registered as a PreToolUse hook: it only executes when Claude actually invokes a tool.",
+      "A plain-text response to a query/research/generate/analyze prompt requires zero tool calls; if Claude answers directly in prose, no PreToolUse hook fires at all, regardless of enforce mode.",
+      "This holds even in 'hard' mode, where the tool-blocking logic (see CHZ-AUD-A-06 for the exact blocklist) only ever activates in response to an attempted tool call."
+    ],
+    "reproduction": [
+      "Source-level: read src/chuzom/hooks/enforce-route.py's hook registration / trigger contract (PreToolUse) alongside its dispatch logic at lines ~1092-1330; no code path exists for a hook of this type to fire without an associated tool_name in the incoming payload."
+    ],
+    "expected": "N/A — this is a structural property of the PreToolUse hook type, not necessarily a bug, but it directly limits what 'hard enforcement' can actually guarantee.",
+    "actual": "Hard enforcement can force a choice between routing first or being blocked on Bash/Edit/Write/MultiEdit/NotebookEdit — but cannot force routing before Claude answers a question in prose, since prose requires no blockable tool call.",
+    "impact": "Any claim that 'hard mode' guarantees every eligible query is routed through Chuzom is false for the common case of a prompt Claude can answer directly from its own knowledge without touching a tool. The enforcement is real for tool-mediated work, illusory for pure Q&A.",
+    "root_cause": "PreToolUse is inherently a tool-call-triggered hook type; there is no complementary mechanism (e.g. a post-response or pre-final-answer hook) that inspects prose-only turns for routing compliance.",
+    "recommended_fix": "If prose-only Q&A routing compliance is a goal, it must be enforced at the UserPromptSubmit layer (auto-route.py) with zero-Claude semantics (see CHZ-AUD-A-03), not at PreToolUse — PreToolUse-based enforcement should be documented as scoped to tool-mediated actions only.",
+    "regression_test": "N/A (documentation/design-scope finding, not a code defect with a natural regression test); could add an integration test asserting no PreToolUse hook invocation occurs for a prose-only Claude turn."
+  },
+  {
+    "id": "CHZ-AUD-A-06",
+    "title": "Hard-mode Directive Injection banner falsely claims Edit/Write/Bash 'stay allowed', when enforce-route.py actually blocks them outright for all task types including Q&A",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed, exact banner text pulled verbatim from executed harness output)",
+    "component": "src/chuzom/hooks/auto-route.py (hard-mode Directive Injection banner text), src/chuzom/hooks/enforce-route.py (lines 92-96 _block_tools_for, lines 1092-1330 hard-mode dispatch)",
+    "claim_affected": "Self-description accuracy of the hard-mode banner shown to Claude in-context",
+    "evidence": [
+      "Verbatim banner text (from executed cell hard_direct0_normal in auto_route_hook_results.json): \"File reads and implementation tools (Edit/Write/Bash) stay allowed — only the route-first step is enforced, and only for the blocklisted tools for query.\"",
+      "enforce-route.py lines 92-96: _BASE_BLOCK_TOOLS = frozenset({\"Bash\",\"Edit\",\"MultiEdit\",\"Write\",\"NotebookEdit\"}); _block_tools_for(task_type) returns _BASE_BLOCK_TOOLS | _QA_ONLY_BLOCK_TOOLS (the latter is an empty frozenset) for QA task types, and _BASE_BLOCK_TOOLS otherwise — i.e. the same 5 tools are blocked regardless of task type.",
+      "enforce-route.py lines ~1167-1177 (hard-mode dispatch): 'if tool_name in (_BASE_BLOCK_TOOLS | _QA_ONLY_BLOCK_TOOLS | {\"Edit\",\"Write\",\"MultiEdit\"}): pass  # falls through to BLOCK' — Bash/Edit/MultiEdit/Write/NotebookEdit are blocked unconditionally in hard mode for every task type.",
+      "Lines ~1146-1165: the read-only-Bash escape valve is explicitly gated 'if not _strict and task_type not in _QA_TASK_TYPES:' — meaning for query/research/generate/analyze tasks, even read-only Bash commands are NOT exempted and fall into the block path."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/auto_route_hook_harness.py",
+      "Inspect auto_route_hook_results.json cell hard_direct0_normal for the exact banner text.",
+      "Read src/chuzom/hooks/enforce-route.py lines 92-96 and 1092-1330 to confirm the actual blocklist/dispatch logic contradicts the banner."
+    ],
+    "expected": "The banner text should accurately describe what the paired PreToolUse hook (enforce-route.py) will actually do in hard mode.",
+    "actual": "The banner claims Edit/Write/Bash 'stay allowed'; the code blocks exactly those tools (plus MultiEdit/NotebookEdit) outright, for all task types including Q&A, with no read-only-Bash exemption for QA tasks.",
+    "impact": "This is a self-description/trust-accuracy bug shown directly in Claude's context. Practically, real enforcement is STRICTER than advertised (not weaker), so it is not itself a routing-guarantee hole — but it means any agent or operator reasoning about what hard mode permits, based on the in-context banner text, will be materially wrong, which can cause confusing failures (Claude attempts a Bash/Edit/Write call believing it 'stays allowed' and is unexpectedly blocked).",
+    "root_cause": "The banner text in auto-route.py and the actual blocklist logic in enforce-route.py were evidently authored/updated independently and drifted out of sync.",
+    "recommended_fix": "Update the hard-mode banner string in auto-route.py to accurately state that Bash/Edit/Write/MultiEdit/NotebookEdit are blocked pending a routing tool call, and that only Read/Glob/Grep/LS remain unconditionally allowed.",
+    "regression_test": "Add a test asserting the banner text and the enforce-route.py _BASE_BLOCK_TOOLS/_block_tools_for set are derived from (or cross-checked against) a single shared source of truth, so future drift fails CI."
+  },
+  {
+    "id": "CHZ-AUD-A-07",
+    "title": "POSITIVE: semantic-cache hits are honestly disclosed via a cache/ model-tag prefix rather than misattributed to the originating provider",
+    "severity": "INFO/POSITIVE",
+    "confidence": "HIGH (execution-confirmed)",
+    "component": "src/chuzom/router.py / semantic cache layer",
+    "claim_affected": "Telemetry honesty for cached responses",
+    "evidence": [
+      "Canary harness (canary_results.json), whitespace-category prompt: recorded_model=\"cache/ollama/qwen3:32b\", recorded_provider=\"cache\", content contains PROVIDER_OLLAMA_CANARY (the originally-cached provider's canary), elapsed_ms=46.8 (consistent with a cache hit, not a live call).",
+      "The router records provider as \"cache\", not \"ollama\", even though the content originated from an ollama call in an earlier prompt — an honest disclosure rather than a silent misattribution."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/canary_harness.py",
+      "Inspect canary_results.json for the row with canary_matches_recorded_provider=false; recorded_provider is \"cache\", not a false ollama/other claim."
+    ],
+    "expected": "N/A — positive finding.",
+    "actual": "N/A — positive finding, telemetry behaves correctly here.",
+    "impact": "None (positive). Included to document that the one apparent 'mismatch' surfaced by the canary harness is not a misattribution bug — it strengthens confidence in telemetry honesty for the cache-hit case specifically.",
+    "root_cause": "N/A",
+    "recommended_fix": "None required. Consider surfacing this cache/ prefix convention explicitly in any user-facing savings/attribution documentation, since it is a good practice worth calling out.",
+    "regression_test": "Add an assertion to the canary harness (or a pytest version) that any recorded_provider==\"cache\" row is never counted as a wrong-provider/misattribution case in aggregate wrong-provider-rate metrics."
+  },
+  {
+    "id": "CHZ-AUD-A-08",
+    "title": "UNABLE TO VERIFY: the Claude Code CLI subprocess dispatch path (run_claude / claude_offload) was never actually exercised by either audit harness",
+    "severity": "INFO/UNABLE TO VERIFY",
+    "confidence": "N/A — explicitly not executed",
+    "component": "src/chuzom/router.py (claude-CLI-subprocess dispatch path, gated by claude_offload_available)",
+    "claim_affected": "Behavior/reliability of the CLI-subprocess dispatch path specifically (as distinct from the litellm/API Anthropic path, which IS canary-covered)",
+    "evidence": [
+      "The canary harness patches chuzom.providers.litellm.acompletion (and the codex/gemini-cli broker paths) but does not patch or otherwise intercept the claude-CLI-subprocess code path.",
+      "None of the 48 canary-harness prompts, nor the failure_ledger_probe.py run, triggered claude_offload_available=True / the CLI-subprocess dispatch branch (claude_offload_available was explicitly patched to False in failure_ledger_probe.py to keep that run deterministic).",
+      "5/48 canary prompts recorded provider=anthropic, but this is confirmed to be the litellm/API dispatch path (Anthropic API key path), not the CLI-subprocess path — the canary content and call_log entries are consistent with an API call, not a subprocess invocation."
+    ],
+    "reproduction": [
+      "N/A — explicitly not executed this audit. Would require a separate harness that sets claude_offload_available=True and patches subprocess.run/Popen (or the specific CLI-invocation function) to return a canary, then drives prompts that would select that dispatch branch."
+    ],
+    "expected": "N/A",
+    "actual": "N/A — no executed evidence either way for this specific dispatch path.",
+    "impact": "Any audit conclusion about routing-execution guarantees should explicitly exclude the CLI-subprocess dispatch path from its scope of proof; claims about that path's correctness/reliability remain unverified by this audit and should not be assumed to share the same guarantees demonstrated for the litellm/API path.",
+    "root_cause": "N/A — scope/time boundary of this audit's harnesses, not a code defect.",
+    "recommended_fix": "Build a dedicated canary harness for the claude-CLI-subprocess dispatch path (patch the subprocess invocation to return a unique PROVIDER_CLAUDE_CLI_CANARY) as a follow-up audit item.",
+    "regression_test": "N/A pending the follow-up harness described above."
+  }
+]

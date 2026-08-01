@@ -324,13 +324,63 @@ class PostgresBudgetBackend:
                 pass
             raise
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None:
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None:
         if cost_usd <= 0:
             return
         async with self._lock:
-            await asyncio.to_thread(self._commit_sync, key, cost_usd)
+            await asyncio.to_thread(self._commit_sync, key, cost_usd, settle_pending)
 
-    def _commit_sync(self, key: BudgetKey, cost_usd: float) -> None:
+    def _commit_sync(
+        self, key: BudgetKey, cost_usd: float, settle_pending: bool = True
+    ) -> None:
+        # RED1-5-01: see SqliteBudgetBackend — when the reservation was already
+        # released via release(est), do not decrement pending_usd again (it would
+        # erase a concurrent sibling's outstanding reservation on a shared key).
+        try:
+            with self._conn.cursor() as cur:
+                chain_keys = self._chain_keys(cur, key)
+                _pending_sql = (
+                    ", pending_usd = GREATEST(0.0, pending_usd - %s)"
+                    if settle_pending
+                    else ""
+                )
+                for env_key in chain_keys:
+                    _params = (
+                        (cost_usd, cost_usd, _serialise_key(env_key))
+                        if settle_pending
+                        else (cost_usd, _serialise_key(env_key))
+                    )
+                    cur.execute(
+                        "UPDATE chuzom_envelopes "
+                        "SET consumed_usd = consumed_usd + %s"
+                        + _pending_sql
+                        + " WHERE key_blob = %s",
+                        _params,
+                    )
+            self._conn.commit()
+            for env_key in chain_keys:
+                self._maybe_flip_soft_state(env_key)
+        except Exception:
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+            raise
+
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None:
+        """RED1-7-01: atomic pending−=est + consumed+=actual in one transaction."""
+        if est_cost_usd <= 0 and actual_cost_usd <= 0:
+            return
+        async with self._lock:
+            await asyncio.to_thread(
+                self._settle_sync, key, float(est_cost_usd or 0.0), float(actual_cost_usd or 0.0)
+            )
+
+    def _settle_sync(self, key: BudgetKey, est: float, actual: float) -> None:
         try:
             with self._conn.cursor() as cur:
                 chain_keys = self._chain_keys(cur, key)
@@ -340,7 +390,7 @@ class PostgresBudgetBackend:
                         "SET consumed_usd = consumed_usd + %s, "
                         "pending_usd = GREATEST(0.0, pending_usd - %s) "
                         "WHERE key_blob = %s",
-                        (cost_usd, cost_usd, _serialise_key(env_key)),
+                        (actual, est, _serialise_key(env_key)),
                     )
             self._conn.commit()
             for env_key in chain_keys:
@@ -353,24 +403,32 @@ class PostgresBudgetBackend:
             raise
 
     def _chain_keys(self, cur: "psycopg.Cursor", key: BudgetKey) -> list[BudgetKey]:
-        """Lock the leaf row + each registered parent, return their keys."""
-        cur.execute(
-            "SELECT parents_json FROM chuzom_envelopes "
-            "WHERE key_blob = %s FOR UPDATE",
-            (_serialise_key(key),),
-        )
-        row = cur.fetchone()
-        if row is None:
-            return []
-        chain: list[BudgetKey] = [key]
-        for parent_key in _deserialise_parents(row[0]):
+        """Lock the leaf row + every registered ancestor, return their keys.
+
+        RED1-6-01: walks the parent chain TRANSITIVELY (breadth-first with a
+        cycle guard), following each registered row's own ``parents_json`` — a
+        cap 2+ levels up (org → user → agent) previously never locked/settled."""
+        chain: list[BudgetKey] = []
+        seen: set = set()
+        queue: list[BudgetKey] = [key]
+        while queue:
+            k = queue.pop(0)
+            sk = _serialise_key(k)
+            if sk in seen:
+                continue
+            seen.add(sk)
             cur.execute(
-                "SELECT 1 FROM chuzom_envelopes "
+                "SELECT parents_json FROM chuzom_envelopes "
                 "WHERE key_blob = %s FOR UPDATE",
-                (_serialise_key(parent_key),),
+                (sk,),
             )
-            if cur.fetchone() is not None:
-                chain.append(parent_key)
+            row = cur.fetchone()
+            if row is None:
+                continue
+            chain.append(k)
+            for parent_key in _deserialise_parents(row[0]):
+                if _serialise_key(parent_key) not in seen:
+                    queue.append(parent_key)
         return chain
 
     # ── Soft tier ─────────────────────────────────────────────────────────

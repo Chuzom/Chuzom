@@ -17,7 +17,7 @@ that can handle the task (Ollama → Codex → paid APIs in free-first order).
 
 | Task type | Tool to call | Why |
 |-----------|-------------|-----|
-| Simple factual question | `llm_query` | Gemini Flash / Groq — 50× cheaper than o3 |
+| Simple factual question | `llm_query` | Gemini Flash / Groq — cheaper than o3 |
 | Research / current events | `llm_research` | Perplexity (web-grounded, not stale) |
 | Writing / summaries / brainstorm | `llm_generate` | Gemini Flash / Haiku |
 | Deep analysis / debugging | `llm_analyze` | GPT-4o / Gemini Pro |
@@ -41,6 +41,6 @@ llm_auto(prompt="<the full user request>")   # safest default
 
 ## Cost Impact
 
-Routing simple tasks to Gemini Flash instead of o3 saves ~50–100×.
+Routing simple tasks to Gemini Flash instead of o3 conserves premium quota.
 `llm_auto` shows cumulative savings every 5 calls automatically.
 Run `llm_savings` anytime to see your totals.

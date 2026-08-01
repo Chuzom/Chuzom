@@ -115,14 +115,14 @@ parts=()
 CHUZOM_USAGE_TTL_SEC="${CHUZOM_USAGE_TTL_SEC:-300}"
 REFRESH_SCRIPT="$HOME/.claude/hooks/chuzom-usage-refresh.py"
 if [ -f "$USAGE_JSON" ] && [ -x "$REFRESH_SCRIPT" ]; then
-    file_age_s=$(python3 -c "
-import json, time
+    file_age_s=$(CHZ_USAGE_JSON="$USAGE_JSON" python3 -c '
+import json, time, os
 try:
-    d = json.load(open('$USAGE_JSON'))
-    print(int(time.time() - d.get('updated_at', 0)))
+    d = json.load(open(os.environ["CHZ_USAGE_JSON"]))
+    print(int(time.time() - d.get("updated_at", 0)))
 except Exception:
     print(99999)
-" 2>/dev/null)
+' 2>/dev/null)
     if [ -n "$file_age_s" ] && [ "$file_age_s" -gt "$CHUZOM_USAGE_TTL_SEC" ]; then
         # Background refresh — fire & forget; statusline keeps drawing.
         #
@@ -135,7 +135,7 @@ except Exception:
         throttle="${CHUZOM_REFRESH_THROTTLE_SEC:-60}"
         do_refresh=1
         if [ -f "$LAST_TRY" ]; then
-            try_age=$(python3 -c "import os,time;print(int(time.time()-os.path.getmtime('$LAST_TRY')))" 2>/dev/null)
+            try_age=$(CHZ_LAST_TRY="$LAST_TRY" python3 -c 'import os,time;print(int(time.time()-os.path.getmtime(os.environ["CHZ_LAST_TRY"])))' 2>/dev/null)
             [ -n "$try_age" ] && [ "$try_age" -lt "$throttle" ] && do_refresh=0
         fi
         if [ "$do_refresh" = "1" ]; then
@@ -147,8 +147,8 @@ except Exception:
 fi
 
 if [ -f "$USAGE_JSON" ]; then
-    session_pct=$(python3 -c "import json; d=json.load(open('$USAGE_JSON')); print(f\"{d.get('session_pct',0):.0f}\")" 2>/dev/null)
-    weekly_pct=$(python3 -c "import json; d=json.load(open('$USAGE_JSON')); print(f\"{d.get('weekly_pct',0):.0f}\")" 2>/dev/null)
+    session_pct=$(CHZ_USAGE_JSON="$USAGE_JSON" python3 -c 'import json,os; d=json.load(open(os.environ["CHZ_USAGE_JSON"])); print("%.0f" % d.get("session_pct",0))' 2>/dev/null)
+    weekly_pct=$(CHZ_USAGE_JSON="$USAGE_JSON" python3 -c 'import json,os; d=json.load(open(os.environ["CHZ_USAGE_JSON"])); print("%.0f" % d.get("weekly_pct",0))' 2>/dev/null)
     if [ -n "$session_pct" ]; then
         s_color=$(_pct_color "$session_pct")
         w_color=$(_pct_color "$weekly_pct")
@@ -165,21 +165,21 @@ fi
 
 # ── ⏰ Quota reset time ──────────────────────────────────────────────────────
 if [ -f "$USAGE_JSON" ]; then
-    reset_str=$(python3 -c "
-import json, datetime
+    reset_str=$(CHZ_USAGE_JSON="$USAGE_JSON" python3 -c '
+import json, datetime, os
 try:
-    d = json.load(open('$USAGE_JSON'))
-    raw = d.get('session_resets_at', '')
+    d = json.load(open(os.environ["CHZ_USAGE_JSON"]))
+    raw = d.get("session_resets_at", "")
     if not raw:
         raise ValueError
-    raw = raw.replace('Z', '+00:00')
+    raw = raw.replace("Z", "+00:00")
     dt = datetime.datetime.fromisoformat(raw).astimezone()
     if dt < datetime.datetime.now(datetime.timezone.utc).astimezone():
         raise ValueError
-    print(dt.strftime('%-I:%M%p').lower())
+    print(dt.strftime("%-I:%M%p").lower())
 except Exception:
     pass
-" 2>/dev/null)
+' 2>/dev/null)
     if [ -n "$reset_str" ]; then
         parts+=("⏰ ${_YELLOW}${reset_str}${_RESET}")
     fi
@@ -195,42 +195,46 @@ fi
 
 # ── 🧠 Context tokens (with progress bar) ────────────────────────────────────
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
-    ctx_total=$(python3 -c "
-import json
+    ctx_total=$(CHZ_TRANSCRIPT="$transcript_path" python3 -c '
+import json, os
 total = None
 try:
-    with open('$transcript_path') as f:
+    with open(os.environ["CHZ_TRANSCRIPT"]) as f:
         for line in f:
             try:
                 d = json.loads(line)
             except Exception:
                 continue
-            msg = d.get('message')
+            msg = d.get("message")
             if not isinstance(msg, dict):
                 continue
-            u = msg.get('usage')
+            u = msg.get("usage")
             if not isinstance(u, dict):
                 continue
             tokens = (
-                u.get('input_tokens', 0)
-                + u.get('cache_creation_input_tokens', 0)
-                + u.get('cache_read_input_tokens', 0)
+                u.get("input_tokens", 0)
+                + u.get("cache_creation_input_tokens", 0)
+                + u.get("cache_read_input_tokens", 0)
             )
             if tokens > 0:
                 total = tokens
     print(total if total is not None else 0)
 except Exception:
     print(0)
-" 2>/dev/null)
+' 2>/dev/null)
     if [ -n "$ctx_total" ] && [ "$ctx_total" != "0" ]; then
         ctx_pct=$(( ctx_total * 100 / CONTEXT_LIMIT ))
         [ "$ctx_pct" -gt 100 ] && ctx_pct=100
-        ctx_human=$(python3 -c "
-n=$ctx_total
-if n >= 1_000_000: print(f'{n/1_000_000:.1f}M')
-elif n >= 1_000:   print(f'{n/1_000:.1f}k')
+        ctx_human=$(CHZ_CTX_TOTAL="$ctx_total" python3 -c '
+import os
+try:
+    n = int(os.environ["CHZ_CTX_TOTAL"])
+except (KeyError, ValueError):
+    n = 0
+if n >= 1_000_000: print("%.1fM" % (n/1_000_000))
+elif n >= 1_000:   print("%.1fk" % (n/1_000))
 else:              print(str(n))
-" 2>/dev/null)
+' 2>/dev/null)
         ctx_bar=$(_bar "$ctx_pct" 8)
         parts+=("🧠 ${_PINK}${ctx_human}${_RESET} ${ctx_bar} ${_DIM}${ctx_pct}%${_RESET}")
     fi
@@ -262,43 +266,55 @@ if [ -f "$USAGE_DB" ]; then
             WHERE date(timestamp,'localtime')=date('now','localtime');
         " 2>/dev/null)
         if [ -n "$val" ]; then
-            platform_sum=$(python3 -c "print(float('$platform_sum') + float('$val'))" 2>/dev/null)
+            platform_sum=$(CHZ_A="$platform_sum" CHZ_B="$val" python3 -c 'import os
+def f(x):
+    try: return float(x)
+    except (TypeError, ValueError): return 0.0
+print(f(os.environ.get("CHZ_A")) + f(os.environ.get("CHZ_B")))' 2>/dev/null)
         fi
     done
-    today_saved=$(python3 -c "print(float('${legacy:-0}') + float('${platform_sum:-0}'))" 2>/dev/null)
+    today_saved=$(CHZ_A="${legacy:-0}" CHZ_B="${platform_sum:-0}" python3 -c 'import os
+def f(x):
+    try: return float(x)
+    except (TypeError, ValueError): return 0.0
+print(f(os.environ.get("CHZ_A")) + f(os.environ.get("CHZ_B")))' 2>/dev/null)
 fi
 
 SAVINGS_LOG="$STATE_DIR/savings_log.jsonl"
 if [ -f "$SAVINGS_LOG" ]; then
-    pending=$(python3 -c "
-import json, datetime
-# savings_log timestamps are UTC ISO (…+00:00); compare in LOCAL time so 'today'
-# matches the user's wall clock, not UTC (which dropped the last N hours near
+    pending=$(CHZ_SAVINGS_LOG="$SAVINGS_LOG" python3 -c '
+import json, datetime, os
+# savings_log timestamps are UTC ISO (…+00:00); compare in LOCAL time so "today"
+# matches the user wall clock, not UTC (which dropped the last N hours near
 # local midnight for non-UTC users).
 today = datetime.datetime.now().astimezone().date()
 total = 0.0
 try:
-    with open('$SAVINGS_LOG') as f:
+    with open(os.environ["CHZ_SAVINGS_LOG"]) as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             try:
                 rec = json.loads(line)
-                ts = rec.get('timestamp', '')
+                ts = rec.get("timestamp", "")
                 dt = datetime.datetime.fromisoformat(ts)
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=datetime.timezone.utc)
                 if dt.astimezone().date() == today:
-                    total += float(rec.get('estimated_saved', 0))
+                    total += float(rec.get("estimated_saved", 0))
             except Exception:
                 pass
 except OSError:
     pass
-print(f'{total:.6f}')
-" 2>/dev/null)
+print("%.6f" % total)
+' 2>/dev/null)
     if [ -n "$pending" ]; then
-        today_saved=$(python3 -c "print(float('$today_saved') + float('$pending'))" 2>/dev/null)
+        today_saved=$(CHZ_A="$today_saved" CHZ_B="$pending" python3 -c 'import os
+def f(x):
+    try: return float(x)
+    except (TypeError, ValueError): return 0.0
+print(f(os.environ.get("CHZ_A")) + f(os.environ.get("CHZ_B")))' 2>/dev/null)
     fi
 fi
 
@@ -322,29 +338,29 @@ esac
 # down ✗  : no model provider reachable (no API key, no recent local model)
 # degraded ⚠: usage data stale (>30 min)
 # ok ✓     : routing normally
-health=$(python3 -c "
+health=$(CHZ_SAVINGS_LOG="$SAVINGS_LOG" CHZ_USAGE_JSON="$USAGE_JSON" python3 -c '
 import json, os, time
 now = time.time()
-keys = ('ANTHROPIC_API_KEY','OPENAI_API_KEY','GEMINI_API_KEY','DEEPSEEK_API_KEY','GROQ_API_KEY')
+keys = ("ANTHROPIC_API_KEY","OPENAI_API_KEY","GEMINI_API_KEY","DEEPSEEK_API_KEY","GROQ_API_KEY")
 providers = any(os.environ.get(k) for k in keys)
 if not providers:
     try:
         from datetime import datetime
-        for line in reversed(open(os.path.expanduser('$SAVINGS_LOG')).readlines()[-200:]):
+        for line in reversed(open(os.environ["CHZ_SAVINGS_LOG"]).readlines()[-200:]):
             r = json.loads(line)
-            m = r.get('model','')
-            if isinstance(m,str) and m.startswith('ollama/'):
-                ts = datetime.fromisoformat(r['timestamp']).timestamp()
+            m = r.get("model","")
+            if isinstance(m,str) and m.startswith("ollama/"):
+                ts = datetime.fromisoformat(r["timestamp"]).timestamp()
                 if now - ts <= 1800:
                     providers = True; break
     except Exception:
         pass
 try:
-    stale = (now - os.path.getmtime(os.path.expanduser('$USAGE_JSON'))) > 1800
+    stale = (now - os.path.getmtime(os.environ["CHZ_USAGE_JSON"])) > 1800
 except OSError:
     stale = True
-print('down' if not providers else ('degraded' if stale else 'ok'))
-" 2>/dev/null)
+print("down" if not providers else ("degraded" if stale else "ok"))
+' 2>/dev/null)
 case "$health" in
     ok)       parts+=("${_GREEN}✓${_RESET}") ;;
     degraded) parts+=("${_YELLOW}⚠${_RESET}") ;;
@@ -355,21 +371,21 @@ esac
 # Persistent: always render the most recent route. A dim ° marker is appended
 # when the route is older than 5 min, matching the quota segment's stale cue.
 # Output format from python: "<route>\t<stale>" where stale is "1" or "".
-last_raw=$(python3 -c "
+last_raw=$(CHZ_STATE_DIR="$STATE_DIR" python3 -c '
 import json, glob, os, time
-files = glob.glob(os.path.expanduser('$STATE_DIR/last_route_*.json'))
+files = glob.glob(os.path.join(os.environ["CHZ_STATE_DIR"], "last_route_*.json"))
 if files:
     newest = max(files, key=os.path.getmtime)
     try:
         d = json.load(open(newest))
-        tool = d.get('tool', '?').replace('llm_', '')
-        task = d.get('task_type', tool)
-        route = f'{task}>{tool}' if task != tool else tool
-        stale = '1' if (time.time() - d.get('saved_at', 0)) >= 300 else ''
-        print(f'{route}\t{stale}')
+        tool = d.get("tool", "?").replace("llm_", "")
+        task = d.get("task_type", tool)
+        route = (task + ">" + tool) if task != tool else tool
+        stale = "1" if (time.time() - d.get("saved_at", 0)) >= 300 else ""
+        print(route + "\t" + stale)
     except Exception:
         pass
-" 2>/dev/null)
+' 2>/dev/null)
 last="${last_raw%%$'\t'*}"
 last_stale="${last_raw##*$'\t'}"
 if [ -n "$last" ]; then
@@ -377,21 +393,21 @@ if [ -n "$last" ]; then
     [ -n "$last_stale" ] && stale_marker="${_DIM}°${_RESET}"
     # Token count of the most recent routed call (input+output), read from the
     # savings log (last_route_*.json carries no token counts). Compact: "1.2k tok".
-    last_tok=$(python3 -c "
+    last_tok=$(CHZ_SAVINGS_LOG="$SAVINGS_LOG" python3 -c '
 import json, os
 try:
-    for line in reversed(open(os.path.expanduser('$SAVINGS_LOG')).readlines()[-200:]):
+    for line in reversed(open(os.environ["CHZ_SAVINGS_LOG"]).readlines()[-200:]):
         line = line.strip()
         if not line:
             continue
         d = json.loads(line)
-        n = (d.get('input_tokens') or 0) + (d.get('output_tokens') or 0)
+        n = (d.get("input_tokens") or 0) + (d.get("output_tokens") or 0)
         if n > 0:
-            print(f'{n/1000:.1f}k tok' if n >= 1000 else f'{n} tok')
+            print(("%.1fk tok" % (n/1000)) if n >= 1000 else ("%d tok" % n))
         break
 except Exception:
     pass
-" 2>/dev/null)
+' 2>/dev/null)
     tok_seg=""
     [ -n "$last_tok" ] && tok_seg=" ${_DIM}${last_tok}${_RESET}"
     parts+=("🔀 ${_MAUVE}${last}${_RESET}${stale_marker}${tok_seg}")

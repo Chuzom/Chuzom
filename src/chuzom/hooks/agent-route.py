@@ -9,12 +9,12 @@ When Claude spawns a subagent (Agent tool), this hook intercepts and decides:
 
   BLOCK   → reasoning tasks: analysis, coding, generation, explanation.
             These are routed to the appropriate llm_* MCP tool instead,
-            which routes to a model 10-50x cheaper than Opus.
+            which routes to a cheaper model than Opus.
 
 Pressure-aware profile selection (passed to the MCP tool):
   < 85% quota:
-    simple   → profile=budget   (Haiku — 50x cheaper than Opus)
-    moderate → profile=balanced  (Sonnet — 10x cheaper)
+    simple   → profile=budget   (Haiku — much cheaper than Opus)
+    moderate → profile=balanced  (Sonnet — cheaper than Opus)
     complex  → profile=premium   (Opus — best quality, full quota available)
   ≥ 85% quota:
     simple   → profile=budget   (cheapest external: Gemini Flash, Groq)

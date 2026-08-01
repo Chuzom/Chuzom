@@ -98,6 +98,64 @@ def _read_hook_complexity_hint(max_age_sec: float = 120.0) -> str | None:
     return complexity
 
 
+def _read_hook_route_directive(max_age_sec: float = 120.0) -> str | None:
+    """Return the route_id the auto-route hook minted for this turn, or None.
+
+    Phase 0.5 (Option A, sidecar directive-id bridge): the hook now writes a
+    ``route_id`` into the SAME ``last_classification_<session_id>.json``
+    sidecar that :func:`_read_hook_complexity_hint` already reads, minted
+    identically to (and shared with) ``pending['route_id']`` — the id
+    ``enforce-route.py``'s ``_record_realization_used`` uses when it writes
+    the adoption row. Doors that pass this value through as
+    ``route_directive_id`` to ``route_and_call`` let the execution ledger's
+    billable rows land under that SAME id, so its route_id join against the
+    adoption row actually fires instead of comparing two independently
+    minted ids that never matched.
+
+    Reuses the identical guarded-read gates as ``_read_hook_complexity_hint``
+    (same file, same session-match check, same freshness window) rather than
+    performing a second, unguarded read — a stale or session-mismatched
+    sidecar must not leak a directive id into an unrelated turn any more than
+    it may leak a complexity hint. Returns ``None`` on any miss (missing
+    file, session mismatch, stale, absent/non-string route_id) — the caller
+    falls back to ``route_directive_id=None``, i.e. today's behavior
+    (billable rows keyed on ``correlation_id``, unchanged).
+    """
+    import json
+    import os
+    from pathlib import Path
+    import time
+
+    session_id = os.environ.get("CLAUDE_SESSION_ID", "").strip()
+    if not session_id:
+        return None
+
+    path = Path.home() / ".chuzom" / f"last_classification_{session_id}.json"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+    inner_sid = data.get("session_id")
+    if isinstance(inner_sid, str) and inner_sid and inner_sid != session_id:
+        return None
+
+    issued_at = data.get("issued_at")
+    if not isinstance(issued_at, (int, float)):
+        return None
+    if time.time() - issued_at > max_age_sec:
+        return None
+
+    route_id = data.get("route_id")
+    if not isinstance(route_id, str) or not route_id:
+        return None
+    return route_id
+
+
 def _effective_complexity(caller_hint: str | None, floor: str | None = None) -> str | None:
     """Pick the best complexity hint: caller arg > hook verdict > floor.
 
@@ -482,6 +540,7 @@ async def llm_query(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "query", effective)
     _record_quality(resp, "query", effective)
@@ -573,6 +632,7 @@ async def llm_research(
         temperature=0.3,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "research", "moderate")
     _record_quality(resp, "research", "moderate")
@@ -620,6 +680,7 @@ async def llm_generate(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "generate", effective)
     _record_quality(resp, "generate", effective)
@@ -663,6 +724,7 @@ async def llm_analyze(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "analyze", effective_complexity)
     _record_quality(resp, "analyze", effective_complexity)
@@ -706,6 +768,7 @@ async def llm_reason(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "analyze", "deep_reasoning")
     _record_quality(resp, "analyze", "deep_reasoning")
@@ -780,6 +843,7 @@ async def llm_code(
         max_tokens=max_tokens,
         ctx=ctx,
         caller_context=context,
+        route_directive_id=_read_hook_route_directive(),
     )
     _cache_result(prompt, resp, "code", effective)
     _record_quality(resp, "code", effective)
@@ -848,6 +912,7 @@ async def llm_edit(
         ),
         temperature=0.1,
         ctx=ctx,
+        route_directive_id=_read_hook_route_directive(),
     )
 
     instructions, warnings = parse_edit_response(resp.content)

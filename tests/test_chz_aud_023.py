@@ -16,10 +16,12 @@ from chuzom import context as ctx
 
 @pytest.fixture
 def _reset_buffer():
-    # Ensure the in-process session buffer does not leak state between tests.
-    ctx._session_buffer = None
+    # Ensure the in-process session buffer registry does not leak state
+    # between tests (CHZ-AUD-B-04: buffers are now keyed by (project_id,
+    # session_id) in a bounded registry, not a single module-level global).
+    ctx._reset_session_buffers_for_test()
     yield
-    ctx._session_buffer = None
+    ctx._reset_session_buffers_for_test()
 
 
 async def _run(monkeypatch, *, mode: str, target_provider: str | None):

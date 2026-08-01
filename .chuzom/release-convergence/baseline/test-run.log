@@ -1,0 +1,518 @@
+............................................................F........... [  1%]
+........................................................................ [  2%]
+....................................................FFFFFF.............. [  3%]
+........................................................................ [  4%]
+.....................................x.................................. [  5%]
+..................ss..ssss..s........................................... [  6%]
+........................................................................ [  7%]
+....ssssss...................ss.sssss.ss.ss.sssss.ss.ss.sssss.ss........ [  8%]
+.s...........s...........s..ss.ss.ssssssss.ss.ssssssss.ss.ssssssss.ss.ss [  9%]
+ssss.................................................................... [ 11%]
+..........................ss...ss.ss.ssssssss.ss.ssssssss.ss.ssssssss.ss [ 12%]
+.ssssssss.ss.ssssss..........................sss.....................sss [ 13%]
+ssssssssss................F............................................. [ 14%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+..................ssssssss..........................F................... [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+.........s.............................................................. [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................s............................... [ 38%]
+........................................................................ [ 39%]
+.....................................................................sss [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+..................................................ssss.................. [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+....................................................................s... [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+.........................................ss............................. [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+.....................s.................................................. [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 85%]
+........................................................................ [ 87%]
+.EE..................................................................... [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 98%]
+..............................F......................................... [ 99%]
+.........................................................                [100%]
+📜 Scenario report written: /Users/yaliandrona/Projects/Chuzom/Docs/SCENARIO_REPORT.md (24 scenarios, 24 passed)
+
+==================================== ERRORS ====================================
+_________________ ERROR at setup of test_no_cross_project_hit __________________
+
+tmp_path = PosixPath('/private/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/pytest-of-yaliandrona/pytest-5029/test_no_cross_project_hit0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x114bc1050>
+
+    @pytest.fixture()
+    def wired(tmp_path, monkeypatch):
+        db_file = tmp_path / "usage.db"
+    
+        async def _init():
+            conn = await aiosqlite.connect(str(db_file))
+            await conn.executescript(CREATE_SEMANTIC_CACHE_TABLE)
+            await conn.commit()
+            await conn.close()
+    
+>       asyncio.get_event_loop().run_until_complete(_init())
+
+tests/test_st004_semantic_cache_project_scope.py:39: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/base_events.py:629: in run_until_complete
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+________________ ERROR at setup of test_same_project_still_hits ________________
+
+tmp_path = PosixPath('/private/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/pytest-of-yaliandrona/pytest-5029/test_same_project_still_hits0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x114d7fcd0>
+
+    @pytest.fixture()
+    def wired(tmp_path, monkeypatch):
+        db_file = tmp_path / "usage.db"
+    
+        async def _init():
+            conn = await aiosqlite.connect(str(db_file))
+            await conn.executescript(CREATE_SEMANTIC_CACHE_TABLE)
+            await conn.commit()
+            await conn.close()
+    
+>       asyncio.get_event_loop().run_until_complete(_init())
+
+tests/test_st004_semantic_cache_project_scope.py:39: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/base_events.py:629: in run_until_complete
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+=================================== FAILURES ===================================
+_____________ test_routing_yaml_daily_caps_are_wired_and_downgrade _____________
+
+routed_runtime = <test_policy_switching._SimpleNamespace object at 0x111971a50>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1116da610>
+
+    @pytest.mark.asyncio
+    async def test_routing_yaml_daily_caps_are_wired_and_downgrade(
+        routed_runtime, monkeypatch
+    ):
+        """routing.yaml `daily_caps` ARE consulted by the live routing path
+        (was CHZ-TQ-007). This test patches the real loader (`effective_config`) —
+        the earlier `_BUG` version patched only the config *object* and never
+        `effective_config`, so route_and_call never saw the cap and the test
+        "passed" for the wrong reason, masking that caps were in fact wired.
+    
+        TQ-007 behavior: an exceeded routing.yaml daily cap DOWNGRADES to free-local;
+        against the paid-only routed_runtime chain with enforce=hard there is no free
+        fallback, so it hard-blocks with BudgetExceededError.
+        """
+        repo_cfg = _dict_to_config(
+            {"daily_caps": {"code": 0.0001}, "enforce": "hard"}, "test"
+        )
+        assert repo_cfg.daily_cap_for("code") == 0.0001
+    
+        with patch(
+            "chuzom.repo_config.effective_config", return_value=repo_cfg,
+        ), patch(
+            "chuzom.router.cost.get_daily_spend_by_task_type",
+            new_callable=AsyncMock,
+            return_value=9_999.0,  # already "way over" the cap
+        ), patch("chuzom.policy.load_org_policy", return_value=None):
+>           with pytest.raises(BudgetExceededError, match="Task-type daily limit|Daily spend"):
+E           Failed: DID NOT RAISE <class 'chuzom.types.BudgetExceededError'>
+
+tests/audit/test_policy_switching.py:287: Failed
+_ test_plugin_manifest_version_matches_pyproject[.claude-plugin/plugin.json-] __
+
+label = '.claude-plugin/plugin.json'
+path = PosixPath('/Users/yaliandrona/Projects/Chuzom/.claude-plugin/plugin.json')
+pyproject_version = '1.0.1'
+
+    @pytest.mark.parametrize("label,path", _plugin_files(), ids=lambda x: x if isinstance(x, str) else "")
+    def test_plugin_manifest_version_matches_pyproject(
+        label: str, path: Path, pyproject_version: str
+    ):
+        data = _read_json(path)
+        versions = []
+        if "version" in data:
+            versions.append(("root", data["version"]))
+        for plugin in data.get("plugins", []) if isinstance(data.get("plugins"), list) else []:
+            if isinstance(plugin, dict) and "version" in plugin:
+                versions.append((f"plugins[{plugin.get('name', '?')}]", plugin["version"]))
+        assert versions, f"{label} declares no version field"
+        for location, version in versions:
+>           assert version == pyproject_version, (
+                f"{label} {location}: {version} != pyproject {pyproject_version}"
+            )
+E           AssertionError: .claude-plugin/plugin.json root: 1.0.0 != pyproject 1.0.1
+E           assert '1.0.0' == '1.0.1'
+E             
+E             - 1.0.1
+E             ?     ^
+E             + 1.0.0
+E             ?     ^
+
+tests/integration/test_host_integrations.py:89: AssertionError
+_ test_plugin_manifest_version_matches_pyproject[.claude-plugin/marketplace.json-] _
+
+label = '.claude-plugin/marketplace.json'
+path = PosixPath('/Users/yaliandrona/Projects/Chuzom/.claude-plugin/marketplace.json')
+pyproject_version = '1.0.1'
+
+    @pytest.mark.parametrize("label,path", _plugin_files(), ids=lambda x: x if isinstance(x, str) else "")
+    def test_plugin_manifest_version_matches_pyproject(
+        label: str, path: Path, pyproject_version: str
+    ):
+        data = _read_json(path)
+        versions = []
+        if "version" in data:
+            versions.append(("root", data["version"]))
+        for plugin in data.get("plugins", []) if isinstance(data.get("plugins"), list) else []:
+            if isinstance(plugin, dict) and "version" in plugin:
+                versions.append((f"plugins[{plugin.get('name', '?')}]", plugin["version"]))
+        assert versions, f"{label} declares no version field"
+        for location, version in versions:
+>           assert version == pyproject_version, (
+                f"{label} {location}: {version} != pyproject {pyproject_version}"
+            )
+E           AssertionError: .claude-plugin/marketplace.json root: 1.0.0 != pyproject 1.0.1
+E           assert '1.0.0' == '1.0.1'
+E             
+E             - 1.0.1
+E             ?     ^
+E             + 1.0.0
+E             ?     ^
+
+tests/integration/test_host_integrations.py:89: AssertionError
+__ test_plugin_manifest_version_matches_pyproject[.codex-plugin/plugin.json-] __
+
+label = '.codex-plugin/plugin.json'
+path = PosixPath('/Users/yaliandrona/Projects/Chuzom/.codex-plugin/plugin.json')
+pyproject_version = '1.0.1'
+
+    @pytest.mark.parametrize("label,path", _plugin_files(), ids=lambda x: x if isinstance(x, str) else "")
+    def test_plugin_manifest_version_matches_pyproject(
+        label: str, path: Path, pyproject_version: str
+    ):
+        data = _read_json(path)
+        versions = []
+        if "version" in data:
+            versions.append(("root", data["version"]))
+        for plugin in data.get("plugins", []) if isinstance(data.get("plugins"), list) else []:
+            if isinstance(plugin, dict) and "version" in plugin:
+                versions.append((f"plugins[{plugin.get('name', '?')}]", plugin["version"]))
+        assert versions, f"{label} declares no version field"
+        for location, version in versions:
+>           assert version == pyproject_version, (
+                f"{label} {location}: {version} != pyproject {pyproject_version}"
+            )
+E           AssertionError: .codex-plugin/plugin.json root: 1.0.0 != pyproject 1.0.1
+E           assert '1.0.0' == '1.0.1'
+E             
+E             - 1.0.1
+E             ?     ^
+E             + 1.0.0
+E             ?     ^
+
+tests/integration/test_host_integrations.py:89: AssertionError
+_ test_plugin_manifest_version_matches_pyproject[.codex-plugin/marketplace.json-] _
+
+label = '.codex-plugin/marketplace.json'
+path = PosixPath('/Users/yaliandrona/Projects/Chuzom/.codex-plugin/marketplace.json')
+pyproject_version = '1.0.1'
+
+    @pytest.mark.parametrize("label,path", _plugin_files(), ids=lambda x: x if isinstance(x, str) else "")
+    def test_plugin_manifest_version_matches_pyproject(
+        label: str, path: Path, pyproject_version: str
+    ):
+        data = _read_json(path)
+        versions = []
+        if "version" in data:
+            versions.append(("root", data["version"]))
+        for plugin in data.get("plugins", []) if isinstance(data.get("plugins"), list) else []:
+            if isinstance(plugin, dict) and "version" in plugin:
+                versions.append((f"plugins[{plugin.get('name', '?')}]", plugin["version"]))
+        assert versions, f"{label} declares no version field"
+        for location, version in versions:
+>           assert version == pyproject_version, (
+                f"{label} {location}: {version} != pyproject {pyproject_version}"
+            )
+E           AssertionError: .codex-plugin/marketplace.json root: 1.0.0 != pyproject 1.0.1
+E           assert '1.0.0' == '1.0.1'
+E             
+E             - 1.0.1
+E             ?     ^
+E             + 1.0.0
+E             ?     ^
+
+tests/integration/test_host_integrations.py:89: AssertionError
+_ test_plugin_manifest_version_matches_pyproject[.factory-plugin/plugin.json-] _
+
+label = '.factory-plugin/plugin.json'
+path = PosixPath('/Users/yaliandrona/Projects/Chuzom/.factory-plugin/plugin.json')
+pyproject_version = '1.0.1'
+
+    @pytest.mark.parametrize("label,path", _plugin_files(), ids=lambda x: x if isinstance(x, str) else "")
+    def test_plugin_manifest_version_matches_pyproject(
+        label: str, path: Path, pyproject_version: str
+    ):
+        data = _read_json(path)
+        versions = []
+        if "version" in data:
+            versions.append(("root", data["version"]))
+        for plugin in data.get("plugins", []) if isinstance(data.get("plugins"), list) else []:
+            if isinstance(plugin, dict) and "version" in plugin:
+                versions.append((f"plugins[{plugin.get('name', '?')}]", plugin["version"]))
+        assert versions, f"{label} declares no version field"
+        for location, version in versions:
+>           assert version == pyproject_version, (
+                f"{label} {location}: {version} != pyproject {pyproject_version}"
+            )
+E           AssertionError: .factory-plugin/plugin.json root: 1.0.0 != pyproject 1.0.1
+E           assert '1.0.0' == '1.0.1'
+E             
+E             - 1.0.1
+E             ?     ^
+E             + 1.0.0
+E             ?     ^
+
+tests/integration/test_host_integrations.py:89: AssertionError
+_ test_plugin_manifest_version_matches_pyproject[.factory-plugin/marketplace.json-] _
+
+label = '.factory-plugin/marketplace.json'
+path = PosixPath('/Users/yaliandrona/Projects/Chuzom/.factory-plugin/marketplace.json')
+pyproject_version = '1.0.1'
+
+    @pytest.mark.parametrize("label,path", _plugin_files(), ids=lambda x: x if isinstance(x, str) else "")
+    def test_plugin_manifest_version_matches_pyproject(
+        label: str, path: Path, pyproject_version: str
+    ):
+        data = _read_json(path)
+        versions = []
+        if "version" in data:
+            versions.append(("root", data["version"]))
+        for plugin in data.get("plugins", []) if isinstance(data.get("plugins"), list) else []:
+            if isinstance(plugin, dict) and "version" in plugin:
+                versions.append((f"plugins[{plugin.get('name', '?')}]", plugin["version"]))
+        assert versions, f"{label} declares no version field"
+        for location, version in versions:
+>           assert version == pyproject_version, (
+                f"{label} {location}: {version} != pyproject {pyproject_version}"
+            )
+E           AssertionError: .factory-plugin/marketplace.json root: 1.0.0 != pyproject 1.0.1
+E           assert '1.0.0' == '1.0.1'
+E             
+E             - 1.0.1
+E             ?     ^
+E             + 1.0.0
+E             ?     ^
+
+tests/integration/test_host_integrations.py:89: AssertionError
+_______________ test_marketplace_plugin_versions_match_pyproject _______________
+
+    def test_marketplace_plugin_versions_match_pyproject():
+        """All marketplace plugin versions must match pyproject.toml — drift
+        causes the host to show 'chuzom v10.1.3' in the marketplace while
+        the runtime is v0.0.2 (confusing the user)."""
+        import tomllib
+        pyproj = tomllib.loads((ROOT / "pyproject.toml").read_text())
+        expected = pyproj["project"]["version"]
+    
+        for plugin_dir, host_name in MARKETPLACE_PLUGINS:
+            plugin = json.loads((ROOT / plugin_dir / "plugin.json").read_text())
+>           assert plugin["version"] == expected, (
+                f"{host_name} plugin.json version {plugin['version']} "
+                f"!= pyproject {expected}"
+            )
+E           AssertionError: Claude Code plugin.json version 1.0.0 != pyproject 1.0.1
+E           assert '1.0.0' == '1.0.1'
+E             
+E             - 1.0.1
+E             ?     ^
+E             + 1.0.0
+E             ?     ^
+
+tests/qa/test_plugin_packaging.py:225: AssertionError
+_____ TestBudgetEnforcement.test_daily_budget_exceeded_raises_immediately ______
+
+self = <tests.test_audit_v5_fixes.TestBudgetEnforcement object at 0x10df53dd0>
+temp_db = PosixPath('/private/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/pytest-of-yaliandrona/pytest-5029/test_daily_budget_exceeded_rai0/.chuzom/test_usage.db')
+
+    @pytest.mark.asyncio
+    async def test_daily_budget_exceeded_raises_immediately(self, temp_db):
+        """Exceeding daily budget should raise BudgetExceededError immediately."""
+        with patch('chuzom.cost.get_monthly_spend', new_callable=AsyncMock) as mock_spend:
+            with patch('chuzom.cost.get_daily_spend', new_callable=AsyncMock) as mock_daily:
+                mock_spend.return_value = 0.0
+                # Current daily spend exceeds limit
+                mock_daily.return_value = 0.51
+    
+                with patch('chuzom.router.get_config') as mock_config:
+                    config = MagicMock()
+                    config.chuzom_monthly_budget = 0.0  # No monthly limit
+                    config.chuzom_daily_spend_limit = 0.50  # Daily limit
+                    config.available_providers = ['openai']
+                    mock_config.return_value = config
+    
+>                   with pytest.raises(BudgetExceededError, match="Daily spend"):
+E                   Failed: DID NOT RAISE <class 'chuzom.types.BudgetExceededError'>
+
+tests/test_audit_v5_fixes.py:57: Failed
+----------------------------- Captured stderr call -----------------------------
+[92m00:31:49 - LiteLLM:INFO[0m: utils.py:4011 - 
+LiteLLM completion() model= hermes3:8b; provider = ollama
+------------------------------ Captured log call -------------------------------
+WARNING  chuzom.router:router.py:417 {'event': 'Latency-stats prefetch failed: database is locked', 'user_id': 'yaliandrona', 'tenant_id': 'local', 'request_id': '84d5a7e2', 'org_id': 'local', 'logger': 'chuzom.router', 'level': 'warning', 'timestamp': '2026-07-29T23:31:49.219015Z'}
+WARNING  chuzom.router:router.py:3368 {'correlation_id': '84d5a7e2', 'task_type': 'query', 'profile': 'budget', 'complexity': 'simple', 'event': "Daily cap exceeded — downgrading to free-local providers (1 model(s), $0). Daily spend limit of $0.50 exceeded (spent: $0.5100 today UTC). Resets at midnight UTC. To raise the limit: set CHUZOM_DAILY_SPEND_LIMIT env var or routing.yaml's daily_caps._total.", 'user_id': 'yaliandrona', 'tenant_id': 'local', 'request_id': '84d5a7e2', 'org_id': 'local', 'logger': 'chuzom.router', 'level': 'warning', 'timestamp': '2026-07-29T23:31:49.220555Z'}
+INFO     chuzom.router:router.py:3522 {'correlation_id': '84d5a7e2', 'task_type': 'query', 'profile': 'budget', 'complexity': 'simple', 'top_model': 'ollama/hermes3:8b', 'model_chain': 'hermes3:8b', 'candidate_count': 1, 'event': 'route_start', 'user_id': 'yaliandrona', 'tenant_id': 'local', 'request_id': '84d5a7e2', 'org_id': 'local', 'logger': 'chuzom.router', 'level': 'info', 'timestamp': '2026-07-29T23:31:49.520173Z'}
+INFO     chuzom.router:router.py:3612 {'correlation_id': '84d5a7e2', 'task_type': 'query', 'profile': 'budget', 'complexity': 'simple', 'event': 'context_prep enriched prompt (source=cache(5 results), tokens~1371)', 'user_id': 'yaliandrona', 'tenant_id': 'local', 'request_id': '84d5a7e2', 'org_id': 'local', 'logger': 'chuzom.router', 'level': 'info', 'timestamp': '2026-07-29T23:31:49.521598Z'}
+INFO     LiteLLM:utils.py:4011 
+LiteLLM completion() model= hermes3:8b; provider = ollama
+INFO     chuzom.router:router.py:2540 {'correlation_id': '84d5a7e2', 'task_type': 'query', 'profile': 'budget', 'complexity': 'simple', 'model': 'ollama/hermes3:8b', 'provider': 'ollama', 'cost_usd': 0.0, 'latency_ms': 3469.292915891856, 'event': 'routing_decision', 'user_id': 'yaliandrona', 'tenant_id': 'local', 'request_id': '84d5a7e2', 'org_id': 'local', 'logger': 'chuzom.router', 'level': 'info', 'timestamp': '2026-07-29T23:31:53.033382Z'}
+_______________________ test_cap_hit_no_free_hard_blocks _______________________
+
+    @pytest.mark.asyncio
+    async def test_cap_hit_no_free_hard_blocks():
+        # chain is paid-only; cap exceeded + hard → BudgetExceededError.
+>       with pytest.raises(BudgetExceededError, match="daily limit|Daily spend"):
+E       Failed: DID NOT RAISE <class 'chuzom.types.BudgetExceededError'>
+
+tests/test_tq007_daily_cap_downgrade.py:108: Failed
+------------------------------ Captured log call -------------------------------
+WARNING  chuzom.redaction_routing:redaction_routing.py:82 {'error': 'redactor died', 'event': 'redaction_failed', 'logger': 'chuzom.redaction_routing', 'level': 'warning', 'timestamp': '2026-07-29T23:34:21.687436Z'}
+=============================== warnings summary ===============================
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_request_model
+  /Users/yaliandrona/Projects/Chuzom/src/chuzom/service.py:332: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_request_model
+  /Users/yaliandrona/Projects/Chuzom/.venv/lib/python3.11/site-packages/fastapi/applications.py:4656: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_endpoint_error_returns_original_order
+tests/test_error_sanitization.py::TestCreateUserErrorMessage::test_logs_internal_error
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_sanitizes_database_error
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_sanitizes_api_error
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_includes_http_status_when_available
+tests/test_error_sanitization.py::TestSpecializedSanitization::test_skips_http_status_when_not_requested
+tests/test_oauth_token_rotation.py::TestTokenRefreshStrategy::test_refresh_handles_exceptions
+  /Users/yaliandrona/Projects/Chuzom/.venv/lib/python3.11/site-packages/structlog/stdlib.py:1166: UserWarning: Remove `format_exc_info` from your processor chain if you want pretty exceptions.
+    ed = p(logger, meth_name, ed)  # type: ignore[arg-type]
+
+tests/test_dashboard_auth.py::test_auth_middleware_allows_index_without_token
+  /Users/yaliandrona/Projects/Chuzom/tests/test_dashboard_auth.py:91: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_dashboard_auth.py::test_auth_middleware_blocks_api_without_token
+  /Users/yaliandrona/Projects/Chuzom/tests/test_dashboard_auth.py:125: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_dashboard_auth.py::test_auth_middleware_allows_api_with_valid_token
+  /Users/yaliandrona/Projects/Chuzom/tests/test_dashboard_auth.py:157: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_judge.py::test_store_judge_score
+  /Users/yaliandrona/Projects/Chuzom/.venv/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:258: RuntimeWarning: coroutine '_evaluate_background' was never awaited
+    return tuple(dict.fromkeys(alias_names)), is_alias_path_only
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_zero_claude_status.py::test_zero_claude_banner_overrides_detected_subscription
+  /Users/yaliandrona/Projects/Chuzom/tests/conftest.py:666: RuntimeWarning: coroutine 'wired.<locals>._init' was never awaited
+    gc.collect()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/audit/test_policy_switching.py::test_routing_yaml_daily_caps_are_wired_and_downgrade
+FAILED tests/integration/test_host_integrations.py::test_plugin_manifest_version_matches_pyproject[.claude-plugin/plugin.json-]
+FAILED tests/integration/test_host_integrations.py::test_plugin_manifest_version_matches_pyproject[.claude-plugin/marketplace.json-]
+FAILED tests/integration/test_host_integrations.py::test_plugin_manifest_version_matches_pyproject[.codex-plugin/plugin.json-]
+FAILED tests/integration/test_host_integrations.py::test_plugin_manifest_version_matches_pyproject[.codex-plugin/marketplace.json-]
+FAILED tests/integration/test_host_integrations.py::test_plugin_manifest_version_matches_pyproject[.factory-plugin/plugin.json-]
+FAILED tests/integration/test_host_integrations.py::test_plugin_manifest_version_matches_pyproject[.factory-plugin/marketplace.json-]
+FAILED tests/qa/test_plugin_packaging.py::test_marketplace_plugin_versions_match_pyproject
+FAILED tests/test_audit_v5_fixes.py::TestBudgetEnforcement::test_daily_budget_exceeded_raises_immediately
+FAILED tests/test_tq007_daily_cap_downgrade.py::test_cap_hit_no_free_hard_blocks
+ERROR tests/test_st004_semantic_cache_project_scope.py::test_no_cross_project_hit
+ERROR tests/test_st004_semantic_cache_project_scope.py::test_same_project_still_hits
+10 failed, 6352 passed, 174 skipped, 30 deselected, 1 xfailed, 14 warnings, 2 errors in 228.31s (0:03:48)

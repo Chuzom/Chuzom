@@ -9,7 +9,7 @@ After every bash tool call:
   4. Log compression stats to SQLite (original → compressed tokens)
   5. Inject compressed output as contextForAgent
 
-Token savings: 60-90% reduction on shell commands (git, pytest, cargo, docker, etc.)
+Trims verbose shell command output (git, pytest, cargo, docker, etc.) before it reaches the model.
 by removing noise, duplicates, and verbose output.
 
 Env vars:

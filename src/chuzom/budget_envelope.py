@@ -175,18 +175,28 @@ class BudgetEnvelopeManager:
         )
 
     def _chain(self, key: BudgetKey) -> list[BudgetEnvelope]:
-        """Return [self_env, *parent_envs] for the registered envelopes
+        """Return [self_env, *ancestor_envs] for the registered envelopes
         in the parent chain. Unregistered parents are silently
-        skipped — caller knows what envelopes it registered."""
+        skipped — caller knows what envelopes it registered.
+
+        RED1-6-01: walks the chain TRANSITIVELY (breadth-first with a cycle
+        guard) so a cap 2+ levels up (org → user → agent) is settled/enforced,
+        not just the leaf's immediate parents."""
         out: list[BudgetEnvelope] = []
-        env = self._envelopes.get(key)
-        if env is None:
-            return out
-        out.append(env)
-        for parent_key in env.parents:
-            parent = self._envelopes.get(parent_key)
-            if parent is not None:
-                out.append(parent)
+        seen: set = set()
+        queue: list[BudgetKey] = [key]
+        while queue:
+            k = queue.pop(0)
+            if k in seen:
+                continue
+            seen.add(k)
+            env = self._envelopes.get(k)
+            if env is None:
+                continue
+            out.append(env)
+            for parent_key in env.parents:
+                if parent_key not in seen:
+                    queue.append(parent_key)
         return out
 
     async def try_reserve(self, key: BudgetKey, cost_usd: float) -> bool:
@@ -233,14 +243,23 @@ class BudgetEnvelopeManager:
                 release_for(env.key, cost_usd)
                 self._update_soft_state(env)
 
-    async def commit(self, key: BudgetKey, cost_usd: float) -> None:
+    async def commit(
+        self, key: BudgetKey, cost_usd: float, *, settle_pending: bool = True
+    ) -> None:
         """Move ``cost_usd`` from pending to consumed on self + parents.
 
         Success path: caller called ``try_reserve(key, estimated)``,
         the provider returned with ``actual_cost``, caller calls
-        ``commit(key, actual_cost)`` AND ``release(key, estimated)`` if
-        actual ≠ estimated — or just ``commit(key, estimated)`` if the
-        accounting tolerance is acceptable.
+        ``release(key, estimated)`` to undo the reservation exactly and then
+        ``commit(key, actual_cost, settle_pending=False)`` to record true spend
+        without touching pending again. ``settle_pending=True`` (the default)
+        keeps the standalone "move pending→consumed" behaviour for callers that
+        do not release separately.
+
+        RED1-5-01: when ``settle_pending`` is False, pending is NOT decremented
+        here (release already did it). Decrementing twice erased a concurrent
+        sibling's outstanding reservation on a shared key and let a third caller
+        exceed the cap.
         """
         if cost_usd <= 0:
             return
@@ -250,12 +269,30 @@ class BudgetEnvelopeManager:
                 self._consumed[env.key] = (
                     self._consumed.get(env.key, 0.0) + cost_usd
                 )
-                # Decrement pending to match — production callers should
-                # pair commit() with release() of any unused reservation.
-                self._pending[env.key] = max(
-                    0.0, self._pending.get(env.key, 0.0) - cost_usd
-                )
-                release_for(env.key, cost_usd)
+                if settle_pending:
+                    # Standalone callers: decrement pending to match.
+                    self._pending[env.key] = max(
+                        0.0, self._pending.get(env.key, 0.0) - cost_usd
+                    )
+                    release_for(env.key, cost_usd)
+                self._update_soft_state(env)
+
+    async def settle(
+        self, key: BudgetKey, est_cost_usd: float, actual_cost_usd: float
+    ) -> None:
+        """RED1-7-01: atomically undo the reservation (pending -= est) and record
+        the real spend (consumed += actual) under a SINGLE lock-hold, so a
+        concurrent try_reserve cannot observe the reservation as gone while the
+        spend has not yet landed (which allowed a shared cap to be breached)."""
+        if est_cost_usd <= 0 and actual_cost_usd <= 0:
+            return
+        est = float(est_cost_usd or 0.0)
+        actual = float(actual_cost_usd or 0.0)
+        async with self._lock:
+            for env in self._chain(key):
+                self._consumed[env.key] = self._consumed.get(env.key, 0.0) + actual
+                self._pending[env.key] = max(0.0, self._pending.get(env.key, 0.0) - est)
+                release_for(env.key, est)
                 self._update_soft_state(env)
 
     # ── T2-M3 soft tier ────────────────────────────────────────────────────

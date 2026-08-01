@@ -124,16 +124,22 @@ def test_zero_claude_blocks_on_success(tmp_path, stub_ollama):
     assert "Paris" in json.dumps(out)
 
 
-def test_default_mode_blocks_self_contained(tmp_path, stub_ollama):
-    """P1 (truthful routing): default RENDER_MODE=auto must BLOCK a
-    self-contained prompt with a successful draft — that is the only way the
-    "routes instead of Claude" claim is true out of the box. The routed answer
-    must still reach the user via the block reason."""
+def test_default_mode_echoes_self_contained_outside_zero_claude(tmp_path, stub_ollama):
+    """CHZ-DRAFT-01 / RED2-01: default RENDER_MODE=auto must NOT block-replace the
+    user's turn outside zero-Claude — a stateless local-model draft must never
+    masquerade as the answer (the block path is reserved for explicit zero-Claude,
+    see test_zero_claude_* below). The draft is instead delivered as advisory
+    context (decision=approve) that the assistant verifies. This replaces the old
+    assertion that default mode BLOCKS self-contained drafts, which was exactly
+    the turn-replacement fabrication risk the audit identified: _is_context_dependent
+    is a fixed noun list with a ~60% false-negative rate, so "self-contained" could
+    not be trusted to gate a turn-replacing block."""
     out = _run("What is the capital of France?", tmp_path, stub_ollama)
     assert out is not None
-    assert out.get("decision") == "block", (
-        f"auto default should block self-contained drafts, got {out.get('decision')!r}"
+    assert out.get("decision") == "approve", (
+        f"auto default must stay advisory outside zero-Claude, got {out.get('decision')!r}"
     )
+    # The advisory draft still reaches the assistant (via additionalContext).
     assert "Paris" in json.dumps(out)
 
 

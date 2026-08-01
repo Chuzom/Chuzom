@@ -46,6 +46,21 @@ _SECRET_ENV_VARS = {
     r"CLAUDE.*TOKEN",
     r".*PASSWORD.*",
     r".*SECRET.*",
+    # CHZ-SEC-03: the blocklist leaked AWS_ACCESS_KEY_ID, GH_PAT and DATABASE_URL
+    # to child CLIs (none of them end in _API_KEY/_TOKEN or contain SECRET).
+    # Broaden to the credential-bearing classes.
+    r"AWS_.*",                 # ACCESS_KEY_ID, SESSION_TOKEN, etc. (child CLIs don't need AWS)
+    r".*ACCESS_KEY.*",
+    r".*_KEY_ID$",
+    r".*CREDENTIAL.*",
+    r".*_PAT$",                # GH_PAT and friends
+    r"GH_PAT",
+    r"GITHUB_TOKEN",
+    r".*DATABASE_URL$",
+    r".*REDIS_URL$",
+    r".*_DSN$",
+    r".*CONNECTION_STRING.*",
+    r".*PRIVATE_KEY.*",
 }
 
 

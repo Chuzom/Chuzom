@@ -1157,10 +1157,14 @@ async def run(port: int = DEFAULT_PORT) -> None:
 
     @web.middleware
     async def auth_middleware(request: "web.Request", handler) -> "web.Response":
-        if request.path == "/":
-            return await handler(request)
+        # CHZ-SEC-05: the index ("/") must NOT be exempt from auth. It injects the
+        # dashboard token into the page (window.DASHBOARD_TOKEN), so exempting it
+        # handed the token to any unauthenticated request that reached the port,
+        # defeating the whole scheme. The launcher logs the tokenized URL
+        # (http://localhost:PORT/?token=…), so a legitimate user still gets in;
+        # an unauthenticated GET / now receives 401 and no token.
         provided = request.headers.get("X-Dashboard-Token") or request.rel_url.query.get("token")
-        if provided != token:
+        if not provided or not secrets.compare_digest(provided, token):
             raise web.HTTPUnauthorized(text="Unauthorized")
         return await handler(request)
 

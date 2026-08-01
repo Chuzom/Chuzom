@@ -101,8 +101,19 @@ async def commit_envelope(
         return
     b = backend or _get_backend()
     try:
-        await b.release(key, float(est_cost_usd or 0.0))
-        await b.commit(key, float(actual_cost_usd or 0.0))
+        # RED1-7-01: settle atomically undoes the reservation (pending -= est) AND
+        # records the real spend (consumed += actual) in ONE transaction/lock-hold.
+        # The previous release(est)+commit(actual) was two separate awaits; a
+        # concurrent try_reserve landing in the gap saw pending already decremented
+        # but consumed not yet incremented and could be admitted past a shared cap.
+        # (RED1-5-01: the reservation must be undone by `est`, not `actual`, and the
+        # spend recorded as `actual` — settle does both without double-touching.)
+        settle = getattr(b, "settle", None)
+        if settle is not None:
+            await settle(key, float(est_cost_usd or 0.0), float(actual_cost_usd or 0.0))
+        else:  # backend predates settle(): fall back to the two-step path
+            await b.release(key, float(est_cost_usd or 0.0))
+            await b.commit(key, float(actual_cost_usd or 0.0), settle_pending=False)
     except Exception as exc:
         log.warning("envelope_commit_failed", error=str(exc))
 

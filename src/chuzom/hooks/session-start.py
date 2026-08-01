@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 17
+# chuzom-hook-version: 18
 """SessionStart hook — inject routing banner, start Ollama, refresh Claude usage.
 
 Fires once when a new Claude Code session begins. Four jobs:
@@ -118,7 +118,7 @@ BANNER_SUBSCRIPTION = """
 ║  Subscription usage tracked for session-end delta reporting  ║
 ║  Inline OAuth refresh keeps pressure data fresh              ║
 ╠════════════════════════════════════════════════════════════════╣
-║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+║  routing is advisory; enforce mode decides what is blocked  ║
 ║  Prefer the cheap tool when it fits, else just do the work  ║
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
@@ -136,12 +136,48 @@ BANNER_API_KEYS = """
 ║  Free-first chain: Ollama → Codex → paid API providers        ║
 ║  Set GEMINI_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, etc.      ║
 ╠════════════════════════════════════════════════════════════════╣
-║  advise mode — a ROUTE hint is a suggestion, never a block  ║
+║  routing is advisory; enforce mode decides what is blocked  ║
 ║  Prefer the cheap tool when it fits, else just do the work  ║
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
-BANNER = BANNER_SUBSCRIPTION if _CC_MODE else BANNER_API_KEYS
+BANNER_LOCAL = """
+╔════════════════════════════════════════════════════════════════╗
+║  ⚡ chuzom ACTIVE — local routing (no cloud keys set)     ║
+╠════════════════════════════════════════════════════════════════╣
+║  No cloud API keys detected. Routing uses whatever is         ║
+║  available locally (Ollama / Codex / Gemini CLI) or falls     ║
+║  through to Claude when nothing else can serve the task.      ║
+║  Add OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY, etc. to  ║
+║  enable cloud fallbacks — run `chuzom setup` to configure.    ║
+╠════════════════════════════════════════════════════════════════╣
+║  routing is advisory; enforce mode decides what is blocked  ║
+╚════════════════════════════════════════════════════════════════╝
+""".strip()
+
+# RED2-8-03: the banner must reflect ACTUAL provider availability, not just the
+# subscription flag. Claiming "API-key routing in effect" and naming cloud
+# providers when zero keys are configured (the README's own Ollama-first
+# quickstart state) is false. Cloud-key vars chuzom can actually route through:
+_CLOUD_KEY_VARS = (
+    "OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY",
+    "DEEPSEEK_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY", "PERPLEXITY_API_KEY",
+)
+
+
+def _any_cloud_key() -> bool:
+    return any(os.environ.get(k, "").strip() for k in _CLOUD_KEY_VARS)
+
+
+def _resolve_banner(is_subscription: bool) -> str:
+    if is_subscription or _CC_MODE:
+        return BANNER_SUBSCRIPTION
+    if _any_cloud_key():
+        return BANNER_API_KEYS
+    return BANNER_LOCAL  # honest: no cloud keys configured
+
+
+BANNER = _resolve_banner(_CC_MODE)
 
 
 _CHUZOM_LOGO = "⚡ Chuzom"
@@ -149,37 +185,53 @@ _WELCOME_DIVIDER = "─" * 60
 
 
 def _mode_label(is_subscription: bool) -> str:
-    """One-word mode label for the welcome line: zero-claude / subscription / api-keys."""
+    """One-word mode label for the welcome line: zero-claude / subscription /
+    api-keys / local.
+
+    RED2-11-03: must have a "local" branch so the welcome mode line agrees with
+    the banner box (BANNER_LOCAL) when no cloud keys are configured — previously
+    it always claimed "api-keys" even with zero keys, contradicting the box.
+    """
     if _zero_claude_enabled():
         return "zero-claude (strict — external routes or block)"
     if is_subscription or _CC_MODE:
         return "subscription (Claude OAuth pressure cascade)"
-    return "api-keys (Ollama → Codex → paid providers)"
+    if _any_cloud_key():
+        return "api-keys (Ollama → Codex → paid providers)"
+    return "local (Ollama / Codex — no cloud keys set)"
 
 
 def _enforce_label() -> str:
     """Human description of the RESOLVED enforcement mode (honest — no hardcoding).
 
     Resolves through the same source of truth the PreToolUse enforcer uses, so
-    this line always matches actual behavior. After P0, no mode blocks file/shell
-    tools — the differences are only in logging.
+    this line always matches actual behavior.
     """
     try:
         from chuzom.enforce_config import resolve_enforce_mode
         mode = resolve_enforce_mode()
     except Exception:
         mode = "soft"
+    # CHZ-AUD-D-05/A-06 (RED-2 re-audit): honest per-mode text, verified against
+    # enforce-route.py. On a ROUTED turn (one for which auto-route wrote a pending
+    # directive), SMART holds Edit/Write/MultiEdit until the route is satisfied —
+    # for ALL task types, NOT just Q&A (enforce-route.py:1181). Its only concession
+    # over hard is that read-only Bash is allowed for code/non-Q&A tasks; write Bash
+    # is still held. HARD/STRICT hold Bash/Edit/Write/MultiEdit/NotebookEdit
+    # outright (only Read/Glob/Grep/LS proceed). Only off/shadow/advise/suggest/soft
+    # never block. The smart label must not tell code tasks their write tools are
+    # free, nor claim "never blocks" for a mode that blocks.
     descriptions = {
         "off": "off (no enforcement)",
-        "shadow": "shadow (observe-only)",
+        "shadow": "shadow (observe-only; never blocks)",
         "advise": "advise (silent; never blocks)",
-        "suggest": "soft (logs routing misses; never blocks)",
-        "soft": "soft (logs routing misses; never blocks — default)",
-        "smart": "smart (logs misses; file/shell tools never blocked)",
-        "hard": "hard (logs misses; file/shell tools never blocked)",
-        "strict": "strict (logs misses; file/shell tools never blocked)",
+        "suggest": "suggest (logs routing misses; never blocks)",
+        "soft": "soft (logs routing misses; never blocks)",
+        "smart": "smart — DEFAULT (on a routed turn holds Edit/Write/MultiEdit until routed for ALL tasks; Read/Glob/Grep/LS always proceed, read-only Bash proceeds for code tasks)",
+        "hard": "hard (holds Edit/Write/MultiEdit/NotebookEdit + write Bash until routed; Read/Glob/Grep/LS proceed, and read-only Bash proceeds for code tasks)",
+        "strict": "strict (holds Bash/Edit/Write/MultiEdit/NotebookEdit until routed — read-only Bash included; only Read/Glob/Grep/LS proceed)",
     }
-    return descriptions.get(mode, f"{mode} (never blocks file/shell tools)")
+    return descriptions.get(mode, f"{mode} (holds blocklisted tools until routed)")
 
 
 def _render_welcome(is_subscription: bool) -> str:
@@ -258,7 +310,9 @@ def _zero_claude_enabled() -> bool:
 def _select_banner(is_subscription: bool) -> str:
     if _zero_claude_enabled():
         return BANNER_ZERO_CLAUDE
-    return BANNER_SUBSCRIPTION if is_subscription or _CC_MODE else BANNER_API_KEYS
+    # RED2-8-03: honest — fall to the local banner when no cloud keys are set
+    # instead of claiming "API-key routing in effect".
+    return _resolve_banner(is_subscription)
 
 
 def _reset_session_stats() -> None:
@@ -486,6 +540,12 @@ def _refresh_claude_usage() -> str:
                 "sonnet_pct": result["sonnet_pct"],
                 "highest_pressure": result["highest_pressure"],
                 "updated_at": time.time(),
+                # RED2-9-04: the SUCCESS path must set is_fallback explicitly.
+                # Omitting it made the banner reader `get("is_fallback", True)`
+                # default to True, so a successful subscription refresh was
+                # mis-read as a fallback and the banner box showed the wrong mode
+                # for every session after the first.
+                "is_fallback": False,
             }
             
             try:
@@ -728,23 +788,27 @@ def _preflight_check() -> str:
     Runs silently (never raises) so it cannot block session start.
     Only emits output when something needs attention.
     """
-    issues = []
-    ok = []
+    # RED2-5-03: a missing OPTIONAL provider is not a defect. Chuzom routes over
+    # whatever is available (any cloud key OR reachable Ollama OR Claude
+    # subscription). Distinguish "you have ZERO usable routing paths" (genuinely
+    # actionable — emit the imperative) from "one of several optional providers is
+    # unconfigured" (informational — never tell the agent to 'fix' it, which could
+    # push it to prompt for a credential that isn't needed).
+    paths: list[str] = []          # usable routing paths (at least one → we're fine)
+    optional_missing: list[str] = []
 
-    # API keys
     for key, label in [
         ("OPENAI_API_KEY", "OpenAI"),
         ("GEMINI_API_KEY", "Gemini"),
         ("ANTHROPIC_API_KEY", "Anthropic"),
     ]:
         if os.environ.get(key, "").strip():
-            ok.append(label)
+            paths.append(label)
         elif key == "ANTHROPIC_API_KEY" and _CC_MODE:
-            # Claude arrives via the Pro/Max subscription in CC mode — no API key
-            # needed, so a missing ANTHROPIC_API_KEY is expected, not a problem.
-            ok.append("Anthropic (subscription)")
+            # Claude arrives via the Pro/Max subscription in CC mode — a usable path.
+            paths.append("Anthropic (subscription)")
         else:
-            issues.append(f"{key} missing")
+            optional_missing.append(label)
 
     # Ollama
     try:
@@ -753,28 +817,33 @@ def _preflight_check() -> str:
             ["ollama", "list"], capture_output=True, timeout=subprocess_timeout()
         )
         if result.returncode == 0:
-            ok.append("Ollama")
+            paths.append("Ollama")
         else:
-            issues.append("Ollama not running")
+            optional_missing.append("Ollama (not running)")
     except Exception:
-        issues.append("Ollama not found")
+        optional_missing.append("Ollama (not found)")
 
-    # Enforce-route mode
     enforce = os.environ.get("CHUZOM_ENFORCE", "smart")
+
+    lines: list[str] = []
+
+    if not paths:
+        # Genuinely actionable: nothing can route. This is the only case that
+        # warrants the imperative.
+        lines.append("\n⚠️  No routing paths available — Chuzom cannot route.")
+        lines.append("  Set an API key (OpenAI/Gemini/Anthropic) or start Ollama before starting.")
+    elif optional_missing:
+        # Informational only — routing works; these are extra optional providers.
+        lines.append(
+            "\nℹ️  Optional providers not configured: "
+            + ", ".join(optional_missing)
+            + " — routing works via " + ", ".join(paths) + "."
+        )
+
+    # Enforce mode is a heads-up, not a defect — keep it out of the 'fix' bucket.
     if enforce == "hard":
-        issues.append("CHUZOM_ENFORCE=hard (may block tools — use smart or off to debug)")
-    elif enforce == "off":
-        ok.append("enforce=off")
-    else:
-        ok.append(f"enforce={enforce}")
+        lines.append("  ℹ️  CHUZOM_ENFORCE=hard may block tools when no route is available — use smart/off to debug.")
 
-    if not issues:
-        return ""  # All good — stay silent
-
-    lines = ["\n⚠️  Pre-flight issues:"]
-    for issue in issues:
-        lines.append(f"  ✗ {issue}")
-    lines.append("  Fix before starting implementation.")
     return "\n".join(lines)
 
 
@@ -1040,7 +1109,13 @@ def main() -> None:
         _usage_path = os.path.join(STATE_DIR, "usage.json")
         with open(_usage_path) as _uf:
             _cached_usage = json.load(_uf)
-        _cached_sub = not _cached_usage.get("is_fallback", True)
+        # RED2-10-02: default to NOT-fallback (i.e. success) when the key is
+        # absent. Several success-path usage.json writers (subscription.py,
+        # usage-refresh.py) never write is_fallback; the fallback path ALWAYS
+        # writes is_fallback=True explicitly. So a missing key means success —
+        # the previous `True` default mis-read every such cache as a fallback and
+        # showed the wrong banner box. This one-line reader fix covers all writers.
+        _cached_sub = not _cached_usage.get("is_fallback", False)
     except Exception:
         _cached_sub = _CC_MODE
     banner = _select_banner(_cached_sub)

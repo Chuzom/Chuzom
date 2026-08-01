@@ -165,11 +165,19 @@ def check_hooks() -> tuple[bool, list[str]]:
     messages = []
     all_ok = True
 
-    hook_names = [
-        "chuzom-auto-route.py",
-        "chuzom-session-end.py",
-        "chuzom-enforce-route.py",
-    ]
+    # CHZ-AUD-C-04: derive the expected hook set from the authoritative install
+    # manifest (_HOOK_DEFS) rather than a hardcoded subset — `chuzom verify`
+    # previously checked only 3 of the 13 hooks install actually deploys, so a
+    # missing/broken hook among the other 10 was reported as "all good".
+    try:
+        from chuzom.install_hooks import _HOOK_DEFS
+        hook_names = [dst_name for (_src, dst_name, _event, _matcher) in _HOOK_DEFS]
+    except Exception:
+        hook_names = [
+            "chuzom-auto-route.py",
+            "chuzom-session-end.py",
+            "chuzom-enforce-route.py",
+        ]
 
     for hook_name in hook_names:
         hook_path = hooks_dir / hook_name

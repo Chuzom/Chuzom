@@ -22,6 +22,7 @@ import urllib.request
 from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 from chuzom.types import QualityMode, RoutingProfile, Tier
@@ -91,6 +92,40 @@ def probe_pxpipe(base_url: str) -> bool:
         _pxpipe_reachable_cache = False
     _pxpipe_cache_time = now
     return _pxpipe_reachable_cache
+
+
+def validate_ollama_url(url: str) -> str:
+    """CHZ-SEC-06: reject unsafe Ollama endpoints before any urlopen.
+
+    ``CHUZOM_OLLAMA_URL`` / ``OLLAMA_URL`` reached ``urlopen`` with no scheme or
+    host validation, so ``file://`` was accepted (local file read) and
+    cloud-metadata addresses (169.254.169.254, ::ffff:169.254.169.254) were
+    attempted — a classic SSRF sink. Returns the URL unchanged when safe, or ``""``
+    (Ollama disabled) when not. Only ``http``/``https`` to a non-metadata,
+    non-link-local host are allowed.
+    """
+    if not url:
+        return ""
+    try:
+        from urllib.parse import urlparse
+        p = urlparse(url)
+    except Exception:
+        return ""
+    if p.scheme not in ("http", "https"):
+        return ""
+    host = (p.hostname or "").lower()
+    if not host:
+        return ""
+    # Block cloud-metadata + link-local + unspecified addresses.
+    _BLOCKED_HOSTS = {
+        "169.254.169.254", "metadata.google.internal", "metadata",
+        "0.0.0.0", "::", "[::]",
+    }
+    if host in _BLOCKED_HOSTS:
+        return ""
+    if host.startswith("169.254.") or host.startswith("fe80:") or "169.254.169.254" in host:
+        return ""
+    return url
 
 
 class RouterConfig(BaseSettings):
@@ -193,6 +228,14 @@ class RouterConfig(BaseSettings):
     ollama_base_url: str = ""               # empty = Ollama disabled
     ollama_budget_models: str = ""          # comma-separated model names
 
+    @field_validator("ollama_base_url")
+    @classmethod
+    def _validate_ollama_base_url(cls, v: str) -> str:
+        # CHZ-SEC-06: a configured/env-injected Ollama URL is validated at the
+        # boundary, so every direct `.ollama_base_url` read (semantic_cache,
+        # discover, …) is already scheme/host-safe. Unsafe → "" (disabled).
+        return validate_ollama_url(v)
+
     # ── OpenAI-compatible local inference (llama.cpp, vLLM, TGI, LM Studio) ──
     # Any server that speaks /v1/chat/completions (OpenAI wire format) works here.
     # Example: openai_compat_base_url="http://localhost:8080/v1"
@@ -222,6 +265,19 @@ class RouterConfig(BaseSettings):
     chuzom_db_path: Path = Path.home() / ".chuzom" / "usage.db"
     chuzom_monthly_budget: float = 20.0  # $20/month default cap
     chuzom_daily_spend_limit: float = 0.0  # 0 = disabled; >0 fires alert when crossed
+
+    # ── Persistence hardening (sensitive-content lifecycle) ──
+    # Whether result_cache/semantic_cache/session_store scrub credentials,
+    # tokens, and PII from content BEFORE it is written to disk. On by
+    # default — persistence is not a safe place for raw secrets.
+    chuzom_persist_redaction: bool = True   # CHUZOM_PERSIST_REDACTION
+    # Opt-in escape hatch: when true, skip redaction entirely and persist
+    # verbatim content. Off by default; only for trusted local debugging.
+    chuzom_persist_raw: bool = False        # CHUZOM_PERSIST_RAW
+    # Retention window for persisted content. Rows/lines older than this are
+    # PHYSICALLY deleted (not just filtered from queries) the next time the
+    # owning store is opened or written to. 0 disables purging.
+    chuzom_persist_ttl_days: int = 30       # CHUZOM_PERSIST_TTL_DAYS
 
     # ── Explainability (v8.2.0) ──
     # Controls routing explanation visibility on every response.
@@ -468,12 +524,14 @@ class RouterConfig(BaseSettings):
         """
         import os
 
-        return (
+        candidate = (
             self.ollama_base_url
             or os.getenv("OLLAMA_BASE_URL", "")
             or os.getenv("OLLAMA_URL", "")
             or ("" if os.getenv("PYTEST_CURRENT_TEST") else "http://localhost:11434")
         )
+        # CHZ-SEC-06: never hand an unvalidated URL to a network call.
+        return validate_ollama_url(candidate)
 
     @property
     def text_providers(self) -> set[str]:

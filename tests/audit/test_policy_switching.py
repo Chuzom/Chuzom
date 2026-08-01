@@ -259,40 +259,52 @@ def routed_runtime(monkeypatch, temp_db):
 
 
 @pytest.mark.asyncio
-async def test_routing_yaml_daily_caps_and_enforce_have_no_runtime_effect_BUG(
+async def test_routing_yaml_daily_caps_are_wired_and_downgrade(
     routed_runtime, monkeypatch
 ):
-    """BUG (see REPORT_A.md): routing.yaml's `daily_caps` + `enforce` fields
-    are dead for the live routing path. Even with an absurdly low cap and
-    `enforce: hard`, and a task-daily-spend already far above it, the call
-    proceeds and succeeds — because route_and_call never consults
-    RepoConfig.daily_cap_for() / effective_enforce() at all.
+    """routing.yaml `daily_caps` ARE consulted by the live routing path
+    (was CHZ-TQ-007). This test patches the real loader (`effective_config`) —
+    the earlier `_BUG` version patched only the config *object* and never
+    `effective_config`, so route_and_call never saw the cap and the test
+    "passed" for the wrong reason, masking that caps were in fact wired.
+
+    TQ-007 behavior: an exceeded routing.yaml daily cap DOWNGRADES to free-local;
+    against the paid-only routed_runtime chain with enforce=hard there is no free
+    fallback, so it hard-blocks with BudgetExceededError.
     """
+    # effective_enforce() reads CHUZOM_ENFORCE from env first; pin it so an
+    # ambient value doesn't flip the no-free-fallback branch to smart.
+    monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
+    repo_cfg = _dict_to_config(
+        {"daily_caps": {"code": 0.0001}, "enforce": "hard"}, "test"
+    )
+    assert repo_cfg.daily_cap_for("code") == 0.0001
+
     with patch(
+        "chuzom.repo_config.effective_config", return_value=repo_cfg,
+    ), patch(
         "chuzom.router.cost.get_daily_spend_by_task_type",
         new_callable=AsyncMock,
-        return_value=9_999.0,  # already "way over" any plausible cap
+        return_value=9_999.0,  # already "way over" the cap
     ), patch("chuzom.policy.load_org_policy", return_value=None):
-        repo_cfg = _dict_to_config(
-            {"daily_caps": {"code": 0.0001}, "enforce": "hard"}, "test"
-        )
-        assert repo_cfg.daily_cap_for("code") == 0.0001
-        assert repo_cfg.effective_enforce() == "hard"
-
-        # Despite the above, route_and_call has no wiring to this object at
-        # all — it succeeds normally.
-        response = await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
-        assert response.model == "openai/gpt-4o"
+        with pytest.raises(BudgetExceededError, match="Task-type daily limit|Daily spend"):
+            await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
 
 
 @pytest.mark.asyncio
 async def test_org_policy_task_cap_is_the_mechanism_that_actually_enforces(
-    routed_runtime,
+    routed_runtime, monkeypatch,
 ):
     """The REAL per-task daily cap mechanism: ~/.chuzom/org-policy.yaml's
     `task_caps`, loaded via chuzom.policy.load_org_policy() / get_task_cap().
-    A low cap here DOES block the call with BudgetExceededError."""
+
+    TQ-007: an exceeded cap DOWNGRADES to free-local providers rather than
+    hard-blocking. The routed_runtime chain is paid-only (openai) — no free
+    fallback — so with enforce=hard the cap hard-blocks (the enforcing case
+    verified here). In smart mode it would instead fall through to Claude.
+    """
     from chuzom.policy import OrgPolicy
+    monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
 
     with patch(
         "chuzom.router.cost.get_daily_spend_by_task_type",
@@ -307,7 +319,7 @@ async def test_org_policy_task_cap_is_the_mechanism_that_actually_enforces(
 
 
 @pytest.mark.asyncio
-async def test_task_caps_are_interpreted_as_cents_not_dollars(routed_runtime):
+async def test_task_caps_are_interpreted_as_cents_not_dollars(routed_runtime, monkeypatch):
     """Regression test for the cents/dollars unit bug: OrgPolicy.task_caps is
     documented (policy.py) and displayed (policy.py:569's `${v/100:.2f}`) as
     CENTS, but route_and_call used to compare the raw cents integer directly
@@ -315,9 +327,12 @@ async def test_task_caps_are_interpreted_as_cents_not_dollars(routed_runtime):
     $50/day cap) was enforced as a $5000/day cap, 100x too permissive.
 
     task_caps={"code": 5000} means a $50.00/day cap. $40 spent must NOT block
-    (under cap); $60 spent must block (over cap, correctly converted).
+    (under cap); $60 spent must block (over cap, correctly converted). enforce=hard
+    so the over-cap case blocks against the paid-only chain (TQ-007 downgrade has
+    no free fallback here).
     """
     from chuzom.policy import OrgPolicy
+    monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
 
     with patch(
         "chuzom.router.cost.get_daily_spend_by_task_type",
@@ -345,30 +360,47 @@ async def test_task_caps_are_interpreted_as_cents_not_dollars(routed_runtime):
 
 
 @pytest.mark.asyncio
-async def test_enforce_mode_hard_blocks_soft_warns_and_proceeds(
+async def test_enforce_mode_hard_blocks_soft_falls_through_to_claude(
     routed_runtime, monkeypatch
 ):
-    """Regression test: CHUZOM_ENFORCE now has a real effect on route_and_call's
-    budget-enforcement path. With a task cap exceeded, "hard" (the default)
-    blocks the call with BudgetExceededError; "soft" logs a warning and lets
-    the call proceed instead. Previously neither mode had any effect at all.
+    """CHUZOM_ENFORCE controls the cap no-free branch (RED2-2-01 corrected).
+
+    With a task cap exceeded and no free-local provider:
+    - "hard" blocks with BudgetExceededError (paid-only chain).
+    - "soft"/"smart" fall through to CLAUDE if the chain has a Claude model —
+      NOT to a non-Claude paid provider (that was the RED2-2-01 silent-paid-call
+      bug: soft used to return openai/gpt-4o). With a paid-only chain that has no
+      Claude, soft also blocks — there is no cap-respecting way to proceed.
     """
     from chuzom.policy import OrgPolicy
 
     with patch(
+        "chuzom.policy.load_org_policy",
+        return_value=OrgPolicy(task_caps={"code": 1000}, source="file"),  # $10 cap
+    ), patch(
         "chuzom.router.cost.get_daily_spend_by_task_type",
         new_callable=AsyncMock,
         return_value=20.0,
-    ), patch(
-        "chuzom.policy.load_org_policy",
-        return_value=OrgPolicy(task_caps={"code": 1000}, source="file"),  # $10 cap
     ):
+        # hard: paid-only chain (routed_runtime → openai) → block.
         monkeypatch.setenv("CHUZOM_ENFORCE", "hard")
         with pytest.raises(BudgetExceededError, match="Task-type daily limit"):
             await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
 
+        # soft, paid-only NON-Claude chain → block (no silent paid call).
         monkeypatch.setenv("CHUZOM_ENFORCE", "soft")
-        soft_response = await route_and_call(
-            TaskType.CODE, "hello", profile=RoutingProfile.BALANCED
-        )
-        assert soft_response.model == "openai/gpt-4o"
+        with pytest.raises(BudgetExceededError, match="Task-type daily limit"):
+            await route_and_call(TaskType.CODE, "hello", profile=RoutingProfile.BALANCED)
+
+        # soft, chain WITH Claude → fall through to Claude (anthropic), not openai.
+        with patch(
+            "chuzom.router._build_and_filter_chain",
+            new_callable=AsyncMock,
+            return_value=["openai/gpt-4o", "anthropic/claude-sonnet-4-6"],
+        ):
+            resp = await route_and_call(
+                TaskType.CODE, "hello", profile=RoutingProfile.BALANCED
+            )
+            assert resp.provider == "anthropic", (
+                f"soft cap-fallthrough must go to Claude, not a paid API: {resp.model}"
+            )

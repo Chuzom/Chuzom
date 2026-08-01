@@ -18,6 +18,7 @@ import re
 import shlex
 import shutil
 import sys
+import time
 from pathlib import Path
 
 
@@ -48,6 +49,32 @@ _CLAUDE_DIR = Path.home() / ".claude"
 _HOOKS_DST = _CLAUDE_DIR / "hooks"
 _RULES_DST = _CLAUDE_DIR / "rules"
 _SETTINGS_PATH = _CLAUDE_DIR / "settings.json"
+
+
+def _legacy_llm_router_paths() -> list[Path]:
+    """RED2-4-01: pre-rebrand 'llm-router' artifacts that shipped before the
+    Chuzom rename. The orphaned rules file contradicts the current advise-mode
+    chuzom.md (it declares routing a HARD CONSTRAINT / forbids using your own
+    tools), so it must be removed on install (migration) and uninstall. Never
+    referenced by the current codebase; safe to delete."""
+    paths = [_RULES_DST / "llm-router.md"]
+    hooks_dir = _HOOKS_DST
+    if hooks_dir.exists():
+        paths.extend(sorted(hooks_dir.glob("llm-router-*.py")))
+    return paths
+
+
+def _migrate_remove_legacy_llm_router() -> list[str]:
+    """Remove the conflicting pre-rebrand llm-router.md/hooks on install/upgrade."""
+    actions: list[str] = []
+    for p in _legacy_llm_router_paths():
+        if p.exists():
+            try:
+                p.unlink()
+                actions.append(f"Removed conflicting legacy artifact {p}")
+            except OSError:
+                pass
+    return actions
 
 
 def _claw_code_dir() -> Path | None:
@@ -111,6 +138,19 @@ def _hook_version(path: Path) -> int:
         return 0
 
 
+def _files_differ(src: Path, dst: Path) -> bool:
+    """True if the two files' contents differ (byte comparison).
+
+    Used by the content-aware update path (RED2-6-01) to detect a hook/rules
+    file whose behaviour drifted from the bundled copy without a version bump.
+    On any read error, report 'differ' so the safer action (re-copy) is taken.
+    """
+    try:
+        return src.read_bytes() != dst.read_bytes()
+    except OSError:
+        return True
+
+
 def _command_script_path(command: str) -> Path | None:
     """Extract the script path from a Python hook command, if present."""
     try:
@@ -123,14 +163,50 @@ def _command_script_path(command: str) -> Path | None:
     return None
 
 
+def _backup_before_overwrite(dst: Path) -> Path | None:
+    """RED1-7-02: preserve the file about to be overwritten, so a hand-edited
+    managed hook/rules file is never SILENTLY and PERMANENTLY destroyed.
+
+    Returns the backup path or None if the backup could not be written (the
+    caller MUST NOT overwrite when None is returned — RED1-8-02).
+
+    RED1-8-03/RED2-8-02: never clobber an existing backup. The plain ``<dst>.bak``
+    is written only if absent (it holds the FIRST captured edit); a subsequent
+    drift event writes a timestamped ``<dst>.<ts>.bak`` instead, so no earlier
+    hand-edit is ever lost.
+    """
+    try:
+        primary = dst.with_suffix(dst.suffix + ".bak")
+        if not primary.exists():
+            shutil.copy2(dst, primary)
+            return primary
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        alt = dst.with_suffix(dst.suffix + f".{ts}.bak")
+        # Guard the sub-second collision case so we still never clobber.
+        n = 0
+        while alt.exists():
+            n += 1
+            alt = dst.with_suffix(dst.suffix + f".{ts}-{n}.bak")
+        shutil.copy2(dst, alt)
+        return alt
+    except OSError:
+        return None
+
+
 def check_and_update_hooks() -> list[str]:
     """Re-copy bundled hooks to ~/.claude/hooks/ if the installed versions are stale.
 
     Returns a list of human-readable update messages (one per updated hook).
     Called automatically on MCP server startup so existing users get hook updates
     after ``pip install --upgrade chuzom-router`` without re-running install.
-    Missing managed hooks are also restored. Existing files are only overwritten
-    when the bundled version is newer, to avoid clobbering user-managed scripts.
+    Missing managed hooks are also restored.
+
+    Existing files are overwritten when the bundled version is newer OR when the
+    version stamps match but the installed bytes have drifted from the bundled
+    copy (RED2-6-01: content changes without a stamp bump must still propagate).
+    Before ANY such overwrite, the existing file is backed up to ``<name>.bak``
+    and the backup path is reported (RED1-7-02: a user who hand-edited a managed
+    hook must never silently lose that edit — it is recoverable and announced).
     """
     updates: list[str] = []
     settings = _load_settings()
@@ -152,14 +228,30 @@ def check_and_update_hooks() -> list[str]:
                 updates.append(f"Failed to restore {dst_name}: {e}")
         else:
             dst_v = _hook_version(dst)
-            if src_v > dst_v:
-                try:
-                    shutil.copy2(src, dst)
-                    if sys.platform != "win32":
-                        dst.chmod(0o755)
-                    updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}")
-                except OSError as e:
-                    updates.append(f"Failed to update {dst_name}: {e}")
+            # RED2-6-01: content-aware, not purely version-stamp-gated. We never
+            # downgrade (src_v < dst_v is left alone).
+            _drifted = src_v == dst_v and _files_differ(src, dst)
+            if src_v > dst_v or _drifted:
+                # RED1-8-02: if the backup cannot be written, do NOT overwrite —
+                # a hand-edited file must never be destroyed with no recovery path.
+                backup = _backup_before_overwrite(dst)  # RED1-7-02
+                if backup is None:
+                    updates.append(
+                        f"SKIPPED {dst_name}: could not back up existing file — "
+                        f"update NOT applied (previous content preserved)"
+                    )
+                else:
+                    try:
+                        shutil.copy2(src, dst)
+                        if sys.platform != "win32":
+                            dst.chmod(0o755)
+                        _where = f" (previous saved to {backup.name})"
+                        if _drifted:
+                            updates.append(f"Refreshed {dst_name} (content drift at v{src_v}){_where}")
+                        else:
+                            updates.append(f"Updated {dst_name} v{dst_v} → v{src_v}{_where}")
+                    except OSError as e:
+                        updates.append(f"Failed to update {dst_name}: {e}")
 
         legacy_msg = _sync_legacy_hook_alias(_HOOKS_DST, settings, src_name, dst_name, src)
         if legacy_msg:
@@ -183,12 +275,33 @@ def check_and_update_rules() -> str | None:
     src_version = _rules_version(rules_src)
     dst_version = _rules_version(rules_dst)
 
-    if src_version <= dst_version:
+    # RED2-6-03: content-aware, same as check_and_update_hooks. Re-copy when the
+    # bundled version is newer OR the versions match but the installed rules drifted
+    # from bundled (a content change that forgot to bump the version stamp). Never
+    # downgrade. Without this, a reworded rules file silently never reaches users.
+    if src_version < dst_version:
+        return None
+    _drifted = src_version == dst_version and _files_differ(rules_src, rules_dst)
+    if src_version == dst_version and not _drifted:
         return None
 
     _RULES_DST.mkdir(parents=True, exist_ok=True)
+    # RED1-7-02 / RED1-8-02: back up a possibly hand-edited rules file before
+    # overwriting; if the backup cannot be written, skip the overwrite so the
+    # user's content is never destroyed without a recovery path.
+    _where = ""
+    if rules_dst.exists():
+        backup = _backup_before_overwrite(rules_dst)
+        if backup is None:
+            return (
+                "SKIPPED routing rules update: could not back up existing file "
+                "— update NOT applied (previous content preserved)"
+            )
+        _where = f" (previous saved to {backup.name})"
     shutil.copy2(rules_src, rules_dst)
-    return f"Updated routing rules v{dst_version} → v{src_version}"
+    if _drifted:
+        return f"Refreshed routing rules (content drift at v{src_version}){_where}"
+    return f"Updated routing rules v{dst_version} → v{src_version}{_where}"
 
 
 # Hook definitions: (source_filename, dest_filename, event, matcher)
@@ -249,9 +362,31 @@ def _load_settings() -> dict:
 
 
 def _save_settings(settings: dict) -> None:
-    """Write settings.json atomically."""
+    """Write settings.json atomically, backing up an unparseable existing file.
+
+    CHZ-PKG-008: ``_load_settings`` silently returns ``{}`` when the existing
+    settings.json can't be parsed, so a malformed-but-user-authored file was
+    then overwritten and lost with no backup. Before overwriting, if the current
+    file exists and does NOT parse as JSON, copy it to a timestamped ``.bak`` so
+    the user can recover it. The write itself is atomic (tmp + os.replace).
+    """
+    import time
+
     _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _SETTINGS_PATH.write_text(json.dumps(settings, indent=2) + "\n")
+    if _SETTINGS_PATH.exists():
+        try:
+            json.loads(_SETTINGS_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            try:
+                backup = _SETTINGS_PATH.with_name(
+                    f"settings.json.corrupt.{int(time.time())}.bak"
+                )
+                backup.write_bytes(_SETTINGS_PATH.read_bytes())
+            except OSError:
+                pass
+    tmp = _SETTINGS_PATH.with_name("settings.json.tmp")
+    tmp.write_text(json.dumps(settings, indent=2) + "\n")
+    os.replace(tmp, _SETTINGS_PATH)
 
 
 def _legacy_alias_path(hooks_dir: Path, src_name: str, dst_name: str) -> Path | None:
@@ -623,6 +758,18 @@ def install(force: bool = False) -> list[str]:
             except OSError:
                 pass
 
+        # RED1-9-01 / RED1-11-02: back up a hand-edited managed hook before install
+        # overwrites it, and if the backup CANNOT be written, SKIP the overwrite —
+        # never destroy a user's edit with no recovery path (parity with the
+        # auto-update path). Only when the installed file differs from bundled.
+        if dst.exists() and _files_differ(src, dst):
+            _b = _backup_before_overwrite(dst)
+            if _b is None:
+                actions.append(
+                    f"SKIPPED {src_name}: could not back up existing file — not overwritten"
+                )
+                continue
+            actions.append(f"Backed up existing {dst_name} → {_b.name}")
         shutil.copy2(src, dst)
         if sys.platform != "win32":
             dst.chmod(0o755)
@@ -689,10 +836,30 @@ def install(force: bool = False) -> list[str]:
     rules_dst = _RULES_DST / "chuzom.md"
 
     if rules_src.exists():
-        shutil.copy2(rules_src, rules_dst)
-        actions.append(f"Installed routing rules → {rules_dst}")
+        # RED1-11-01: back up a hand-edited rules file before overwriting; if the
+        # backup can't be written, skip the overwrite (never destroy user content
+        # with no recovery path) — parity with the auto-update path.
+        if rules_dst.exists() and _files_differ(rules_src, rules_dst):
+            _rb = _backup_before_overwrite(rules_dst)
+            if _rb is None:
+                actions.append(
+                    "SKIPPED routing rules: could not back up existing file — not overwritten"
+                )
+            else:
+                actions.append(f"Backed up existing chuzom.md → {_rb.name}")
+                shutil.copy2(rules_src, rules_dst)
+                actions.append(f"Installed routing rules → {rules_dst}")
+        else:
+            shutil.copy2(rules_src, rules_dst)
+            actions.append(f"Installed routing rules → {rules_dst}")
     else:
         actions.append(f"SKIP rules: source not found at {rules_src}")
+
+    # RED2-4-01: heal the pre-rebrand conflict on every install/upgrade — remove
+    # the orphaned llm-router.md (which declares routing a HARD CONSTRAINT and
+    # contradicts the advise-mode chuzom.md just written above) and its dormant
+    # llm-router-*.py hooks.
+    actions.extend(_migrate_remove_legacy_llm_router())
 
     # ── Install statusLine command ──────────────────────────────────────
     statusline_src = _HOOKS_SRC / "statusline-command.sh"
@@ -791,6 +958,53 @@ def uninstall() -> list[str]:
     if rules_dst.exists():
         rules_dst.unlink()
         actions.append(f"Removed {rules_dst}")
+
+    # RED2-4-01: also remove PRE-REBRAND "llm-router" artifacts that earlier
+    # versions installed under the old identity. They are never referenced by the
+    # current codebase, so uninstall previously left them behind forever — and the
+    # orphaned llm-router.md rules file actively contradicts the current advise-mode
+    # chuzom.md (it declares routing a HARD CONSTRAINT), silently overriding intent
+    # in every session. Clean them up on uninstall, and on install (see
+    # _migrate_remove_legacy_llm_router below) so an upgrade heals the conflict.
+    for _legacy in _legacy_llm_router_paths():
+        if _legacy.exists():
+            try:
+                _legacy.unlink()
+                actions.append(f"Removed legacy pre-rebrand artifact {_legacy}")
+            except OSError:
+                pass
+
+    # RED2-5-01: remove the statusLine script + its settings.json registration.
+    # install() copies chuzom-statusline.sh and registers a `bash <path>`
+    # statusLine command; uninstall previously left both, so Claude Code kept
+    # executing the chuzom script on every render after the user uninstalled.
+    statusline_dst = _HOOKS_DST / "chuzom-statusline.sh"
+    if statusline_dst.exists():
+        try:
+            statusline_dst.unlink()
+            actions.append(f"Removed {statusline_dst}")
+        except OSError:
+            pass
+    settings_sl = _load_settings()
+    current_sl = settings_sl.get("statusLine")
+    if isinstance(current_sl, dict) and "chuzom-statusline.sh" in str(
+        current_sl.get("command", "")
+    ):
+        del settings_sl["statusLine"]
+        _save_settings(settings_sl)
+        actions.append("Removed statusLine command from ~/.claude/settings.json")
+
+    # RED2-5-02: remove the sidecar helper scripts install() copied into the
+    # hooks dir. They carry no event/matcher so the _HOOK_DEFS removal loop above
+    # never touched them, leaving them orphaned on disk after uninstall.
+    for _name in _SIDECAR_SCRIPTS:
+        _sidecar = _HOOKS_DST / _name
+        if _sidecar.exists():
+            try:
+                _sidecar.unlink()
+                actions.append(f"Removed sidecar script {_sidecar}")
+            except OSError:
+                pass
 
     # Remove from Claude Desktop
     actions.extend(_uninstall_claude_desktop())
@@ -948,6 +1162,31 @@ def uninstall_claw_code() -> list[str]:
         del mcp_servers["chuzom"]
         actions.append("Removed chuzom MCP server from claw-code")
 
+    # RED2-5-02: remove the sidecar helper scripts install_claw_code() copied in.
+    for _name in _SIDECAR_SCRIPTS:
+        _sidecar = hooks_dst / _name
+        if _sidecar.exists():
+            try:
+                _sidecar.unlink()
+                actions.append(f"Removed sidecar script {_sidecar}")
+            except OSError:
+                pass
+
+    # RED2-5-02: strip the CHUZOM_CLAW_CODE=true marker install_claw_code() wrote
+    # into ~/.claw-code/.env, so the claw-code host stops believing chuzom is
+    # active after uninstall. Parse-and-rewrite, dropping only that line.
+    env_path = cc_dir / ".env"
+    if env_path.exists():
+        try:
+            _lines = env_path.read_text(encoding="utf-8").splitlines()
+            _kept = [ln for ln in _lines if not ln.strip().startswith("CHUZOM_CLAW_CODE")]
+            if len(_kept) != len(_lines):
+                _body = "\n".join(_kept)
+                env_path.write_text(_body + ("\n" if _body else ""), encoding="utf-8")
+                actions.append(f"Removed CHUZOM_CLAW_CODE flag from {env_path}")
+        except OSError:
+            pass
+
     if settings_path.exists():
         settings_path.write_text(json.dumps(settings, indent=2) + "\n")
 
@@ -963,7 +1202,7 @@ _VSCODE_MCP_CONTENT = """\
       "type": "stdio",
       "command": "chuzom",
       "args": [],
-      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call saves 60-90% vs sending directly to Claude."
+      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call routes to a cheaper capable model before using Claude quota."
     }
   }
 }
@@ -975,7 +1214,7 @@ _WINDSURF_MCP_CONTENT = """\
     "chuzom": {
       "command": "chuzom",
       "args": [],
-      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call saves 60-90% vs sending directly to Claude."
+      "description": "Chuzom smart LLM router — routes tasks to the cheapest capable model (Ollama → Gemini Flash → GPT-4o-mini → Claude). Call llm_code for coding tasks, llm_query for questions, llm_analyze for analysis, llm_research for web search. Each call routes to a cheaper capable model before using Claude quota."
     }
   }
 }
@@ -991,7 +1230,8 @@ alwaysApply: true
 # Chuzom routing — use MCP tools before answering directly
 
 Chuzom MCP tools route each task to the cheapest model that can handle it.
-Calling them before generating your own answer saves 60–90% of token cost.
+Calling them before generating your own answer routes to a cheaper capable model,
+conserving Claude quota.
 
 > **Important — pull routing:** Unlike Claude Code (which intercepts prompts
 > automatically via hooks), Cursor uses pull routing: YOU must call the tool.
@@ -1061,20 +1301,34 @@ def install_ide_configs(project_dir: Path | None = None) -> list[str]:
 
 
 def uninstall_ide_configs(project_dir: Path | None = None) -> list[str]:
-    """Remove Chuzom-managed IDE config files from the given project directory."""
+    """Remove Chuzom-managed IDE config from the given project directory.
+
+    RED2-11-01/02: ``.vscode/mcp.json`` and ``.windsurf/mcp.json`` are SHARED
+    config files — a user keeps their own MCP servers there. Wholesale-unlinking
+    them (the previous behaviour) destroyed unrelated user config. Remove ONLY the
+    chuzom entry surgically. Only a dedicated chuzom-authored file
+    (``.cursor/rules/use-chuzom.mdc``) is safe to delete outright.
+
+    RED2-9-03: the project-scoped .github/copilot-instructions.md and Trae .rules
+    are written via _append_routing_rules → recorded in the install manifest
+    (created-vs-appended aware), so the manifest replay removes them correctly.
+    """
     root = Path(project_dir) if project_dir else Path.cwd()
     actions: list[str] = []
+    from chuzom import install_manifest as _im
 
-    targets = [
-        root / ".vscode" / "mcp.json",
-        root / ".windsurf" / "mcp.json",
-        root / ".cursor" / "rules" / "use-chuzom.mdc",
-    ]
+    # Shared MCP config — surgical removal of the chuzom entry only.
+    actions += _im._remove_json_key(root / ".vscode" / "mcp.json", "servers", "chuzom")
+    actions += _im._remove_json_key(root / ".windsurf" / "mcp.json", "mcpServers", "chuzom")
 
-    for path in targets:
-        if path.exists():
-            path.unlink()
-            actions.append(f"Removed {path}")
+    # Dedicated chuzom-authored rule file — safe to remove entirely.
+    mdc = root / ".cursor" / "rules" / "use-chuzom.mdc"
+    if mdc.exists():
+        try:
+            mdc.unlink()
+            actions.append(f"Removed {mdc}")
+        except OSError:
+            pass
 
     return actions
 
@@ -1086,11 +1340,13 @@ def main() -> None:
     cmd = args[0] if args else "install"
 
     if cmd == "uninstall":
-        print("\nUninstalling Chuzom hooks...\n")
-        actions = uninstall()
-        for a in actions:
-            print(f"  {a}")
-        print("\nDone. Restart Claude Code to apply changes.\n")
+        # RED2-7-01: delegate to the single uninstall implementation so this
+        # frozen public entry point (`chuzom-install-hooks uninstall`) cleans up
+        # everything install could have created — claw-code + IDE configs
+        # included — exactly like `chuzom uninstall`. Previously main() called
+        # only uninstall(), leaving a full parallel claw-code install behind.
+        from chuzom.commands.uninstall import _run_uninstall
+        _run_uninstall(args[1:])
         return
 
     if cmd == "ide":
@@ -1184,9 +1440,10 @@ WHAT GETS INSTALLED
 
 PUSH vs PULL — THE KEY DIFFERENCE
 
-  Push (Claude Code):  Chuzom intercepts the prompt BEFORE the LLM sees it.
-    Every prompt is auto-routed. Zero extra effort from the model or user.
-    Savings are guaranteed on every turn.
+  Push (Claude Code):  Chuzom suggests a route on every prompt BEFORE the LLM
+    sees it, with no extra effort from you. In advise mode nothing is ever
+    blocked — Claude keeps the final call — so how much you save depends on
+    your task mix, not a guarantee.
 
   Pull (Copilot/Cursor/Windsurf):  The LLM sees the prompt, then DECIDES
     whether to call a Chuzom tool. The Cursor .mdc rule makes this more

@@ -53,6 +53,30 @@ _load_dotenv()  # at import, before any routing
 
 app = FastAPI(title="Chuzom Gateway", version="2")
 
+
+@app.middleware("http")
+async def _guard_cross_origin(request, call_next):
+    """CHZ-SEC-04: block browser CSRF / DNS-rebinding on this loopback gateway.
+
+    Every route here can trigger a real (possibly paid) model call. The gateway
+    binds loopback, but a malicious web page could POST to http://127.0.0.1:PORT
+    from the user's browser (CSRF), or use DNS-rebinding (attacker.com -> 127.0.0.1)
+    to reach it. Both carry a non-loopback ``Host`` and/or a cross-site
+    ``Origin``/``Referer``; legitimate clients that set OPENAI_BASE_URL /
+    ANTHROPIC_BASE_URL (curl, the OpenAI/Anthropic SDKs) send a loopback Host and
+    no browser Origin, so they are unaffected.
+    """
+    from starlette.responses import JSONResponse
+
+    from chuzom.route_server import is_forbidden_cross_origin
+
+    if is_forbidden_cross_origin(request.headers):
+        return JSONResponse(
+            {"error": "forbidden: cross-origin request rejected"}, status_code=403
+        )
+    return await call_next(request)
+
+
 # Gateway mode fronts host tools such as Codex/Cursor/Pi. Calling Codex or
 # Gemini CLI again from inside the gateway can recurse or fail under launchd's
 # trimmed PATH, so keep subprocess host backends out unless an operator opts in.

@@ -17,11 +17,12 @@ import platform
 import re
 import subprocess
 import threading
+# weakref removed with the per-loop budget-lock cache (RED1-09).
 import time
-import weakref
 import zlib
 from dataclasses import replace
 from typing import Any, AsyncIterator, TYPE_CHECKING
+from contextvars import ContextVar
 from uuid import uuid4
 
 from chuzom import cost, media, providers
@@ -57,7 +58,7 @@ from chuzom.streaming_types import RouterStreamEvent
 from chuzom.compaction import compact_structural
 from chuzom.config import get_config
 from chuzom.repo_config import effective_config as get_repo_config
-from chuzom.context import build_context_messages, get_session_buffer
+from chuzom.context import _resolve_context_identity, build_context_messages, get_session_buffer
 from chuzom.health import get_tracker
 from chuzom.profiles import get_model_chain, provider_from_model
 from chuzom.receipt_store import compute_receipt, store_receipt
@@ -1070,23 +1071,52 @@ def _reorder_for_agent_context(
         else:  # claude_code — Claude preferred for complex/deep reasoning
             return claude + ollama + codex + gemini_cli + rest
 
-# Guards the check-then-spend budget sequence so concurrent calls cannot
-# both slip through the limit before either has recorded its spend.
-# asyncio locks are bound to their event loop, and gateway requests can enter
-# through route_server.route_payload(), which uses asyncio.run() per request.
-# Keep one lock per active loop so the gateway does not trip "bound to a
-# different event loop" on its second routed request.
-_budget_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = weakref.WeakKeyDictionary()
+# Guards the check-then-spend budget sequence so concurrent calls cannot both
+# slip through the limit before either has recorded its spend.
+#
+# RED1-09: this was a per-event-loop asyncio.Lock (keyed in a WeakKeyDictionary).
+# The gateway (route_server.py) is a ThreadingHTTPServer that runs asyncio.run()
+# PER REQUEST — so every concurrent request ran on a distinct, short-lived event
+# loop and therefore got a DISTINCT asyncio.Lock, providing zero cross-request
+# mutual exclusion. Two requests could both pass the cap check before either
+# committed its spend (observed lost updates to _pending_spend).
+#
+# The fix is a single PROCESS-WIDE threading.Lock, acquired via a non-blocking
+# async spin so it serializes across BOTH deployment shapes without ever
+# blocking an event loop:
+#   * MCP server  — one long-lived loop, many async tasks: the spin yields via
+#     asyncio.sleep, so sibling tasks are not starved while one holds the lock.
+#   * Gateway     — many OS threads, one loop each: a process-global
+#     threading.Lock is the only thing that actually excludes across threads.
+# The critical section is short (a local SQLite spend read + arithmetic), so the
+# 5 ms spin granularity adds negligible latency.
+_budget_proc_lock = threading.Lock()
 _pending_spend: float = 0.0  # sum of provisional spend for all in-flight calls
 
 
-def _budget_lock() -> asyncio.Lock:
-    loop = asyncio.get_running_loop()
-    lock = _budget_locks.get(loop)
-    if lock is None:
-        lock = asyncio.Lock()
-        _budget_locks[loop] = lock
-    return lock
+class _AsyncProcLock:
+    """Async context manager over a process-wide threading.Lock (RED1-09).
+
+    Acquire is a non-blocking spin with ``asyncio.sleep`` so the event loop is
+    never blocked; the underlying threading.Lock provides real mutual exclusion
+    across threads and across distinct event loops. threading.Lock has no
+    owner-thread check on release, so acquiring and releasing from the same
+    coroutine (possibly observed on one loop thread) is valid.
+    """
+
+    __slots__ = ()
+
+    async def __aenter__(self) -> "_AsyncProcLock":
+        while not _budget_proc_lock.acquire(blocking=False):
+            await asyncio.sleep(0.005)
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        _budget_proc_lock.release()
+
+
+def _budget_lock() -> "_AsyncProcLock":
+    return _AsyncProcLock()
 
 
 def _disabled_subprocess_backends() -> set[str]:
@@ -1462,8 +1492,15 @@ def _enrich_response(
     effective_complexity: str,
     task_type: TaskType,
     chain_attempts: list[str],
+    failed_attempt_cost: float = 0.0,
 ) -> LLMResponse:
-    """Add explainability fields to a successful LLMResponse."""
+    """Add explainability fields to a successful LLMResponse.
+
+    RED1-8-01: ``failed_attempt_cost`` carries the already-billed cost of prior
+    rejected attempts out of the dispatch loop so route_and_call can settle the
+    TRUE turn cost (this response's cost + the rejected attempts') into the
+    budget envelope and quota tracker.
+    """
     return replace(
         response,
         confidence=classification_data.get("classifier_confidence", 0.0) if classification_data else 0.0,
@@ -1471,6 +1508,7 @@ def _enrich_response(
         complexity=effective_complexity,
         task_type_str=task_type.value,
         chain_attempts=chain_attempts,
+        chain_attempt_cost_usd=float(failed_attempt_cost or 0.0),
     )
 
 
@@ -1555,7 +1593,9 @@ async def _cli_prompt_with_context(
         return prompt
     try:
         context_msgs = await build_context_messages(
-            caller_context=caller_context,
+            # CHZ-AUD-B-01: fall back to the LIVE prompt so keyword-relevance
+            # retrieval fires even when the caller passes no explicit context.
+            caller_context=caller_context or prompt,
             max_session_messages=getattr(config, "context_max_messages", 5),
             max_previous_sessions=getattr(config, "context_max_previous_sessions", 3),
             max_context_tokens=getattr(config, "context_max_tokens", 1500),
@@ -1578,6 +1618,37 @@ async def _cli_prompt_with_context(
     )
 
 
+# CHZ-AUD-A-02: when route_and_call is invoked with an agent_session_id, the
+# execution ledger must attribute its rows to THAT session so
+# get_session_accounting(agent_session_id) returns the agent's real activity.
+# The identifier is carried through this ContextVar, set for the exact span of
+# the dispatch (and reset in a finally), rather than threaded through every one
+# of the ~12 ledger-emit call sites. Precedence when resolving the ledger
+# session id: explicit agent_session_id > CHUZOM_SESSION_ID env > correlation_id.
+_LEDGER_SESSION_OVERRIDE: "ContextVar[str]" = ContextVar(
+    "chuzom_ledger_session_override", default=""
+)
+
+
+def _ledger_session_id(correlation_id: str | None, override: str | None = None) -> str:
+    """Resolve the ledger session_id with CHZ-AUD-A-02 precedence.
+
+    Phase 0.5 (Edit 5): ``CLAUDE_SESSION_ID`` (the Claude Code host's own
+    session env var) is checked after ``CHUZOM_SESSION_ID`` and before the
+    correlation_id fallback — an independent correctness repair for
+    session/period rollups when the chuzom-specific env var is unset but the
+    host session id is available. Additive; still falls back to
+    correlation_id when neither env var is set.
+    """
+    return (
+        override
+        or _LEDGER_SESSION_OVERRIDE.get()
+        or os.environ.get("CHUZOM_SESSION_ID", "")
+        or os.environ.get("CLAUDE_SESSION_ID", "")
+        or (correlation_id or "")
+    )
+
+
 def _emit_ledger_attempt(
     response: Any,
     model: str,
@@ -1589,6 +1660,11 @@ def _emit_ledger_attempt(
     accepted: bool | None = None,
     rejected: bool | None = None,
     rejection_reason: str | None = None,
+    classifier_cost_usd: float | None = None,
+    failed_attempt_cost_usd: float | None = None,
+    baseline_equivalent_cost_usd: float | None = None,
+    baseline_tokens: int | None = None,
+    ledger_route_id: str | None = None,
 ) -> None:
     """Emit ONE attempt event to the canonical execution ledger (INV-COST-001).
 
@@ -1596,13 +1672,35 @@ def _emit_ledger_attempt(
     exactly once, so route/session totals derived by the aggregation layer include
     rejected/escalated attempt cost (which cost.log_usage/session_spend, called only
     for the winning attempt, structurally omit). FAIL-OPEN: never raises into routing.
+
+    Phase 0 realized-savings params (all optional, default None — only the
+    ACCEPTED attempt on a route should carry these; rejected/failed attempts
+    stay cost-only so the baseline is never credited more than once, R6):
+        classifier_cost_usd: this route's classification cost (Gap 1).
+        failed_attempt_cost_usd: the route's running `_failed_attempt_cost`
+            carried onto the accepted attempt (Gap 1).
+        baseline_equivalent_cost_usd: $ cost of the realistic counterfactual
+            baseline model for this call (reuses the existing ledger column;
+            un-breaks `potential_savings_usd`).
+        baseline_tokens: actual_proxy token count for quota-tokens-saved on
+            subscription hosts (Gap 2 — populated starting Step 5).
+        ledger_route_id: Phase 0.5 (Option A sidecar bridge) — when the hook
+            minted a route_directive_id for this turn (threaded down from
+            ``route_and_call``), the BILLABLE-ROW route_id uses that id
+            instead of correlation_id, so it matches the id the adoption row
+            (``enforce-route.py::_record_realization_used``) is keyed on and
+            the execution ledger's route_id join actually fires. None (the
+            default, all non-MCP callers/CLI/tests) falls back to
+            correlation_id — byte-identical to pre-Phase-0.5 behavior.
+            session_id resolution is UNCHANGED (still correlation_id-based
+            via ``_ledger_session_id``) — only route_id switches.
     """
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
         host_mode = "metered" if cost._host_is_metered() else "subscription"
         record_event(LedgerEvent(
-            session_id=os.environ.get("CHUZOM_SESSION_ID", "") or (correlation_id or ""),
-            route_id=correlation_id or "",
+            session_id=_ledger_session_id(correlation_id),
+            route_id=ledger_route_id or correlation_id or "",
             event_type=event_type,  # type: ignore[arg-type]
             task_type=task_type.value,
             routing_profile=profile.value,
@@ -1615,25 +1713,304 @@ def _emit_ledger_attempt(
             accepted=accepted,
             rejected=rejected,
             rejection_reason=rejection_reason,
+            classifier_cost_usd=classifier_cost_usd,
+            failed_attempt_cost_usd=failed_attempt_cost_usd,
+            baseline_equivalent_cost_usd=baseline_equivalent_cost_usd,
+            baseline_tokens=baseline_tokens,
         ))
     except Exception:  # noqa: BLE001 — ledger emission must never break routing
         pass
 
 
 def _emit_ledger_terminal(
-    correlation_id: str | None, terminal_state: str, *, route_succeeded: bool
+    correlation_id: str | None, terminal_state: str, *, route_succeeded: bool,
+    agent_session_id: str | None = None,
 ) -> None:
-    """Emit the route's single terminal-state event (INV-ROUTE-004/005). FAIL-OPEN."""
+    """Emit the route's single terminal-state event (INV-ROUTE-004/005). FAIL-OPEN.
+
+    agent_session_id (CHZ-AUD-A-02) lets the bypass paths — which run OUTSIDE the
+    dispatch span where the ContextVar override is active — still attribute their
+    terminal row to the agent session.
+    """
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
         record_event(LedgerEvent(
-            session_id=os.environ.get("CHUZOM_SESSION_ID", "") or (correlation_id or ""),
+            session_id=_ledger_session_id(correlation_id, agent_session_id),
             route_id=correlation_id or "",
             event_type="route_completed" if route_succeeded else "route_failed",
             terminal_state=terminal_state,  # type: ignore[arg-type]
         ))
     except Exception:  # noqa: BLE001
         pass
+
+
+async def _finalize_successful_route(
+    *,
+    response,
+    model: str,
+    provider: str,
+    task_type: "TaskType",
+    profile: "RoutingProfile",
+    prompt: str,
+    classification_data: dict | None,
+    chain_attempts: list[str],
+    chain_errors: list,
+    correlation_id: str | None,
+    failed_attempt_cost: float,
+    config,
+    receipt=None,
+    suppress_ledger: bool = False,
+    served_from_cache: bool = False,
+) -> None:
+    """CHZ-AUD-B-05: single source of truth for the post-success finalization
+    side-effects, called from EVERY success path: the primary success path, the
+    emergency BUDGET fallback path, AND the two bypass paths (semantic-cache hit
+    and idempotency dedupe) via served_from_cache=True.
+
+    served_from_cache=True records the parts a cache-served turn MUST NOT lose —
+    the context buffers (so future turns see the exchange) and the routing-decision
+    analytics — while skipping the parts that would be wrong for a bypass: the
+    session-spend meter and route-quality ledger completion (which would
+    double-count the originally-billed cost / duplicate the already-emitted
+    `bypassed` terminal), the daily-spend alert (no new spend), and the semantic
+    cache store (never re-store a hit).
+
+    The emergency fallback used to be a divergent copy that recorded only the
+    execution-ledger attempt/terminal and skipped everything else — so an answer
+    produced by the budget fallback was invisible to the session-spend meter, the
+    North-Star route-quality ledger, the context buffers, the routing-decision
+    analytics, the semantic cache, and the daily-spend alert. Centralising the
+    side-effects here removes the drift class: both paths now finalize identically.
+
+    Every sub-step is independently fail-open — telemetry never breaks routing.
+    `log_usage`, the accepted-attempt ledger event and the terminal ledger event
+    are intentionally NOT here: each caller already emits those before/around the
+    call, so including them would double-count.
+    """
+    # CLI-provider quota accounting (Codex / Gemini CLI).
+    if provider == "codex":
+        try:
+            from chuzom.quota_balance import record_codex_request
+            record_codex_request(config.codex_daily_limit)
+        except Exception as _quota_err:
+            log.debug("Failed to record Codex request: %s", _quota_err)
+    elif provider == "gemini_cli":
+        try:
+            from chuzom.gemini_cli_quota import record_gemini_request
+            record_gemini_request()
+        except Exception as _quota_err:
+            log.debug("Failed to record Gemini CLI request: %s", _quota_err)
+
+    # Real-time session spend meter (v4.0). Skipped for cache-served turns — the
+    # cost was already billed when the response was first produced; re-recording
+    # it here would double-count (CHZ-AUD-B-05).
+    if not served_from_cache:
+        try:
+            from chuzom.session_spend import get_session_spend
+            _spend = get_session_spend()
+            _spend.record(
+                model=model,
+                tool=task_type.value,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                cost_usd=response.cost_usd,
+            )
+            if receipt is not None:
+                _spend.record_reclaimed(
+                    tokens_reclaimed=receipt.tokens_reclaimed,
+                    opus_equivalent_usd=receipt.opus_equivalent_cost,
+                    gates_passed=receipt.all_passed,
+                )
+        except Exception as e:
+            log.warning("session_spend_tracking_failed", error=str(e))
+
+    # North Star route-quality ledger (CF-1) — completion route. Skipped on cache
+    # hits: the `bypassed` terminal already emitted at the call site is the correct
+    # ledger signal; a completion record here would double-signal (CHZ-AUD-B-05).
+    if not suppress_ledger and not served_from_cache:
+        try:
+            from chuzom.routing_quality import (
+                RouteLedgerRecord, derive_fallback_reason, record_route,
+            )
+            _fb_occurred = len(chain_errors) > 0
+            _fb_reason, _mis = derive_fallback_reason(chain_errors)
+            _first_model = chain_attempts[0] if chain_attempts else None
+            _in_tok = getattr(response, "input_tokens", 0)
+            _out_tok = getattr(response, "output_tokens", 0)
+            _base = _baseline_cost(task_type, profile, _in_tok, _out_tok)
+            _final_cost = float(getattr(response, "cost_usd", 0.0) or 0.0)
+            _actual = _final_cost + failed_attempt_cost
+            record_route(RouteLedgerRecord(
+                route_kind="completion",
+                task_type=task_type.value,
+                chosen_tier=_model_tier(_first_model, profile),
+                final_tier=_model_tier(response.model, profile),
+                chosen_model=_first_model,
+                final_model=response.model,
+                route_succeeded=True,
+                tool_execution_attempted=False,
+                tool_execution_succeeded=None,
+                verification_attempted=False,
+                verification_passed=None,
+                fallback_occurred=_fb_occurred,
+                fallback_reason=_fb_reason,
+                quality_escalation_occurred=(_mis is True),
+                quality_escalation_reason=(
+                    "cheap tier answer rejected by a dispatch gate"
+                    if _mis is True else None
+                ),
+                mis_route=_mis,
+                actual_cost_usd=_actual,
+                baseline_cost_usd=_base,
+                saved_usd=max(0.0, _base - _actual),
+                failed_attempt_cost_usd=failed_attempt_cost,
+                prompt_tokens=_in_tok,
+                completion_tokens=_out_tok,
+                chain_attempts=list(chain_attempts),
+                chain_errors=[{"model": m, "reason": r} for m, r in chain_errors],
+                price_table_version=_price_table_version(),
+            ))
+        except Exception as _ledger_err:  # noqa: BLE001 — telemetry never breaks routing
+            log.debug("route ledger emit skipped (non-fatal): %s", _ledger_err)
+
+    # Context buffers: in-process session buffer + durable session_store mirror,
+    # both scoped to the same resolved (project_id, session_id) identity.
+    # CHZ-AUD (RED-1 re-audit): identity resolution must itself be fail-open — it
+    # was the ONE unguarded statement in this finalizer, so a resolution failure
+    # would propagate out and be misclassified by the primary loop's provider-error
+    # handler (writing a contradictory attempt_failed + discarding a billed
+    # response) or break the idempotency dedupe path's fail-open guarantee.
+    try:
+        _rt_pid, _rt_sid = _resolve_context_identity(None, None)
+    except Exception as _id_err:  # noqa: BLE001 — telemetry never breaks routing
+        log.debug("context identity resolution failed (non-fatal): %s", _id_err)
+        _rt_pid, _rt_sid = None, None
+    try:
+        buf = get_session_buffer(_rt_pid, _rt_sid)
+        buf.record("user", prompt, task_type=task_type.value)
+        buf.record("assistant", response.content, task_type=task_type.value)
+    except Exception as _buf_err:
+        log.debug("session buffer record failed (non-fatal): %s", _buf_err)
+    try:
+        from chuzom import session_store as _session_store
+        if _rt_sid:
+            _session_store.record_event(
+                _rt_sid, "user_prompt", prompt,
+                role="user", task_type=task_type.value,
+            )
+            _session_store.record_event(
+                _rt_sid, "routed_qa", response.content,
+                role="assistant", task_type=task_type.value, model=model,
+            )
+    except Exception as _sca_err:
+        log.debug("session_store record failed (non-fatal): %s", _sca_err)
+
+    # Routing-decision analytics + per-provider usage auto-logging.
+    if classification_data:
+        try:
+            await cost.log_routing_decision(
+                prompt=prompt,
+                task_type=classification_data.get("task_type", task_type.value),
+                profile=classification_data.get("profile", profile.value),
+                classifier_type=classification_data.get("classifier_type", "unknown"),
+                classifier_model=classification_data.get("classifier_model"),
+                classifier_confidence=classification_data.get("classifier_confidence", 0.0),
+                classifier_latency_ms=classification_data.get("classifier_latency_ms", 0.0),
+                complexity=classification_data.get("complexity", "moderate"),
+                recommended_model=classification_data.get("recommended_model", model),
+                base_model=classification_data.get("base_model", model),
+                was_downshifted=classification_data.get("was_downshifted", False),
+                budget_pct_used=classification_data.get("budget_pct_used", 0.0),
+                quality_mode=classification_data.get("quality_mode", "balanced"),
+                final_model=response.model,
+                final_provider=response.provider,
+                success=True,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                cost_usd=response.cost_usd,
+                latency_ms=response.latency_ms,
+                reason_code=classification_data.get("reason_code"),
+                correlation_id=correlation_id,
+                response=response.content,
+                requested_complexity=classification_data.get("requested_complexity"),
+                subject=classification_data.get("subject"),
+            )
+            if response.provider in {"claude_subscription", "subscription", "anthropic", "claude"}:
+                try:
+                    await cost.log_claude_usage(
+                        model=response.model,
+                        tokens_used=0,
+                        complexity=classification_data.get("complexity", "moderate"),
+                        task_type=classification_data.get("task_type"),
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                        cache_creation_input_tokens=response.cache_creation_input_tokens,
+                        cache_read_input_tokens=response.cache_read_input_tokens,
+                    )
+                except Exception as e:
+                    log.debug("Failed to log claude_usage: %s", e)
+            elif response.provider in {"openai", "openai_subscription", "codex", "codex_subscription"}:
+                try:
+                    await cost.log_codex_usage(
+                        model=response.model,
+                        tokens_used=0,
+                        complexity=classification_data.get("complexity", "moderate"),
+                        task_type=classification_data.get("task_type"),
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                        cache_creation_input_tokens=response.cache_creation_input_tokens,
+                        cache_read_input_tokens=response.cache_read_input_tokens,
+                    )
+                except Exception as e:
+                    log.debug("Failed to log codex_usage: %s", e)
+            elif response.provider in {"gemini", "google", "google_subscription", "gemini_cli", "gemini_subscription"}:
+                try:
+                    await cost.log_gemini_usage(
+                        model=response.model,
+                        tokens_used=0,
+                        complexity=classification_data.get("complexity", "moderate"),
+                        task_type=classification_data.get("task_type"),
+                        input_tokens=response.input_tokens,
+                        output_tokens=response.output_tokens,
+                        cache_creation_input_tokens=response.cache_creation_input_tokens,
+                        cache_read_input_tokens=response.cache_read_input_tokens,
+                    )
+                except Exception as e:
+                    log.debug("Failed to log gemini_usage: %s", e)
+        except Exception as e:
+            log.warning("Failed to log routing decision: %s", e)
+
+    # Daily-spend alert (fire-and-forget; never blocks the response). No new spend
+    # on a cache hit, so skip (CHZ-AUD-B-05).
+    _raw_limit = getattr(config, "chuzom_daily_spend_limit", 0.0)
+    daily_limit = float(_raw_limit) if isinstance(_raw_limit, (int, float)) else 0.0
+    if daily_limit > 0 and not served_from_cache:
+        try:
+            daily_spend = await cost.get_daily_spend()
+            if daily_spend >= daily_limit:
+                cost.fire_budget_alert(
+                    "Chuzom — Daily Limit Reached",
+                    f"Daily spend ${daily_spend:.3f} has crossed the "
+                    f"${daily_limit:.2f} limit.",
+                )
+            elif daily_spend >= daily_limit * 0.9:
+                cost.fire_budget_alert(
+                    "Chuzom — Daily Spend Warning",
+                    f"Daily spend ${daily_spend:.3f} is at "
+                    f"{100 * daily_spend / daily_limit:.0f}% of the "
+                    f"${daily_limit:.2f} limit.",
+                )
+        except Exception as e:
+            log.debug("Daily budget alert check failed: %s", e)
+
+    # Semantic cache store for future dedup (fire-and-forget). Never re-store a
+    # cache hit (CHZ-AUD-B-05).
+    if task_type not in MEDIA_TASK_TYPES and not served_from_cache:
+        try:
+            from chuzom import semantic_cache
+            await semantic_cache.store(prompt, task_type, response)
+        except Exception as _sc_err:
+            log.debug("Semantic cache store failed (non-fatal): %s", _sc_err)
 
 
 async def _dispatch_model_loop(
@@ -1661,6 +2038,8 @@ async def _dispatch_model_loop(
     identity: TurnIdentity | None = None,
     routing_policy: "AgentRoutingPolicy | None" = None,
     suppress_ledger: bool = False,
+    model_override: str | None = None,
+    ledger_route_id: str | None = None,
 ) -> LLMResponse:
     """Execute the main model dispatch loop with primary + emergency fallback chains.
 
@@ -1953,10 +2332,14 @@ async def _dispatch_model_loop(
                     )
                     continue
 
-        # Quality feedback: skip models with poor track record for this task pattern
+        # Quality feedback: skip models with poor track record for this task pattern.
+        # CHZ-AUD-C-02: an EXPLICIT model_override must be honored exactly — the
+        # process-global quality circuit-breaker must NOT silently substitute a
+        # different model for a caller's explicit pin. Only non-override models are
+        # subject to the breaker.
         try:
             from chuzom.quality_feedback import should_skip_model
-            if should_skip_model(model, task_type.value, c.value):
+            if model != model_override and should_skip_model(model, task_type.value, c.value):
                 log.info("Skipping low-quality model for %s/%s: %s", task_type.value, c.value, model)
                 route_log.info(
                     "model_quality_skip",
@@ -2217,6 +2600,7 @@ async def _dispatch_model_loop(
                         event_type="attempt_rejected", rejected=True,
                         rejection_reason=f"gate_failed:{_fail_summary}",
                         correlation_id=correlation_id,
+                        ledger_route_id=ledger_route_id,
                     )
                     _remember_rejected(response)  # exhaustion floor (lever ①)
                     continue
@@ -2276,6 +2660,7 @@ async def _dispatch_model_loop(
                             event_type="attempt_rejected", rejected=True,
                             rejection_reason=f"low_quality:{_qs.score:.2f}",
                             correlation_id=correlation_id,
+                            ledger_route_id=ledger_route_id,
                         )
                         await _notify(
                             ctx, "info",
@@ -2289,10 +2674,35 @@ async def _dispatch_model_loop(
 
             tracker.record_success(provider)
             await cost.log_usage(response, task_type, profile, correlation_id=correlation_id)
+            # Phase 0 (Gap 1): credit the realistic $ baseline + classifier/failed-
+            # attempt cost ONCE, on the accepted attempt only (R6 — rejected
+            # attempts above stay cost-only). Fail-open: a computation error here
+            # must never break the routed turn or drop the accepted ledger row.
+            _classifier_cost_usd = (
+                classification_data.get("classifier_cost_usd", 0.0)
+                if classification_data else 0.0
+            )
+            try:
+                _baseline_model = cost._get_baseline_for_task(task_type.value, c.value)
+                _baseline_equivalent_cost_usd = cost._get_baseline_cost(
+                    response.input_tokens or 0, response.output_tokens or 0, _baseline_model,
+                )
+            except Exception:
+                _baseline_equivalent_cost_usd = None
+            # Phase 0 (Gap 2): baseline_tokens is the actual_proxy for
+            # quota-tokens-saved — the actual input+output token count on
+            # this accepted attempt, used downstream (subscription host_mode)
+            # in place of a fabricated $ baseline.
+            _baseline_tokens = (response.input_tokens or 0) + (response.output_tokens or 0)
             _emit_ledger_attempt(
                 response, model, task_type, profile,
                 event_type="attempt_completed", accepted=True,
                 correlation_id=correlation_id,
+                classifier_cost_usd=_classifier_cost_usd,
+                failed_attempt_cost_usd=_failed_attempt_cost,
+                baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd,
+                baseline_tokens=_baseline_tokens,
+                ledger_route_id=ledger_route_id,
             )
             _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
             # P1-7: the token reservation is released in this attempt's finally.
@@ -2324,204 +2734,40 @@ async def _dispatch_model_loop(
             except Exception as _sl_err:
                 log.debug("savings_log bridge skipped: %s", _sl_err)
 
-            # Record Codex/Gemini CLI requests for quota tracking (v7.1.0)
-            if provider == "codex":
-                try:
-                    from chuzom.quota_balance import record_codex_request
-                    record_codex_request(config.codex_daily_limit)
-                except Exception as _quota_err:
-                    log.debug("Failed to record Codex request: %s", _quota_err)
-            elif provider == "gemini_cli":
-                try:
-                    from chuzom.gemini_cli_quota import record_gemini_request
-                    record_gemini_request()
-                except Exception as _quota_err:
-                    log.debug("Failed to record Gemini CLI request: %s", _quota_err)
-
-            # Record spend for real-time session spend meter (v4.0)
+            # CHZ-AUD-B-05: single shared finalization for the post-success
+            # side-effects (session-spend meter, North-Star route-quality ledger,
+            # context buffers, routing-decision analytics + usage auto-logging,
+            # daily-spend alert, semantic-cache store). The emergency BUDGET
+            # fallback path calls the SAME helper, so the two paths can no longer
+            # drift. All sub-steps are fail-open.
+            #
+            # CHZ-AUD (RED-1 re-audit): this call MUST be isolated in its own
+            # try/except, distinct from the per-model provider-error handler below.
+            # Otherwise a bug inside finalization (which runs AFTER cost.log_usage
+            # + the attempt_completed ledger row) is caught by that handler, logged
+            # as "model failed", written as a CONTRADICTORY attempt_failed for the
+            # same attempt, and the already-generated, already-billed response is
+            # discarded and a second real provider call is made. Finalization is
+            # telemetry — it must never fail the routed turn.
             try:
-                from chuzom.session_spend import get_session_spend
-                _spend = get_session_spend()
-                _spend.record(
+                await _finalize_successful_route(
+                    response=response,
                     model=model,
-                    tool=task_type.value,
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                    cost_usd=response.cost_usd,
+                    provider=provider,
+                    task_type=task_type,
+                    profile=profile,
+                    prompt=prompt,
+                    classification_data=classification_data,
+                    chain_attempts=chain_attempts,
+                    chain_errors=chain_errors,
+                    correlation_id=correlation_id,
+                    failed_attempt_cost=_failed_attempt_cost,
+                    config=config,
+                    receipt=_receipt,
+                    suppress_ledger=suppress_ledger,
                 )
-                # v8.8.0: Track reclaimed tokens from contract verification
-                _spend.record_reclaimed(
-                    tokens_reclaimed=_receipt.tokens_reclaimed,
-                    opus_equivalent_usd=_receipt.opus_equivalent_cost,
-                    gates_passed=_receipt.all_passed,
-                )
-            except Exception as e:
-                log.warning("session_spend_tracking_failed", error=str(e))
-
-            # ── North Star route-quality ledger (CF-1) ────────────────────────
-            # Record this COMPLETION route where chain_attempts/chain_errors live.
-            # Honesty rules: no tools ran and no objective check ran, so
-            # tool_execution_succeeded / verification_passed are None (NOT True) —
-            # an unverified completion is honestly unverified. A gate_failed /
-            # low_quality entry in chain_errors IS a genuine quality escalation
-            # (a cheap tier's answer was rejected), so we derive it rather than
-            # hardcode False. suppress_ledger is set by MGEE internal calls so a
-            # delegation counts once (aggregate-delegation-only). Fail-open.
-            if not suppress_ledger:
-                try:
-                    from chuzom.routing_quality import (
-                        RouteLedgerRecord, derive_fallback_reason, record_route,
-                    )
-                    _fb_occurred = len(chain_errors) > 0
-                    _fb_reason, _mis = derive_fallback_reason(chain_errors)
-                    _first_model = chain_attempts[0] if chain_attempts else None
-                    _in_tok = getattr(response, "input_tokens", 0)
-                    _out_tok = getattr(response, "output_tokens", 0)
-                    _base = _baseline_cost(task_type, profile, _in_tok, _out_tok)
-                    # §4.3: actual cost = final success cost + billable failed attempts.
-                    _final_cost = float(getattr(response, "cost_usd", 0.0) or 0.0)
-                    _actual = _final_cost + _failed_attempt_cost
-                    record_route(RouteLedgerRecord(
-                        route_kind="completion",
-                        task_type=task_type.value,
-                        chosen_tier=_model_tier(_first_model, profile),
-                        final_tier=_model_tier(response.model, profile),
-                        chosen_model=_first_model,
-                        final_model=response.model,
-                        route_succeeded=True,
-                        tool_execution_attempted=False,
-                        tool_execution_succeeded=None,
-                        verification_attempted=False,
-                        verification_passed=None,
-                        fallback_occurred=_fb_occurred,
-                        fallback_reason=_fb_reason,
-                        quality_escalation_occurred=(_mis is True),
-                        quality_escalation_reason=(
-                            "cheap tier answer rejected by a dispatch gate"
-                            if _mis is True else None
-                        ),
-                        mis_route=_mis,
-                        actual_cost_usd=_actual,
-                        baseline_cost_usd=_base,
-                        saved_usd=max(0.0, _base - _actual),
-                        failed_attempt_cost_usd=_failed_attempt_cost,
-                        prompt_tokens=_in_tok,
-                        completion_tokens=_out_tok,
-                        chain_attempts=list(chain_attempts),
-                        chain_errors=[{"model": m, "reason": r} for m, r in chain_errors],
-                        price_table_version=_price_table_version(),
-                    ))
-                except Exception as _ledger_err:  # noqa: BLE001 — telemetry never breaks routing
-                    log.debug("route ledger emit skipped (non-fatal): %s", _ledger_err)
-
-            # Record exchange in session buffer for future context injection
-            buf = get_session_buffer()
-            buf.record("user", prompt, task_type=task_type.value)
-            buf.record("assistant", response.content, task_type=task_type.value)
-
-            # Session Context Accumulator (durable, cross-process): mirror the
-            # same exchange into the per-session JSONL store so future routed
-            # calls — including ones in a different process/hook — see it.
-            # Fully independent of the in-process buffer above; fails open.
-            try:
-                from chuzom import session_store as _session_store
-                _sid = _session_store.resolve_session_id()
-                if _sid:
-                    _session_store.record_event(
-                        _sid, "user_prompt", prompt,
-                        role="user", task_type=task_type.value,
-                    )
-                    _session_store.record_event(
-                        _sid, "routed_qa", response.content,
-                        role="assistant", task_type=task_type.value, model=model,
-                    )
-            except Exception as _sca_err:
-                log.debug("session_store record failed (non-fatal): %s", _sca_err)
-
-            # Log routing decision for quality analytics
-            if classification_data:
-                try:
-                    await cost.log_routing_decision(
-                        prompt=prompt,
-                        task_type=classification_data.get("task_type", task_type.value),
-                        profile=classification_data.get("profile", profile.value),
-                        classifier_type=classification_data.get("classifier_type", "unknown"),
-                        classifier_model=classification_data.get("classifier_model"),
-                        classifier_confidence=classification_data.get("classifier_confidence", 0.0),
-                        classifier_latency_ms=classification_data.get("classifier_latency_ms", 0.0),
-                        complexity=classification_data.get("complexity", "moderate"),
-                        recommended_model=classification_data.get("recommended_model", model),
-                        base_model=classification_data.get("base_model", model),
-                        was_downshifted=classification_data.get("was_downshifted", False),
-                        budget_pct_used=classification_data.get("budget_pct_used", 0.0),
-                        quality_mode=classification_data.get("quality_mode", "balanced"),
-                        final_model=response.model,
-                        final_provider=response.provider,
-                        success=True,
-                        input_tokens=response.input_tokens,
-                        output_tokens=response.output_tokens,
-                        cost_usd=response.cost_usd,
-                        latency_ms=response.latency_ms,
-                        reason_code=classification_data.get("reason_code"),
-                        correlation_id=correlation_id,
-                        response=response.content,
-                        requested_complexity=classification_data.get("requested_complexity"),
-                        subject=classification_data.get("subject"),
-                    )
-                    
-                    # Auto-log Claude usage when router selects Claude model.
-                    # v9.2.2 — forward sub-component token counts (including cache
-                    # tokens from Anthropic prompt caching) and task_type so
-                    # log_claude_usage can compute cache-aware, task-baselined savings.
-                    if response.provider in {"claude_subscription", "subscription", "anthropic", "claude"}:
-                        try:
-                            await cost.log_claude_usage(
-                                model=response.model,
-                                tokens_used=0,  # compute from sub-components
-                                complexity=classification_data.get("complexity", "moderate"),
-                                task_type=classification_data.get("task_type"),
-                                input_tokens=response.input_tokens,
-                                output_tokens=response.output_tokens,
-                                cache_creation_input_tokens=response.cache_creation_input_tokens,
-                                cache_read_input_tokens=response.cache_read_input_tokens,
-                            )
-                        except Exception as e:
-                            log.debug("Failed to log claude_usage: %s", e)
-
-                    # v9.3.0 — Auto-log Codex/OpenAI usage in parallel. Same shape,
-                    # writes to codex_usage table for the dual-platform dashboard.
-                    elif response.provider in {"openai", "openai_subscription", "codex", "codex_subscription"}:
-                        try:
-                            await cost.log_codex_usage(
-                                model=response.model,
-                                tokens_used=0,
-                                complexity=classification_data.get("complexity", "moderate"),
-                                task_type=classification_data.get("task_type"),
-                                input_tokens=response.input_tokens,
-                                output_tokens=response.output_tokens,
-                                cache_creation_input_tokens=response.cache_creation_input_tokens,
-                                cache_read_input_tokens=response.cache_read_input_tokens,
-                            )
-                        except Exception as e:
-                            log.debug("Failed to log codex_usage: %s", e)
-
-                    # v9.3.1 — Auto-log Gemini usage. Same shape, writes to gemini_usage.
-                    elif response.provider in {"gemini", "google", "google_subscription", "gemini_cli", "gemini_subscription"}:
-                        try:
-                            await cost.log_gemini_usage(
-                                model=response.model,
-                                tokens_used=0,
-                                complexity=classification_data.get("complexity", "moderate"),
-                                task_type=classification_data.get("task_type"),
-                                input_tokens=response.input_tokens,
-                                output_tokens=response.output_tokens,
-                                cache_creation_input_tokens=response.cache_creation_input_tokens,
-                                cache_read_input_tokens=response.cache_read_input_tokens,
-                            )
-                        except Exception as e:
-                            log.debug("Failed to log gemini_usage: %s", e)
-                except Exception as e:
-                    log.warning("Failed to log routing decision: %s", e)
+            except Exception as _fin_err:  # noqa: BLE001 — finalize never fails the turn
+                log.warning("finalize_successful_route failed (non-fatal): %s", _fin_err)
 
             # Enhanced notification showing provider for QUOTA_BALANCED
             provider_tag = f" [{response.provider.upper()}]" if profile == RoutingProfile.QUOTA_BALANCED else ""
@@ -2567,41 +2813,16 @@ async def _dispatch_model_loop(
                 attempts=attempt,
             )
 
-            # Daily spend alert — fire async so it never blocks the response
-            _raw_limit = getattr(config, "chuzom_daily_spend_limit", 0.0)
-            daily_limit = float(_raw_limit) if isinstance(_raw_limit, (int, float)) else 0.0
-            if daily_limit > 0:
-                try:
-                    daily_spend = await cost.get_daily_spend()
-                    if daily_spend >= daily_limit:
-                        cost.fire_budget_alert(
-                            "Chuzom — Daily Limit Reached",
-                            f"Daily spend ${daily_spend:.3f} has crossed the "
-                            f"${daily_limit:.2f} limit.",
-                        )
-                    elif daily_spend >= daily_limit * 0.9:
-                        cost.fire_budget_alert(
-                            "Chuzom — Daily Spend Warning",
-                            f"Daily spend ${daily_spend:.3f} is at "
-                            f"{100 * daily_spend / daily_limit:.0f}% of the "
-                            f"${daily_limit:.2f} limit.",
-                        )
-                except Exception as e:
-                    log.debug("Daily budget alert check failed: %s", e)
-
-            # Store in semantic cache for future dedup (fire-and-forget)
-            if task_type not in MEDIA_TASK_TYPES:
-                try:
-                    from chuzom import semantic_cache
-                    await semantic_cache.store(prompt, task_type, response)
-                except Exception as _sc_err:
-                    log.debug("Semantic cache store failed (non-fatal): %s", _sc_err)
+            # (Daily-spend alert + semantic-cache store now run inside
+            # _finalize_successful_route — CHZ-AUD-B-05 — so both the primary and
+            # the emergency BUDGET fallback paths perform them identically.)
 
             async with _budget_lock():
                 _pending_spend = max(0.0, _pending_spend - _reservation)
             return _enrich_response(
                 response, classification_data, effective_complexity,
                 task_type, chain_attempts,
+                failed_attempt_cost=_failed_attempt_cost,  # RED1-8-01
             )
 
         except Exception as e:
@@ -2649,6 +2870,22 @@ async def _dispatch_model_loop(
                     fallback_reason="provider_error",
                 )
                 tracker.record_failure(provider)
+            # CHZ-AUD-A-01: record the FAILED provider attempt in the execution
+            # ledger. Provider errors (rate-limit/auth/outage/generic) were
+            # invisible to the ledger — only accepted/rejected attempts emitted —
+            # so cost/savings dashboards under-counted real attempts. Fail-open.
+            import types as _types_a01
+            _emit_ledger_attempt(
+                _types_a01.SimpleNamespace(
+                    provider=provider, cost_usd=0.0, input_tokens=0,
+                    output_tokens=0, model=model, latency_ms=0.0,
+                ),
+                model, task_type, profile,
+                event_type="attempt_failed",
+                correlation_id=correlation_id,
+                rejection_reason=f"{type(e).__name__}: {e}"[:200],
+                ledger_route_id=ledger_route_id,
+            )
             last_error = e
             chain_errors.append((model, f"{type(e).__name__}: {e}"))
             continue
@@ -2726,12 +2963,60 @@ async def _dispatch_model_loop(
 
                     tracker.record_success(provider)
                     await cost.log_usage(response, task_type, RoutingProfile.BUDGET, correlation_id=correlation_id)
+                    # Phase 0 (Gap 1): symmetric with the primary accepted-attempt
+                    # site above — same fail-open baseline derivation.
+                    _classifier_cost_usd_eb = (
+                        classification_data.get("classifier_cost_usd", 0.0)
+                        if classification_data else 0.0
+                    )
+                    try:
+                        _baseline_model_eb = cost._get_baseline_for_task(task_type.value, c.value)
+                        _baseline_equivalent_cost_usd_eb = cost._get_baseline_cost(
+                            response.input_tokens or 0, response.output_tokens or 0, _baseline_model_eb,
+                        )
+                    except Exception:
+                        _baseline_equivalent_cost_usd_eb = None
+                    # Phase 0 (Gap 2): symmetric with the primary accepted-attempt
+                    # site above — actual_proxy baseline_tokens.
+                    _baseline_tokens_eb = (response.input_tokens or 0) + (response.output_tokens or 0)
                     _emit_ledger_attempt(
                         response, model, task_type, RoutingProfile.BUDGET,
                         event_type="attempt_completed", accepted=True,
                         correlation_id=correlation_id,
+                        classifier_cost_usd=_classifier_cost_usd_eb,
+                        failed_attempt_cost_usd=_failed_attempt_cost,
+                        baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd_eb,
+                        baseline_tokens=_baseline_tokens_eb,
+                        ledger_route_id=ledger_route_id,
                     )
                     _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
+
+                    # CHZ-AUD-B-05: record the winning budget model in the chain
+                    # BEFORE finalization so the route-quality ledger sees it, then
+                    # run the SAME finalization helper the primary path uses. The
+                    # emergency path previously skipped the session-spend meter,
+                    # route-quality ledger, context buffers, routing-decision
+                    # analytics, daily-spend alert and semantic cache entirely.
+                    chain_attempts.append(model)
+                    try:
+                        await _finalize_successful_route(
+                            response=response,
+                            model=model,
+                            provider=provider,
+                            task_type=task_type,
+                            profile=profile,
+                            prompt=prompt,
+                            classification_data=classification_data,
+                            chain_attempts=chain_attempts,
+                            chain_errors=chain_errors,
+                            correlation_id=correlation_id,
+                            failed_attempt_cost=_failed_attempt_cost,
+                            config=config,
+                            receipt=None,
+                            suppress_ledger=suppress_ledger,
+                        )
+                    except Exception as _fin_err:  # noqa: BLE001 — finalize never fails the turn
+                        log.warning("finalize_successful_route (emergency) failed (non-fatal): %s", _fin_err)
 
                     route_log.info(
                         "emergency_fallback_success",
@@ -2751,16 +3036,33 @@ async def _dispatch_model_loop(
 
                     async with _budget_lock():
                         _pending_spend = max(0.0, _pending_spend - _reservation)
-                    chain_attempts.append(model)
                     return _enrich_response(
                         response, classification_data, effective_complexity,
                         task_type, chain_attempts,
+                        failed_attempt_cost=_failed_attempt_cost,  # RED1-8-01
                     )
 
                 except Exception as e:
                     chain_attempts.append(model)
                     log.warning(
                         "Emergency fallback model %s failed: %s", model, e
+                    )
+                    # CHZ-AUD-A-01 (sibling): the emergency BUDGET fallback loop's
+                    # provider-failure path must record the failed attempt in the
+                    # execution ledger too — the primary loop already does, so
+                    # leaving this out under-counted real billable attempts on any
+                    # turn that fell through to the budget chain. Fail-open.
+                    import types as _types_a01eb
+                    _emit_ledger_attempt(
+                        _types_a01eb.SimpleNamespace(
+                            provider=provider, cost_usd=0.0, input_tokens=0,
+                            output_tokens=0, model=model, latency_ms=0.0,
+                        ),
+                        model, task_type, RoutingProfile.BUDGET,
+                        event_type="attempt_failed",
+                        correlation_id=correlation_id,
+                        rejection_reason=f"{type(e).__name__}: {e}"[:200],
+                        ledger_route_id=ledger_route_id,
                     )
                     last_error = e
                     chain_errors.append((model, f"{type(e).__name__}: {e}"))
@@ -2849,9 +3151,32 @@ async def _dispatch_model_loop(
         # rejected); accepting it here does not re-bill. Terminal state is 'accepted'
         # — an answer WAS returned — with the degradation captured in the logs above.
         _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
+        # RED1-8-01: the floor answer's own cost is ALREADY inside
+        # _failed_attempt_cost (billed when it was rejected), so subtract it to
+        # avoid double-counting — settlement adds response.cost_usd back.
+        _floor_extra = max(0.0, _failed_attempt_cost - float(getattr(_best_rejected, "cost_usd", 0.0) or 0.0))
+        # CHZ-AUD-B-05 (RED-1 re-audit): the exhaustion floor is a FOURTH success
+        # path that returned content to the caller but skipped finalization — the
+        # degraded answer never reached the context buffers or routing analytics.
+        # served_from_cache=True records context + analytics without re-billing
+        # (its cost is already accounted) or re-emitting a completion ledger row
+        # (the 'accepted' terminal above is the signal). Fail-open.
+        try:
+            await _finalize_successful_route(
+                response=_best_rejected,
+                model=_best_rejected.model, provider=_best_rejected.provider,
+                task_type=task_type, profile=profile, prompt=prompt,
+                classification_data=classification_data,
+                chain_attempts=chain_attempts, chain_errors=chain_errors,
+                correlation_id=correlation_id, failed_attempt_cost=_floor_extra,
+                config=config, receipt=None, served_from_cache=True,
+            )
+        except Exception as _fin_err:  # noqa: BLE001 — finalize never fails the turn
+            log.warning("finalize_successful_route (exhaustion-floor) failed (non-fatal): %s", _fin_err)
         return _enrich_response(
             _best_rejected, classification_data, effective_complexity,
             task_type, chain_attempts,
+            failed_attempt_cost=_floor_extra,
         )
 
     _emit_ledger_terminal(correlation_id, "failed", route_succeeded=False)
@@ -2882,6 +3207,7 @@ async def route_and_call(
     idempotency_key: str | None = None,
     agent_session_id: str | None = None,
     suppress_ledger: bool = False,
+    route_directive_id: str | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -2987,6 +3313,13 @@ async def route_and_call(
     """
     config = get_config()
     correlation_id = uuid4().hex[:8]
+    # Phase 0.5 (Option A sidecar bridge): when the hook minted a directive id
+    # for this turn (threaded down from an MCP door), the BILLABLE-ROW
+    # route_id uses that id so it matches the adoption row's route_id and the
+    # execution ledger's join actually fires. None (all non-MCP callers/CLI/
+    # tests) falls back to correlation_id — byte-identical to pre-0.5 behavior.
+    # session_id resolution is UNCHANGED (still correlation_id-based).
+    _ledger_route_id = route_directive_id or correlation_id
 
     # Tier-1 identity resolution. Done once per turn before any model call
     # so both the cached-hit and cold-fetched return paths share the same
@@ -3150,7 +3483,25 @@ async def route_and_call(
                 log.warning("audit_idempotency_dedupe_write_failed", error=str(_audit_err))
             # AC-6/INV-ROUTE-005: a cache hit is a real terminal outcome (no billable
             # attempt) — record it so every route ends in exactly one recorded state.
-            _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
+            _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True, agent_session_id=agent_session_id)
+            # CHZ-AUD-B-05 (sibling): idempotency dedupe is also a success path —
+            # record the served exchange's context + analytics (served_from_cache
+            # skips spend/ledger/store). Runs before profile resolution, so pass a
+            # neutral profile default (only used by the skipped ledger block).
+            try:
+                await _finalize_successful_route(
+                    response=_cached_resp,
+                    model=getattr(_cached_resp, "model", "cache") or "cache",
+                    provider=getattr(_cached_resp, "provider", "cache") or "cache",
+                    task_type=task_type,
+                    profile=profile if profile is not None else RoutingProfile.BALANCED,
+                    prompt=prompt, classification_data=classification_data,
+                    chain_attempts=[], chain_errors=[], correlation_id=correlation_id,
+                    failed_attempt_cost=0.0, config=config, receipt=None,
+                    served_from_cache=True,
+                )
+            except Exception as _fin_err:  # noqa: BLE001 — dedupe fail-open: never break the served turn
+                log.warning("finalize_successful_route (idempotency) failed (non-fatal): %s", _fin_err)
             return _cached_resp
 
     # T4-M1: prompt redaction immediately before the prompt heads to any
@@ -3214,12 +3565,18 @@ async def route_and_call(
         # see the full committed + pending total (prevents TOCTOU overrun).
         global _pending_spend
         _reservation: float = 0.0
+        # TQ-007: DAILY spend caps do NOT hard-block here. When a daily cap is
+        # exceeded we record the reason and, after the model chain is built,
+        # DOWNGRADE to free-local providers (Ollama/Codex/Gemini-CLI) so work
+        # keeps flowing at $0. Only if no free-local provider is available does
+        # enforce mode decide: `hard` blocks, `smart`/`soft` fall through to
+        # Claude. Caps apply whenever configured, independent of enforce mode
+        # (enforce mode only governs the no-free-fallback branch). The MONTHLY
+        # budget below is a separate, harder ceiling and still hard-blocks.
+        _enforce_mode = "smart"
+        _daily_cap_exc: BudgetExceededError | None = None
+        _cap_downgrade_applied: str = ""  # RED2-02: reason string when downgrade fired
         async with _budget_lock():
-            # routing.yaml's daily_caps/enforce used to be dead code: read only
-            # by the `chuzom config` display command, never by live routing
-            # here. Both are now real. `enforce: soft` downgrades every raise
-            # below to a warning instead of blocking the call — "hard" (the
-            # default) keeps the original blocking behaviour.
             from chuzom.repo_config import effective_config as _get_repo_config_for_budget
             _repo_cfg_budget = _get_repo_config_for_budget()
             _enforce_mode = _repo_cfg_budget.effective_enforce()
@@ -3242,13 +3599,14 @@ async def route_and_call(
             if _daily_limit > 0:
                 daily_spend = await cost.get_daily_spend()
                 if daily_spend + _pending_spend >= _daily_limit:
-                    _enforce_or_warn(BudgetExceededError(
+                    # TQ-007: record for downgrade instead of blocking here.
+                    _daily_cap_exc = BudgetExceededError(
                         f"Daily spend limit of ${_daily_limit:.2f} exceeded "
-                        f"(spent: ${daily_spend:.4f} today UTC). "
-                        "Resets at midnight UTC. "
+                        f"(spent: ${daily_spend:.4f} today, local time). "
+                        "Resets at local midnight. "
                         "To raise the limit: set CHUZOM_DAILY_SPEND_LIMIT env var "
                         "or routing.yaml's daily_caps._total."
-                    ))
+                    )
 
             # Per-task daily cap enforcement — two sources: org-policy.yaml
             # (cents, org-wide) and routing.yaml's daily_caps (dollars,
@@ -3270,13 +3628,16 @@ async def route_and_call(
             if task_cap > 0:
                 task_daily_spend = await cost.get_daily_spend_by_task_type(task_type.value)
                 if task_daily_spend + _pending_spend >= task_cap:
-                    _enforce_or_warn(BudgetExceededError(
+                    # TQ-007: record for downgrade instead of blocking here. A
+                    # per-task cap is the tighter signal, so it wins over a
+                    # not-yet-hit total cap; if both are hit, either exc is fine.
+                    _daily_cap_exc = BudgetExceededError(
                         f"Task-type daily limit for {task_type.value} (${task_cap:.2f}) exceeded "
-                        f"(spent: ${task_daily_spend:.4f} today UTC). "
-                        f"Resets at midnight UTC. "
+                        f"(spent: ${task_daily_spend:.4f} today, local time). "
+                        f"Resets at local midnight. "
                         f"To raise the limit: update ~/.chuzom/org-policy.yaml task_caps "
                         f"or routing.yaml's daily_caps.{task_type.value}."
-                    ))
+                    )
 
             if config.chuzom_monthly_budget > 0:
                 monthly_spend = await cost.get_monthly_spend()
@@ -3310,6 +3671,33 @@ async def route_and_call(
             # symmetrically per attempt (was: two hardcoded
             # reserve_tokens("anthropic", 500) here, asymmetrically released).
 
+        # RED1-3-01/02/03 + RED1-2-02: single idempotent reservation release.
+        # route_and_call has no top-level try/finally and its many early exits
+        # (empty-chain ValueError, semantic-cache-hit return, reserve_envelope
+        # failure, and the TQ-007 cap raises) each ran BEFORE _dispatch_model_loop
+        # — the only place that released the reservation — so _pending_spend (and,
+        # once reserved, the distributed envelope) leaked, biasing every later cap
+        # check. This helper releases both exactly once; the guard flag makes it
+        # safe to call at every early-exit path without double-decrementing.
+        # _env_key is None until reserve_envelope runs, so early exits release only
+        # _pending_spend.
+        _env_key = None
+        _reservation_released = False
+
+        async def _release_reservation_if_held() -> None:
+            nonlocal _reservation_released, _env_key
+            global _pending_spend
+            if _reservation_released:
+                return
+            _reservation_released = True
+            async with _budget_lock():
+                _pending_spend = max(0.0, _pending_spend - _reservation)
+            if _env_key is not None:
+                try:
+                    await release_envelope(_env_key, _reservation)
+                except Exception:  # noqa: BLE001 — release must never break the exit path
+                    pass
+
         # Structural compaction — shrink prompt before sending to external LLMs
         # Guard: compaction_mode/threshold may be MagicMock in test mocks
         compaction_mode = getattr(config, "compaction_mode", "structural")
@@ -3341,6 +3729,11 @@ async def route_and_call(
         models_to_try = await _build_and_filter_chain(
             task_type, profile, model_override, complexity_hint, c, config
         )
+
+        # TQ-007 cap-downgrade is applied LAST (after precision-tier,
+        # subject-specialist and bandit reorder) — see below, just before the
+        # empty-chain check. Applying it here was a bug (RED1-01/RED1-02): those
+        # later steps re-prepend paid models, defeating the filter.
 
         # #27 / Option B — precision-tier routing. A short prompt demanding an exact,
         # verifiable answer (arithmetic / code output / precise count) is the regime
@@ -3407,6 +3800,58 @@ async def route_and_call(
             except Exception as _bandit_err:
                 log.debug("Bandit reorder skipped (continuing): %s", _bandit_err)
 
+        # TQ-007 (applied LAST — RED1-01/RED1-02 fix): a daily spend cap was
+        # exceeded → confine the FINAL chain to free-local providers. This runs
+        # after every chain-mutation step (precision-tier fronting, subject
+        # specialist, bandit reorder), each of which could otherwise re-prepend a
+        # paid model after an earlier filter. Keeping this as the last transform
+        # guarantees dispatch never sees a paid provider once the cap is hit.
+        # If ≥1 free-local model survives → run free ($0). If none → enforce mode
+        # decides: `hard` blocks (caller pays nothing); `smart`/`soft` fall
+        # through to Claude. Caps apply whenever configured; enforce mode governs
+        # only this no-free branch.
+        if _daily_cap_exc is not None:
+            _FREE_LOCAL_PROVIDERS = {"ollama", "codex", "gemini_cli"}
+            _free_chain = [
+                m for m in models_to_try
+                if provider_from_model(m) in _FREE_LOCAL_PROVIDERS
+            ]
+
+            if _free_chain:
+                route_log.warning(
+                    "Daily cap exceeded — downgrading to free-local providers "
+                    "(%d model(s), $0). %s",
+                    len(_free_chain), _daily_cap_exc,
+                )
+                models_to_try = _free_chain
+                _cap_downgrade_applied = str(_daily_cap_exc)  # RED2-02: surface it
+            else:
+                # No free-local survivor. Q-SMART-PAID (RED2-2-01): the previous
+                # smart/soft branch left the (paid, non-Claude) chain untouched
+                # and let it dispatch — a SILENT metered paid call under an
+                # exceeded cap, despite the log saying "falling through to Claude".
+                # Correct behavior: smart/soft genuinely falls through to Claude,
+                # i.e. restrict to anthropic/Claude models if the chain has any;
+                # otherwise (and always under hard) BLOCK — never silently call a
+                # non-Claude paid provider once the cap is hit.
+                _claude_chain = [
+                    m for m in models_to_try if provider_from_model(m) == "anthropic"
+                ]
+                if _enforce_mode != "hard" and _claude_chain:
+                    route_log.warning(
+                        "Daily cap exceeded, no free-local provider — falling "
+                        "through to Claude (enforce=%s): %s",
+                        _enforce_mode, _daily_cap_exc,
+                    )
+                    models_to_try = _claude_chain
+                    _cap_downgrade_applied = str(_daily_cap_exc)
+                else:
+                    # hard, OR smart/soft with no Claude to fall through to →
+                    # block. Any remaining candidate is a metered paid provider
+                    # the cap forbids.
+                    await _release_reservation_if_held()
+                    raise _daily_cap_exc
+
         if not models_to_try:
             set_span_attributes(
                 route_span,
@@ -3417,6 +3862,7 @@ async def route_and_call(
             # _blocked_providers) and the chain came out empty, surface the block
             # as a likely cause — otherwise the generic "install Ollama / set a key"
             # message is misleading (the fix may just be to unblock a provider).
+            await _release_reservation_if_held()  # RED1-3-01: don't leak on empty-chain
             _blocked = _blocked_providers()
             if _blocked:
                 raise ValueError(
@@ -3464,7 +3910,27 @@ async def route_and_call(
                         detail_extras={"correlation_id": correlation_id},
                     )
                     # AC-6/INV-ROUTE-005: semantic-cache hit is a bypassed terminal state.
-                    _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True)
+                    _emit_ledger_terminal(correlation_id, "bypassed", route_succeeded=True, agent_session_id=agent_session_id)
+                    # CHZ-AUD-B-05 (sibling): a cache-served turn is a real success
+                    # path — record the exchange into the context buffers and
+                    # routing analytics so it is not lost. served_from_cache=True
+                    # skips spend/ledger/semantic-store (would double-count).
+                    try:
+                        await _finalize_successful_route(
+                            response=cached, model=cached.model, provider=cached.provider,
+                            task_type=task_type, profile=profile, prompt=prompt,
+                            classification_data=classification_data, chain_attempts=[],
+                            chain_errors=[], correlation_id=correlation_id,
+                            failed_attempt_cost=0.0, config=config, receipt=None,
+                            served_from_cache=True,
+                        )
+                    except Exception as _fin_err:  # noqa: BLE001 — must not fall through to a real call
+                        # CHZ-AUD (RED-1): a finalize failure here must NOT be caught
+                        # by the outer semantic-cache `except` (which falls through to
+                        # real chain dispatch, discarding this cache hit and making a
+                        # billed provider call). Swallow it and serve the cached result.
+                        log.warning("finalize_successful_route (semantic-cache) failed (non-fatal): %s", _fin_err)
+                    await _release_reservation_if_held()  # RED1-3-02: cache-hit fast path
                     return cached
             except Exception as _sc_err:
                 log.debug("Semantic cache check failed (continuing): %s", _sc_err)
@@ -3630,6 +4096,11 @@ async def route_and_call(
                 )
             except Exception as _audit_err:
                 log.warning("audit_envelope_write_failed", error=str(_audit_err))
+            # RED1-3-03: the envelope was NOT reserved (not _env_ok), so release
+            # only the in-process _pending_spend reservation — null _env_key first
+            # so the helper does not try to release an envelope that never held.
+            _env_key = None
+            await _release_reservation_if_held()
             raise BudgetExceededError(
                 "Routed turn refused: budget envelope exhausted for this "
                 "identity's org/user rollup (CHUZOM_ENVELOPE_MODE=strict)."
@@ -3682,6 +4153,8 @@ async def route_and_call(
             identity=identity,
             routing_policy=_routing_policy,
             suppress_ledger=suppress_ledger,
+            model_override=model_override,  # CHZ-AUD-C-02: honor explicit pin
+            ledger_route_id=_ledger_route_id,
         )
         # T3-S2 + T3-M1: combined timeout + cancel handling. Both failure
         # modes share the same cleanup contract — release the budget
@@ -3748,6 +4221,14 @@ async def route_and_call(
         else:
             _effective_timeout = None
             _deadline_is_tighter = False
+        # CHZ-AUD-A-02: bind the ledger session override to this agent_session_id
+        # for exactly the dispatch span — every ledger row emitted inside
+        # _dispatch_model_loop (attempts + terminals) then attributes to the agent
+        # session. Reset unconditionally in the finally so the ContextVar never
+        # leaks past this call (success, timeout, cancel, or all-models-failed).
+        _led_tok = (
+            _LEDGER_SESSION_OVERRIDE.set(agent_session_id) if agent_session_id else None
+        )
         try:
             if _effective_timeout is not None and _effective_timeout > 0:
                 response = await asyncio.wait_for(
@@ -3862,8 +4343,36 @@ async def route_and_call(
                 cap_seconds=max_wall_clock_seconds,
                 elapsed_seconds=elapsed,
             ) from _to_err
-        async with _budget_lock():
-            _pending_spend = max(0.0, _pending_spend - _reservation)
+        except Exception:
+            # RED1-4-02: _dispatch_model_loop releases _pending_spend on its
+            # all-models-failed tail (RuntimeError) but never the distributed
+            # budget envelope, and route_and_call only caught Cancelled/Timeout —
+            # so in strict-envelope mode the backend hold leaked on every
+            # all-failed turn. Release ONLY the envelope here (the dispatch already
+            # released _pending_spend on this path; releasing it again would
+            # re-introduce the RED1-4-01 double-decrement) and re-raise.
+            # release_envelope(None, ...) is a safe no-op in off-mode.
+            try:
+                await release_envelope(_env_key, _reservation)
+            except Exception:  # noqa: BLE001 — cleanup must not mask the original error
+                pass
+            raise
+        finally:
+            # CHZ-AUD-A-02: always clear the ledger session override so it cannot
+            # leak into a later route on this task (nested/sequential calls).
+            if _led_tok is not None:
+                _LEDGER_SESSION_OVERRIDE.reset(_led_tok)
+        # RED1-5-02: do NOT release _pending_spend here. This line is reached only
+        # after `_dispatch_model_loop` returned a successful response, and every
+        # success return in that loop already released the reservation exactly once
+        # (primary-chain success at ~2630, emergency-BUDGET success at ~2782). A
+        # second release here double-decremented the shared in-process counter and,
+        # under true concurrency, erased a sibling turn's still-outstanding
+        # reservation — defeating the TOCTOU daily/monthly pre-check the counter
+        # exists for. The iteration-4 belief that removing this "broke 11 tests" was
+        # disproven: those failures came from a leaky TEST (un-drained bg-tasks),
+        # not this decrement (identical failures with and without it). With that
+        # test fixed, single-release is correct and GATE-green.
         _success_detail = {"correlation_id": correlation_id}
         # T4-M1: surface scrub-rate per turn so operators can observe
         # which PII patterns are firing without persisting any PII.
@@ -3879,14 +4388,20 @@ async def route_and_call(
             cached=False,
             detail_extras=_success_detail,
         )
+        # RED1-8-01: the TRUE turn cost is this final response's cost PLUS the
+        # already-billed cost of any prior attempts a gate/quality check rejected
+        # (carried out of the dispatch loop on chain_attempt_cost_usd). Settling
+        # only response.cost_usd under-counted real spend in BOTH enforcement
+        # mechanisms, letting cumulative spend exceed a cap undetected.
+        _true_cost = float(getattr(response, "cost_usd", 0.0) or 0.0) + float(
+            getattr(response, "chain_attempt_cost_usd", 0.0) or 0.0
+        )
         # F4: record real per-identity spend so the next over-cap turn is
         # refused. No-op off-mode / zero-cost (cached/local/free) turns.
-        record_consumption(identity, float(getattr(response, "cost_usd", 0.0) or 0.0))
+        record_consumption(identity, _true_cost)
         # P0-3: settle the budget envelope — release the estimate reservation and
         # commit the actual spend so the shared envelope reflects true cost.
-        await commit_envelope(
-            _env_key, _reservation, float(getattr(response, "cost_usd", 0.0) or 0.0)
-        )
+        await commit_envelope(_env_key, _reservation, _true_cost)
         # T3-M4: persist the result for a future replay under the same
         # idempotency_key. Best-effort; a write failure must not break
         # the success path the caller is about to receive.
@@ -3918,6 +4433,22 @@ async def route_and_call(
                 )
         except Exception:  # noqa: BLE001
             pass
+
+        # RED2-02: surface a daily-cap downgrade on the response so a caller/CLI/
+        # dashboard can explain the (cheaper, local) route instead of leaving an
+        # unexplained quality drop. LLMResponse is a frozen dataclass, so build a
+        # copy with the fields set (mutation would raise FrozenInstanceError).
+        # Best-effort — never break the return.
+        if _cap_downgrade_applied:
+            try:
+                import dataclasses as _dc
+                response = _dc.replace(
+                    response,
+                    cap_downgraded=True,
+                    cap_downgrade_reason=_cap_downgrade_applied,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
         return response
 
@@ -3981,7 +4512,9 @@ async def _call_text(
         _is_free = model.startswith("ollama/") or model.startswith("codex/") or model.startswith("gemini_cli/")
         _target_provider = model.split("/", 1)[0] if "/" in model else None
         context_msgs = await build_context_messages(
-            caller_context=caller_context,
+            # CHZ-AUD-B-01: fall back to the LIVE prompt so keyword-relevance
+            # retrieval fires even when the caller passes no explicit context.
+            caller_context=caller_context or prompt,
             max_session_messages=getattr(config, "context_max_messages", 5),
             max_previous_sessions=getattr(config, "context_max_previous_sessions", 3),
             max_context_tokens=getattr(config, "context_max_tokens", 1500),
@@ -4290,10 +4823,18 @@ async def route_and_stream(
             }
 
             try:
+                # CHZ-AUD-B-07: build_context_messages is async + keyword-only; the
+                # previous synchronous POSITIONAL call always raised TypeError, so
+                # streaming was structurally broken. Await it with keyword args,
+                # matching the non-streaming path (B-01: fall back to live prompt).
+                _stream_msgs = await build_context_messages(
+                    caller_context=caller_context or prompt,
+                    target_provider=provider,
+                )
                 # Stream provider events and map to router-level events
                 async for provider_event in providers.call_llm_stream_events(
                     model=model,
-                    messages=build_context_messages(prompt, system_prompt, caller_context),
+                    messages=_stream_msgs,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 ):

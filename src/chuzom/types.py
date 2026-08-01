@@ -488,6 +488,17 @@ class LLMResponse:
     # Semantic cache fields (v8.4.0) — chuzom's own LRU prompt cache
     cache_hit: bool = False
     cache_similarity: float = 0.0
+    # RED2-02: set when a daily spend cap forced this turn to a free-local
+    # provider (TQ-007 downgrade). Lets a caller / CLI / dashboard tell the user
+    # "you hit your cap, so this used a cheaper local model" instead of leaving
+    # an unexplained quality drop. `cap_downgrade_reason` carries the cap detail.
+    cap_downgraded: bool = False
+    cap_downgrade_reason: str = ""
+    # RED1-8-01: total already-billed cost of PRIOR attempts in this turn that a
+    # contract gate or quality-escalation rejected before this final response.
+    # `cost_usd` is only this final attempt; the budget envelope + quota tracker
+    # must settle `cost_usd + chain_attempt_cost_usd` to not under-count true spend.
+    chain_attempt_cost_usd: float = 0.0
     # Anthropic prompt-caching token counts (v9.2.2) — populated when the
     # provider response includes a usage block with these fields. Used by
     # cost.py:_claude_cost for the 4-component billing formula matching
@@ -507,6 +518,11 @@ class LLMResponse:
             parts.append(tokens)
         parts.append(f"${self.cost_usd:.6f}")
         parts.append(f"{self.latency_ms:.0f}ms")
+        # RED2-2-02 / RED2-3-01: make a daily-cap downgrade visible, and describe
+        # it HONESTLY by the actual provider — a smart-mode cap fallthrough routes
+        # to Claude (paid), not free-local, so don't claim "free-local" then.
+        if self.cap_downgraded:
+            parts.append(f"⬇ daily cap → {self._cap_downgrade_target()}")
         return " ".join(parts)
 
     def header(self) -> str:
@@ -521,7 +537,23 @@ class LLMResponse:
             parts.append(tokens)
         parts.append(f"${self.cost_usd:.6f}")
         parts.append(f"{self.latency_ms:.0f}ms")
+        if self.cap_downgraded:  # RED2-2-02 / RED2-3-01
+            parts.append(f"⬇ daily cap reached → routed to {self._cap_downgrade_target()}")
         return " · ".join(parts)
+
+    def _cap_downgrade_target(self) -> str:
+        """Honest description of where a cap downgrade actually routed (RED2-3-01).
+
+        The smart/soft cap fallthrough routes to Claude (anthropic, PAID) — not a
+        free/local model — so the message must reflect the real provider instead
+        of unconditionally claiming "free-local".
+        """
+        prov = (self.provider or "").lower()
+        if prov in ("ollama", "codex", "gemini_cli"):
+            return "a free/local model"
+        if prov == "anthropic":
+            return "Claude (subscription)"
+        return f"{prov or self.model}"
 
 
 @dataclass(frozen=True)

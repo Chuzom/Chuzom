@@ -138,7 +138,13 @@ async def get_provider_spend() -> dict[str, float]:
     if not exists:
         return {}
 
-    db = await aiosqlite.connect(str(db_path))
+    # CHZ-PY-004: mark the worker daemon BEFORE awaiting — the thread hasn't
+    # started yet, so daemon takes effect (marking after await is a no-op:
+    # daemon can't be changed on a started thread).
+    from chuzom.aiosqlite_util import mark_worker_daemon
+    _conn = aiosqlite.connect(str(db_path))
+    mark_worker_daemon(_conn)
+    db = await _conn
     try:
         cursor = await db.execute(
             "SELECT provider, COALESCE(SUM(cost_usd), 0) FROM usage "

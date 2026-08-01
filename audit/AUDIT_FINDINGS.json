@@ -1,0 +1,655 @@
+[
+  {
+    "id": "CHZ-AUD-B-04",
+    "title": "In-process SessionBuffer singleton is not scoped by project \u2014 cross-project content leak within a single process/session lifetime",
+    "severity": "Critical",
+    "confidence": "Confirmed",
+    "component": "chuzom/context.py:SessionBuffer, get_session_buffer() (module-level singleton, lines 96-169), build_context_messages() layer 2 (lines 472-476)",
+    "claim_affected": "Cross-project isolation of conversational context (an implicit but load-bearing security property for any multi-project/multi-tenant use of a single chuzom process, e.g. one long-running MCP server instance serving multiple repos/projects)",
+    "evidence": [
+      "context.py:161-169: `_session_buffer: SessionBuffer | None = None` is a SINGLE module-level global; `get_session_buffer()` lazily constructs it ONCE per process and returns the same instance on every call, with no parameterization by `CHUZOM_PROJECT_ID`, `session_id`, or any other scope key anywhere in its construction or lookup.",
+      "SessionBuffer.record()/format_for_injection() (context.py ~104-160) operate purely on an internal `deque(maxlen=max_messages)` shared process-wide \u2014 confirmed by direct read of the class body: no project_id or session_id field is stored per-message or checked on read.",
+      "Live execution proof (phase8_leakage_and_failopen.py, Test A): within ONE process, `CHUZOM_PROJECT_ID=project-alpha` is used to send \"Project ALPHA secret is PURPLE-999. Remember it.\"; `CHUZOM_PROJECT_ID` is then changed to `project-beta` (same process, same CLAUDE_SESSION_ID) and a follow-up prompt is sent. Result: `cross_project_same_session_id.project_alpha_secret_leaked_into_project_beta_payload: true` \u2014 \"PURPLE-999\" appears verbatim inside the `[Recent conversation context]` block (the SessionBuffer's injection marker, per context.py's `format_for_injection()`) of project-beta's outgoing payload to the LLM provider.",
+      "The SAME test run confirms the DURABLE layer remains correctly isolated: `project_alpha_dir_exists: true` and `project_beta_dir_exists: true`, each with its OWN separate on-disk JSONL file under its own `projects/<id>/` directory, and the leak is demonstrably NOT present in the durable per-project files themselves \u2014 it occurs exclusively via the in-process SessionBuffer's shared, unscoped deque."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase8_leakage_and_failopen.py",
+      "Inspect the printed JSON: `cross_project_same_session_id.project_alpha_secret_leaked_into_project_beta_payload` is `true`, and `project_beta_payload` contains a message whose content includes `[Recent conversation context]` followed by the literal text \"PURPLE-999\"."
+    ],
+    "expected": "Content scoped to one project (as identified by `CHUZOM_PROJECT_ID`, the same identifier the durable session_store layer uses for isolation) must never appear in the outbound payload for a different project, matching the isolation guarantee the durable layer already provides.",
+    "actual": "The in-process SessionBuffer is a single unscoped global; any change of `CHUZOM_PROJECT_ID` (or, more realistically, any single long-running chuzom process \u2014 e.g. an MCP server \u2014 that serves multiple projects/repos over its lifetime, or multiple concurrent Claude Code sessions across different repositories sharing one router process) will have its recent conversational content, including secrets/PII stated in one project's turns, injected verbatim into prompts sent to a provider on behalf of a completely different project.",
+    "impact": "Direct cross-project data leak of conversational content (not just metadata) to external LLM providers, with no configuration or code path currently available to prevent it short of process isolation per project. This is the most severe finding of the Phase 7-9 investigation because it is live/reachable code (unlike the dead streaming-path bugs, CHZ-AUD-B-07/08) and directly contradicts the durable layer's demonstrated project-scoping design intent.",
+    "root_cause": "SessionBuffer/get_session_buffer() was implemented as a simple process-wide singleton (likely under the assumption that one chuzom process == one project/session), with no scoping key threaded through from CHUZOM_PROJECT_ID or session_id, unlike session_store.py's `_project_dir()`/`_session_path()` which correctly incorporate `_project_id()` into the file path.",
+    "recommended_fix": "Key `_session_buffer` by `(project_id, session_id)` (e.g. a dict of SessionBuffer instances keyed on `session_store._project_id() + ':' + session_store.resolve_session_id()`, mirroring the durable layer's existing, already-correct scoping logic) instead of a single global instance; evict/cap the number of concurrently-tracked (project, session) buffers to bound memory.",
+    "regression_test": "Automated version of the phase8 Test A reproduction above, asserting `project_alpha_secret_leaked_into_project_beta_payload == False` after the fix, run in a hermetic HOME with mocked providers, within a single process.",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-D-01",
+    "title": "Result cache and semantic cache persist raw, unredacted prompt/response text (including secrets) in a world-readable, indefinitely-retained, full-text-searchable SQLite database that later re-injects into future model context",
+    "severity": "CRITICAL",
+    "confidence": "HIGH (empirically proven)",
+    "component": "src/chuzom/result_cache.py, src/chuzom/semantic_cache.py, src/chuzom/tools/text.py, src/chuzom/router.py",
+    "claim_affected": "Implicit: none of the README/pyproject claims mention that routed prompts/responses are cached to disk unredacted; the only redaction mechanism (enterprise/redaction.py via redaction_routing.py) is documented as off by default, which the user might read as 'redaction is optional, not needed' rather than 'there is no protection for the caches at all, even with redaction enabled'",
+    "evidence": [
+      "src/chuzom/result_cache.py:126-180 store_result() builds `INSERT INTO results (..., user_prompt, response, ...) VALUES (...)` with the raw string parameters, no scrub/redact call anywhere in the function or file (confirmed via full-file grep of the module for 'scrub'/'redact' \u2014 zero matches).",
+      "src/chuzom/result_cache.py:43-62 `_CREATE_TABLES` schema: `user_prompt TEXT NOT NULL`, `response TEXT NOT NULL` \u2014 plain text columns, no encryption.",
+      "src/chuzom/result_cache.py:64-82 `_CREATE_FTS`/`_CREATE_TRIGGERS` build a synced FTS5 virtual table `results_fts` over the raw prompt/response text, making any leaked secret trivially full-text/BM25-searchable.",
+      "src/chuzom/result_cache.py:114-123 `_ensure_db()` opens the DB with plain `sqlite3.connect(str(db_path), timeout=5)` \u2014 no `os.chmod`/`Path.touch(mode=0o600)` call anywhere in the file, unlike the sibling `cost.py::_get_db()` (see CHZ-AUD-D-02).",
+      "src/chuzom/result_cache.py:316-340 `format_context()` re-serializes raw stored Q&A pairs as `f\"Q: {r.user_prompt}\\nA: {r.response}\\n\\n\"` for injection into the context of SUBSEQUENT prompts sent to (potentially different/less-trusted) routed models \u2014 a forward-propagation vector for any secret that was ever cached.",
+      "src/chuzom/result_cache.py:343-375 `clear_cache()` is the ONLY deletion path; TTL is enforced solely at query time (`WHERE timestamp > cutoff` in search_results/check_dedup) \u2014 rows are retained indefinitely on disk until a manual clear.",
+      "src/chuzom/semantic_cache.py:47-58 `CREATE_SEMANTIC_CACHE_TABLE` includes `response_content TEXT NOT NULL`, raw.",
+      "src/chuzom/semantic_cache.py:237-291 `store()` executes `INSERT INTO semantic_cache (..., response_content, ...) VALUES (...)` with `response.content` verbatim; no scrub/redact call anywhere in the function or file.",
+      "src/chuzom/tools/text.py `_cache_result()` (~lines 150-175): the MCP-tool layer (PULL routing \u2014 `llm_query`/`llm_analyze`/`llm_code`/`llm_research`) calls `store_result(user_prompt=prompt, response=resp.content or \"\", ...)` with the raw prompt/response, wrapped only in a fail-silent `try/except Exception: pass`.",
+      "src/chuzom/router.py:2633 `await semantic_cache.store(prompt, task_type, response)` inside `_dispatch_model_loop` (the PUSH-hook/Claude Code routing path), also raw.",
+      "src/chuzom/redaction_routing.py (full file, 90 lines): the ONLY prompt-redaction mechanism (`maybe_redact`/`CHUZOM_REDACTION`) is (a) off by default for non-enterprise profiles ('off (default) ... Operators who haven't reviewed which patterns chuzom redacts must opt in explicitly'), (b) fail-open on redactor exceptions, and (c) called only inside `route_and_call()` at router.py:3205 \u2014 a different function than `_dispatch_model_loop` (router.py:1676) where `semantic_cache.store` is actually invoked \u2014 and is never referenced at all in `tools/text.py`. Even an operator who explicitly sets `CHUZOM_REDACTION=on` gets NO protection for either cache-store path.",
+      "src/chuzom/enterprise/redaction.py (full file, 139 lines) confirms the redactor itself is well-built (Luhn-checked credit cards, sk-ant-/sk-/AIza/ghp_/AKIA/xox/JWT/private-key/email/SSN/phone patterns) but is architecturally disconnected from both cache-write paths regardless of enablement \u2014 the quality of the redactor is irrelevant because it is never called on this path.",
+      "tests/test_result_cache.py (244 lines) and tests/test_semantic_cache.py (306 lines): zero occurrences of 'secret', 'redact', 'scrub', 'chmod', 'permission', or '0o600' \u2014 neither test suite exercises secret-handling or file-permission behavior at all (see also CHZ-AUD-D-04, test-quality gap)."
+    ],
+    "reproduction": [
+      "1. Create a hermetic temp HOME: `TMPHOME=$(mktemp -d /private/tmp/.../scratchpad/audit-d-home.XXXXXX)`.",
+      "2. `HOME=\"$TMPHOME\" /Users/yaliandrona/Projects/Chuzom/.venv/bin/python3 -c \"import sys; sys.path.insert(0,'src'); from chuzom import result_cache; result_cache.store_result(user_prompt='Here is my key sk-ant-api03-FAKEAUDITSECRETDONOTUSE1234567890ABCDEFGHIJ for testing, please review it', response='I see your AWS secret aws_secret_access_key=abcd1234FAKEAUDITSECRETwXYZ0987654321fakekeyvalueHERE and your password: SuperSecretPass123! in the config', task_type='query', complexity='simple', model_used='test/fake-model')\"`",
+      "3. `db_path = result_cache._get_db_path(None, 'query')` -> resolves to `$TMPHOME/.chuzom/result_cache.db`.",
+      "4. `os.stat(db_path)` -> mode `0o644` (world-readable, not 0600).",
+      "5. `sqlite3.connect(db_path).execute('SELECT user_prompt, response FROM results').fetchall()` -> both fake secrets present verbatim, unredacted.",
+      "6. `grep -a 'FAKEAUDITSECRET' \"$TMPHOME/.chuzom/result_cache.db\"` (raw byte-level grep on the on-disk file, bypassing the SQLite API entirely) -> match, proving persistence at the file-bytes level."
+    ],
+    "expected": "Prompts/responses routed through either the PUSH hook (Claude Code) or PULL MCP tools (llm_query/llm_analyze/llm_code/llm_research) should either (a) never persist raw secret-shaped content to disk by default, or (b) apply the existing, already-implemented `enterprise/redaction.py` redactor to both cache-write paths regardless of the `CHUZOM_REDACTION` toggle, or (c) at minimum harden the result_cache.db file to 0600 at creation (matching the pattern already used correctly for usage.db) and clearly document in the README/config docs that cached content is stored raw and searchable.",
+    "actual": "Every successful routed prompt/response (both PUSH and PULL paths) is persisted verbatim into SQLite databases with no redaction wired in at any layer, no encryption, full-text search indexing (result_cache.db), indefinite retention, forward re-injection into future prompts (format_context), and (for result_cache.db specifically) world-readable 0644 file permissions.",
+    "impact": "Any secret, credential, PII, or confidential business content that appears in a user's prompt or in a routed model's response is durably persisted in plaintext on disk, readable by any local user/process with filesystem access, trivially searchable via FTS5/BM25, retained forever absent a manual `clear_cache()`, and liable to be echoed back into a DIFFERENT (potentially less-trusted, e.g. local Ollama or a third-party CLI) model's context on a future prompt. This directly contradicts the reasonable security expectation implied by having a dedicated, well-engineered redaction module (enterprise/redaction.py) in the codebase \u2014 its existence creates a false sense that redaction is 'available if needed' when in fact it protects neither cache regardless of configuration.",
+    "root_cause": "Three independently-implemented secret/PII-handling subsystems exist in this codebase (secret_scrubber.py for session_store.py's JSONL event log, safe_subprocess.py's env-var blocklist for spawned CLI subprocesses, and enterprise/redaction.py via redaction_routing.py for router.py's route_and_call prompt path) with no shared enforcement point. Neither result_cache.py nor semantic_cache.py was ever wired into any of the three, and cost.py's correct 0600-hardening pattern for usage.db was not replicated in result_cache.py's `_ensure_db()`.",
+    "recommended_fix": "1) Call `enterprise.redaction.redact_prompt()` (or a lighter always-on subset of it, mirroring secret_scrubber.py's unconditional application in session_store.py) on both `user_prompt` and `response`/`response_content` immediately before the INSERT in `result_cache.py::store_result()` and `semantic_cache.py::store()`, independent of the `CHUZOM_REDACTION` enterprise toggle. 2) Harden `result_cache.py::_ensure_db()` to `Path(db_path).touch(mode=0o600)` before first connect, matching `cost.py::_get_db()`. 3) Add a TTL-based physical DELETE (not just query-time filtering) or document the indefinite-retention behavior prominently. 4) Add regression tests asserting that planted secret patterns do NOT appear verbatim in either cache's on-disk bytes after store_result/store, and that both DB files are created 0600.",
+    "regression_test": "tests/test_result_cache.py::test_store_result_redacts_secret_patterns (new) \u2014 store_result() with a prompt/response containing an sk-ant-... pattern and assert the pattern is absent from a raw SELECT and from a raw byte-grep of the db file; tests/test_result_cache.py::test_db_file_created_0600 (new) \u2014 os.stat(db_path).st_mode & 0o777 == 0o600; equivalent pair for tests/test_semantic_cache.py.",
+    "_track": "D"
+  },
+  {
+    "id": "CHZ-AUD-A-01",
+    "title": "Failed provider dispatch attempts are never recorded in the execution ledger (attempt_failed event never emitted)",
+    "severity": "HIGH",
+    "confidence": "HIGH (source-confirmed + execution-confirmed)",
+    "component": "src/chuzom/router.py (dispatch loop), src/chuzom/execution_ledger.py (schema)",
+    "claim_affected": "Observability/telemetry accuracy \u2014 'the ledger records every routing attempt' / cost & savings dashboards built on execution_events",
+    "evidence": [
+      "execution_ledger.py defines 'attempt_failed' as a recognized event_type in its schema / _BILLABLE_EVENTS constant.",
+      "grep -n \"attempt_failed\" src/chuzom/router.py returns zero matches.",
+      "router.py's two exception-handling blocks in the dispatch loop (~lines 2645-2692 and ~2799-2806) catch the provider exception, log it, and advance to the next model in the chain, without ever calling any ledger-emit function with event_type=\"attempt_failed\" or equivalent.",
+      "Executed reproduction (failure_ledger_probe.py): injected RuntimeError on first 2 dispatch attempts, 3rd succeeds. route_and_call() returns successfully; CALLS shows 3 acompletion invocations were made. execution_events table (real SQLite, hermetic tmp DB) contains only 1 attempt_completed row and 1 route_completed row \u2014 the 2 failed attempts produced zero ledger rows."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom",
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/failure_ledger_probe.py",
+      "Inspect printed 'raw execution_ledger rows' section: 3 acompletion calls logged in CALLS, but execution_events query returns only 1 row."
+    ],
+    "expected": "Each of the 3 dispatch attempts (2 failed + 1 succeeded) produces a corresponding execution_events row, with the 2 failures recorded as attempt_failed (or equivalent) carrying the error_message and failed model/provider.",
+    "actual": "Only the single successful attempt is recorded. The 2 failed attempts leave no trace in execution_events.",
+    "impact": "Any reporting, cost analysis, or reliability dashboard built on execution_events will systematically undercount real provider failures and retries. A provider with a high failure-then-retry rate looks identical, in the ledger, to a provider that succeeds on the first try every time \u2014 masking reliability problems and making retry-driven latency/cost invisible.",
+    "root_cause": "The dispatch loop's except blocks handle control flow (advance to next model) but were never wired to call the ledger's attempt-emission function for the failure case, even though the ledger schema already anticipates this event type.",
+    "recommended_fix": "In both exception-handling blocks in router.py's dispatch loop, call the ledger emit function with event_type=\"attempt_failed\", populating model/provider/error_message/route_id before continuing to the next candidate model.",
+    "regression_test": "Extend failure_ledger_probe.py (or a pytest equivalent) into the permanent test suite: inject N failures then a success, assert execution_events contains N attempt_failed rows plus 1 attempt_completed row plus 1 route_completed row.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-A-03",
+    "title": "In the default (non-zero-Claude) configuration, the push hook never guarantees Claude's turn is replaced, even on successful real external execution \u2014 advisory-only by design",
+    "severity": "HIGH",
+    "confidence": "HIGH (source-confirmed + execution-confirmed across 9 real subprocess cells)",
+    "component": "src/chuzom/hooks/auto-route.py (_resolve_auto_render_mode, Direct Execution)",
+    "claim_affected": "Any claim that Chuzom 'always executes another model' or 'guarantees interception' for the Claude Code push-hook path",
+    "evidence": [
+      "_resolve_auto_render_mode()'s own docstring: \"Outside zero-Claude, 'auto' always resolves to advisory 'echo': the draft becomes context the assistant verifies, never a fabricated answer that replaces the turn.\"",
+      "Executed truth table (auto_route_hook_harness.py, 9 real subprocess cells, hermetic tmp HOME, real UserPromptSubmit stdin contract): advise/direct=1/normal, hard/direct=1/normal, and suggest/direct=1/normal cells all produced decision=\"approve\" with a genuine real-Ollama-generated draft (qwen3.5:latest, real TCP/UDP content, real elapsed-time ~1.3-2.1s and token counts ~264-302) delivered as additionalContext explicitly labeled \"UNVERIFIED DRAFT\" with instructions Claude may 'IGNORE the draft entirely and answer normally'.",
+      "Only the advise_direct1_zeroclaude and hard_direct1_zeroclaude cells produced decision=\"block\" (genuine turn replacement) \u2014 both require the non-default CHUZOM_ZERO_CLAUDE=1 configuration."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/auto_route_hook_harness.py",
+      "Inspect auto_route_hook_results.json: cells advise_direct1_normal / hard_direct1_normal / suggest_direct1_normal all have decision_field=\"approve\" despite real external content in stdout_raw; only *_zeroclaude cells show decision_field=\"block\"."
+    ],
+    "expected": "N/A for a well-documented system \u2014 this finding is about ensuring the distinction is not misrepresented, not that the behavior itself is wrong. A user/operator reading marketing or top-level claims should understand 'execution' in default mode means 'a real model was called and its draft was offered', not 'Claude's answer is guaranteed to come from that model'.",
+    "actual": "In the default configuration (zero_claude=False), a successful, real, on-topic external model response is downgraded to unverified advisory context; Claude retains full discretion to ignore it. This is true across advise, hard, and suggest enforce modes at the push-hook layer specifically.",
+    "impact": "Any external claim (marketing, README, onboarding docs) stating Chuzom 'always executes another model' for the push path is materially misleading unless immediately qualified with 'in advisory mode, Claude may discard the result' and 'guaranteed replacement only under zero-Claude'. This is the audit's central adversarial finding.",
+    "root_cause": "Deliberate design choice (see also the positive anti-injection framing noted in enforce-route.py comments) \u2014 advisory-only behavior is intentional, not a bug, but is easy to misstate externally.",
+    "recommended_fix": "No code fix required. Documentation/marketing fix: any 'execution guarantee' language must explicitly state the zero-Claude precondition for guaranteed turn replacement, and must describe default/advise/hard/suggest modes as 'advisory' at the push-hook layer.",
+    "regression_test": "Keep auto_route_hook_harness.py (or a pytest-ified version) as a permanent regression test asserting decision_field==\"approve\" for all non-zero-claude cells and decision_field==\"block\" only for zero-claude cells with direct execution successfully enabled.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-B-02",
+    "title": "Durable session_store persists full, verbatim, plaintext prompt/response content indefinitely on local disk",
+    "severity": "High",
+    "confidence": "Confirmed",
+    "component": "chuzom/session_store.py:record_event(), _session_path(), build_session_context()",
+    "claim_affected": "Implicit claim of the 'Session Context Accumulator' design (context.py comments) that persisted context is a lightweight aid, not a full transcript archive; also bears on any data-retention/privacy posture the project states",
+    "evidence": [
+      "router.py primary success path (lines ~2459-2476, established pre-compaction and re-read this session) calls `_session_store.record_event(..., kind='user_prompt', content=prompt, ...)` and again with `kind='routed_qa', content=response.content, ...)` for every successful primary-chain call, storing the FULL prompt and FULL response text (after only the narrow _scrub_secrets() pass \u2014 see CHZ-AUD-B-03) as JSONL records under `~/.chuzom/projects/<project_id>/session_context_<session_id>.jsonl`.",
+      "Live execution (phase7_cross_provider.py): after running, the on-disk JSONL under the hermetic tmp HOME contains the literal string \"ORANGE-742\" (the test's synthetic secret) verbatim, unredacted, in plaintext \u2014 confirmed by direct inspection of the written file.",
+      "session_store.py has no TTL/expiry logic visible in the reviewed code \u2014 _compact_if_needed() (lines ~370-407) only caps file size by keeping the newest _COMPACT_TO records when the file grows past a threshold; it does not delete or age out old records on any wall-clock basis. Content persists until the file is compacted away by sheer volume or the project/session directory is manually removed."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7_cross_provider.py",
+      "cat <tmp_home_printed>/.chuzom/projects/audit-b-phase7-project/session_context_audit-b-p7-session-1.jsonl | grep ORANGE-742  # matches, proving verbatim on-disk plaintext persistence"
+    ],
+    "expected": "Persisted cross-session context should either be summarized/abstracted rather than verbatim, or should have effective redaction of sensitive content, or both, given it lives indefinitely in plaintext on local disk and is later re-injected into prompts sent to third-party model providers.",
+    "actual": "Full verbatim prompt and response text is written to disk in plaintext, retained indefinitely (no TTL), and is later read back and injected into outbound payloads to whichever provider handles a future turn \u2014 including external paid providers, subject only to the `local`/`off` privacy-mode gate in build_session_context() (which most users leave at the default `all`).",
+    "impact": "Any sensitive information a user pastes into any routed prompt (credentials that don't match the narrow regex set, PII, proprietary code, business secrets) is durably stored in plaintext under the user's home directory and will be replayed to future LLM providers (potentially different/external ones) in later turns, for as long as the JSONL file exists.",
+    "root_cause": "Design choice \u2014 session_store.py's Session Context Accumulator was built to store raw event content (kind: user_prompt / routed_qa / tool_call / assistant) rather than summaries, with redaction as the sole content-safety control (see CHZ-AUD-B-03 for why that control's coverage is narrow).",
+    "recommended_fix": "Either (a) add a documented, user-configurable TTL/retention policy with default expiry for durable session_context records, (b) broaden redaction coverage (see CHZ-AUD-B-03) and/or add an explicit opt-in before verbatim content is persisted, or (c) clearly document in user-facing docs that this store is a full local transcript archive with no default expiry, so users can make an informed retention/privacy decision.",
+    "regression_test": "Write a session record containing a known synthetic secret string that is NOT of a recognized credential shape (e.g. a business-context phrase), assert it IS found byte-for-byte in the on-disk JSONL today (documenting current behavior), then re-run after any fix and assert the new expected behavior (redacted/expired/absent) instead.",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-B-05",
+    "title": "Emergency BUDGET fallback success path skips session_spend, routing_quality ledger, SessionBuffer, and durable session_store recording",
+    "severity": "High",
+    "confidence": "Confirmed",
+    "component": "chuzom/router.py:route_and_call() \u2014 primary success path (~2380-2643) vs. emergency BUDGET fallback success path (~2705-2797)",
+    "claim_affected": "That every successful routed call becomes part of subsequent context (both in-process and durable) and is fully accounted for in cost/quality ledgers \u2014 an implicit but load-bearing assumption for both the context-preservation claims (Phase 7/8) and the cost-accounting claims (Phase 9's 'is cost/quota double-counted' question)",
+    "evidence": [
+      "Direct read of router.py lines 2380-2799 (this session): the PRIMARY chain's success return (via `_enrich_response(...)` at line 2639, inside the main try block) performs, in order: session_spend recording (2380-2396), routing_quality ledger `record_route(RouteLedgerRecord(...))` (2407-2452, computing `actual_cost_usd` including `failed_attempt_cost_usd`), in-process `buf.record('user', prompt, ...)` / `buf.record('assistant', response.content, ...)` (2454-2457), and durable `_session_store.record_event()` for both `user_prompt` and `routed_qa` kinds (2459-2476, wrapped in try/except that fails open to a debug log).",
+      "The SEPARATE emergency BUDGET fallback block (a structurally distinct `if profile != RoutingProfile.BUDGET ...:` branch starting at line 2705, entered only when the primary chain is exhausted \u2014 e.g. every candidate fails the dispatch quality/length gate, or is rate-limited/unhealthy) performs, on success, ONLY: `tracker.record_success(provider)`, `await cost.log_usage(...)`, `_emit_ledger_attempt(...)`, `_emit_ledger_terminal(...)`, a `route_log.info('emergency_fallback_success', ...)` structured-log line, and a notify call \u2014 then returns `_enrich_response(...)` directly at line 2793, WITHOUT executing any of the session_spend recording, routing_quality `record_route()` ledger call, `buf.record()` calls, or `_session_store.record_event()` calls that the primary path performs.",
+      "Live execution proof: the FIRST run of phase8_leakage_and_failopen.py used a 3-character fake response ('ack'), which failed the dispatch quality/length gate ('length: too short: 3 < 20 chars') for every call, silently diverting every test call through the emergency BUDGET fallback path. Inspecting the resulting hermetic tmp HOME afterward showed NO project directories were created for project-alpha/project-beta/project-gamma at all under `~/.chuzom/projects/` \u2014 proving that the durable session_store recording genuinely did not occur for any of those emergency-fallback-routed calls, exactly as the source-level analysis predicts."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python -c \"import sys; sys.path.insert(0,'src')\" # (illustrative \u2014 see script)",
+      "Force every candidate response below the ~20-char dispatch gate threshold (e.g. return content='ack' from a monkeypatched providers.call_llm) while calling router.route_and_call() with model_override set; observe 'Gate verification failed ... trying next model' followed by 'emergency_fallback_success' in logs, then inspect `~/.chuzom/projects/<project_id>/` under the test's hermetic HOME afterward \u2014 it will not exist despite `route_and_call()` having returned a normal, successful LLMResponse to the caller."
+    ],
+    "expected": "Any turn that returns a successful response to the caller should be uniformly recorded into session_spend, the routing_quality ledger, the in-process SessionBuffer, and the durable session_store \u2014 regardless of which internal code path produced the success \u2014 so subsequent turns/sessions have access to it and cost/quality analytics remain complete.",
+    "actual": "Successful turns routed via the emergency BUDGET fallback path are completely invisible to both context-injection layers (SessionBuffer and durable session_store) and to the routing_quality ledger and session_spend tracker, even though `cost.log_usage()` IS still called (so `usage.db`'s basic usage table is populated) and the caller receives an ordinary, successful-looking response with no error or warning.",
+    "impact": "(1) Context-preservation gap: any fact stated in a turn that happens to route via emergency fallback (e.g. because the primary chain's response was rejected by the quality/length gate) silently vanishes from all future context \u2014 the user has no way to know this turn 'didn't count' for context purposes. (2) Analytics gap: the routing_quality ledger's cost-double-counting/failed-attempt-cost analysis (which computes `actual_cost_usd` including `failed_attempt_cost_usd` on the primary path) is entirely blind to emergency-fallback successes, understating true cost-of-routing-attempts for that subset of calls, though basic per-call cost in usage.db is still recorded so there is no double-billing, only an analytics blind spot.",
+    "root_cause": "The emergency BUDGET fallback was implemented as a structurally separate code block from the primary chain's success path rather than funneling through a single shared 'on success, record everything' helper \u2014 likely because it was added later as a last-resort safety net and the context/ledger recording calls were not backported into it.",
+    "recommended_fix": "Extract the primary path's recording block (session_spend, routing_quality ledger, buf.record(), _session_store.record_event()) into a single shared helper function, and call it from both the primary success return and the emergency BUDGET fallback success return, so no successful code path can silently skip recording.",
+    "regression_test": "Force every primary-chain candidate to fail the dispatch quality gate (short canned response) so the call is routed via emergency fallback, then assert the durable session_store DOES contain a record for that turn's project/session directory after the fix (currently it does not \u2014 see reproduction).",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-C-01",
+    "title": "session_store.record_event() loses writes under real concurrent multi-process access (inode-orphaning race in _maybe_compact())",
+    "severity": "HIGH",
+    "confidence": "HIGH (execution-confirmed, freshly re-run this segment)",
+    "component": "src/chuzom/session_store.py",
+    "claim_affected": "Session/interaction history recorded via record_event() is durable and complete for a given session_id.",
+    "evidence": [
+      "test_session_store_concurrency.py: 6 real OS processes x 200 unique-content writes each = 1200 total writes to the same session_id, production compaction thresholds left at default (_MAX_RECORDS=300, _COMPACT_TO=150) so multiple organic compaction cycles occur mid-run.",
+      "Fresh run this segment, hermetic HOME=/var/folders/.../chuzom-audit-c-home-n4k25glc: 22/1200 (1.83%) writes lost -- e.g. proc 1 lost 5/200 at seqs [113,142,168,169,197], proc 2 lost 5/200 at seqs [51,78,105,154,155].",
+      "final_line_count=253 corrupt_lines=0 -- every surviving line is well-formed JSON, ruling out torn/interleaved writes as the mechanism.",
+      "record_event() calls _maybe_compact() inline after every append; compaction rewrites to a tempfile and os.replace()s it over the session path, with no explicit lock (file lock, asyncio.Lock, or OS advisory lock) coordinating concurrent writers against that replace.",
+      "Losses are silent: record_event() raised no exception to any of the 22 lost calls; loss was only detected by the test harness's independent post-write readback of the file."
+    ],
+    "reproduction": [
+      "cd /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/audit-C",
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python test_session_store_concurrency.py",
+      "Observe per-process LOST counts and final RESULT: FAIL when total_lost_via_readback > 0."
+    ],
+    "expected": "All 1200 record_event() calls across 6 concurrent processes are present in the final session file, or a call that will not persist raises an exception to its caller.",
+    "actual": "22/1200 calls (1.83%) returned normally (no exception) but are absent from the final file; 0 corrupt lines, consistent with an inode-orphaning race between a writer's open file handle and a concurrent os.replace() during compaction.",
+    "impact": "Any deployment where multiple processes/agents can append to the same session_id concurrently (e.g. multiple MCP server workers, multi-agent fan-out sharing a session) will silently lose a small but consistent fraction of recorded events, with no error surfaced to callers and no way to detect the loss after the fact short of independent auditing.",
+    "root_cause": "record_event() appends without holding any lock around the read-modify-compact-replace cycle in _maybe_compact(); a writer that has an open handle/fd against the pre-compaction file (or that resolves the path just before a concurrent os.replace() swaps the inode) can have its write land on an orphaned inode that is no longer reachable via the session's canonical path.",
+    "recommended_fix": "Serialize record_event()/_maybe_compact() per session_id with an OS-level advisory lock (e.g. fcntl.flock on a sidecar lock file) or a single-writer queue/actor per session_id; alternatively, switch the session store to an append-only, lock-free-safe backend (e.g. SQLite WAL, as already used successfully by budget_backend.py) instead of tempfile+os.replace() JSONL compaction under concurrent writers.",
+    "regression_test": "Extend test_session_store_concurrency.py (or port it into the project's pytest suite) to run as a marked slow/integration test: N processes x M unique writes to one session_id, assert total_lost_via_readback == 0 and corrupt_lines == 0 after the run, with production _MAX_RECORDS/_COMPACT_TO thresholds so compaction fires organically during the test.",
+    "_track": "C"
+  },
+  {
+    "id": "CHZ-AUD-C-02",
+    "title": "model_override is silently overridden by the process-global quality-feedback circuit breaker once a model's rolling quality average degrades",
+    "severity": "HIGH",
+    "confidence": "HIGH (source-confirmed root cause + execution-confirmed at soak scale + exact quantitative cross-validation)",
+    "component": "src/chuzom/router.py (_build_and_filter_chain, per-model dispatch loop), src/chuzom/quality_feedback.py",
+    "claim_affected": "Passing model_override to route_and_call() guarantees that exact model is used ('If set, use only this model' per _build_and_filter_chain's own docstring).",
+    "evidence": [
+      "soak_driver.py: 5418 sequential route_and_call() calls with model_override='openai/gpt-4o-mini' against a monkeypatched _call_text. First 3 iterations dispatch to openai/gpt-4o-mini as requested; starting at iteration 4, 5415/5418 (99.94%) instead log 'Skipping low-quality model for generate/moderate: openai/gpt-4o-mini' -> 'Primary balanced chain exhausted, attempting BUDGET emergency fallback' -> fallback_model=ollama/qwen2.5-coder:7b, with no exception raised.",
+      "src/chuzom/router.py _build_and_filter_chain(), docstring line 342: 'model_override: If set, use only this model (with subscription validation).' Implementation, line 387: 'return [model_override]' -- a single-element candidate chain.",
+      "src/chuzom/router.py lines 1993-2003 (per-model dispatch loop): unconditional call to quality_feedback.should_skip_model(model, task_type.value, c.value); if True, logs 'model_quality_skip' and `continue`s -- applied identically whether models_to_try came from a dynamic multi-model chain or a single-element model_override chain; no bypass/exemption exists for the override case.",
+      "src/chuzom/quality_feedback.py: _quality_store is a process-global, in-memory dict keyed by (model, task_type, complexity) with no session/caller scoping (line ~81); _MIN_CALLS_FOR_SIGNAL=3 (line ~84) and QUALITY_THRESHOLD=0.4 (line ~87) exactly match the soak observation (skip begins at the 4th call); should_skip_model() returns True once call_count>=3 and avg_quality<0.4.",
+      "Hand-verified score_response() rubric against the soak's exact fake content for task_type='generate': 0.1 (non-empty) + 0.2 (no refusal phrases) with no length/structure/punctuation bonus = 0.3 exactly, matching the soak log's observed avg=0.3 and confirming the mechanism is deterministic and fully characterized, not merely correlated."
+    ],
+    "reproduction": [
+      "cd /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/audit-C",
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python soak_driver.py  # SOAK_SECONDS=210 by default",
+      "grep -c model_quality_skip soak_full_run.log  # 5415",
+      "grep -c emergency_fallback_success soak_full_run.log  # 5415, all fallback_model=ollama/qwen2.5-coder:7b",
+      "Cross-check source: grep -n 'return \\[model_override\\]' src/chuzom/router.py; sed -n '1985,2005p' src/chuzom/router.py; sed -n '1,100p' src/chuzom/quality_feedback.py"
+    ],
+    "expected": "route_and_call(..., model_override='openai/gpt-4o-mini') dispatches to openai/gpt-4o-mini for every call, or raises/signals clearly to the caller if it cannot (e.g. subscription-mode block, which router.py DOES already handle explicitly with a logged warning and explicit fallback-chain substitution).",
+    "actual": "After 3 calls to a given (model, task_type, complexity) triple score an average quality below 0.4, every subsequent call using model_override for that exact triple is silently redirected to a different model/provider (observed: ollama/qwen2.5-coder:7b) for the remaining lifetime of the process, with resp.model/resp.provider reflecting the substitute and no caller-visible error, warning, or flag.",
+    "impact": "Breaks the documented 'use only this model' contract for model_override. Any caller relying on explicit model selection for reproducibility, cost control, provider-compliance routing, or A/B/benchmark comparison gets silently wrong results. Because _quality_store is process-global and unscoped by caller/session/agent, one caller's poor-quality traffic for a given (model, task_type, complexity) can silently redirect ALL other callers in the same long-lived process (e.g. a shared MCP server) who explicitly request that exact model for that same task_type/complexity -- a cross-caller isolation violation, not just a single-session quirk.",
+    "root_cause": "The per-model quality-feedback skip check in the router's dispatch loop is applied unconditionally to every candidate in models_to_try, including the single-element list produced when model_override is set, with no code path exempting an explicit override from the quality gate.",
+    "recommended_fix": "Add an explicit bypass: when the current model came from model_override (not a dynamically-built fallback chain), skip the should_skip_model() gate entirely, OR raise a clear, typed exception (e.g. ModelQualityDegradedError) to the caller instead of silently substituting, so the caller can decide whether to accept the fallback. Additionally, scope _quality_store per-session/per-caller (or at minimum expose an opt-out flag on route_and_call, e.g. respect_override_strictly=True) to eliminate the cross-caller poisoning vector.",
+    "regression_test": "Unit test: seed quality_feedback._quality_store with 3+ low-quality (<0.4) records for (model='x', task_type='generate', complexity='moderate'); call route_and_call(..., model_override='x', ...) and assert resp.model == 'x' (not silently substituted), or assert a typed exception/flag is raised instead of a silent substitution.",
+    "_track": "C"
+  },
+  {
+    "id": "CHZ-AUD-D-05",
+    "title": "The shipped/installed rules file and the SessionStart banner both claim 'never blocks' / 'advise mode', but this directly contradicts the codebase's own default enforcement behavior (CHUZOM_ENFORCE default is 'smart', which genuinely blocks Edit/Write/MultiEdit/non-readonly-Bash until a routed llm_* tool is called) \u2014 and the 'honest, no-hardcoding' banner-label code itself mislabels both the default mode and what 'smart'/'hard' actually do",
+    "severity": "HIGH",
+    "confidence": "HIGH (proven via direct code citation and byte-identical diff, no execution required)",
+    "component": "src/chuzom/rules/chuzom.md, src/chuzom/hooks/session-start.py, src/chuzom/hooks/enforce-route.py, src/chuzom/enforce_config.py, src/chuzom/tools/setup.py",
+    "claim_affected": "src/chuzom/rules/chuzom.md:2 'Global Routing Rules (advise mode: route everywhere, never block)'; same file: 'They are a default recommendation, not a constraint \u2014 you always keep the final call, and no tool is ever blocked' and 'There is no \"blocked\" state in advise mode.' This exact file is what is installed to ~/.claude/rules/chuzom.md and was shown verbatim in this audit session's own context. session-start.py's SessionStart banner text 'advise mode \u2014 a ROUTE hint is a suggestion, never a block' (also shown verbatim in this session's own context, three times). session-start.py:221 '\"soft\": \"soft (logs routing misses; never blocks \u2014 default)\"'. tools/setup.py's install-completion message: 'Work that skips a required route is blocked by default (`CHUZOM_ENFORCE=hard`).'",
+    "evidence": [
+      "`diff src/chuzom/rules/chuzom.md ~/.claude/rules/chuzom.md` -> zero differences (byte-identical), confirming this repo file is the literal source of the globally-installed rules the LLM reads as instructions every session.",
+      "src/chuzom/enforce_config.py:36 `DEFAULT_ENFORCE = \"smart\"` with docstring: '\"smart\" = block Q&A/reasoning tools until the prompt is routed, while letting code/local-file work through' \u2014 this is the single source of truth both auto-route.py (banner) and enforce-route.py (PreToolUse enforcer) resolve through, per the module's own docstring ('so they can never disagree').",
+      "src/chuzom/hooks/enforce-route.py:1178-1199 (the 'smart mode' branch, the actual default): `if tool_name in {\"Edit\", \"Write\", \"MultiEdit\"}: pass # Write tools are blocked until routing is satisfied (all task types)` \u2014 falls through to violation handling, which (per lines 1206-1280 and the file's own module docstring at lines 20-41) tracks violation counts, can hard-deny the tool call, and only auto-pivots/allows after repeated-violation escape valves fire (loop detection, trap detection, 4-violation stuck-pattern). This is genuine, code-level tool blocking, not merely logging.",
+      "src/chuzom/hooks/enforce-route.py module docstring lines 37-41: 'hard \u2014 Bash/Edit/Write are blocked for ALL task types until an llm_* tool is called. Maximum cost enforcement.'",
+      "src/chuzom/hooks/session-start.py:204-226 `_enforce_label()`, whose own docstring claims: 'Human description of the RESOLVED enforcement mode (honest \u2014 no hardcoding)... After P0, no mode blocks file/shell tools \u2014 the differences are only in logging.' Its description dict labels BOTH 'smart' (line 222: 'file/shell tools never blocked') and 'hard' (line 223: 'file/shell tools never blocked') as never-blocking \u2014 directly contradicted by enforce-route.py's own real blocking logic and its own module docstring quoted above, in the SAME CODEBASE.",
+      "src/chuzom/hooks/session-start.py:221 labels 'soft' as '\u2014 default', but the actual resolved default (enforce_config.DEFAULT_ENFORCE) is 'smart', not 'soft' \u2014 a second, independently falsifiable mislabeling in the same dict.",
+      "src/chuzom/tools/setup.py (install-hooks completion message) states 'blocked by default (`CHUZOM_ENFORCE=hard`)' \u2014 wrong on two counts: (a) 'hard' is not the default ('smart' is, per enforce_config.py), (b) framing implies blocking is specific to the 'hard' mode/opt-in, when the actual default 'smart' mode already blocks Edit/Write/MultiEdit unconditionally for all task types.",
+      "The SessionStart banner shown verbatim in THIS audit session's own tool-call context (three occurrences) states: 'advise mode \u2014 a ROUTE hint is a suggestion, never a block' / 'Prefer the cheap tool when it fits, else just do the work' \u2014 consistent with rules/chuzom.md's framing, but this framing does not match the actual default PreToolUse enforcement behavior described above. (Note: this specific banner rendering may correspond to a session actually running under an 'advise'-resolved mode for this particular install/profile \u2014 enforce mode is resolvable per-repo/per-user via .chuzom.yml/routing.yaml/env var \u2014 but the GLOBAL rules file and the DEFAULT built-in value are what is shown to and read by every fresh install/session absent an explicit override, and those are what state 'never block'/'smart default is never-blocking', which is false relative to enforce-route.py's own code.)",
+      "DECISIVE CORROBORATION: Docs/configuration.md:35-48 ('## Enforcement Modes' section, the project's OWN linked reference doc, verified accurate by tests/test_chz_aud_012_028.py which scans exactly this file) correctly and unambiguously states: '`smart` (**default**) | Hard-blocks direct answers for Q&A tasks (query/research/generate/analyze) until routed. Allows file tools for code tasks.' and '`hard` | Blocks Bash/Edit/Write for **all** task types until an `llm_*` tool is called.' and reserves the never-blocks language ONLY for `soft`/`advise`/`off`. This is the CORRECT, code-consistent description. It directly proves that rules/chuzom.md's blanket 'no tool is ever blocked' / 'advise mode' framing and session-start.py's `_enforce_label()` dict (labeling smart/hard as 'file/shell tools never blocked') are not just theoretically inconsistent with the enforcer code \u2014 they are inconsistent with this SAME PROJECT'S OWN independently-correct, test-verified documentation of the identical subsystem. Two docs in one repo describing the same default mode reach opposite conclusions about whether it blocks.",
+      "tests/test_enforce_default_consistency.py (existing regression test, run hermetically this audit: `env -i PATH=\"$PATH\" HOME=<isolated tmp dir> .venv/bin/python -m pytest tests/test_enforce_default_consistency.py -v` -> 5 passed) EMPIRICALLY confirms, via actual execution with no CHUZOM_ENFORCE env var and no routing.yaml/repo config present, that `enforce_config.resolve_enforce_mode(cwd=tmp_path, home=tmp_path) == \"smart\"` and `repo_config.RepoConfig().effective_enforce() == \"smart\"` \u2014 i.e. 'smart' is proven to be the real resolved default for a fresh install, not merely asserted by reading DEFAULT_ENFORCE in isolation. This test's own docstring documents a PRIOR incarnation of a closely related bug (F01: 'the effective out-of-box default was soft... routing was advisory-only') that was fixed by synchronizing the MODE NAME across enforce_config/repo_config/enforce-route.py \u2014 but the fix did not extend to synchronizing the HUMAN-READABLE DESCRIPTIONS of what that mode does (session-start.py's _enforce_label(), rules/chuzom.md), which is the gap this finding (D-05) identifies.",
+      "tests/test_chz_aud_012_028.py:106-135 contains a properly-scoped, passing test (`test_readme_enforcement_modes_note_advisory_nature`) that only asserts the Docs/configuration.md Enforcement Modes section mentions that soft/advise/suggest never block \u2014 it does NOT assert anything about smart/hard, and does NOT read rules/chuzom.md or session-start.py's _enforce_label() output at all. No test in the suite cross-checks rules/chuzom.md or _enforce_label() against Docs/configuration.md's ground truth, so this finding's contradiction has zero regression coverage (see companion test-quality note below)."
+    ],
+    "reproduction": [
+      "1. `diff src/chuzom/rules/chuzom.md ~/.claude/rules/chuzom.md` -> no output (identical).",
+      "2. `grep -n 'DEFAULT_ENFORCE' src/chuzom/enforce_config.py` -> `DEFAULT_ENFORCE = \"smart\"`.",
+      "3. `sed -n '1178,1199p' src/chuzom/hooks/enforce-route.py` -> shows Edit/Write/MultiEdit falling through to violation/blocking handling under 'smart' (the else-branch used whenever `enforce != \"hard\"`, which includes the default).",
+      "4. `sed -n '204,226p' src/chuzom/hooks/session-start.py` -> shows the '(honest \u2014 no hardcoding)'-labeled function describing 'smart' and 'hard' as 'file/shell tools never blocked', and 'soft' as '\u2014 default'.",
+      "5. Cross-reference against rules/chuzom.md's own title line: 'advise mode: route everywhere, never block'.",
+      "6. Cross-reference against `sed -n '35,48p' Docs/configuration.md` -> the project's OWN correct table stating smart 'Hard-blocks direct answers' and hard 'Blocks Bash/Edit/Write for all task types'.",
+      "7. EMPIRICAL: `env -i PATH=\"$PATH\" HOME=<hermetic tmp dir> .venv/bin/python -m pytest tests/test_enforce_default_consistency.py -v` -> `5 passed` (executed this audit pass), proving 'smart' really is the out-of-box resolved default, not merely a code-reading inference.",
+      "A live PreToolUse-hook-deny repro (actually invoking Edit/Write under a fresh CHUZOM_ENFORCE-unset session and confirming a JSON permissionDecision:deny/exit-code-2 fires) was NOT executed in this audit pass \u2014 the exact deny-emission mechanism (exit code vs. stdout JSON) was not pinned down before time ran out. This narrow point remains UNABLE TO VERIFY via live hook invocation; the default-mode-resolves-to-smart fact IS empirically verified (item 7), and the branch logic that falls through to violation/blocking handling for Edit/Write/MultiEdit under smart is directly cited from source (item 3), so overall confidence remains HIGH despite this one narrow gap."
+    ],
+    "expected": "A rules file and SessionStart banner that are read by the LLM as authoritative operating instructions every session should accurately describe the actual default runtime enforcement behavior of the same product, especially on the specific dimension (blocking vs. advisory) that most affects how an agent should behave and how a security auditor should reason about whether 'nothing is ever blocked' is a safe assumption.",
+    "actual": "The rules file (byte-identical to what's installed and shown to the LLM) and one of the two SessionStart banner code paths describe the product as pure advise-mode / never-blocking, while the actual default enforcement mode ('smart', confirmed via the project's own declared single source of truth) genuinely blocks generative tool calls (Edit/Write/MultiEdit, and non-readonly Bash) until a routed llm_* tool has been called, with real violation tracking and auto-pivot/escalation machinery. A second banner-generation function that explicitly claims to be 'honest \u2014 no hardcoding' independently mislabels both the default mode and the blocking behavior of 'smart'/'hard' modes.",
+    "impact": "An LLM agent (including this very audit) that trusts the rules file's 'no tool is ever blocked' framing may mischaracterize the product's actual behavior in its own reasoning or in a claims-verification deliverable, understating a real, user-facing friction/behavior-shaping mechanism. More broadly, a user reading the installed rules file or the SessionStart banner text would reasonably conclude routing hints are always advisory, when in fact \u2014 under the shipped default \u2014 declining to route before editing a file can result in the edit being denied by the PreToolUse hook. This is a product-trust/claims-accuracy issue (Phase 15) rather than a data-exposure issue (Phase 13), but it directly matches the audit brief's explicit instruction to flag any claim implying guaranteed (or in this case, the inverse: guaranteed non-)enforcement that doesn't match actual code behavior.",
+    "root_cause": "The codebase appears to be mid-migration: comments in enforce-route.py (e.g. line 68-70, session-start.py's 'After P0, no mode blocks file/shell tools' docstring) suggest a deliberate effort to remove/soften blocking behavior happened at some point, but it was incompletely applied \u2014 the module docstrings, the rules/chuzom.md advisory text, and the SessionStart banner were updated/written to describe the POST-fix (never-blocking) state, while the actual decision logic in the 'smart'-mode branch (the real default) and the 'hard'-mode docstring still implement/describe genuine blocking. The two halves of the same file (and the cross-file rules/banner text) were not kept in sync.",
+    "recommended_fix": "1) Make enforce_config.py's DEFAULT_ENFORCE, rules/chuzom.md's framing, and session-start.py's _enforce_label() dict agree on ONE ground truth by having rules/chuzom.md dynamically render its 'advise mode' framing FROM resolve_enforce_mode() at install/session-start time (the way the banner already claims to, per its own docstring) rather than hardcoding static advisory language that can drift from the enforcer's real branch logic. 2) Fix the _enforce_label() dict so 'smart' and 'hard' descriptions accurately state that Edit/Write/MultiEdit ARE blocked until routed. 3) Fix the '\u2014 default' label to point at 'smart', not 'soft'. 4) Fix tools/setup.py's install-completion message to state the correct default mode and correct blocking scope. 5) Add an automated consistency test that renders both the rules-file advisory text and the _enforce_label() output for each of off/shadow/advise/soft/smart/hard/strict and asserts they do not contain contradictory 'never blocks' vs 'blocks' language for the same resolved mode.",
+    "regression_test": "tests/test_enforce_route_labels_match_behavior.py (new) \u2014 for each mode in {smart, hard, strict}, call resolve_enforce_mode() with that env var set, then assert _enforce_label()'s returned string does NOT contain 'never blocked' if enforce-route.py's actual branch for that mode falls through to violation/blocking handling for Edit/Write/MultiEdit (can be asserted by directly invoking enforce-route's decision function with a fake hook_input and checking for a deny/violation outcome vs. sys.exit(0)).",
+    "_track": "D"
+  },
+  {
+    "id": "CHZ-AUD-A-04",
+    "title": "Malformed/unparseable stdin JSON causes a full silent bypass of auto-route.py, even when zero-Claude/strict enforcement is explicitly configured",
+    "severity": "MEDIUM-HIGH",
+    "confidence": "HIGH (execution-confirmed)",
+    "component": "src/chuzom/hooks/auto-route.py (main(), stdin JSON parsing, ~lines 2661-2665)",
+    "claim_affected": "\"Every eligible prompt is intercepted\" / guaranteed interception under strict/zero-Claude configuration",
+    "evidence": [
+      "main()'s stdin-JSON-parse failure path calls sys.exit(0) immediately, before _zero_claude_enabled() (or any zero-Claude gate) is ever evaluated.",
+      "Executed reproduction (auto_route_hook_harness.py, cell skip_malformed_json_input): stdin bytes 'NOT VALID JSON {{{' sent to the real hook subprocess with CHUZOM_ZERO_CLAUDE=1 and CHUZOM_ENFORCE=hard explicitly set. Result: completely empty stdout, rc=0 \u2014 no block, no advisory, nothing."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/auto_route_hook_harness.py",
+      "Inspect auto_route_hook_results.json entry label=skip_malformed_json_input: env includes CHUZOM_ZERO_CLAUDE:1, stdout_raw is empty, decision_field is null."
+    ],
+    "expected": "Under an operator's explicit zero-Claude/strict configuration, a malformed stdin payload should fail closed (block with a diagnostic reason) rather than silently allowing Claude to proceed unrouted.",
+    "actual": "The hook exits 0 with no output whatsoever, before the zero-Claude gate is reached, effectively letting Claude answer the turn completely unrouted and unintercepted.",
+    "impact": "This is a genuine, execution-proven gap in any 'guaranteed interception' claim. Any condition that produces malformed stdin JSON (a Claude Code version skew, a hook-contract change, a transport glitch) bypasses routing entirely, silently, and cannot be prevented by any hook-level configuration since the check happens ahead of the configuration read.",
+    "root_cause": "The JSON-parse try/except is structured as an early-return fast-fail, ordered before the enforcement-mode/zero-Claude configuration is loaded and consulted.",
+    "recommended_fix": "Reorder main() so the zero-Claude/strict configuration is read before or independently of JSON parsing; on a parse failure under zero-Claude, emit a fail-closed block decision (as already done for other zero-Claude fail-closed paths) instead of a silent sys.exit(0).",
+    "regression_test": "Add a permanent test: send malformed stdin JSON to the hook subprocess with CHUZOM_ZERO_CLAUDE=1, assert non-empty stdout with a block decision, not empty output.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-A-02",
+    "title": "agent_session_id is not threaded into the ledger's session_id column, causing get_session_accounting(agent_session_id) to silently return empty accounting",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed + execution-confirmed)",
+    "component": "src/chuzom/router.py (route_and_call signature), src/chuzom/execution_ledger.py (get_session_accounting)",
+    "claim_affected": "API contract of route_and_call(agent_session_id=...) / per-session cost & savings accounting",
+    "evidence": [
+      "route_and_call(agent_session_id=...) uses agent_session_id solely for agent-specific routing-policy lookup, not for the ledger's session_id column.",
+      "The ledger's session_id column is populated from CHUZOM_SESSION_ID env var or an auto-generated correlation_id \u2014 independent of whatever value is passed as agent_session_id.",
+      "Executed reproduction (failure_ledger_probe.py): route_and_call(..., agent_session_id=\"audit-a-failure-probe-session\") is called; ledger.get_session_accounting(\"audit-a-failure-probe-session\") is then queried directly and returns an empty/zeroed Accounting object despite real, billable activity having occurred during that call."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/failure_ledger_probe.py",
+      "Inspect printed 'get_route_accounting / get_session_accounting' section: session accounting for the exact agent_session_id string passed in is empty."
+    ],
+    "expected": "get_session_accounting(agent_session_id) reflects the cost/savings/attempt activity of calls made with that agent_session_id, since that is the only session-scoped identifier callers of route_and_call actually control.",
+    "actual": "get_session_accounting(agent_session_id) always returns empty accounting unless the caller separately, coincidentally, also set CHUZOM_SESSION_ID to the same value.",
+    "impact": "Any caller/integration that expects per-agent-session cost tracking via the documented agent_session_id parameter silently gets zeroed-out accounting with no error or warning \u2014 a correctness trap that could cause cost/savings reporting to under-report for entire integrations without any visible failure.",
+    "root_cause": "Two independent session identifiers exist (agent_session_id, used for routing-policy lookup; CHUZOM_SESSION_ID/correlation_id, used for ledger session_id) and were never reconciled or documented as distinct.",
+    "recommended_fix": "Either thread agent_session_id into the ledger's session_id field when provided (with CHUZOM_SESSION_ID as fallback/override), or rename/document the two identifiers clearly and raise a warning/error if get_session_accounting is called with a value that was never used as a ledger session_id.",
+    "regression_test": "Add a test that calls route_and_call with an explicit agent_session_id, then asserts get_session_accounting(that_same_id) reflects non-zero attempt_count/cost.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-A-05",
+    "title": "PreToolUse-based enforcement (enforce-route.py) cannot intercept a prose-only answer, under any enforcement mode including hard \u2014 structural limitation",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed)",
+    "component": "src/chuzom/hooks/enforce-route.py (PreToolUse hook trigger mechanism)",
+    "claim_affected": "\"Hard enforcement\" guaranteeing routing compliance for Q&A/query-type prompts",
+    "evidence": [
+      "enforce-route.py is registered as a PreToolUse hook: it only executes when Claude actually invokes a tool.",
+      "A plain-text response to a query/research/generate/analyze prompt requires zero tool calls; if Claude answers directly in prose, no PreToolUse hook fires at all, regardless of enforce mode.",
+      "This holds even in 'hard' mode, where the tool-blocking logic (see CHZ-AUD-A-06 for the exact blocklist) only ever activates in response to an attempted tool call."
+    ],
+    "reproduction": [
+      "Source-level: read src/chuzom/hooks/enforce-route.py's hook registration / trigger contract (PreToolUse) alongside its dispatch logic at lines ~1092-1330; no code path exists for a hook of this type to fire without an associated tool_name in the incoming payload."
+    ],
+    "expected": "N/A \u2014 this is a structural property of the PreToolUse hook type, not necessarily a bug, but it directly limits what 'hard enforcement' can actually guarantee.",
+    "actual": "Hard enforcement can force a choice between routing first or being blocked on Bash/Edit/Write/MultiEdit/NotebookEdit \u2014 but cannot force routing before Claude answers a question in prose, since prose requires no blockable tool call.",
+    "impact": "Any claim that 'hard mode' guarantees every eligible query is routed through Chuzom is false for the common case of a prompt Claude can answer directly from its own knowledge without touching a tool. The enforcement is real for tool-mediated work, illusory for pure Q&A.",
+    "root_cause": "PreToolUse is inherently a tool-call-triggered hook type; there is no complementary mechanism (e.g. a post-response or pre-final-answer hook) that inspects prose-only turns for routing compliance.",
+    "recommended_fix": "If prose-only Q&A routing compliance is a goal, it must be enforced at the UserPromptSubmit layer (auto-route.py) with zero-Claude semantics (see CHZ-AUD-A-03), not at PreToolUse \u2014 PreToolUse-based enforcement should be documented as scoped to tool-mediated actions only.",
+    "regression_test": "N/A (documentation/design-scope finding, not a code defect with a natural regression test); could add an integration test asserting no PreToolUse hook invocation occurs for a prose-only Claude turn.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-A-06",
+    "title": "Hard-mode Directive Injection banner falsely claims Edit/Write/Bash 'stay allowed', when enforce-route.py actually blocks them outright for all task types including Q&A",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed, exact banner text pulled verbatim from executed harness output)",
+    "component": "src/chuzom/hooks/auto-route.py (hard-mode Directive Injection banner text), src/chuzom/hooks/enforce-route.py (lines 92-96 _block_tools_for, lines 1092-1330 hard-mode dispatch)",
+    "claim_affected": "Self-description accuracy of the hard-mode banner shown to Claude in-context",
+    "evidence": [
+      "Verbatim banner text (from executed cell hard_direct0_normal in auto_route_hook_results.json): \"File reads and implementation tools (Edit/Write/Bash) stay allowed \u2014 only the route-first step is enforced, and only for the blocklisted tools for query.\"",
+      "enforce-route.py lines 92-96: _BASE_BLOCK_TOOLS = frozenset({\"Bash\",\"Edit\",\"MultiEdit\",\"Write\",\"NotebookEdit\"}); _block_tools_for(task_type) returns _BASE_BLOCK_TOOLS | _QA_ONLY_BLOCK_TOOLS (the latter is an empty frozenset) for QA task types, and _BASE_BLOCK_TOOLS otherwise \u2014 i.e. the same 5 tools are blocked regardless of task type.",
+      "enforce-route.py lines ~1167-1177 (hard-mode dispatch): 'if tool_name in (_BASE_BLOCK_TOOLS | _QA_ONLY_BLOCK_TOOLS | {\"Edit\",\"Write\",\"MultiEdit\"}): pass  # falls through to BLOCK' \u2014 Bash/Edit/MultiEdit/Write/NotebookEdit are blocked unconditionally in hard mode for every task type.",
+      "Lines ~1146-1165: the read-only-Bash escape valve is explicitly gated 'if not _strict and task_type not in _QA_TASK_TYPES:' \u2014 meaning for query/research/generate/analyze tasks, even read-only Bash commands are NOT exempted and fall into the block path."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/auto_route_hook_harness.py",
+      "Inspect auto_route_hook_results.json cell hard_direct0_normal for the exact banner text.",
+      "Read src/chuzom/hooks/enforce-route.py lines 92-96 and 1092-1330 to confirm the actual blocklist/dispatch logic contradicts the banner."
+    ],
+    "expected": "The banner text should accurately describe what the paired PreToolUse hook (enforce-route.py) will actually do in hard mode.",
+    "actual": "The banner claims Edit/Write/Bash 'stay allowed'; the code blocks exactly those tools (plus MultiEdit/NotebookEdit) outright, for all task types including Q&A, with no read-only-Bash exemption for QA tasks.",
+    "impact": "This is a self-description/trust-accuracy bug shown directly in Claude's context. Practically, real enforcement is STRICTER than advertised (not weaker), so it is not itself a routing-guarantee hole \u2014 but it means any agent or operator reasoning about what hard mode permits, based on the in-context banner text, will be materially wrong, which can cause confusing failures (Claude attempts a Bash/Edit/Write call believing it 'stays allowed' and is unexpectedly blocked).",
+    "root_cause": "The banner text in auto-route.py and the actual blocklist logic in enforce-route.py were evidently authored/updated independently and drifted out of sync.",
+    "recommended_fix": "Update the hard-mode banner string in auto-route.py to accurately state that Bash/Edit/Write/MultiEdit/NotebookEdit are blocked pending a routing tool call, and that only Read/Glob/Grep/LS remain unconditionally allowed.",
+    "regression_test": "Add a test asserting the banner text and the enforce-route.py _BASE_BLOCK_TOOLS/_block_tools_for set are derived from (or cross-checked against) a single shared source of truth, so future drift fails CI.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-B-01",
+    "title": "Durable keyword-relevance context fallback is structurally dead code \u2014 caller_context is never wired to the live prompt by any real caller",
+    "severity": "Medium",
+    "confidence": "Confirmed",
+    "component": "chuzom/session_store.py:build_session_context() (query_words path), chuzom/context.py:build_context_messages() (caller_context param), chuzom/router.py (route_and_call/route_and_stream caller_context passthrough)",
+    "claim_affected": "Chuzom preserves conversational context across turns within a session, including facts from earlier in the conversation",
+    "evidence": [
+      "session_store.py:463-518 build_session_context(): keeps the 3 newest durable events unconditionally, plus any OLDER event only if task_type matches OR `query_words & _keywords(rec['content'])` is non-empty; query_words is built from the `query` kwarg only, and is an empty set whenever query is None/empty (line 493: `query_words = _keywords(query) if query else set()`).",
+      "context.py:495-500: build_context_messages() calls `session_store.build_session_context(resolved_sid, ..., query=caller_context, ...)` \u2014 the ONLY place `query` is ever populated, and it is populated exclusively from the `caller_context` parameter, never from the live user prompt/task text.",
+      "grep across the entire src/chuzom package: `caller_context` is referenced ONLY inside context.py and router.py. No MCP tool-definition, CLI entry point, or server-facing call site (llm_query/llm_analyze/llm_code/llm_research/llm_act/etc.) ever supplies a value for it \u2014 router.py's `route_and_call(..., caller_context: str | None = None, ...)` signature defaults it to None for every real invocation.",
+      "Live execution proof (audit/scripts/phase7_cross_provider.py + phase7b_buffer_eviction_and_restart.py): turn 1 states a secret (\"The secret code is ORANGE-742\") via ollama; 4 unrelated filler turns follow (fresh process, fresh SessionBuffer, same session_id/project via durable store only); a final turn that shares the keyword \"code\" with the original message and asks \"what was that secret code again?\" does NOT surface ORANGE-742 in the outgoing payload (`orange_742_present_in_final_payload: false` in the phase7b JSON output) despite the durable JSONL still containing the original record and the query literally sharing the keyword \"code\" \u2014 because build_context_messages() never passed the live prompt text as `query`, so `query_words` was always empty and the keyword-overlap branch could never activate."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7_cross_provider.py  # writes 3 turns (incl. 'ORANGE-742') to a fresh hermetic HOME, prints tmp_home path",
+      ".venv/bin/python audit/scripts/phase7b_buffer_eviction_and_restart.py <tmp_home_from_previous_step>  # fresh process, 4 filler turns, then a final turn asking about the secret using the shared keyword 'code'",
+      "Inspect the printed `orange_742_present_in_final_payload` field \u2014 it is false."
+    ],
+    "expected": "The durable session_store's keyword-relevance fallback should resurface an older, contextually relevant record (sharing a keyword with the current query) once it has aged out of the '3 most recent' unconditional window, per the documented design in build_session_context()'s own docstring.",
+    "actual": "The fallback never activates in any real invocation because the `query` parameter it depends on is only ever populated from `caller_context`, which no real caller (MCP tool surface, CLI, router internals) ever sets to the live prompt text.",
+    "impact": "Silent fact-loss in any conversation longer than ~3-4 exchanges once a fact ages out of the unconditional recency window, even when the current question shares an exact keyword with the earlier fact and the underlying data is still present on disk. This is a functional/quality gap, not a security leak \u2014 no data crosses an isolation boundary, it is simply not retrieved for the user who owns it.",
+    "root_cause": "build_context_messages()'s `caller_context` parameter was designed as an explicit MCP-caller-supplied string, but router.py's `route_and_call()`/`route_and_stream()` never default it to the actual task prompt before invoking build_context_messages() at any of their internal call sites (router.py:1594-1595, 4173-4174, 4486). The keyword-relevance code path in session_store.py is fully implemented and correct in isolation, but structurally unreachable in every live code path.",
+    "recommended_fix": "At the router.py call sites of build_context_messages() (router.py ~1594, ~4173), pass `caller_context=caller_context or prompt` (or, more precisely, always pass the live task prompt as an additional/explicit `query=` value threaded through to build_session_context(), decoupled from the caller_context concept) so the keyword-relevance fallback can actually engage using the current turn's text.",
+    "regression_test": "Automated version of the phase7 + phase7b reproduction above, asserting `orange_742_present_in_final_payload == True` after the fix, run in a hermetic HOME with mocked providers.",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-B-03",
+    "title": "Secret-scrubbing regexes only match key=value/key: value assignment syntax \u2014 prose-phrased secrets bypass redaction entirely",
+    "severity": "Medium",
+    "confidence": "Confirmed",
+    "component": "chuzom/secret_scrubber.py:SECRET_PATTERNS/scrub_text(), chuzom/session_store.py:_SECRET_PATTERNS/_scrub_secrets()",
+    "claim_affected": "session_store.py's own docstring/comment: 'Credential patterns scrubbed from event content before it is persisted' (line 70-73)",
+    "evidence": [
+      "secret_scrubber.py:13-38 SECRET_PATTERNS: vendor-prefix patterns (sk-ant-, sk-/sk-proj-, AIza..., AKIA..., gh[pousr]_...) match regardless of surrounding syntax, but the generic categories ('api_key', 'token', 'password', 'secret') are ALL anchored on an explicit `[:=]` separator, e.g. `secret[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s:;,]+[\"']?` (line 32) and `password[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s:;,]+[\"']?` (line 31) \u2014 both REQUIRE a literal ':' or '=' between the keyword and the value.",
+      "session_store.py:74-83 _SECRET_PATTERNS (the local fallback layer) is similarly syntax-anchored: `_(?:API_)?KEY\\s*[=:]\\s*\\S+`, `Bearer\\s+...`, vendor prefixes, and a PEM block matcher \u2014 none of it matches natural-language phrasing.",
+      "Live execution (phase8_leakage_and_failopen.py): the prompt \"Project ALPHA secret is PURPLE-999. Remember it.\" \u2014 phrased as prose (\"secret is X\", not \"secret: X\" or \"secret=X\") \u2014 was persisted and re-surfaced completely unredacted; \"PURPLE-999\" appears verbatim in a later payload with no [REDACTED] substitution anywhere."
+    ],
+    "reproduction": [
+      ".venv/bin/python audit/scripts/phase8_leakage_and_failopen.py  # 'PURPLE-999' appears unredacted in cross_project_same_session_id.project_beta_payload"
+    ],
+    "expected": "A credential/secret-scrubbing pass intended to protect sensitive values before durable persistence should catch commonly-phrased secret disclosures, not only rigid key=value assignment syntax.",
+    "actual": "Only key=value/key: value-style assignments and known vendor token prefixes are redacted; any secret stated in prose (\"the secret is X\", \"my password is X\", \"remember this code: <newline> X\") passes through unmodified into the durable, indefinitely-retained plaintext store (see CHZ-AUD-B-02) and can be replayed to external providers in later turns.",
+    "root_cause": "All four generic SECRET_PATTERNS categories in secret_scrubber.py, and all of session_store.py's local _SECRET_PATTERNS, are built around a `[:=]` separator requirement; none use an NLP/heuristic value-adjacent-to-keyword approach that would catch prose phrasing.",
+    "recommended_fix": "Either broaden the generic patterns to also match common prose connectors (\"is\", \"was\", \"=\") between a sensitive keyword and a plausible token-shaped value, or \u2014 more robustly \u2014 treat the scrubber as necessarily incomplete and prioritize CHZ-AUD-B-02's retention/consent recommendations instead of relying on scrubbing as the primary safeguard.",
+    "regression_test": "Unit test feeding `_scrub_secrets(\"the api key is abc123def456ghi789\")` (prose form) and asserting it currently is NOT redacted (documents the gap); after a fix, assert it IS redacted.",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-B-07",
+    "title": "Streaming context injection call is a synchronous positional call against an async keyword-only function \u2014 always raises TypeError (dead code)",
+    "severity": "Medium",
+    "confidence": "Confirmed",
+    "component": "chuzom/router.py:route_and_stream() (~line 4486), chuzom/context.py:build_context_messages()",
+    "claim_affected": "That the streaming route (route_and_stream) also benefits from context injection like the non-streaming route_and_call() does",
+    "evidence": [
+      "router.py line 4486: `messages=build_context_messages(prompt, system_prompt, caller_context)` \u2014 build_context_messages() is declared `async def build_context_messages(*, caller_context=None, ...)` (context.py line 390), i.e. keyword-only arguments and a coroutine function; the call at 4486 passes three POSITIONAL arguments and is not awaited.",
+      "Live execution (phase7c_streaming_context_bug.py) against route_and_stream() with a monkeypatched providers.call_llm_stream_events, forcing model_override so routing reaches the context-injection call site: raised `TypeError` at that call, confirmed via the script's captured `error_type`/`traceback` output (positional-argument-against-keyword-only-signature error, exactly as predicted from the source alone)."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7c_streaming_context_bug.py",
+      "Inspect the printed JSON `error_type`/`traceback` \u2014 shows a TypeError raised from the build_context_messages(...) call inside route_and_stream()."
+    ],
+    "expected": "route_and_stream() should call `await build_context_messages(caller_context=caller_context, ...)` (or equivalent correct async/keyword usage) so streaming calls receive the same context injection as non-streaming calls.",
+    "actual": "The call raises TypeError immediately whenever this code path is reached, meaning context injection (and, depending on exception handling further up the call stack, potentially the entire streaming call) fails.",
+    "impact": "No live-entry-point impact: `route_and_stream()` was confirmed pre-compaction to be unreachable from any current CLI command, MCP tool, or dashboard invocation \u2014 this is dead code today. It is flagged as Medium rather than Low because it represents a latent landmine that would immediately break in production the moment any future feature wires a live caller to route_and_stream(), and because it demonstrates the streaming path has not been exercised/tested in a way that would have caught this.",
+    "root_cause": "Apparent copy/paste or incomplete refactor: build_context_messages() was made async and keyword-only (matching its usage in route_and_call()) without updating this one remaining call site in route_and_stream().",
+    "recommended_fix": "Change router.py:4486 to `messages = await build_context_messages(caller_context=caller_context, session_id=session_id, target_provider=target_provider, ...)` matching the pattern used in route_and_call(); add a test that actually exercises route_and_stream() end-to-end so this class of bug is caught by CI.",
+    "regression_test": "Automated version of phase7c_streaming_context_bug.py, asserting no TypeError is raised and that events are yielded successfully, run in CI once/if route_and_stream() becomes reachable from a live entry point.",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-C-03",
+    "title": "Router's output-length gate rejects short responses and silently double-dispatches via 'BUDGET emergency fallback' with no caller-visible signal",
+    "severity": "MEDIUM",
+    "confidence": "MEDIUM (source-class-confirmed; directly observed only in test-harness iteration, not independently reproduced against production traffic this segment)",
+    "component": "src/chuzom/router.py (post-dispatch response-length gate, shared 'BUDGET emergency fallback' path also used by CHZ-AUD-C-02)",
+    "claim_affected": "A single route_and_call() invocation results in at most one underlying model dispatch per attempted model in its chain, and any response substitution is either an explicit error or clearly attributable in the response.",
+    "evidence": [
+      "soak_driver.py docstring (lines 12-17), itself written from a direct empirical observation while developing the soak harness: the first run of soak_smoke.py, before its fake response content was lengthened to pass the router's minimum output-length check, produced 10 _call_text invocations for 5 iterations (a 2x ratio) -- i.e. a response shorter than the length floor is rejected post-dispatch and triggers a second, silent dispatch via the same 'BUDGET emergency fallback' path used by CHZ-AUD-C-02, without raising to the caller.",
+      "soak_smoke.py's fake_call_text was subsequently fixed to return a >=20-char content string specifically to avoid this gate, and the corrected version produces exactly 1 invocation per iteration (confirmed both in soak_smoke.py's 5-iteration run and soak_driver.py's 5418-iteration full soak: fake_call_text_invocations=5418 == N exactly)."
+    ],
+    "reproduction": [
+      "Not independently re-executed against a fresh short-content fake this segment (the finding is preserved from the harness-development record rather than freshly re-run). To reproduce: revert soak_smoke.py's fake_call_text content to a string under the router's length floor and re-run; compare _call_count to iteration count."
+    ],
+    "expected": "A single route_and_call() invocation results in exactly one dispatch per model actually needed, and any automatic quality-driven re-dispatch is either surfaced to the caller or at minimum distinguishable via response metadata.",
+    "actual": "A response shorter than the router's minimum output-length floor triggers a second, silent dispatch through the same emergency-fallback mechanism used by the quality-feedback skip (CHZ-AUD-C-02), invisible to the caller beyond the final substituted response.",
+    "impact": "Same class of caller-invisible substitution as CHZ-AUD-C-02, triggered by a different gate (raw response length rather than rolling quality average); also means short-but-correct responses (e.g. 'OK', a valid single-word answer) can trigger an unnecessary second, slower/costlier dispatch -- a concern independently flagged in the router's own source comments near the escalation logic ('escalating a short-but-correct answer... into a slow reasoning model').",
+    "root_cause": "The output-length gate and the quality-feedback skip both funnel into the same undifferentiated 'BUDGET emergency fallback' path with no caller-visible distinction between 'the requested model failed/was unavailable' and 'the requested model succeeded but was judged too short/low-quality after the fact.'",
+    "recommended_fix": "Surface which gate triggered a fallback (length vs. quality vs. availability) in response metadata or structured logs at a level the caller can act on; consider allow-listing legitimately short valid responses (e.g. yes/no, single-token) via a task-type-aware minimum-length threshold rather than a fixed floor.",
+    "regression_test": "Unit test: monkeypatch _call_text to return a response just under the length floor for a task_type where short answers are valid (e.g. a yes/no classification task); assert the router either accepts it without a second dispatch, or clearly flags the substitution to the caller.",
+    "_track": "C"
+  },
+  {
+    "id": "CHZ-AUD-C-04",
+    "title": "chuzom verify's hook health check covers only 3 of the 13 hooks actually installed by install_hooks.py",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (source-confirmed, fresh read this segment)",
+    "component": "src/chuzom/commands/verify.py (check_hooks), src/chuzom/install_hooks.py",
+    "claim_affected": "`chuzom verify` accurately reports the health of the installed hook set (especially meaningful now that CHZ-PKG-005's exit-code propagation fix makes verify's pass/fail result load-bearing for CI/install gates).",
+    "evidence": [
+      "src/chuzom/commands/verify.py lines 158-183: check_hooks() hardcodes hook_names = ['chuzom-auto-route.py', 'chuzom-session-end.py', 'chuzom-enforce-route.py'] -- exactly 3 entries.",
+      "src/chuzom/install_hooks.py, hook manifest tuples around lines 309-350: install at least 13 distinct hooks, including chuzom-session-start.py, chuzom-status-bar.py (and/or chuzom-status-bar-clawcode.py), chuzom-agent-route.py, chuzom-subagent-start.py, chuzom-usage-refresh.py, chuzom-cc-usage-track.py, chuzom-agent-depth-release.py, chuzom-playwright-compress.py, chuzom-bash-compress.py, chuzom-context-capture.py, in addition to the 3 that verify.py does check.",
+      "10 of the 13 installed hooks (session-start, status-bar, agent-route, subagent-start, usage-refresh, cc-usage-track, agent-depth-release, playwright-compress, bash-compress, context-capture) are never checked by check_hooks() at all -- a missing, corrupted, or non-executable copy of any of these 10 is invisible to `chuzom verify`, silent or not."
+    ],
+    "reproduction": [
+      "grep -n 'hook_names' /Users/yaliandrona/Projects/Chuzom/src/chuzom/commands/verify.py",
+      "grep -n 'chuzom-.*\\.py' /Users/yaliandrona/Projects/Chuzom/src/chuzom/install_hooks.py | sort -u"
+    ],
+    "expected": "chuzom verify's hook check enumerates (or otherwise validates coverage against) the same set of hooks that install_hooks.py actually installs.",
+    "actual": "check_hooks() checks a fixed list of 3 hook filenames, a strict subset of the 13 the installer deploys; 10 installed hooks have no corresponding health check.",
+    "impact": "Now that CHZ-PKG-005 (verify's exit-code discard) is fixed and `chuzom verify`'s exit code is meaningfully used by CI/install gates, a correct exit code is only as trustworthy as the completeness of the checks behind it -- a broken/missing install of ~77% of the actually-installed hooks (10/13) would still report a clean/passing verify result.",
+    "root_cause": "check_hooks()'s hook_names list was hardcoded at some point and not kept in sync with install_hooks.py's manifest as new hooks were added.",
+    "recommended_fix": "Derive check_hooks()'s expected hook list from the same source of truth as install_hooks.py (e.g. a shared constant/manifest) instead of a separately hardcoded literal, so new hooks are automatically covered by verify.",
+    "regression_test": "Add a test asserting set(verify.check_hooks.__globals__['hook_names']) (or the refactored equivalent) is a superset of every hook filename referenced in install_hooks.py's install manifests, failing the build if a new hook is added to the installer without a corresponding verify check.",
+    "_track": "C"
+  },
+  {
+    "id": "CHZ-AUD-D-02",
+    "title": "Inconsistent SQLite file-permission hardening across the codebase's local databases (usage.db correctly 0600'd at creation; result_cache.db is not)",
+    "severity": "MEDIUM",
+    "confidence": "HIGH (empirically proven for both files)",
+    "component": "src/chuzom/cost.py, src/chuzom/result_cache.py",
+    "claim_affected": "None explicit in README; this is an internal consistency/defense-in-depth gap surfaced while investigating CHZ-AUD-D-01.",
+    "evidence": [
+      "src/chuzom/cost.py:528-553 `_get_db()`: `if not config.chuzom_db_path.exists(): config.chuzom_db_path.touch(mode=0o600)` BEFORE `aiosqlite.connect(...)` \u2014 correct atomic hardening, with an explicit comment 'Secure file before creation (stores sensitive cost/token data)'.",
+      "src/chuzom/result_cache.py:114-123 `_ensure_db()`: `sqlite3.connect(str(db_path), timeout=5)` with no equivalent touch/chmod call.",
+      "Empirical: os.stat() on a freshly created result_cache.db under a hermetic HOME returned mode 0o644 (see CHZ-AUD-D-01 repro steps 3-4)."
+    ],
+    "reproduction": [
+      "Same as CHZ-AUD-D-01 steps 1-4."
+    ],
+    "expected": "All SQLite databases under ~/.chuzom/ that may contain sensitive content (prompts, responses, cost/usage data) should be created with 0600 permissions consistently.",
+    "actual": "usage.db (shared, includes semantic_cache table) is 0600'd correctly; result_cache.db is left at the process umask default (0644 observed).",
+    "impact": "On a shared/multi-user machine, any local user can read cached prompts/responses from result_cache.db (compounding CHZ-AUD-D-01's raw-persistence issue). Lower severity than D-01 standalone since it's a permission gap rather than the primary data-exposure issue, but directly widens D-01's blast radius.",
+    "root_cause": "The 0600-hardening pattern implemented once in cost.py::_get_db() was not extracted into a shared helper and reused by result_cache.py::_ensure_db(), so the two DB-creation code paths diverged.",
+    "recommended_fix": "Extract a shared `_secure_touch(path)` helper (or reuse cost.py's pattern directly) and call it from result_cache.py::_ensure_db() before the first sqlite3.connect(). Audit any other `.db`-creating module for the same gap (not exhaustively checked in this audit pass).",
+    "regression_test": "tests/test_result_cache.py::test_db_file_created_0600 (see CHZ-AUD-D-01's regression_test entry).",
+    "_track": "D"
+  },
+  {
+    "id": "CHZ-AUD-B-06",
+    "title": "usage.db project_id resolution is entirely independent from and inconsistent with the durable session_store's project scoping",
+    "severity": "Low",
+    "confidence": "Confirmed",
+    "component": "chuzom/team.py:get_project_id(), chuzom/cost.py:_get_team_identity()/log_usage() (INSERT INTO usage ... project_id), chuzom/session_store.py:_project_id()",
+    "claim_affected": "Consistency of 'project' as a scoping/filtering concept across chuzom's different persisted stores (usage.db supports filtering usage/cost reports by project_id, per cost.py line ~2901-2934)",
+    "evidence": [
+      "cost.py:643-659, 697: `log_usage()` calls `_get_team_identity()` which imports and calls `chuzom.team.get_project_id()` to populate the `usage.project_id` column on every INSERT INTO usage (cost.py line ~718-734).",
+      "team.py:53-71 `get_project_id()`: resolves project identity via (1) `git remote get-url origin`, normalized via regex to `owner/repo` form, or (2) falling back to `os.path.basename(os.getcwd())` if no git remote is found. It does NOT read `$CHUZOM_PROJECT_ID` at all.",
+      "session_store.py's `_project_id()` (the function that scopes the durable Session Context Accumulator, established pre-compaction) resolves via `$CHUZOM_PROJECT_ID` env var (sanitized, truncated to 64 chars) first, falling back to `sha1(cwd)[:16]` only if that env var is unset \u2014 a completely different precedence order and a completely different value space (e.g. 'project-alpha' vs. 'Chuzom/Chuzom') from team.get_project_id().",
+      "Observed empirically (pre-compaction, re-confirmed by this source read): `usage.db`'s recorded `project_id` value was `'Chuzom/Chuzom'` (matching this repo's `git remote get-url origin` \u2192 owner/repo normalization) regardless of any `$CHUZOM_PROJECT_ID` value set for a given call, while session_store.py's on-disk directory structure DID correctly follow `$CHUZOM_PROJECT_ID`."
+    ],
+    "reproduction": [
+      "grep -n 'def get_project_id' /Users/yaliandrona/Projects/Chuzom/src/chuzom/team.py  # shows git-remote/cwd-basename resolution, no env var read",
+      "grep -n 'def _project_id' /Users/yaliandrona/Projects/Chuzom/src/chuzom/session_store.py  # shows $CHUZOM_PROJECT_ID-first resolution",
+      "Set CHUZOM_PROJECT_ID=some-custom-id, run any routed call, then compare the resulting usage.db row's project_id column (will show the git-remote-derived value, ignoring the env var) against the session_context_*.jsonl file's parent directory name (will correctly show 'some-custom-id')."
+    ],
+    "expected": "A single, consistent project-identity resolution function used by every store that persists a `project_id` field, so that filtering/reporting by project (e.g. cost.py's `get_usage(project_id=...)` at line 2901) actually lines up with the same project boundaries the context-isolation layer (session_store.py) enforces.",
+    "actual": "Two independent, differently-precedenced project-identity resolvers exist in the codebase: `chuzom.team.get_project_id()` (git-remote/cwd-basename based, used by usage.db) and `chuzom.session_store._project_id()` ($CHUZOM_PROJECT_ID-env-based, used by the Session Context Accumulator). Setting `$CHUZOM_PROJECT_ID` to scope/separate context does not affect which 'project' a given call's cost is attributed to in usage.db.",
+    "impact": "Cost/usage reporting filtered by project_id (cost.py's project_id parameter) will not correctly separate spend for use cases that rely on `$CHUZOM_PROJECT_ID` for logical project separation (e.g. multiple logical projects sharing one git repo/cwd, or automation setting a custom project id) \u2014 a reporting/attribution accuracy issue, not a content-security leak, since usage.db does not store prompt/response content, only cost/token/model metadata.",
+    "root_cause": "Two separate project-identity concepts were implemented independently at different times/for different subsystems (team/billing attribution vs. session-context isolation) without being unified into one shared resolver.",
+    "recommended_fix": "Either make `chuzom.team.get_project_id()` check `$CHUZOM_PROJECT_ID` first (mirroring session_store.py's precedence) before falling back to git-remote/cwd-basename, or clearly document that these are two intentionally-different concepts (billing/team project vs. context-isolation project) with different names to avoid the implied consistency.",
+    "regression_test": "Set CHUZOM_PROJECT_ID to a custom value, make a routed call, assert the usage.db row's project_id equals the custom value (currently fails \u2014 shows git-remote-derived value instead).",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-B-08",
+    "title": "Uncaught ValueError ('Unknown media task type') causes streaming QUERY calls to hard-fail after chain exhaustion",
+    "severity": "Low",
+    "confidence": "Confirmed",
+    "component": "chuzom/router.py:route_and_stream()",
+    "claim_affected": "Fail-open / graceful-degradation behavior for the streaming route, analogous to route_and_call()'s emergency BUDGET fallback",
+    "evidence": [
+      "Live execution (phase7c_streaming_context_bug.py): after route_and_stream() exhausts its candidate chain (or fails earlier, e.g. due to CHZ-AUD-B-07's TypeError depending on exception ordering), a subsequent code path raises an uncaught `ValueError: Unknown media task type` rather than degrading gracefully or falling back the way route_and_call()'s emergency BUDGET path does."
+    ],
+    "reproduction": [
+      "cd /Users/yaliandrona/Projects/Chuzom && .venv/bin/python audit/scripts/phase7c_streaming_context_bug.py  # traceback field shows the ValueError"
+    ],
+    "expected": "Streaming QUERY-type calls should either succeed via a fallback path or fail with an error message describing the actual problem, not a generic/misleading 'Unknown media task type' error unrelated to the task type actually being routed (QUERY).",
+    "actual": "An uncaught ValueError with a message that does not match the actual failure condition (task type IS known \u2014 it's TaskType.QUERY) propagates to the caller.",
+    "impact": "Same dead-code caveat as CHZ-AUD-B-07 \u2014 route_and_stream() is unreachable from any current live entry point, so there is no current user-facing impact. Documented for completeness and because it compounds CHZ-AUD-B-07: the streaming path has at least two independent, never-exercised bugs stacked on top of each other.",
+    "root_cause": "Not fully traced within this audit's remaining scope \u2014 likely a media/task-type dispatch branch in route_and_stream() that was written assuming a different task-type enumeration or an internal media-specific streaming helper that QUERY-type calls should never reach in the first place.",
+    "recommended_fix": "Trace the exact raise site (not completed in this audit pass) and either fix the dispatch condition so QUERY-type streaming calls don't hit the media-only branch, or fix CHZ-AUD-B-07 first and re-test, since the two bugs may be masking each other's exact behavior.",
+    "regression_test": "Same as CHZ-AUD-B-07's regression test \u2014 once that TypeError is fixed, re-run and confirm whether this ValueError still reproduces; add a targeted test either way.",
+    "_track": "B"
+  },
+  {
+    "id": "CHZ-AUD-C-05",
+    "title": "IDE workspace-config writers (mcp.json, KIMI.md, .github) resolve paths via Path.cwd(), risking writes into the real Chuzom repo checkout",
+    "severity": "LOW",
+    "confidence": "HIGH (source-confirmed, fresh grep this segment)",
+    "component": "src/chuzom/cli.py",
+    "claim_affected": "chuzom install/setup writes IDE integration files only into the intended target project, not into whatever directory the command happens to be run from.",
+    "evidence": [
+      "grep -n 'Path.cwd()' src/chuzom/cli.py (fresh this segment): line 233 (.vscode/mcp.json), line 245 (.github), line 406 (.windsurf/mcp.json), line 418 (.github), line 463 (.kimi/mcp.json), line 475 (KIMI.md) -- six distinct writers all resolving relative to the process's current working directory rather than an explicit target-path argument."
+    ],
+    "reproduction": [
+      "grep -n 'Path.cwd()' /Users/yaliandrona/Projects/Chuzom/src/chuzom/cli.py",
+      "(Not executed against the real repo to avoid mutating it, per hermeticity constraints -- the risk is demonstrated by direct source inspection, not by reproducing the mutation.)"
+    ],
+    "expected": "IDE workspace-config writers operate against an explicitly specified or safely-detected target project directory, independent of the invoking shell's current working directory.",
+    "actual": "All six writers use Path.cwd() directly; running an install/setup subcommand while cd'd into the actual Chuzom repo checkout (a realistic scenario for a Chuzom contributor, or any user who cd's into a git repo before installing) will read/write .vscode/mcp.json, .windsurf/mcp.json, .kimi/mcp.json, .github/, and KIMI.md inside that real repo/project rather than a sandboxed or explicitly-chosen location.",
+    "impact": "A developer working inside the Chuzom repo itself (or any other git checkout) who runs an install/setup command without first cd'ing elsewhere risks unintended, uncommitted modifications to real project files -- low severity because it requires the operator to be inside a specific directory at invocation time, but the failure mode (silent file writes into version-controlled project files) is the kind of thing that produces confusing diffs and accidental commits.",
+    "root_cause": "Path.cwd() is used directly at each of the 6 call sites instead of threading through an explicit target-directory parameter validated/confirmed against user intent.",
+    "recommended_fix": "Require an explicit --target/--project-dir argument (or interactively confirm the resolved cwd-based path with the user before writing) for all workspace-config-writing subcommands; consider warning/refusing when cwd itself looks like the Chuzom project's own source checkout.",
+    "regression_test": "Test that invoking the relevant install/setup subcommand with cwd pointed at a throwaway tmp dir writes files only under that tmp dir, and add an assertion/guard test that cwd resolution is never silently used when a target path is available from configuration or arguments.",
+    "_track": "C"
+  },
+  {
+    "id": "CHZ-AUD-D-03",
+    "title": "'Audited' / RELEASE_QUALIFIED badge and language in README scope-limited to cost/quality benchmarking, not security/privacy \u2014 readers may reasonably over-infer security coverage",
+    "severity": "LOW",
+    "confidence": "MEDIUM (documentation-interpretation finding, not a code defect)",
+    "component": "README.md",
+    "claim_affected": "README.md:26 badge '[Audited](Docs/correctness-reset/03_RELEASE_GATES.md) \u2014 audit-RELEASE_QUALIFIED'; README.md:46 'and now independently audited'; README.md:169-183 '\ud83d\udcca Measured Results (audited)' section.",
+    "evidence": [
+      "README.md:169-183: the entire 'audited' claim is explicitly and correctly scoped to a 'control-group benchmark' measuring net cash savings, quality delta (LLM-judge score), and exhaustions \u2014 a cost/quality benchmark, not a security review. The prose itself is honest about this scope ('Chuzom v1.0.0 is the first release where the savings claim is backed by a real, reproducible control-group benchmark').",
+      "README.md:26: the shields.io badge text is simply 'audit: RELEASE_QUALIFIED' with no scope qualifier visible in the badge itself (only in the linked doc/section), which is where a skimming reader could over-generalize 'audited' to mean 'security-audited' or 'reviewed for safety', when CHZ-AUD-D-01 shows a live, untested-by-the-existing-suite, by-default-active secret-persistence gap exists in the same v1.0.0 release this badge describes.",
+      "No security-specific audit claim (e.g. 'security reviewed', 'no known vulnerabilities') was found anywhere in README.md, pyproject.toml, or CLI help text during this pass \u2014 so this is NOT a false claim, only a badge/wording ambiguity risk."
+    ],
+    "reproduction": [
+      "N/A \u2014 documentation review, not a runtime repro."
+    ],
+    "expected": "A badge/heading using the word 'audit' in a security-adjacent codebase (LLM router handling API keys, prompts, and responses) would ideally disambiguate 'cost/quality audit' from 'security audit' at the point of first mention (badge alt-text or immediately adjacent heading), especially given CHZ-AUD-D-01's finding that no such security audit has in fact closed the raw-secret-persistence gap.",
+    "actual": "The word 'audit'/'audited' appears in a badge and heading without a scope qualifier at first glance; the correct scope (cost/quality only) is only clear after reading the linked section/doc.",
+    "impact": "Low \u2014 this is a wording/perception risk, not a functional or security defect in the router itself. Classified MISLEADING-BY-OMISSION rather than FALSE: the underlying claim (cost/quality benchmark passed release gates) is itself well-evidenced and honestly hedged in the body text (see CLAIMS_VERIFICATION.md).",
+    "root_cause": "Single word 'audit' used for two different audit types (cost/quality vs. security) across the project without badge-level disambiguation.",
+    "recommended_fix": "Rename the badge to something like 'benchmark: RELEASE_QUALIFIED' or add alt-text/tooltip clarifying 'cost & quality benchmark, see docs' to avoid conflation with a security audit, particularly once CHZ-AUD-D-01 is fixed and a real security-audit claim (if ever made) would need its own distinct badge.",
+    "regression_test": "N/A (documentation change, not code).",
+    "_track": "D"
+  },
+  {
+    "id": "CHZ-AUD-A-07",
+    "title": "POSITIVE: semantic-cache hits are honestly disclosed via a cache/ model-tag prefix rather than misattributed to the originating provider",
+    "severity": "INFO/POSITIVE",
+    "confidence": "HIGH (execution-confirmed)",
+    "component": "src/chuzom/router.py / semantic cache layer",
+    "claim_affected": "Telemetry honesty for cached responses",
+    "evidence": [
+      "Canary harness (canary_results.json), whitespace-category prompt: recorded_model=\"cache/ollama/qwen3:32b\", recorded_provider=\"cache\", content contains PROVIDER_OLLAMA_CANARY (the originally-cached provider's canary), elapsed_ms=46.8 (consistent with a cache hit, not a live call).",
+      "The router records provider as \"cache\", not \"ollama\", even though the content originated from an ollama call in an earlier prompt \u2014 an honest disclosure rather than a silent misattribution."
+    ],
+    "reproduction": [
+      "/Users/yaliandrona/Projects/Chuzom/.venv/bin/python /private/tmp/claude-501/-Users-yaliandrona-ai-job-search/07b9d5d1-cd6c-4aa8-a4db-b3cbb522c19a/scratchpad/canary_harness.py",
+      "Inspect canary_results.json for the row with canary_matches_recorded_provider=false; recorded_provider is \"cache\", not a false ollama/other claim."
+    ],
+    "expected": "N/A \u2014 positive finding.",
+    "actual": "N/A \u2014 positive finding, telemetry behaves correctly here.",
+    "impact": "None (positive). Included to document that the one apparent 'mismatch' surfaced by the canary harness is not a misattribution bug \u2014 it strengthens confidence in telemetry honesty for the cache-hit case specifically.",
+    "root_cause": "N/A",
+    "recommended_fix": "None required. Consider surfacing this cache/ prefix convention explicitly in any user-facing savings/attribution documentation, since it is a good practice worth calling out.",
+    "regression_test": "Add an assertion to the canary harness (or a pytest version) that any recorded_provider==\"cache\" row is never counted as a wrong-provider/misattribution case in aggregate wrong-provider-rate metrics.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-A-08",
+    "title": "UNABLE TO VERIFY: the Claude Code CLI subprocess dispatch path (run_claude / claude_offload) was never actually exercised by either audit harness",
+    "severity": "INFO/UNABLE TO VERIFY",
+    "confidence": "N/A \u2014 explicitly not executed",
+    "component": "src/chuzom/router.py (claude-CLI-subprocess dispatch path, gated by claude_offload_available)",
+    "claim_affected": "Behavior/reliability of the CLI-subprocess dispatch path specifically (as distinct from the litellm/API Anthropic path, which IS canary-covered)",
+    "evidence": [
+      "The canary harness patches chuzom.providers.litellm.acompletion (and the codex/gemini-cli broker paths) but does not patch or otherwise intercept the claude-CLI-subprocess code path.",
+      "None of the 48 canary-harness prompts, nor the failure_ledger_probe.py run, triggered claude_offload_available=True / the CLI-subprocess dispatch branch (claude_offload_available was explicitly patched to False in failure_ledger_probe.py to keep that run deterministic).",
+      "5/48 canary prompts recorded provider=anthropic, but this is confirmed to be the litellm/API dispatch path (Anthropic API key path), not the CLI-subprocess path \u2014 the canary content and call_log entries are consistent with an API call, not a subprocess invocation."
+    ],
+    "reproduction": [
+      "N/A \u2014 explicitly not executed this audit. Would require a separate harness that sets claude_offload_available=True and patches subprocess.run/Popen (or the specific CLI-invocation function) to return a canary, then drives prompts that would select that dispatch branch."
+    ],
+    "expected": "N/A",
+    "actual": "N/A \u2014 no executed evidence either way for this specific dispatch path.",
+    "impact": "Any audit conclusion about routing-execution guarantees should explicitly exclude the CLI-subprocess dispatch path from its scope of proof; claims about that path's correctness/reliability remain unverified by this audit and should not be assumed to share the same guarantees demonstrated for the litellm/API path.",
+    "root_cause": "N/A \u2014 scope/time boundary of this audit's harnesses, not a code defect.",
+    "recommended_fix": "Build a dedicated canary harness for the claude-CLI-subprocess dispatch path (patch the subprocess invocation to return a unique PROVIDER_CLAUDE_CLI_CANARY) as a follow-up audit item.",
+    "regression_test": "N/A pending the follow-up harness described above.",
+    "_track": "A"
+  },
+  {
+    "id": "CHZ-AUD-D-04",
+    "title": "Existing result_cache.py / semantic_cache.py test suites assert only functional correctness (dedup, TTL windows, FTS search, cosine-similarity math, project-scope isolation) and never assert on secret-handling or file-permission behavior",
+    "severity": "MEDIUM (test-quality gap directly enabling CHZ-AUD-D-01 to ship undetected)",
+    "confidence": "HIGH",
+    "component": "tests/test_result_cache.py, tests/test_semantic_cache.py, tests/test_st004_semantic_cache_project_scope.py",
+    "claim_affected": "N/A \u2014 this is a Phase 3 test-quality finding, cross-referenced from CHZ-AUD-D-01.",
+    "evidence": [
+      "tests/test_result_cache.py (244 lines): classes TestStoreResult, TestSearchResults, TestCheckDedup, TestFormatContext, TestSanitizeFtsQuery, TestClearCache \u2014 grep for 'secret|redact|scrub|chmod|0o600|permission|mode' returns zero substantive matches (only incidental 'model_used=' parameter names).",
+      "tests/test_semantic_cache.py (306 lines): tests cover cosine-similarity math (identical/orthogonal/zero vectors), embedding-fetch error handling, threshold config, cache-hit fields/footer formatting \u2014 same zero-match result for secret/redact/chmod/permission terms.",
+      "tests/test_st004_semantic_cache_project_scope.py (94 lines) covers the documented CHZ-ST-004 cross-project-leak fix (project_scope column) but not raw-content redaction or file permissions.",
+      "This means the exact vulnerability class proven in CHZ-AUD-D-01 (raw secret persistence + 0644 permissions) had zero test coverage prior to this audit, despite both modules having substantial, actively-maintained test suites (550+ lines combined) that exercise many other behaviors of the same store()/store_result() functions where the fix would need to be asserted."
+    ],
+    "reproduction": [
+      "grep -n \"secret|redact|scrub|chmod|0o600|permission\" tests/test_result_cache.py tests/test_semantic_cache.py -> no matches (run 2026-07-30)."
+    ],
+    "expected": "A cache module whose explicit purpose is storing every routed prompt/response for future retrieval should have at least one test asserting that stored content does not retain obvious secret patterns unredacted, and one asserting the on-disk file is not world-readable.",
+    "actual": "No such tests exist in either suite.",
+    "impact": "The gap in CHZ-AUD-D-01 could ship in every release without any CI signal, since the test suites that most directly exercise the vulnerable code paths never look at the dimension that matters (content sensitivity / file permissions) \u2014 they only look at retrieval correctness.",
+    "root_cause": "Test suites were evidently written to validate the caches' functional contract (dedup, ranking, TTL, project isolation) as those features were built/fixed (e.g. CHZ-ST-004), but security-relevant properties of the same write path were never added as a first-class test dimension.",
+    "recommended_fix": "See CHZ-AUD-D-01's regression_test entries \u2014 add explicit redaction and file-permission assertions to both suites.",
+    "regression_test": "See CHZ-AUD-D-01.",
+    "_track": "D"
+  }
+]

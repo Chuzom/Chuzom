@@ -23,6 +23,7 @@ from chuzom.profiles import complexity_to_profile
 from chuzom.provider_budget import get_provider_budgets, rank_external_models
 from chuzom.router import route_and_call
 from chuzom.statusline_hud import record_routing_decision
+from chuzom.tools.text import _read_hook_route_directive
 from chuzom.types import (
     ClassificationResult, Complexity, QualityMode,
     RoutingProfile, RoutingRecommendation, TaskType, _budget_bar,
@@ -381,6 +382,7 @@ async def llm_route(
         "was_downshifted": rec.was_downshifted,
         "budget_pct_used": budget_pct,
         "quality_mode": q_mode.value if hasattr(q_mode, "value") else str(q_mode),
+        "classifier_cost_usd": classification.classifier_cost_usd,
     }
 
     # Step 4: Route and call
@@ -393,6 +395,7 @@ async def llm_route(
         caller_context=context,
         ctx=ctx,
         classification_data=_classification_data,
+        route_directive_id=_read_hook_route_directive(),
     )
 
     # Record routing decision for HUD visibility. Supply the task-aware Claude
@@ -566,6 +569,7 @@ async def llm_auto(
         "was_downshifted": False,
         "budget_pct_used": budget_pct,
         "quality_mode": q_mode.value if hasattr(q_mode, "value") else str(q_mode),
+        "classifier_cost_usd": classification.classifier_cost_usd,
     }
 
     resp = await route_and_call(
@@ -575,6 +579,7 @@ async def llm_auto(
         caller_context=context,
         ctx=ctx,
         classification_data=_classification_data,
+        route_directive_id=_read_hook_route_directive(),
     )
 
     total_cost = classification.classifier_cost_usd + resp.cost_usd

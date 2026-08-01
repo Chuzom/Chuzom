@@ -45,6 +45,7 @@ Usage:
     chuzom stats [--period recent] — show combined download stats (llm-routing + claude-code-chuzom)
     chuzom verify                — end-to-end health check (30 seconds)
     chuzom gc [--ttl-days N] [--apply] — sweep stale session shards from ~/.chuzom (dry-run by default)
+    chuzom soak [--use-gold-complexity] [--full] [--out PATH] — replay the realized-savings soak corpus and write soak/report.json
 """
 
 from __future__ import annotations
@@ -190,7 +191,7 @@ then relay the routed result to the user. Do NOT generate your own answer first.
 | Deep reasoning, proofs, root cause | `llm_reason` |
 
 Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable
-model (Ollama → Flash → GPT-4o-mini → Claude), saving 60–90% of premium quota.
+model (Ollama → Flash → GPT-4o-mini → Claude), conserving premium quota.
 """
 
 
@@ -453,7 +454,7 @@ def _install_kimi_files() -> list[str]:
             "chuzom",
             {"command": "chuzom", "args": [], "description": (
                 "Chuzom smart LLM router — routes tasks to the cheapest capable model. "
-                "Call before answering to save 60–90% of token cost."
+                "Call before answering to route to a cheaper capable model."
             )},
             root_key="mcpServers",
         )
@@ -492,7 +493,7 @@ Call the relevant tool BEFORE generating your own answer — relay the routed re
 | Prose, docs, email | `llm_generate` |
 | Deep reasoning, proofs, root cause | `llm_reason` |
 
-Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable model, saving 60–90%.
+Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable model.
 """
     if kimi_md.exists():
         content = kimi_md.read_text()
@@ -927,8 +928,12 @@ def main() -> None:
         from chuzom.commands.replay import main as _replay_main
         _replay_main(args[1:])
     elif args and args[0] == "verify":
+        # CHZ-PKG-005: propagate verify's exit code. main() returns 1 when any
+        # health check fails; discarding it made `chuzom verify` always exit 0,
+        # so a CI/install gate keying on the exit code treated a broken install
+        # as healthy.
         from chuzom.commands.verify import main as _verify_main
-        _verify_main(args[1:])
+        sys.exit(_verify_main(args[1:]))
     elif args and args[0] == "audit":
         from chuzom.commands.audit import main as _audit_main
         sys.exit(_audit_main(args[1:]))
@@ -938,6 +943,9 @@ def main() -> None:
     elif args and args[0] == "gc":
         from chuzom.commands.gc import main as _gc_main
         sys.exit(_gc_main(args[1:]))
+    elif args and args[0] == "soak":
+        from chuzom.commands.soak import cmd_soak
+        sys.exit(cmd_soak(args[1:]))
     elif args and args[0] == "retrospect":
         from chuzom.commands.retrospect import main as _retrospect_main
         _retrospect_main(args[1:])
