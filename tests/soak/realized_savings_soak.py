@@ -21,6 +21,7 @@ honest, non-fabricated figure, not that the figure is large or "good".
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
@@ -60,8 +61,8 @@ def test_corpus_is_valid_and_secret_free_before_soaking():
     assert errors == [], f"corpus failed validation: {errors}"
 
 
-@pytest.fixture
-def soak_report(temp_db, monkeypatch):
+@pytest.fixture(scope="session")
+def soak_report(tmp_path_factory):
     """Run the full replay+report pipeline DEFAULT_N_SOAK_RUNS times (Phase
     0.2 FIX A) against the committed v1 corpus, hermetically
     (use_gold_complexity=True => no live classifier, and _call_row mocks out
@@ -69,20 +70,61 @@ def soak_report(temp_db, monkeypatch):
     schema. A single run's point estimate is NOT run-to-run reproducible
     (see soak.report.NONDETERMINISM_NOTE) -- the gate below asserts against
     ``conservative_ci_lower`` (the min CI lower bound across all N runs), not
-    any single run's point/ci95. run_soak_n manages its own per-run scratch
-    ledger dirs internally, so no tmp_path wiring is needed here; temp_db
-    still isolates the underlying chuzom usage DB writes from the real one.
-    Session-scoped would be nice, but monkeypatch is function-scoped, and the
-    report build is cheap (small corpus, no real network calls, ~1s/run) --
-    rerunning per-test is fine.
+    any single run's point/ci95.
+
+    SESSION-scoped (CHZ-CI: G7 30s-timeout fix). The report build is ~8s
+    (11 runs * ~0.7s); function scope re-ran it in *every* dependent test's
+    setup (~10x = ~80s of pure setup), and on slower CI a single test's setup
+    tipped past the 30s pytest-timeout -> the whole G7 gate errored. Building
+    once per session keeps N=DEFAULT_N_SOAK_RUNS and every downstream
+    assertion identical while dropping per-test setup to ~0s.
+
+    temp_db is function-scoped and cannot be a dependency of a session-scoped
+    fixture, so its DB/env isolation is replicated here with a session-safe
+    pytest.MonkeyPatch() + tmp_path_factory. run_soak_n manages its own
+    per-run scratch ledger dirs internally, so no tmp_path wiring is needed
+    for the runs themselves; the isolation below only pins the underlying
+    chuzom usage DB away from the real ~/.chuzom so the soak can NEVER write
+    to the production DB.
     """
-    return asyncio.run(
-        run_soak_n(
-            n_runs=DEFAULT_N_SOAK_RUNS,
-            monkeypatch=monkeypatch,
-            use_gold_complexity=True,
+    mp = pytest.MonkeyPatch()
+    db_dir = tmp_path_factory.mktemp("soak_chuzom") / ".chuzom"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    db_path = db_dir / "test_usage.db"
+    mp.setenv("CHUZOM_DB_PATH", str(db_path))
+    mp.setenv("GEMINI_API_KEY", "test-key")
+    mp.setenv("OPENAI_API_KEY", "test-key")
+    mp.setenv("CHUZOM_ALLOW_STUBS", "1")
+
+    # Reset the config singleton so it re-reads the isolated env, then pin the
+    # DB path deterministically (mirrors temp_db / CHZ-AUD-001: pydantic env
+    # binding for chuzom_db_path is ordering-fragile).
+    import chuzom.config as config_module
+
+    config_module._config = None
+    from chuzom.config import get_config
+
+    config = get_config()
+    if str(config.chuzom_db_path) != str(db_path):
+        try:
+            object.__setattr__(config, "chuzom_db_path", db_path)
+        except Exception:
+            config.chuzom_db_path = db_path
+    assert str(config.chuzom_db_path) != str(
+        Path.home() / ".chuzom" / "usage.db"
+    ), f"soak fixture failed to isolate DB; using {config.chuzom_db_path}"
+
+    try:
+        return asyncio.run(
+            run_soak_n(
+                n_runs=DEFAULT_N_SOAK_RUNS,
+                monkeypatch=mp,
+                use_gold_complexity=True,
+            )
         )
-    )
+    finally:
+        mp.undo()
+        config_module._config = None
 
 
 def test_report_has_all_required_keys(soak_report):
