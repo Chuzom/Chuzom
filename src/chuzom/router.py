@@ -1631,11 +1631,20 @@ _LEDGER_SESSION_OVERRIDE: "ContextVar[str]" = ContextVar(
 
 
 def _ledger_session_id(correlation_id: str | None, override: str | None = None) -> str:
-    """Resolve the ledger session_id with CHZ-AUD-A-02 precedence."""
+    """Resolve the ledger session_id with CHZ-AUD-A-02 precedence.
+
+    Phase 0.5 (Edit 5): ``CLAUDE_SESSION_ID`` (the Claude Code host's own
+    session env var) is checked after ``CHUZOM_SESSION_ID`` and before the
+    correlation_id fallback — an independent correctness repair for
+    session/period rollups when the chuzom-specific env var is unset but the
+    host session id is available. Additive; still falls back to
+    correlation_id when neither env var is set.
+    """
     return (
         override
         or _LEDGER_SESSION_OVERRIDE.get()
         or os.environ.get("CHUZOM_SESSION_ID", "")
+        or os.environ.get("CLAUDE_SESSION_ID", "")
         or (correlation_id or "")
     )
 
@@ -1655,6 +1664,7 @@ def _emit_ledger_attempt(
     failed_attempt_cost_usd: float | None = None,
     baseline_equivalent_cost_usd: float | None = None,
     baseline_tokens: int | None = None,
+    ledger_route_id: str | None = None,
 ) -> None:
     """Emit ONE attempt event to the canonical execution ledger (INV-COST-001).
 
@@ -1674,13 +1684,23 @@ def _emit_ledger_attempt(
             un-breaks `potential_savings_usd`).
         baseline_tokens: actual_proxy token count for quota-tokens-saved on
             subscription hosts (Gap 2 — populated starting Step 5).
+        ledger_route_id: Phase 0.5 (Option A sidecar bridge) — when the hook
+            minted a route_directive_id for this turn (threaded down from
+            ``route_and_call``), the BILLABLE-ROW route_id uses that id
+            instead of correlation_id, so it matches the id the adoption row
+            (``enforce-route.py::_record_realization_used``) is keyed on and
+            the execution ledger's route_id join actually fires. None (the
+            default, all non-MCP callers/CLI/tests) falls back to
+            correlation_id — byte-identical to pre-Phase-0.5 behavior.
+            session_id resolution is UNCHANGED (still correlation_id-based
+            via ``_ledger_session_id``) — only route_id switches.
     """
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
         host_mode = "metered" if cost._host_is_metered() else "subscription"
         record_event(LedgerEvent(
             session_id=_ledger_session_id(correlation_id),
-            route_id=correlation_id or "",
+            route_id=ledger_route_id or correlation_id or "",
             event_type=event_type,  # type: ignore[arg-type]
             task_type=task_type.value,
             routing_profile=profile.value,
@@ -2019,6 +2039,7 @@ async def _dispatch_model_loop(
     routing_policy: "AgentRoutingPolicy | None" = None,
     suppress_ledger: bool = False,
     model_override: str | None = None,
+    ledger_route_id: str | None = None,
 ) -> LLMResponse:
     """Execute the main model dispatch loop with primary + emergency fallback chains.
 
@@ -2579,6 +2600,7 @@ async def _dispatch_model_loop(
                         event_type="attempt_rejected", rejected=True,
                         rejection_reason=f"gate_failed:{_fail_summary}",
                         correlation_id=correlation_id,
+                        ledger_route_id=ledger_route_id,
                     )
                     _remember_rejected(response)  # exhaustion floor (lever ①)
                     continue
@@ -2638,6 +2660,7 @@ async def _dispatch_model_loop(
                             event_type="attempt_rejected", rejected=True,
                             rejection_reason=f"low_quality:{_qs.score:.2f}",
                             correlation_id=correlation_id,
+                            ledger_route_id=ledger_route_id,
                         )
                         await _notify(
                             ctx, "info",
@@ -2679,6 +2702,7 @@ async def _dispatch_model_loop(
                 failed_attempt_cost_usd=_failed_attempt_cost,
                 baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd,
                 baseline_tokens=_baseline_tokens,
+                ledger_route_id=ledger_route_id,
             )
             _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
             # P1-7: the token reservation is released in this attempt's finally.
@@ -2860,6 +2884,7 @@ async def _dispatch_model_loop(
                 event_type="attempt_failed",
                 correlation_id=correlation_id,
                 rejection_reason=f"{type(e).__name__}: {e}"[:200],
+                ledger_route_id=ledger_route_id,
             )
             last_error = e
             chain_errors.append((model, f"{type(e).__name__}: {e}"))
@@ -2962,6 +2987,7 @@ async def _dispatch_model_loop(
                         failed_attempt_cost_usd=_failed_attempt_cost,
                         baseline_equivalent_cost_usd=_baseline_equivalent_cost_usd_eb,
                         baseline_tokens=_baseline_tokens_eb,
+                        ledger_route_id=ledger_route_id,
                     )
                     _emit_ledger_terminal(correlation_id, "accepted", route_succeeded=True)
 
@@ -3036,6 +3062,7 @@ async def _dispatch_model_loop(
                         event_type="attempt_failed",
                         correlation_id=correlation_id,
                         rejection_reason=f"{type(e).__name__}: {e}"[:200],
+                        ledger_route_id=ledger_route_id,
                     )
                     last_error = e
                     chain_errors.append((model, f"{type(e).__name__}: {e}"))
@@ -3180,6 +3207,7 @@ async def route_and_call(
     idempotency_key: str | None = None,
     agent_session_id: str | None = None,
     suppress_ledger: bool = False,
+    route_directive_id: str | None = None,
 ) -> LLMResponse:
     """Route a request to the best available model and return the response.
 
@@ -3285,6 +3313,13 @@ async def route_and_call(
     """
     config = get_config()
     correlation_id = uuid4().hex[:8]
+    # Phase 0.5 (Option A sidecar bridge): when the hook minted a directive id
+    # for this turn (threaded down from an MCP door), the BILLABLE-ROW
+    # route_id uses that id so it matches the adoption row's route_id and the
+    # execution ledger's join actually fires. None (all non-MCP callers/CLI/
+    # tests) falls back to correlation_id — byte-identical to pre-0.5 behavior.
+    # session_id resolution is UNCHANGED (still correlation_id-based).
+    _ledger_route_id = route_directive_id or correlation_id
 
     # Tier-1 identity resolution. Done once per turn before any model call
     # so both the cached-hit and cold-fetched return paths share the same
@@ -4119,6 +4154,7 @@ async def route_and_call(
             routing_policy=_routing_policy,
             suppress_ledger=suppress_ledger,
             model_override=model_override,  # CHZ-AUD-C-02: honor explicit pin
+            ledger_route_id=_ledger_route_id,
         )
         # T3-S2 + T3-M1: combined timeout + cancel handling. Both failure
         # modes share the same cleanup contract — release the budget
