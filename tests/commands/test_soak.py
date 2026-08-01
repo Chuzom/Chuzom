@@ -40,7 +40,11 @@ REQUIRED_REPORT_KEYS = {
 def test_cmd_soak_use_gold_complexity_writes_valid_report():
     with tempfile.TemporaryDirectory() as tmp:
         out_path = Path(tmp) / "report.json"
-        rc = cmd_soak(["--use-gold-complexity", "--out", str(out_path)])
+        # --runs 2 keeps this a CLI-wiring test (rc, output path, valid report
+        # schema incl. the min-across-runs aggregation) without running the full
+        # DEFAULT_N_SOAK_RUNS soak inside the 30s pytest-timeout. The statistical
+        # N-run behavior is exercised by tests/soak/realized_savings_soak.py.
+        rc = cmd_soak(["--use-gold-complexity", "--runs", "2", "--out", str(out_path)])
 
         assert rc == 0
         assert out_path.exists()
@@ -86,7 +90,10 @@ def test_cmd_soak_default_output_path_when_out_omitted(monkeypatch, tmp_path):
     default_path = tmp_path / "report.json"
     monkeypatch.setattr(report_mod, "DEFAULT_REPORT_PATH", default_path)
 
-    rc = cmd_soak(["--use-gold-complexity"])
+    # --runs 2: this test only verifies the default-output-path behavior, so it
+    # need not run the full DEFAULT_N_SOAK_RUNS soak (which on a contended CI
+    # runner exceeded the 30s pytest-timeout — same class as the G7 fix).
+    rc = cmd_soak(["--use-gold-complexity", "--runs", "2"])
 
     assert rc == 0
     assert default_path.exists()
