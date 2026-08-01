@@ -5,6 +5,30 @@
 _Nothing yet. Add a bullet here in your PR when you change routing behavior or a
 user-facing surface, then move it under the next version heading at release time._
 
+## v1.1.0 — 2026-08-01 — Honest realized-savings measurement + security/correctness hardening
+
+Independently audited across multiple adversarial review passes. No breaking API changes.
+
+- **Realized-savings ledger (measured, not claimed).** New `execution_events` accounting
+  computes `net_realized_savings_usd` (gross − classifier − failed-attempt − hook overhead) and,
+  for subscription hosts, `realized_quota_tokens_saved` ("Claude tokens not consumed"). Savings
+  are counted **only** for verified-adopted routes; a corroborating `content_match` stays
+  "likely", never "realized". A `chuzom soak --runs N` harness reports a **conservative floor
+  across N runs** (never a single-run point estimate). New `Docs/audit/…` + `Docs/design/VNEXT.md`
+  document the honest scope: today the meter reads a small, defensible positive number; a
+  production `route_id` reconciliation now makes live `chuzom summary` attribute realized savings.
+- **Security / correctness hardening (audit closure).** Plaintext-secret-at-rest sinks now
+  redact + `0600` + TTL-purge; budget-envelope races (cap breach, double-decrement, atomic settle,
+  single release), cross-process concurrency, and a shared-finalization double-spend/ledger-
+  corruption bug are fixed; dashboard unauth token leak (SEC-05), loopback CSRF/DNS-rebind guard
+  (SEC-04), and aiosqlite hang-at-exit (PY-004) resolved. Install/uninstall manifest hardened.
+- **Claude Code conformance.** PreToolUse blocks now emit the current
+  `hookSpecificOutput.permissionDecision:"deny"` alongside the legacy field (no longer reliant on a
+  deprecated shim); UserPromptSubmit context uses the documented `additionalContext`.
+- **Honesty.** Removed unmeasured marketing claims; enforcement-mode messaging (smart/hard/strict
+  banners + labels) corrected to describe what is actually held vs allowed.
+- **Chore.** `requires-python >=3.11` smoke matrix aligned; ruff lint clean.
+
 ## v1.0.1 — 2026-07-29 — Hotfix: MCP server dead-on-arrival on fresh install (CHZ-PKG-003)
 
 - **Fix (critical): pin `mcp>=1.0.0,<2`.** The unbounded `mcp>=1.0.0` resolved to `mcp==2.0.0`

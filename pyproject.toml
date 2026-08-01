@@ -1,6 +1,6 @@
 [project]
 name = "chuzom-router"
-version = "1.0.1"
+version = "1.1.0"
 description = "LLM cost router. On Claude Code a UserPromptSubmit hook intercepts every prompt and can run eligible ones on local/free providers (Ollama, Codex CLI, Gemini CLI) before using Claude quota; on Cursor/Copilot/Windsurf a rules file asks the host model to route (best-effort, not guaranteed). Savings depend on a configured local provider and workload."
 readme = "README.md"
 license = "MIT"
