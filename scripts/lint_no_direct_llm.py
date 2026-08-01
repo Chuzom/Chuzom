@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Enforcement lint — fail if agent code calls an LLM provider directly.
 
-Part 4 of PLAN.md. Scans Python files for direct provider calls (litellm /
+Part 4 of Docs/planning/PLAN.md. Scans Python files for direct provider calls (litellm /
 openai / anthropic / google.generativeai) and FAILS unless they route through
 Chuzom (the gateway URL / chuzom.route) or are explicitly allowlisted with a
 trailing  ``# chuzom: direct-ok``  marker (for the router's own internals and

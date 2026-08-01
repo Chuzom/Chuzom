@@ -173,7 +173,6 @@ exclude = [
     # Internal docs (NEVER ship per CLAUDE.md)
     "Docs/",
     "CLAUDE.md",
-    "NORTH_STAR.md",
     "SECURITY.md",
     "KIMI.md",
     "RELEASE.md",
@@ -181,7 +180,6 @@ exclude = [
     "CHUZOM_AUDIT_REPORT.md",
     "STUCK_PATTERNS_ANALYSIS.md",
     "CHUZOM_ROADMAP.md",
-    "PLAN.md",
     ".audit/",
     "audit_deliverables/",
     # Infrastructure (deployment-only, not needed for pip install)
