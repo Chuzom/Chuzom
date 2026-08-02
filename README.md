@@ -126,7 +126,7 @@ and a mutation-testing bar. Full evidence: [Release Gates][gates] · [Benchmark 
 
 ### Estimated savings by workload
 
-> **Illustrative estimates — directional, not measured.** They apply the *audited* ratio (Chuzom
+> **These are illustrative estimates — directional, not measured.** They apply the *audited* ratio (Chuzom
 > spent **~12% of the always-premium cost at non-inferior quality** → ≈88% avoided) to typical
 > volumes. On a **Claude Pro/Max subscription the value is quota runway**, **not cash** — the money
 > column applies only if you'd otherwise pay per-token at GPT-4o rates.
