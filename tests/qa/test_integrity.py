@@ -25,6 +25,7 @@ from chuzom.lineage import (
     detect_inversion,
     make_record,
 )
+from chuzom.lineage.lineage_store import _connect
 from chuzom.signals.pii import PiiSignal
 
 
@@ -167,6 +168,45 @@ def test_lineage_concurrent_inserts_lose_no_rows(tmp_path: Path):
     # All rows present in DB
     store = LineageStore(db_path=db)
     assert len(store.recent(limit=1000)) == 500
+
+
+def test_lineage_connections_are_configured_for_concurrency(tmp_path: Path):
+    """Guard the fix for 'database is locked' under concurrent writers.
+
+    The test above is timing-dependent — it passed on 3 of 4 CI Python
+    versions while the bug was live — so it cannot by itself protect the fix.
+    This asserts the mechanism directly.
+
+    SQLite serialises writers under every journal mode, so the busy timeout is
+    what decides whether a contending writer queues or raises. Python's default
+    is 5s, and 60 threads x 40 writes measured a 4.41s worst case on a rollback
+    journal: thin enough that a slower CI runner tipped past it. Both pragmas
+    are asserted because they fix different halves — the timeout is what
+    prevents the error, WAL is what keeps the wait short (1.50s for the same
+    workload) and lets readers run alongside the writer.
+    """
+    db = tmp_path / "lineage.db"
+    LineageStore(db_path=db).close()
+
+    # journal_mode persists in the database header, so any connection sees it.
+    plain = sqlite3.connect(db)
+    try:
+        assert plain.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal", (
+            "lineage DB must be in WAL mode so readers don't block the writer"
+        )
+    finally:
+        plain.close()
+
+    # busy_timeout is per-connection — it must be set on every connect the
+    # store makes, which is why they all go through the one helper.
+    conn = _connect(db)
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] >= 30_000, (
+            "every lineage connection needs a busy timeout well above Python's "
+            "5s default, or concurrent writers raise instead of queueing"
+        )
+    finally:
+        conn.close()
 
 
 # ────────────────────────────────────────────────────────────────────────
