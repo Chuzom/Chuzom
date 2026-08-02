@@ -69,7 +69,11 @@ jobs:
           hook = 'src/chuzom/hooks/auto-route.py'
           payload = json.dumps({'prompt': 'What is 2+2?', 'session_id': 'smoke-test'})
           env = {**os.environ, 'CHUZOM_DIRECT_EXECUTION': 'false', 'CHUZOM_DISABLE_LLM_CLASSIFIERS': '1'}
-          r = subprocess.run([sys.executable, hook], input=payload, capture_output=True, text=True, env=env, timeout=10)
+          # 60s, not 10s: a cold Windows runner spends most of the budget just
+          # starting the interpreter and importing the hook. At 10s this step
+          # flaked on windows-latest/py3.13 with TimeoutExpired before the hook
+          # had classified anything. The job's own timeout still catches a hang.
+          r = subprocess.run([sys.executable, hook], input=payload, capture_output=True, text=True, env=env, timeout=60)
           assert r.returncode == 0, f'hook exit {r.returncode}: {r.stderr}'
           output = next((l for l in r.stdout.splitlines() if l.startswith('{')), r.stdout)
           data = json.loads(output)
@@ -90,7 +94,11 @@ jobs:
               'CHUZOM_DIRECT_EXECUTION': 'false',
               'CHUZOM_DISABLE_LLM_CLASSIFIERS': '1',
           }
-          r = subprocess.run([sys.executable, hook], input=payload, capture_output=True, text=True, env=env, timeout=10)
+          # 60s, not 10s: a cold Windows runner spends most of the budget just
+          # starting the interpreter and importing the hook. At 10s this step
+          # flaked on windows-latest/py3.13 with TimeoutExpired before the hook
+          # had classified anything. The job's own timeout still catches a hang.
+          r = subprocess.run([sys.executable, hook], input=payload, capture_output=True, text=True, env=env, timeout=60)
           assert r.returncode == 0, f'hook exit {r.returncode}: {r.stderr}'
           output = next((l for l in r.stdout.splitlines() if l.startswith('{')), r.stdout)
           data = json.loads(output)

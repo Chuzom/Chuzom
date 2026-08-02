@@ -11,6 +11,34 @@ if TYPE_CHECKING:
     from chuzom.lineage.decision_logger import RoutingDecision
 
 
+# Concurrent writers (the agentic router fans out across threads, and each
+# LineageStore opens its own short-lived connection) all contend on one file.
+# SQLite serialises writers under any journal mode, so the thing that decides
+# whether a writer queues or raises "database is locked" is the busy timeout —
+# and Python's default is only 5s. Measured here at 60 threads x 40 writes:
+#
+#   rollback journal : slowest writer 4.41s  -> 1.1x headroom under 5s
+#   WAL              : slowest writer 1.50s  ->  20x headroom under 30s
+#
+# 4.41s against a 5s budget is why a slower CI runner tipped over into
+# sqlite3.OperationalError. Both levers matter: the timeout is what prevents
+# the error, WAL is what keeps the wait short (and lets readers run alongside
+# the writer). Same pattern as budget_backend.py and result_cache.py.
+_BUSY_TIMEOUT_MS = 30_000
+
+
+def _connect(db_file: Path | str) -> sqlite3.Connection:
+    """Open the lineage DB with concurrency-safe pragmas.
+
+    ``journal_mode`` is persisted in the database header, so it only has to win
+    once; ``busy_timeout`` is per-connection and must be set on every connect.
+    """
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+    conn.execute("PRAGMA journal_mode = WAL")
+    return conn
+
+
 class LineageStore:
     """Dual-write storage backend for routing decisions.
 
@@ -92,7 +120,7 @@ class LineageStore:
         Both share the same SQLite file; the constructor's ``router_dir``
         vs ``db_path`` mode just decides where that file lives.
         """
-        conn = sqlite3.connect(self.db_file)
+        conn = _connect(self.db_file)
         try:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS routing_decisions (
@@ -195,7 +223,7 @@ class LineageStore:
             f.write(json.dumps(decision.to_dict()) + "\n")
 
         # Write to SQLite
-        conn = sqlite3.connect(self.db_file)
+        conn = _connect(self.db_file)
         try:
             conn.execute(
                 """
@@ -367,7 +395,7 @@ class LineageStore:
             f.write(json.dumps(payload) + "\n")
 
         # 2) SQLite insert.
-        conn = sqlite3.connect(self.db_file)
+        conn = _connect(self.db_file)
         try:
             conn.execute(
                 """
@@ -541,7 +569,7 @@ class LineageStore:
         Returns:
             List of result rows as dicts
         """
-        conn = sqlite3.connect(self.db_file)
+        conn = _connect(self.db_file)
         conn.row_factory = sqlite3.Row  # Return rows as dicts
         try:
             cursor = conn.execute(sql, params)
