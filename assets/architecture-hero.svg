@@ -202,13 +202,13 @@
   <text x="1125" y="176" text-anchor="middle" class="cap9">model · task · latency</text>
 
   <line x1="1082" y1="188" x2="1168" y2="188" stroke="var(--border2)"/>
-  <text x="1125" y="212" text-anchor="middle" font-size="18" font-weight="700" fill="var(--a2)">60–80%</text>
-  <text x="1125" y="230" text-anchor="middle" class="cap">cheaper</text>
+  <text x="1125" y="212" text-anchor="middle" font-size="18" font-weight="700" fill="var(--a2)">~88%</text>
+  <text x="1125" y="230" text-anchor="middle" class="cap">cost avoided</text>
 
   <line x1="1082" y1="244" x2="1168" y2="244" stroke="var(--border2)"/>
-  <text x="1125" y="268" text-anchor="middle" font-size="18" font-weight="700" fill="var(--a1)">3×</text>
-  <text x="1125" y="286" text-anchor="middle" class="cap">longer</text>
-  <text x="1125" y="302" text-anchor="middle" class="cap">session</text>
+  <text x="1125" y="268" text-anchor="middle" font-size="18" font-weight="700" fill="var(--a1)">0</text>
+  <text x="1125" y="286" text-anchor="middle" class="cap">dropped</text>
+  <text x="1125" y="302" text-anchor="middle" class="cap">answers</text>
 
   <line x1="1082" y1="316" x2="1168" y2="316" stroke="var(--border2)"/>
   <text x="1125" y="336" text-anchor="middle" class="cap9">session summary</text>
