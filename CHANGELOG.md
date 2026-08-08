@@ -47,6 +47,12 @@ indistinguishable in the savings dashboard.
   registered tool list — deliberately not against `tool_surface` itself, since the bug lived
   precisely in the seam between the hook's idea of the surface and the server's. With
   `--live --fresh` it invokes the tool and reports which model answered.
+- **Guard: the lint reaches outside Python.** The CI smoke test asserted
+  `'llm_research' in ctx` and stayed green while the emitted hint was unroutable — the test
+  was encoding the bug, the worst possible place for it to hide, and an AST scan cannot see
+  YAML. The lint now also scans `.github/workflows/*.yml` and `scripts/*.sh` for tool names
+  in assertions or printed output. It found three more in `scripts/install.sh`, whose
+  post-install "Available tools" list named five tools the default tier does not register.
 - **Guard: startup self-check.** The server logs `tool_surface_unroutable` at boot if any
   emittable name fails to resolve under the active tier.
 - **Also fixed:** `enforce-route.py` kept a private 6-entry copy of the legacy→door map — the

@@ -225,6 +225,34 @@ def check_file(path: Path) -> list[str]:
     return problems
 
 
+def check_non_python(path: Path) -> list[str]:
+    """Scan a workflow / shell script for tool names in an ASSERTION or in output.
+
+    The Python AST scan cannot see these. A CI smoke test asserting
+    ``'llm_research' in ctx`` stayed green while the emitted hint was unroutable —
+    the test was encoding the bug, which is the worst possible place for it to hide.
+    Lines that merely mention a name in a comment or a state fixture (where the
+    LOGICAL name is correct) are left alone.
+    """
+    problems: list[str] = []
+    for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("#") or PRAGMA.search(line):
+            continue
+        hit = next((g for g in GUARDED if g in line), None)
+        if hit is None:
+            continue
+        # Assertions and printed/echoed output are the ones that matter.
+        if not any(k in line for k in ("assert", "echo ", "print(", "print ")):
+            continue
+        problems.append(
+            f"{path}:{i}: tool name {hit!r} hardcoded in an assertion or output — "
+            f"resolve it via chuzom.tool_surface.route_tool so it tracks the active "
+            f"CHUZOM_SLIM tier. Line: {stripped[:70]!r}"
+        )
+    return problems
+
+
 def main(argv: list[str]) -> int:
     targets = [Path(a) for a in argv[1:]] or DEFAULT_TARGETS
     files: list[Path] = []
@@ -236,6 +264,16 @@ def main(argv: list[str]) -> int:
         if f.name in EXEMPT or "__pycache__" in f.parts:
             continue
         problems.extend(check_file(f))
+
+    # Workflows and shell scripts, only when scanning the default targets.
+    if len(argv) <= 1:
+        for extra in (REPO / ".github" / "workflows", REPO / "scripts"):
+            if not extra.is_dir():
+                continue
+            for f in sorted(extra.rglob("*")):
+                if f.suffix in (".yml", ".yaml", ".sh") and f.is_file():
+                    problems.extend(check_non_python(f))
+                    files.append(f)
 
     if problems:
         print(f"CHZ-SURF-01: {len(problems)} violation(s)\n")

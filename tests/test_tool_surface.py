@@ -340,3 +340,23 @@ def test_rules_installer_writes_the_localized_text(tmp_path, monkeypatch):
     text = ih._localized_rules_text(src)
     assert 'llm(task="query")' in text
     assert "llm_query" not in text
+
+
+# ── The lint must reach outside Python too ───────────────────────────────────
+
+def test_lint_scans_workflows_and_shell_by_default():
+    """Default run must include .github/workflows and scripts/*.sh."""
+    r = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "lint_tool_surface.py")],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stdout
+    # The count in the summary proves non-.py files were included.
+    import re as _re
+    m = _re.search(r"clean \((\d+) files checked\)", r.stdout)
+    assert m, r.stdout
+    py_only = len(list((REPO / "src" / "chuzom").rglob("*.py")))
+    assert int(m.group(1)) > py_only, (
+        f"only {m.group(1)} files checked vs {py_only} python files — "
+        "workflows/shell scripts are not being scanned"
+    )

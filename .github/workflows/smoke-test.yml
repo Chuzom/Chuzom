@@ -82,7 +82,7 @@ jobs:
           print(f'hook classified OK: decision={decision}')
           PY
 
-      - name: Verify research routes to llm_research (not Ollama)
+      - name: Verify a research prompt routes to the research tool (not Ollama)
         shell: bash
         run: |
           python - <<'PY'
@@ -103,8 +103,14 @@ jobs:
           output = next((l for l in r.stdout.splitlines() if l.startswith('{')), r.stdout)
           data = json.loads(output)
           ctx = (data.get('hookSpecificOutput') or {}).get('additionalContext', '')
-          assert 'llm_research' in ctx, f'research prompt did not route to llm_research. ctx={ctx[:200]}'
-          print('research → llm_research ✓')
+          # CHZ-SURF-01: assert the tool registered under the ACTIVE tier. The
+          # shipping default is `consolidated`, where the research tool is
+          # llm(task="research") — asserting the raw legacy literal is what let
+          # this smoke test stay green while the emitted hint was unroutable.
+          from chuzom.tool_surface import route_tool
+          expected = route_tool('llm_research')
+          assert expected in ctx, f'research prompt did not route to {expected}. ctx={ctx[:200]}'
+          print(f'research → {expected} ✓')
           PY
 
       - name: Verify sync chain_builder returns empty for research
