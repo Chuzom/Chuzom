@@ -1837,30 +1837,13 @@ def main() -> None:
             daily_14d_data = report_data.get("daily_14d", [])
             daily_costs = [d[3] for d in daily_14d_data] if daily_14d_data else []
 
-            # If still empty, build from cumulative savings (always available)
-            if not daily_costs and cumulative:
-                # Find "today's" savings and use as reference point
-                today_saved = 0.0
-                for label, _, _, _, saved_usd in cumulative:
-                    # Try multiple label variations (case-insensitive)
-                    if label == "today" or label.lower().startswith("today"):
-                        today_saved = saved_usd
-                        break
-                    # Fallback: use first non-zero savings if "today" not found
-                    if saved_usd > 0 and today_saved == 0.0:
-                        today_saved = saved_usd
-
-                # Create 7-day trend using today's value
-                if today_saved > 0.0001:  # Use small threshold to avoid floating point 0
-                    daily_costs = [
-                        today_saved * 0.3,   # 7 days ago
-                        today_saved * 0.35,  # 6 days ago
-                        today_saved * 0.4,   # 5 days ago
-                        today_saved * 0.45,  # 4 days ago
-                        today_saved * 0.5,   # 3 days ago
-                        today_saved * 0.6,   # 2 days ago
-                        today_saved,         # today
-                    ]
+            # NOTE: this used to synthesise a 7-day history when the query
+            # returned nothing, by scaling today's figure by invented ratios
+            # (0.3, 0.35, 0.4, ...). That is fabricated data presented as a
+            # measurement, and it is the one thing a savings report must never
+            # do — a chart of made-up numbers is worse than an empty chart,
+            # because an empty chart is honest about what is known. When there
+            # is no daily data, show none.
 
             total_saved = sum(daily_costs) if daily_costs else 0.0
 

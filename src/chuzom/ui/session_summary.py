@@ -372,11 +372,16 @@ class SessionSummaryDashboard:
         # ── Right: savings summary ───────────────────────────────────────────
         def _savings_entry(usd: float, tokens: int, label: str,
                            style: str) -> list[RenderableType]:
+            # Label FIRST. At this panel width a trailing label wraps to the next
+            # line, and a reader then pairs it with the value below — so lifetime,
+            # today and 14-day were each being read as the wrong figure. Leading
+            # with the label means an overflow pushes the token count down instead,
+            # which cannot be mistaken for a different metric.
             tok_part = f"  {_fmt_tok(tokens)} tok" if tokens > 0 else ""
             return [Text.assemble(
-                (f"  {_fmt_usd(usd):<8}", style),
+                (f"  {label:<9}", PALETTE.text_dim),
+                (f"{_fmt_usd(usd):<10}", style),
                 (tok_part, PALETTE.text_dim),
-                (f"  {label}", PALETTE.text_dim),
             )]
 
         right_lines: list[RenderableType] = [
@@ -767,7 +772,7 @@ class SessionSummaryDashboard:
         lines.append(
             Text(
                 f"  {total_calls:,} calls · {_fmt_tok(total_tokens)} tok · "
-                f"{_fmt_usd(total_saved)} lifetime",
+                f"{_fmt_usd(total_saved)} over {n} days",
                 style=PALETTE.text_primary,
             )
         )
