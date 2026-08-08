@@ -65,7 +65,8 @@ def test_explanatory_prompt_same_task_type_stays_text_only(tmp_path):
     out = json.loads(r.stdout)
     assert out["decision"] == "block"
     assert "llm_act" not in out["reason"], f"explanation must not be routed to llm_act: {out['reason']!r}"
-    assert "call llm\n" in out["reason"]
+    # CHZ-SURF-01: the text-only door, carrying the task the pending state set.
+    assert 'call llm(task="code")' in out["reason"]
 
 
 def test_calling_llm_act_clears_the_execution_lock(tmp_path):

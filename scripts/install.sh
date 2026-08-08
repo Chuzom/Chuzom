@@ -192,12 +192,25 @@ echo ""
 echo "Done! Restart Claude Code to load the LLM Router MCP server."
 echo ""
 echo "Available tools after restart:"
-echo "  llm_query     — General questions (auto-routed)"
-echo "  llm_research  — Search-augmented (Perplexity)"
-echo "  llm_generate  — Content creation (Gemini/GPT)"
-echo "  llm_analyze   — Deep analysis (GPT/o3)"
-echo "  llm_code      — Coding tasks (GPT/Gemini)"
-echo "  llm_set_profile — Switch budget/balanced/premium"
-echo "  llm_usage     — View cost & token stats"
-echo "  llm_health    — Provider health status"
+# CHZ-SURF-01: print the names registered under the ACTIVE tier. The default
+# (`consolidated`) collapses these behind llm(task=…), so the legacy literals
+# would tell every new user to call something that does not exist.
+if python3 -c "import chuzom.tool_surface" 2>/dev/null; then
+  python3 - <<'PYTOOLS'
+from chuzom.tool_surface import route_tool
+for logical, blurb in (
+    ("llm_query",    "General questions (auto-routed)"),
+    ("llm_research", "Search-augmented (Perplexity)"),
+    ("llm_generate", "Content creation (Gemini/GPT)"),
+    ("llm_analyze",  "Deep analysis (GPT/o3)"),
+    ("llm_code",     "Coding tasks (GPT/Gemini)"),
+    ("llm_set_profile", "Switch budget/balanced/premium"),
+    ("llm_usage",       "View cost & token stats"),
+    ("llm_health",      "Provider health status"),
+):
+    print(f"  {route_tool(logical):26} — {blurb}")
+PYTOOLS
+else
+  echo "  (run 'chuzom doctor' to list the tools registered on this install)"
+fi
 echo ""

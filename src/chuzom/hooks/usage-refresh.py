@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 1
+# chuzom-hook-version: 2
 """PostToolUse hook — usage refresh + periodic savings awareness.
 
 After any llm_* MCP tool call:
@@ -19,6 +19,52 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+# ── Registered-tool surface (CHZ-SURF-01) ────────────────────────────────────
+# Tool names are tier-dependent (CHUZOM_SLIM). NEVER put a raw tool name in
+# output: under the DEFAULT `consolidated` tier the legacy llm_query /
+# llm_analyze / llm_code / llm_research / llm_generate names are not registered,
+# so naming one hands the caller "Error: No such tool available" — after which
+# it silently does the work on the expensive model and the savings dashboard
+# cannot distinguish that from "chose not to route".
+def _load_tool_surface_fns():
+    """(route_tool, route_call, route_call_with_complexity) from chuzom.tool_surface.
+
+    Falls back to the stdlib-only copy the installer drops next to the hooks, then
+    to the in-repo source, then to identity (correct only for tier `off`).
+    """
+    try:
+        from chuzom.tool_surface import (
+            route_call,
+            route_call_with_complexity,
+            route_tool,
+        )
+        return route_tool, route_call, route_call_with_complexity
+    except ImportError:
+        pass
+    try:
+        import importlib.util as _ilu
+        from pathlib import Path as _P
+        _here = _P(__file__).resolve().parent
+        for _cand in (_here / "chuzom_tool_surface.py", _here.parent / "tool_surface.py"):
+            if not _cand.exists():
+                continue
+            _spec = _ilu.spec_from_file_location("chuzom_tool_surface", _cand)
+            _mod = _ilu.module_from_spec(_spec)
+            sys.modules["chuzom_tool_surface"] = _mod  # dataclasses needs this
+            _spec.loader.exec_module(_mod)
+            return _mod.route_tool, _mod.route_call, _mod.route_call_with_complexity
+    except Exception:  # noqa: BLE001 — a broken support module must not kill the hook
+        pass
+    return (
+        lambda n, **k: n,
+        lambda n, *a, **k: (f"{n}({', '.join(a)})" if a else n),
+        lambda n, c, *a, **k: f"{n}(complexity='{c}'" + ("".join(', ' + x for x in a)) + ")",
+    )
+
+
+route_tool, route_call, route_call_with_complexity = _load_tool_surface_fns()
+
 STATE_DIR = os.path.expanduser("~/.chuzom")
 STATE_FILE = os.path.join(STATE_DIR, "usage_last_refresh.txt")
 CALL_COUNT_FILE = os.path.join(STATE_DIR, "routed_call_count.txt")
@@ -33,7 +79,15 @@ SKIP_TOOLS = {
     "llm_cache_clear", "llm_health", "llm_providers", "llm_setup",
     "llm_set_profile", "llm_usage", "llm_track_usage",
     "llm_pipeline_templates",
+    # CHZ-SURF-01: under the consolidated default those management tools are
+    # collapsed into these doors. Listing only the legacy names would let an
+    # observability call be counted as a routed call — i.e. checking your savings
+    # would increase your savings.
+    "chuzom_status", "chuzom_admin", "chuzom_session",
 }
+
+# The doors that DO represent real routing work and must stay counted.
+ROUTING_DOORS = {"llm", "llm_act"}
 
 # Estimated Claude token costs per routed call (conservative averages)
 # Based on typical prompt+response: ~1500 input + ~2000 output tokens
@@ -82,7 +136,17 @@ def _append_savings_log(tool_name: str) -> None:
     """Append a JSONL line for the MCP server to import into SQLite."""
     _ensure_state_dir()
     # Derive task_type from tool name (e.g. llm_query -> query)
-    task_type = tool_name.removeprefix("llm_") if tool_name.startswith("llm_") else tool_name
+    # CHZ-SURF-01: strip any MCP qualification first (mcp__chuzom__llm_query).
+    # The consolidated door is just `llm` and carries the specialization in its
+    # ARGUMENTS, not its name, so there is no task to recover from the name —
+    # record "routed" rather than inventing one.
+    bare = tool_name.rsplit("__", 1)[-1]
+    if bare.startswith("llm_"):
+        task_type = bare.removeprefix("llm_")
+    elif bare in ("llm", "llm_act"):
+        task_type = "routed"
+    else:
+        task_type = bare
     # Session ID: read UUID written by session-start hook (never reuses PIDs)
     session_id_file = os.path.join(STATE_DIR, "session_id.txt")
     try:
@@ -168,10 +232,16 @@ def main() -> None:
     payload = json.loads(raw)
 
     tool_name = payload.get("toolName", "")
-    if not tool_name.startswith("llm_"):
+    # CHZ-SURF-01: accept the consolidated doors, not just the `llm_` prefix.
+    # Under the DEFAULT tier the completion door is named exactly `llm`, which
+    # fails a startswith("llm_") test — so every routed call was dropped here and
+    # never reached the savings log. That is an UNDERcount of real savings, and it
+    # looks identical to "nothing was routed".
+    bare_name = tool_name.rsplit("__", 1)[-1]  # mcp__chuzom__llm -> llm
+    if not (bare_name.startswith("llm_") or bare_name in ROUTING_DOORS):
         return
 
-    if tool_name in SKIP_TOOLS:
+    if bare_name in SKIP_TOOLS:
         return
 
     hints: list[str] = []
@@ -190,7 +260,7 @@ def main() -> None:
         age_min = int(age_sec / 60)
         hints.append(
             f"[USAGE STALE: {age_min}m since last refresh] "
-            "Consider running /usage-pulse or calling llm_check_usage "
+            f"Consider running /usage-pulse or calling {route_tool('llm_check_usage')} "
             "to refresh Claude subscription data for accurate routing."
         )
 
@@ -212,7 +282,7 @@ def main() -> None:
             f"saving roughly ${est_saved:.2f} in Claude costs and keeping "
             "your rate limit budget free for tasks that need Claude directly.' "
             "Keep it short and natural — one sentence max. "
-            "Suggest `llm_usage` for detailed breakdown."
+            f"Suggest `{route_tool('llm_usage')}` for detailed breakdown."
         )
 
     if not hints:

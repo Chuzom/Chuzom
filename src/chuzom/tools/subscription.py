@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from chuzom.claude_usage import FETCH_USAGE_JS, parse_api_response
 from chuzom import state as _state
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
 
 async def llm_check_usage() -> str:
@@ -180,8 +181,8 @@ async def llm_quota_saved() -> str:
     snap = compute_quota_savings()
     if snap is None:
         return (
-            "No cached Claude subscription usage yet — run "
-            "`llm_check_usage` (or `llm_refresh_claude_usage`) to "
+            f"No cached Claude subscription usage yet — run "
+            f"`{route_tool('llm_check_usage')}` (or `llm_refresh_claude_usage`) to "
             "populate the snapshot before the quota-saved metric is "
             "available."
         )

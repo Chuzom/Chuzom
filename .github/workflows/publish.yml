@@ -1,13 +1,10 @@
 name: Publish to PyPI
 
-# PyPI publishing is PAUSED — the project is not ready to publish yet.
-# The pipeline is kept fully intact (build, lint, version-check, OIDC publish)
-# but only runs on manual dispatch, so pushing a `v*` tag no longer triggers a
-# publish. To RESUME automated releases, restore the tag trigger:
-#   on:
-#     push:
-#       tags:
-#         - "v*"
+# Manual dispatch ONLY, on purpose. `publish-pypi.yml` is the workflow wired to the
+# `v*` tag (resumed at v1.1.1). If this one also fired on tags, a single release tag
+# would start two concurrent uploads of the same version to PyPI — the second fails
+# on the duplicate, and which one wins is a race. Keep exactly one tag-triggered
+# publisher.
 on:
   workflow_dispatch:
 

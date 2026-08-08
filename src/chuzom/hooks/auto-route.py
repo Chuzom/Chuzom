@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 31
+# chuzom-hook-version: 32
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -81,13 +81,85 @@ except ImportError:
     RoutingProfile = None
     TaskType = None
 
+
+# ── Registered-tool surface (CHZ-SURF-01) ────────────────────────────────────
+# NEVER interpolate a raw tool name into a directive. Which tools exist depends
+# on CHUZOM_SLIM, and the DEFAULT tier (`consolidated`) registers NONE of the
+# legacy llm_query/llm_analyze/llm_code/llm_research/llm_generate names — they
+# live behind the unified `llm(task=…)` door. Emitting a legacy name there gives
+# the caller "Error: No such tool available"; the caller then silently does the
+# work on the expensive model, and the savings dashboard cannot tell that apart
+# from "chose not to route". Every tool name in a user-visible string goes
+# through `route_tool()`.
+def _load_tool_surface():
+    """Return `chuzom.tool_surface.resolve`, or None if it cannot be loaded.
+
+    Tried in order: (1) the installed package — the normal path, since the
+    installer points hook commands at `sys.executable`; (2) the stdlib-only copy
+    the installer drops next to the hooks, for the case where the hook runs under
+    a bare `python3` without chuzom importable; (3) the in-repo source, for tests
+    and for running hooks straight out of a checkout.
+    """
+    try:
+        from chuzom.tool_surface import resolve
+        return resolve
+    except ImportError:
+        pass
+    try:
+        import importlib.util as _ilu
+        _here = Path(__file__).resolve().parent
+        for _cand in (_here / "chuzom_tool_surface.py",      # installed alongside hooks
+                      _here.parent / "tool_surface.py"):      # in-repo (src/chuzom/)
+            if not _cand.exists():
+                continue
+            _spec = _ilu.spec_from_file_location("chuzom_tool_surface", _cand)
+            _mod = _ilu.module_from_spec(_spec)
+            sys.modules["chuzom_tool_surface"] = _mod  # dataclasses needs this
+            _spec.loader.exec_module(_mod)
+            return _mod.resolve
+    except Exception:  # noqa: BLE001 — a broken support module must not kill the hook
+        pass
+    return None
+
+
+_RESOLVE_TOOL = _load_tool_surface()
+
+
+def route_tool(logical: str) -> str:
+    """Logical tool name → the form the caller can ACTUALLY invoke.
+
+    e.g. under the consolidated default ``llm_code`` → ``llm(task="code")``.
+    Falls back to the logical name only when the surface is entirely unknowable
+    (correct for tier ``off``, and the best available guess otherwise).
+    """
+    if _RESOLVE_TOOL is None:
+        return logical
+    try:
+        return _RESOLVE_TOOL(logical).display
+    except Exception:  # noqa: BLE001
+        return logical
+
+
+def route_call(logical: str, *args: str) -> str:
+    """Full invocation form, e.g. ``llm(task="code", prompt=…)``.
+
+    Use this instead of f-string-appending ``(prompt=…)`` to ``route_tool()``,
+    which would produce the broken ``llm(task="code")(prompt=…)``.
+    """
+    if _RESOLVE_TOOL is None:
+        return f"{logical}({', '.join(args)})" if args else logical
+    try:
+        return _RESOLVE_TOOL(logical).render(*args)
+    except Exception:  # noqa: BLE001
+        return f"{logical}({', '.join(args)})" if args else logical
+
 # ── .env loader (reads chuzom's .env for API keys) ──────────────────────
 
 # ── A4: Self-update check for pull-routing environments ──────────────────────
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 31"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 32"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -1836,6 +1908,8 @@ def _log_unrouted_turn(session_id: str, pending: dict) -> None:
         _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         with _ENFORCEMENT_LOG_PATH.open("a", encoding="utf-8") as f:
+            # chz-surface-ok: enforcement LOG record — must keep the LOGICAL name so log
+            # analysis groups by task type, not by whichever tier was active.
             f.write(
                 f"[{ts}] NO_ROUTE session={session_id[:12]} "
                 f"expected={expected_tool} task={task_type}/{complexity}\n"
@@ -2401,7 +2475,7 @@ def _prior_violation_notice(pending: dict | None) -> str:
     # a legitimate choice, not an offense.
     return (
         "ℹ Last turn was not routed: "
-        f"{task_type}/{complexity} could have used {expected_tool}. "
+        f"{task_type}/{complexity} could have used {route_tool(expected_tool)}. "
         "No action needed — route when it saves quota, answer directly when context is needed.\n"
     )
 
@@ -2988,7 +3062,9 @@ def main() -> None:
         _enforce_mode = "suggest"
 
     # ── Standard external routing directive ───────────────────────────────────
-    stale_suffix = " [⚠️ STALE USAGE DATA >30min — run llm_check_usage]" if _is_pressure_stale() else ""
+    stale_suffix = (
+        f" [⚠️ STALE USAGE DATA >30min — run {route_tool('llm_check_usage')}]"
+    ) if _is_pressure_stale() else ""
 
     # Get selected model for tracking and indicator enhancement
     selected_model, provider = _get_selected_model(task_type, complexity)
@@ -3002,6 +3078,7 @@ def main() -> None:
             classification_method=method,
             selected_model=selected_model,
             provider=provider,
+            # chz-surface-ok: telemetry field — logical name keyed to TOOL_MAP for analysis.
             notes=f"routed via {tool}" if tool != TOOL_MAP.get(task_type) else None,
         )
     except Exception as exc:
@@ -3356,13 +3433,26 @@ def main() -> None:
             failure_reason = "no configured external direct-execution route completed successfully"
         _block_zero_claude(failure_reason, task_type, complexity)
 
+    # ── CHZ-SURF-01: logical name → invocable name, at the display boundary ───
+    # `tool` stays LOGICAL everywhere above: it is what gets persisted by
+    # _save_last_route (so context-inheritance still matches), written into the
+    # pending enforcement state (enforce-route.py resolves it on its own side),
+    # and reported to telemetry. Translating it earlier would poison all three.
+    # From here down the value is user-visible, so it must name something the
+    # caller can actually invoke on THIS server's tool surface.
+    tool_disp = route_tool(tool)
+    # Built via route_call, NOT f"{tool_disp}(prompt=…)" — under the consolidated
+    # tier tool_disp is already `llm(task="code")`, so appending arguments would
+    # emit the uncallable `llm(task="code")(prompt=…)`.
+    _call_form = route_call(tool, "prompt=<user's request>")
+
     if _enforce_mode == "shadow":
         # Passive observation — no pending state, no blocking
         directive = (
             f"👁 OBSERVATION [{_enforce_mode}]: ✨ {task_type}/{complexity} ✨ "
-            f"would route to {tool} → 🧠 {selected_model} [via {method}{stale_suffix}]"
+            f"would route to {tool_disp} → 🧠 {selected_model} [via {method}{stale_suffix}]"
         )
-        indicator = f"👁 {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
+        indicator = f"👁 {task_type}/{complexity} ✨ {tool_disp} → 🧠 {selected_model}"
         write_pending = False
     elif _enforce_mode == "advise":
         # Advise: a friendly suggestion that never blocks and never nags. No pending
@@ -3370,13 +3460,13 @@ def main() -> None:
         _est = _estimate_prompt_tokens(prompt)
         _tok = f" · ~{_est} tok" if _est else ""
         directive = (
-            f"⚡ ROUTE (advise): {task_type}/{complexity} → try {tool} → 🧠 {selected_model}{_tok} "
+            f"⚡ ROUTE (advise): {task_type}/{complexity} → try {tool_disp} → 🧠 {selected_model}{_tok} "
             f"[via {method}{stale_suffix}]\n"
-            f"   Suggestion only — nothing is blocked. If {tool} can handle it, prefer it to "
+            f"   Suggestion only — nothing is blocked. If {tool_disp} can handle it, prefer it to "
             f"save Claude quota; otherwise just do the task yourself. Never fabricate a routed "
             f"answer — call the tool or handle it directly."
         )
-        indicator = f"⚡ {task_type}/{complexity} → {tool} → 🧠 {selected_model}"
+        indicator = f"⚡ {task_type}/{complexity} → {tool_disp} → 🧠 {selected_model}"
         write_pending = False
     elif _enforce_mode == "suggest":
         # Soft hint — pending state written but enforce-route only logs, never blocks.
@@ -3385,10 +3475,10 @@ def main() -> None:
         _est = _estimate_prompt_tokens(prompt)
         _tok = f" · ~{_est} tok" if _est else ""
         directive = (
-            f"💡 SUGGESTED: ✨ {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}{_tok} "
+            f"💡 SUGGESTED: ✨ {task_type}/{complexity} ✨ {tool_disp} → 🧠 {selected_model}{_tok} "
             f"[via {method}{stale_suffix}] | You may answer directly if preferred"
         )
-        indicator = f"💡 {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
+        indicator = f"💡 {task_type}/{complexity} ✨ {tool_disp} → 🧠 {selected_model}"
         write_pending = True
     else:
         # enforce / hard (default)
@@ -3404,13 +3494,13 @@ def main() -> None:
             f"╔══════════════════════════════════════════════════╗\n"
             f"║  ⚡ ROUTE DIRECTIVE — HARD ENFORCEMENT           ║\n"
             f"║  task  : {task_complexity:35} ║\n"
-            f"║  action: call {tool:32} ║\n"
+            f"║  action: call {tool_disp:32} ║\n"
             f"║  via   : {method:39} ║\n"
             f"║  saves : {_savings:39} ║\n"
             f"╚══════════════════════════════════════════════════╝\n"
             f"\n"
             f"⚠ ENFORCEMENT ACTIVE (hard, or smart on a Q&A task): the PreToolUse hook\n"
-            f"   (enforce-route.py) holds tools until you call {tool}.\n"
+            f"   (enforce-route.py) holds tools until you call {tool_disp}.\n"
             f"   CHZ-AUD-A-06: HARD holds Edit/Write/MultiEdit/NotebookEdit + write Bash\n"
             f"   until you route; Read/Glob/Grep/LS + read-only Bash (code tasks) proceed\n"
             f"   (STRICT also holds read-only Bash). SMART holds Edit/Write/MultiEdit for\n"
@@ -3418,21 +3508,21 @@ def main() -> None:
             f"   set-enforce off` to disable enforcement.\n"
             f"\n"
             f"✅ REQUIRED SEQUENCE:\n"
-            f"   1. Call {tool}(prompt=<user's request>) — FIRST and ONLY action\n"
+            f"   1. Call {_call_form} — FIRST and ONLY action\n"
             f"   2. Return the result to the user\n"
             f"   3. THEN (and only then) use native tools if needed for implementation\n"
             f"\n"
             f"📍 USER-VISIBLE ROUTE INDICATOR (required):\n"
             f"   Begin your reply to the user with this exact line, then a blank line,\n"
             f"   then your normal response. Replace <model> with the model name from the\n"
-            f"   {tool} result (chuzom MCP tools return the model that handled the call).\n"
-            f"   If the result does not surface the model, use `{tool}` as a fallback.\n"
+            f"   {tool_disp} result (chuzom MCP tools return the model that handled the call).\n"
+            f"   If the result does not surface the model, use `{tool_disp}` as a fallback.\n"
             f"\n"
-            f"      🎯 chuzom → <model> · {task_type}/{complexity} (via {tool})\n"
+            f"      🎯 chuzom → <model> · {task_type}/{complexity} (via {tool_disp})\n"
             f"\n"
             f"   Violations are logged and escalated. See ~/.chuzom/enforcement.log"
         )
-        indicator = f"✨ {task_type}/{complexity} ✨ {tool} → 🧠 {selected_model}"
+        indicator = f"✨ {task_type}/{complexity} ✨ {tool_disp} → 🧠 {selected_model}"
         write_pending = True
 
     # ── Context-aware routing (P0) ───────────────────────────────────────────────
@@ -3453,12 +3543,15 @@ def main() -> None:
                 _ctx_tool = "llm_act"
         except Exception:
             pass
+        # CHZ-SURF-01: same display-boundary translation as `tool` above.
+        _ctx_disp = route_tool(_ctx_tool)
+        _ctx_call = route_call(_ctx_tool, "context=…")
         _context_note = (
             "🧠 CONTEXT-DEPENDENT PROMPT — this references your local files / repo / "
             "history / state, which a stateless routed model cannot see. No blind "
             "draft was generated (it would be fabrication). Answer from your real "
             "context (read the files, use tools, prior turns); if you do route, pass "
-            f"the relevant slices via {_ctx_tool}(context=…). Never present a context-"
+            f"the relevant slices via {_ctx_call}. Never present a context-"
             "free draft as the answer.\n\n"
         )
         # Part B (bounce-back fix): a context-dependent prompt references local
@@ -3472,12 +3565,12 @@ def main() -> None:
         # the tool in the directive also keeps the routing display consistent.
         write_pending = False
         directive = _context_note + (
-            f"⚡ ROUTE (advisory): {task_type}/{complexity} → {_ctx_tool} [via {method}] — but "
+            f"⚡ ROUTE (advisory): {task_type}/{complexity} → {_ctx_disp} [via {method}] — but "
             f"this prompt is context-dependent, so a stateless routed model can't see your "
             f"repo. Nothing is blocked; prefer handling it DIRECTLY with your tools, or "
-            f"route WITH context via {_ctx_tool}(context=…). Never relay a context-free draft."
+            f"route WITH context via {_ctx_call}. Never relay a context-free draft."
         )
-        indicator = f"🧠 {task_type}/{complexity} → {_ctx_tool} · context-dependent [via {method}]"
+        indicator = f"🧠 {task_type}/{complexity} → {_ctx_disp} · context-dependent [via {method}]"
 
     # ── Per-session paid-API spend cap (#3) ──────────────────────────────────────
     # Drafts are already free-only; this is the backstop for the rest of routing.
@@ -3519,6 +3612,7 @@ def main() -> None:
     # writes closes that gap without touching the join itself.
     _directive_now = time.time()
     _directive_id = (
+        # chz-surface-ok: directive-id hash input — must be tier-stable, never display.
         f"{_safe_sid(session_id)}:{int(_directive_now)}:{tool}:"
         f"{_secrets_module.token_hex(4)}"
     ) if session_id else None
@@ -3653,6 +3747,7 @@ def main() -> None:
             "additionalContext": _final_context,
         }
     }
+    # chz-surface-ok: debug log — the logical name is what aids diagnosis here.
     _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUTTING: tool={tool} task={task_type}/{complexity} method={method}")
     # INV-COST-005: record the directive's token overhead so it can be netted from
     # reported savings. This hook injects `additionalContext` into Claude's context on
@@ -3671,7 +3766,7 @@ def main() -> None:
     except Exception:
         pass
     # Visible UI signal — Claude Code surfaces stderr per-prompt so the routing decision is observable.
-    print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool} (via {method})", file=sys.stderr)
+    print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool_disp} (via {method})", file=sys.stderr)
     json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
     _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUT COMPLETE")
 

@@ -31,6 +31,7 @@ from chuzom.tools.agents import (
     chuzom_agent_lineage,
     chuzom_agent_list,
 )
+from chuzom.tool_surface import DEPRECATED_TOOLS as _DEPRECATED_TOOLS
 from chuzom.tools.agentic import llm_delegate
 from chuzom.tools.text import (
     llm_analyze,
@@ -43,32 +44,22 @@ from chuzom.tools.text import (
 # tier → the completion tools' complexity vocabulary
 _TIER_TO_COMPLEXITY = {"fast": "simple", "balanced": "moderate", "best": "complex"}
 
-# 1.0 cutover step 3: the legacy-tool → front-door migration map. Single source of
-# truth — drives deprecation notices now and the breaking removal (step 4) later.
-DEPRECATED_TOOLS: dict[str, str] = {
-    # completion → llm
-    "llm_query": "llm", "llm_analyze": "llm", "llm_code": "llm",
-    "llm_research": "llm", "llm_generate": "llm",
-    # agentic → llm_act
-    "llm_delegate": "llm_act",
-    # observability → chuzom_status
-    "llm_savings": "chuzom_status", "llm_session_savings": "chuzom_status",
-    "llm_session_spend": "chuzom_status", "llm_usage": "chuzom_status",
-    "llm_health": "chuzom_status", "llm_providers": "chuzom_status",
-    "llm_gain": "chuzom_status", "llm_dashboard": "chuzom_status",
-    # config → chuzom_admin
-    "llm_set_profile": "chuzom_admin", "llm_import_profile": "chuzom_admin",
-    "llm_cache_clear": "chuzom_admin", "llm_policy": "chuzom_admin",
-    "llm_budget": "chuzom_admin",
-    # agent lifecycle → chuzom_session
-    "chuzom_agent_list": "chuzom_session", "chuzom_agent_check_budget": "chuzom_session",
-    "chuzom_agent_complete_session": "chuzom_session", "chuzom_agent_lineage": "chuzom_session",
-}
+# 1.0 cutover step 3: the legacy-tool → front-door migration map. The DATA now lives
+# in `chuzom.tool_surface` (stdlib-only) so the routing HOOKS can consume the same map
+# without importing mcp/litellm. A private copy here is exactly what let auto-route.py
+# drift and emit unregistered tool names (CHZ-SURF-01). Re-exported for backward
+# compatibility — do not redefine it here.
+DEPRECATED_TOOLS: dict[str, str] = _DEPRECATED_TOOLS
 
 
 def door_for_tool(name: str) -> str:
     """Return the consolidated front door for a legacy tool, or the name unchanged
-    if it has no door (e.g. it's already a door, or stays as-is toward 1.0)."""
+    if it has no door (e.g. it's already a door, or stays as-is toward 1.0).
+
+    NOTE: this collapses llm_query/llm_code/… to a bare ``llm`` and so DROPS the
+    specialization. Anything that TELLS A CALLER what to invoke must instead use
+    :func:`chuzom.tool_surface.resolve`, which preserves it as ``llm(task="code")``.
+    """
     return DEPRECATED_TOOLS.get(name, name)
 
 

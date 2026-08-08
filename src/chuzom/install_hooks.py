@@ -20,6 +20,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from chuzom.tool_surface import localize  # CHZ-SURF-01
 
 
 def _python_exe() -> str:
@@ -193,6 +194,41 @@ def _backup_before_overwrite(dst: Path) -> Path | None:
         return None
 
 
+# CHZ-SURF-01: stdlib-only support modules copied ALONGSIDE the hooks, so a hook
+# running under an interpreter without `chuzom` importable can still load them by
+# path. `tool_surface` answers "which tool name is actually registered?" — without
+# it a hook has to guess, and guessing is what made every routing hint 404 under
+# the consolidated default. (src relative to the package dir, dst under ~/.claude/hooks/)
+_HOOK_SUPPORT_FILES: tuple[tuple[str, str], ...] = (
+    ("tool_surface.py", "chuzom_tool_surface.py"),
+)
+
+
+def _sync_hook_support_files() -> list[str]:
+    """Copy the stdlib-only support modules next to the installed hooks.
+
+    Content-addressed like the hooks themselves: re-copied whenever the bytes
+    differ. These are generated artifacts (never hand-edited), so no backup dance
+    is needed — but a failure is reported rather than swallowed, because a missing
+    support module silently degrades routing hints.
+    """
+    msgs: list[str] = []
+    for src_name, dst_name in _HOOK_SUPPORT_FILES:
+        src = _PACKAGE_DIR / src_name
+        dst = _HOOKS_DST / dst_name
+        if not src.exists():
+            continue
+        try:
+            if dst.exists() and not _files_differ(src, dst):
+                continue
+            _HOOKS_DST.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            msgs.append(f"Synced hook support module {dst_name}")
+        except OSError as e:
+            msgs.append(f"Failed to sync {dst_name}: {e} (routing hints may name unregistered tools)")
+    return msgs
+
+
 def check_and_update_hooks() -> list[str]:
     """Re-copy bundled hooks to ~/.claude/hooks/ if the installed versions are stale.
 
@@ -209,6 +245,7 @@ def check_and_update_hooks() -> list[str]:
     hook must never silently lose that edit — it is recoverable and announced).
     """
     updates: list[str] = []
+    updates.extend(_sync_hook_support_files())
     settings = _load_settings()
     for src_name, dst_name, _event, _matcher in _HOOK_DEFS:
         src = _HOOKS_SRC / src_name
@@ -259,6 +296,34 @@ def check_and_update_hooks() -> list[str]:
     return updates
 
 
+def _localized_rules_text(src: Path) -> str:
+    """Bundled rules text with every tool name resolved for the ACTIVE tier.
+
+    CHZ-SURF-01: the rules file is loaded into EVERY session and is the single
+    strongest teacher of which tool to call. Shipping it with the legacy names
+    while the default tier registers only the doors trained the model, in every
+    session, to make a call that fails. Localizing at install/refresh time is the
+    right boundary: the file is re-synced on upgrade and by the server at startup.
+    """
+    text = src.read_text(encoding="utf-8")
+    try:
+        return localize(text)
+    except Exception:  # noqa: BLE001 — never fail an install over cosmetics
+        return text
+
+
+def _rules_content_differs(src: Path, dst: Path) -> bool:
+    """Compare the INSTALLED file against what we would install now.
+
+    Must compare against the localized text, not the raw bundle — otherwise the
+    two never match and every startup reports a spurious rules refresh.
+    """
+    try:
+        return dst.read_text(encoding="utf-8") != _localized_rules_text(src)
+    except OSError:
+        return True
+
+
 def check_and_update_rules() -> str | None:
     """Re-copy bundled rules to ~/.claude/rules/ if the installed version is stale.
 
@@ -281,7 +346,7 @@ def check_and_update_rules() -> str | None:
     # downgrade. Without this, a reworded rules file silently never reaches users.
     if src_version < dst_version:
         return None
-    _drifted = src_version == dst_version and _files_differ(rules_src, rules_dst)
+    _drifted = src_version == dst_version and _rules_content_differs(rules_src, rules_dst)
     if src_version == dst_version and not _drifted:
         return None
 
@@ -298,7 +363,7 @@ def check_and_update_rules() -> str | None:
                 "— update NOT applied (previous content preserved)"
             )
         _where = f" (previous saved to {backup.name})"
-    shutil.copy2(rules_src, rules_dst)
+    rules_dst.write_text(_localized_rules_text(rules_src), encoding="utf-8")
     if _drifted:
         return f"Refreshed routing rules (content drift at v{src_version}){_where}"
     return f"Updated routing rules v{dst_version} → v{src_version}{_where}"
@@ -736,6 +801,7 @@ def install(force: bool = False) -> list[str]:
 
     # ── Copy hook scripts ────────────────────────────────────────────────
     _HOOKS_DST.mkdir(parents=True, exist_ok=True)
+    actions.extend(_sync_hook_support_files())  # CHZ-SURF-01
     settings = _load_settings()
 
     for src_name, dst_name, event, matcher in _HOOK_DEFS:
@@ -839,7 +905,10 @@ def install(force: bool = False) -> list[str]:
         # RED1-11-01: back up a hand-edited rules file before overwriting; if the
         # backup can't be written, skip the overwrite (never destroy user content
         # with no recovery path) — parity with the auto-update path.
-        if rules_dst.exists() and _files_differ(rules_src, rules_dst):
+        # CHZ-SURF-01: write the LOCALIZED text (tool names resolved for the active
+        # tier), and compare against it — comparing against the raw bundle would
+        # report drift on every run.
+        if rules_dst.exists() and _rules_content_differs(rules_src, rules_dst):
             _rb = _backup_before_overwrite(rules_dst)
             if _rb is None:
                 actions.append(
@@ -847,10 +916,10 @@ def install(force: bool = False) -> list[str]:
                 )
             else:
                 actions.append(f"Backed up existing chuzom.md → {_rb.name}")
-                shutil.copy2(rules_src, rules_dst)
+                rules_dst.write_text(_localized_rules_text(rules_src), encoding="utf-8")
                 actions.append(f"Installed routing rules → {rules_dst}")
         else:
-            shutil.copy2(rules_src, rules_dst)
+            rules_dst.write_text(_localized_rules_text(rules_src), encoding="utf-8")
             actions.append(f"Installed routing rules → {rules_dst}")
     else:
         actions.append(f"SKIP rules: source not found at {rules_src}")
@@ -1195,7 +1264,7 @@ def uninstall_claw_code() -> list[str]:
 
 # ── IDE config installation (pull-routing: VS Code/Copilot, Windsurf, Cursor) ──
 
-_VSCODE_MCP_CONTENT = """\
+_VSCODE_MCP_CONTENT = localize("""\
 {
   "servers": {
     "chuzom": {
@@ -1206,9 +1275,9 @@ _VSCODE_MCP_CONTENT = """\
     }
   }
 }
-"""
+""")
 
-_WINDSURF_MCP_CONTENT = """\
+_WINDSURF_MCP_CONTENT = localize("""\
 {
   "mcpServers": {
     "chuzom": {
@@ -1218,9 +1287,9 @@ _WINDSURF_MCP_CONTENT = """\
     }
   }
 }
-"""
+""")
 
-_CURSOR_RULE_CONTENT = """\
+_CURSOR_RULE_CONTENT = localize("""\
 ---
 description: Route tasks through Chuzom to save tokens and cost
 globs: ["**/*"]
@@ -1256,7 +1325,7 @@ conserving Claude quota.
 3. Only use native Cursor intelligence for file navigation, terminal commands,
    or when all Chuzom MCP servers are unavailable.
 4. If `llm_code` or similar is unavailable, proceed normally and note it.
-"""
+""")
 
 
 def install_ide_configs(project_dir: Path | None = None) -> list[str]:
@@ -1411,7 +1480,7 @@ def _print_pull_routing_notice() -> None:
 
 
 def _print_help() -> None:
-    print("""
+    print(localize("""
 chuzom-install-hooks — Install Chuzom routing into your dev environment
 
 USAGE
@@ -1464,7 +1533,7 @@ EXAMPLES
 
   # Write IDE configs to a specific project
   chuzom-install-hooks ide ~/projects/my-app
-""".strip())
+""".strip()))
 
 
 if __name__ == "__main__":

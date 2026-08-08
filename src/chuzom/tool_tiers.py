@@ -19,49 +19,20 @@ from __future__ import annotations
 
 from typing import Callable
 
-CORE_TOOLS: frozenset[str] = frozenset({
-    "llm_query",
-    "llm_code",
-    "llm_research",
-    "llm_usage",
-})
-"""4-tool tier — essential tools only. Maximum token savings (~7,500 tokens saved)."""
-
-ROUTING_TOOLS: frozenset[str] = CORE_TOOLS | frozenset({
-    "llm_analyze",
-    "llm_generate",
-    "llm_classify",
-    "llm_route",
-    "llm_auto",
-    "llm_check_usage",
-    "llm_set_profile",
-    "llm_health",
-    "llm_session_spend",
-    "llm_session_savings",  # v10.1.0 — tier-grouped savings dashboard
-    "llm_savings",
-    "llm_reroute",
-    "llm_select_agent",
-})
-"""12-tool tier — routing + core admin tools. Recommended for most users (~5,000 tokens saved)."""
-
-# North Star 1.0 cutover (staged): the CONSOLIDATED front-door surface. Opt into it
-# with CHUZOM_SLIM=consolidated to *run* the collapsed ~11-tool surface today (old
-# tools hidden, not removed). This validates the doors cover every capability before
-# the breaking 1.0 step that actually removes the 73 old tools.
-CONSOLIDATED_TOOLS: frozenset[str] = frozenset({
-    "llm",             # unified completion door (query/analyze/code/research/generate)
-    "llm_act",         # agentic execution door (delegation)
-    "chuzom_status",   # observability door (savings/usage/health/…)
-    "chuzom_admin",    # config door (set_profile/clear_cache/…)
-    "chuzom_session",  # agent-lifecycle door (list/check_budget/complete/lineage)
-    "llm_route",       # auto-routing decision (no door alias yet)
-    "llm_image",       # media (future: llm_media)
-    "llm_audio",       # media (future: llm_media)
-    "llm_edit",        # file ops (future: llm_fs)
-    "chuzom_agent_start_session",  # rich session action (kept until chuzom_session covers it)
-    "chuzom_agent_route",          # rich session action
-})
-"""~11-tool CONSOLIDATED front-door tier (North Star 1.0 direction)."""
+# CHZ-SURF-01: the tier membership sets moved to `chuzom.tool_surface`, which is
+# stdlib-only and therefore loadable BY PATH from a routing hook running under an
+# interpreter that has no `chuzom` on sys.path. The hooks must be able to answer
+# "is this tool registered?" — when they could not, auto-route.py emitted legacy
+# tool names under the consolidated default and every hint 404'd.
+#
+# This module remains the documented home for the *gate*; the sets are re-exported
+# so existing imports (`from chuzom.tool_tiers import CORE_TOOLS`) keep working.
+# Do NOT redefine them here — one definition, one direction of dependency.
+from chuzom.tool_surface import (  # noqa: F401  (re-export)
+    CONSOLIDATED_TOOLS,
+    CORE_TOOLS,
+    ROUTING_TOOLS,
+)
 
 
 def make_should_register(slim: str) -> Callable[[str], bool]:

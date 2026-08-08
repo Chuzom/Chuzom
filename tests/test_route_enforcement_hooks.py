@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from chuzom.tool_surface import route_tool
+
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTO_ROUTE_HOOK = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"
@@ -423,7 +425,7 @@ def test_auto_route_logs_unrouted_previous_turn_on_next_prompt(tmp_path):
     # Neutral framing (de-fanged): the prior-unrouted-turn notice names the task
     # and the tool it could have used, without "violation"/"escalated" language.
     assert "Last turn was not routed" in ctx
-    assert "llm_query" in ctx and "query/simple" in ctx
+    assert route_tool("llm_query") in ctx and "query/simple" in ctx
 
     # With direct execution (block or echo mode), pending state may or may not exist.
     # With Claude pass-through path (MANDATORY ROUTE directive), pending state is updated.

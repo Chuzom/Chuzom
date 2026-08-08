@@ -5,6 +5,87 @@
 _Nothing yet. Add a bullet here in your PR when you change routing behavior or a
 user-facing surface, then move it under the next version heading at release time._
 
+## v1.1.1 — 2026-08-08 — Hotfix: routing hints named tools that were not registered (CHZ-SURF-01)
+
+**Every default install was affected.** `chuzom_slim` has defaulted to `consolidated` since
+0.10.0, and under that tier the legacy completion tools are not registered — they are
+collapsed behind the unified `llm(task=…)` door. But `hooks/auto-route.py` still emitted the
+legacy names. Following a hint as written returned `Error: No such tool available`, after
+which the caller silently did the work on the expensive model. **The failure was invisible in
+every metric we had**: an unroutable hint and "the model chose not to route" are
+indistinguishable in the savings dashboard.
+
+- **Fix (critical): every emitted tool name is resolved against the active tier.** New
+  `chuzom.tool_surface` is the single source of truth for what is registered and what to call.
+  `llm_code` → `llm(task="code")` under `consolidated`, unchanged under `off`. The `task`
+  discriminator is preserved — collapsing to a bare `llm` would be callable but would throw
+  away the specialization the classifier just chose.
+- **The breakage was never consolidated-only.** Each tier hides a different subset while the
+  emitters hardcoded one vocabulary: `core` left 4 of 7 route targets unregistered, `routing`
+  1 of 7, `consolidated` 5 of 7. Resolution is now tier-aware with capability-ordered
+  fallback, so every tier resolves every emittable tool.
+- **13 emitters fixed, not 2.** Beyond `auto-route.py`: `enforce-route.py`, `agent-route.py`,
+  `subagent-start.py` (taught subagents the wrong names), `agent-error.py`, `session-start.py`
+  (the banner injected at session start, which teaches the model for the whole session),
+  `status-bar.py`, `usage-refresh.py`, plus user-facing CLI output in `install.py`,
+  `doctor.py`, `gain.py`, `router.py`, and the **generated** Cursor / VS Code / Windsurf /
+  Copilot rules files, which persist a wrong name for as long as the file exists.
+- **Fix: the arguments were wrong too.** The `llm` door takes `tier=fast|balanced|best`; the
+  legacy tools take `complexity=simple|moderate|complex`. Renaming a tool without translating
+  its arguments only swaps "no such tool" for "unexpected keyword argument". Also dropped
+  `profile=` from `agent-route.py`'s suggested call — not a parameter of any completion tool
+  on any tier, so that call had never been valid.
+- **Guard: `scripts/lint_tool_surface.py`, wired into CI.** Fails the build when a tool name
+  is embedded unresolved in an emitted string, or when `route_tool(...)` is followed by an
+  argument list (building the uncallable `llm(task="code")(prompt=…)`). It also flags
+  interpolation of the logical `tool`/`expected_tool` variables — the variant that survived
+  the first pass of this fix, because `{tool:32}` inside an ASCII box contains no tool name in
+  the source at all. Internal uses (log records, telemetry, hash keys) carry an explicit
+  `# chz-surface-ok: <reason>` pragma.
+- **Guard: `scripts/trace_northstar.py`.** End-to-end trace that runs the real hook, extracts
+  the tool the caller is told to call, and checks it against the MCP server's **actual**
+  registered tool list — deliberately not against `tool_surface` itself, since the bug lived
+  precisely in the seam between the hook's idea of the surface and the server's. With
+  `--live --fresh` it invokes the tool and reports which model answered.
+- **Guard: the lint reaches outside Python.** The CI smoke test asserted
+  `'llm_research' in ctx` and stayed green while the emitted hint was unroutable — the test
+  was encoding the bug, the worst possible place for it to hide, and an AST scan cannot see
+  YAML. The lint now also scans `.github/workflows/*.yml` and `scripts/*.sh` for tool names
+  in assertions or printed output. It found three more in `scripts/install.sh`, whose
+  post-install "Available tools" list named five tools the default tier does not register.
+- **Guard: the lint is version-independent.** Its first version anchored `chz-surface-ok`
+  pragmas to line PROXIMITY, which passed on 3.11 and failed on 3.12+: PEP 701 gives
+  f-string literal parts their real line numbers, where 3.11 had them inherit the enclosing
+  node's. It looked clean locally and broke CI on three interpreters. Pragmas now anchor to
+  the enclosing statement, whose position is stable, and a test pins the property.
+- **Guard: startup self-check.** The server logs `tool_surface_unroutable` at boot if any
+  emittable name fails to resolve under the active tier.
+- **Also fixed:** `enforce-route.py` kept a private 6-entry copy of the legacy→door map — the
+  reason the knowledge never reached the hook that emits hints. Removed; one definition now.
+  Matching uses `door_name()` (never degrades) while display uses `resolve()` (may degrade),
+  so a correct call is never recorded as a violation.
+- **Fix: the installed rules files taught the wrong names too — in every session.**
+  All 13 `src/chuzom/rules/*.md` (installed to `~/.claude/rules/` and the per-host
+  equivalents) documented `llm_query` / `llm_analyze` / `llm_code` / `llm_research` /
+  `llm_generate`, including a task→tool mapping table. That file is loaded into every
+  session, so it was the single strongest teacher of a vocabulary the default tier does not
+  register. Rules are now localized at install/refresh time, and drift detection compares
+  against the localized text so `off` installs stay byte-identical to the bundle. `localize()`
+  rewrites whole call expressions — a name-only rewrite would have produced the uncallable
+  `llm(task="code")(complexity="complex")`, which is exactly the failure the new lint exists
+  to catch.
+- **Fix: routed calls were also going UNCOUNTED (same root cause, measurement side).**
+  `usage-refresh.py` gated on `tool_name.startswith("llm_")`. Under the default tier the
+  completion door is named exactly `llm`, which fails that test — so every routed call was
+  dropped before reaching the savings log. The undercount is indistinguishable from "nothing
+  was routed", the same blind spot as the hint bug. The gate now accepts the doors, strips
+  MCP qualification (`mcp__chuzom__llm`), and records `task_type="routed"` for the door rather
+  than inventing a task the name does not carry. The observability doors
+  (`chuzom_status`/`chuzom_admin`/`chuzom_session`) are added to the skip list, so checking
+  your savings can never increase your savings.
+- **Install:** `tool_surface.py` is now copied beside the hooks as `chuzom_tool_surface.py`,
+  so a hook running under an interpreter without `chuzom` importable can still resolve names.
+
 ## v1.1.0 — 2026-08-01 — Honest realized-savings measurement + security/correctness hardening
 
 Independently audited across multiple adversarial review passes. No breaking API changes.

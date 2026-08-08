@@ -114,6 +114,10 @@ def test_identical_content_is_a_noop(tmp_path, monkeypatch):
     body = "# chuzom-hook-version: 5\nsame\n"
     src.write_text(body)
     dst.write_text(body)
+    # CHZ-SURF-01: the installer also syncs the stdlib-only tool_surface support
+    # module next to the hooks. Sync it first so the state really IS identical —
+    # otherwise this test asserts a noop against a genuinely-missing file.
+    ih._sync_hook_support_files()
     msgs = ih.check_and_update_hooks()
     assert msgs == [], "no update expected when content is identical"
 

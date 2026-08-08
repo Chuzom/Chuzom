@@ -11,6 +11,15 @@ from chuzom.install_hooks import (
 )
 
 
+
+def _hook_msgs(updates):
+    """Drop the CHZ-SURF-01 support-module sync line.
+
+    `check_and_update_hooks` now also syncs the stdlib-only tool_surface
+    module beside the hooks, so exact-list assertions about HOOK updates
+    must ignore it."""
+    return [m for m in updates if "support module" not in m]
+
 class TestRulesVersion:
     def test_no_header_returns_zero(self, tmp_path):
         f = tmp_path / "rules.md"
@@ -152,7 +161,7 @@ class TestCheckAndUpdateHooks:
         assert restored.exists()
         assert restored.read_text() == hook_content
         assert os.access(restored, os.X_OK)
-        assert updates == ["Restored missing chuzom-auto-route.py v7"]
+        assert _hook_msgs(updates) == ["Restored missing chuzom-auto-route.py v7"]
 
     def test_updates_managed_legacy_alias(self, tmp_path, monkeypatch):
         src_dir = tmp_path / "src"
@@ -177,7 +186,7 @@ class TestCheckAndUpdateHooks:
         updates = check_and_update_hooks()
 
         assert (dst_dir / "auto-route.py").read_text() == src_content
-        assert updates == ["Updated legacy alias auto-route.py v7 → v8"]
+        assert _hook_msgs(updates) == ["Updated legacy alias auto-route.py v7 → v8"]
 
     def test_restores_legacy_alias_when_settings_reference_it(self, tmp_path, monkeypatch):
         src_dir = tmp_path / "src"
@@ -215,7 +224,7 @@ class TestCheckAndUpdateHooks:
         updates = check_and_update_hooks()
 
         assert (dst_dir / "auto-route.py").read_text() == src_content
-        assert updates == ["Restored legacy alias auto-route.py v8"]
+        assert _hook_msgs(updates) == ["Restored legacy alias auto-route.py v8"]
 
 
 class TestRegisterHook:

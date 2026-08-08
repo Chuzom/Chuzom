@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
+from chuzom.tool_surface import route_tool
 from chuzom.quota_savings import (
     QuotaSavingsSnapshot,
     _start_of_5h_window_utc,
@@ -265,7 +266,7 @@ async def test_llm_quota_saved_when_no_cached_usage() -> None:
     with patch("chuzom.state.get_last_usage", return_value=None):
         out = await llm_quota_saved()
     assert "No cached Claude subscription usage" in out
-    assert "llm_check_usage" in out
+    assert route_tool("llm_check_usage") in out
 
 
 @pytest.mark.asyncio

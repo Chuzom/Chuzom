@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from chuzom.terminal_style import Color
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01: never print a raw tool name
 
 
 def bold(text: str) -> str:
@@ -452,8 +453,8 @@ class SavingsAnalytics:
 
         # Footer
         output.append(dim("💡 Tips:"))
-        output.append(dim("  • Use 'llm_usage' for detailed cost breakdown by provider"))
-        output.append(dim("  • Use 'llm_savings' for savings over different time periods"))
+        output.append(dim(f"  • Use '{route_tool('llm_usage')}' for detailed cost breakdown by provider"))
+        output.append(dim(f"  • Use '{route_tool('llm_savings')}' for savings over different time periods"))
         output.append(dim("  • Layer 1 (RTK): Enable via shell commands (git, pytest, etc)"))
         output.append(dim("  • Layer 3 (Token-Savior): Enable via CHUZOM_COMPRESS_RESPONSE=true"))
         output.append("")

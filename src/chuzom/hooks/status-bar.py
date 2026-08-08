@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 3
+# chuzom-hook-version: 4
 """UserPromptSubmit hook — enhanced savings + routing status bar.
 
 Displays a two-mode status line:
@@ -19,6 +19,52 @@ import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
+
+
+# ── Registered-tool surface (CHZ-SURF-01) ────────────────────────────────────
+# Tool names are tier-dependent (CHUZOM_SLIM). NEVER put a raw tool name in
+# output: under the DEFAULT `consolidated` tier the legacy llm_query /
+# llm_analyze / llm_code / llm_research / llm_generate names are not registered,
+# so naming one hands the caller "Error: No such tool available" — after which
+# it silently does the work on the expensive model and the savings dashboard
+# cannot distinguish that from "chose not to route".
+def _load_tool_surface_fns():
+    """(route_tool, route_call, route_call_with_complexity) from chuzom.tool_surface.
+
+    Falls back to the stdlib-only copy the installer drops next to the hooks, then
+    to the in-repo source, then to identity (correct only for tier `off`).
+    """
+    try:
+        from chuzom.tool_surface import (
+            route_call,
+            route_call_with_complexity,
+            route_tool,
+        )
+        return route_tool, route_call, route_call_with_complexity
+    except ImportError:
+        pass
+    try:
+        import importlib.util as _ilu
+        from pathlib import Path as _P
+        _here = _P(__file__).resolve().parent
+        for _cand in (_here / "chuzom_tool_surface.py", _here.parent / "tool_surface.py"):
+            if not _cand.exists():
+                continue
+            _spec = _ilu.spec_from_file_location("chuzom_tool_surface", _cand)
+            _mod = _ilu.module_from_spec(_spec)
+            sys.modules["chuzom_tool_surface"] = _mod  # dataclasses needs this
+            _spec.loader.exec_module(_mod)
+            return _mod.route_tool, _mod.route_call, _mod.route_call_with_complexity
+    except Exception:  # noqa: BLE001 — a broken support module must not kill the hook
+        pass
+    return (
+        lambda n, **k: n,
+        lambda n, *a, **k: (f"{n}({', '.join(a)})" if a else n),
+        lambda n, c, *a, **k: f"{n}(complexity='{c}'" + ("".join(', ' + x for x in a)) + ")",
+    )
+
+
+route_tool, route_call, route_call_with_complexity = _load_tool_surface_fns()
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 STATE_DIR = os.path.expanduser("~/.chuzom")
@@ -308,7 +354,7 @@ def _format_status() -> str:
         else:
             cc = f"CC {session_pct:.0f}%s·{weekly_pct:.0f}%w·{sonnet_pct:.0f}%♪{stale_mark}"
     else:
-        cc = f"{DIM}CC — run llm_check_usage{RST}"
+        cc = f"{DIM}CC — run {route_tool('llm_check_usage')}{RST}"
 
     # ── Gemini subscription segment ──
     g_seg = ""

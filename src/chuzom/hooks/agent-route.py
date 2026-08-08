@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 6
+# chuzom-hook-version: 7
 """PreToolUse[Agent] hook — intercept subagent spawning, route reasoning to cheap models.
 
 When Claude spawns a subagent (Agent tool), this hook intercepts and decides:
@@ -34,6 +34,56 @@ import re
 import sys
 import time
 from pathlib import Path
+
+
+# ── Registered-tool surface (CHZ-SURF-01) ────────────────────────────────────
+# Tool names are tier-dependent (CHUZOM_SLIM). NEVER put a raw tool name in
+# output: under the DEFAULT `consolidated` tier the legacy llm_query /
+# llm_analyze / llm_code / llm_research / llm_generate names are not registered,
+# so naming one hands the caller "Error: No such tool available" — after which
+# it silently does the work on the expensive model and the savings dashboard
+# cannot distinguish that from "chose not to route".
+def _load_tool_surface_fns():
+    """(route_tool, route_call, route_call_with_complexity) from chuzom.tool_surface.
+
+    Falls back to the stdlib-only copy the installer drops next to the hooks, then
+    to the in-repo source, then to identity (correct only for tier `off`).
+    """
+    try:
+        from chuzom.tool_surface import (
+            call_parts,
+            route_call,
+            route_call_with_complexity,
+            route_tool,
+        )
+        return route_tool, route_call, route_call_with_complexity, call_parts
+    except ImportError:
+        pass
+    try:
+        import importlib.util as _ilu
+        from pathlib import Path as _P
+        _here = _P(__file__).resolve().parent
+        for _cand in (_here / "chuzom_tool_surface.py", _here.parent / "tool_surface.py"):
+            if not _cand.exists():
+                continue
+            _spec = _ilu.spec_from_file_location("chuzom_tool_surface", _cand)
+            _mod = _ilu.module_from_spec(_spec)
+            sys.modules["chuzom_tool_surface"] = _mod  # dataclasses needs this
+            _spec.loader.exec_module(_mod)
+            return (_mod.route_tool, _mod.route_call,
+                    _mod.route_call_with_complexity, _mod.call_parts)
+    except Exception:  # noqa: BLE001 — a broken support module must not kill the hook
+        pass
+    return (
+        lambda n, **k: n,
+        lambda n, *a, **k: (f"{n}({', '.join(a)})" if a else n),
+        lambda n, c, *a, **k: f"{n}(complexity='{c}'" + ("".join(', ' + x for x in a)) + ")",
+        lambda n, **k: (n, []),
+    )
+
+
+(route_tool, route_call,
+ route_call_with_complexity, call_parts) = _load_tool_surface_fns()
 
 # ── .env loader (mirrors auto-route.py) ──────────────────────────────────────
 # PreToolUse[Agent] runs without an interactive shell, so OLLAMA_BUDGET_MODELS,
@@ -650,8 +700,10 @@ def _allow_routed_spawn() -> bool:
 _SPAWN_ROUTING_NOTE = (
     "\n\n--- chuzom routing (inherited) ---\n"
     "You are a chuzom-routed subagent. For substantive generation, analysis, "
-    "research, or code synthesis, prefer the chuzom MCP tools (llm_query / "
-    "llm_analyze / llm_code / llm_research) over doing the heavy work directly; "
+    f"research, or code synthesis, prefer the chuzom MCP tools ("
+    f"{route_tool('llm_query')} / {route_tool('llm_analyze')} / "
+    f"{route_tool('llm_code')} / {route_tool('llm_research')}"
+    ") over doing the heavy work directly; "
     "use your own file/search tools to gather context and apply concrete edits. "
     "Do NOT spawn further subagents."
 )
@@ -1057,7 +1109,13 @@ def main() -> None:
     # Use repr() for the prompt so newlines are visible and the instruction is copy-safe
     prompt_repr = prompt[:800] + ("..." if len(prompt) > 800 else "")
 
-    stale_note = "\n  ⚠️  Usage data >30min old — quota thresholds may be inaccurate. Run llm_check_usage.\n" if _is_pressure_stale() else ""
+    stale_note = (
+        f"\n  ⚠️  Usage data >30min old — quota thresholds may be inaccurate. "
+        f"Run {route_tool('llm_check_usage')}.\n"
+    ) if _is_pressure_stale() else ""
+    # CHZ-SURF-01: head + pinned args, kept separate so the multi-line call below
+    # renders as `llm(\n  task="analyze",\n  prompt=…\n)` and not `llm(task=…)(…)`.
+    _call_head, _call_pinned = call_parts(tool)
     block_reason = (
         f"[AGENT-ROUTE] Subagent blocked — routing reasoning to cheap model.\n\n"
         f"  Task:       {task_type}/{complexity}\n"
@@ -1071,12 +1129,19 @@ def main() -> None:
         f"     Use Read / Grep / Glob tools to extract the text.\n"
         f"     Embed the content directly in the prompt below.\n\n"
         f"  2. Call this MCP tool:\n\n"
-        f"     {tool}(\n"
+        # CHZ-SURF-01: head and pinned args come from call_parts, NOT route_tool —
+        # route_tool already embeds the args (llm(task="analyze")), so using it as
+        # the head here would emit the uncallable `llm(task="analyze")(prompt=…)`.
+        # `profile=` was ALSO dropped: it is not a parameter of llm_query/analyze/
+        # code/research/generate OR of the `llm` door, so every call this block
+        # printed was rejected for an unexpected keyword argument on every tier.
+        # The profile is already reported above in the "Profile:" line.
+        f"     {_call_head}(\n"
+        + "".join(f"       {_a},\n" for _a in _call_pinned) +
         f'       prompt="""{prompt_repr}""",\n'
-        f'       profile="{profile}",\n'
         f"     )\n\n"
         f"  3. Return the tool output as your response — no further work needed.\n\n"
-        f"Cost saved: subagent would use Opus for reasoning; {tool} uses {model_hint}."
+        f"Cost saved: subagent would use Opus for reasoning; {route_tool(tool)} uses {model_hint}."
     )
 
     result = {

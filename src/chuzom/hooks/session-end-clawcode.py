@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 1
+# chuzom-hook-version: 2
 """Stop hook (claw-code variant) — session summary: external routing costs + free-model savings.
 
 Identical to session-end.py but omits Claude Code subscription pressure sections
@@ -119,6 +119,7 @@ def _format_routing_section(tools: dict[str, dict]) -> list[str]:
         if len(model_short) > 22:
             model_short = model_short[:20] + "…"
         lines.append(
+            # chz-surface-ok: HISTORICAL report of calls that happened; do not rename.
             f"  {tool:<12}  {d['count']:>3}×  {model_short:<24}  ${d['cost']:.4f}"
         )
     return lines
