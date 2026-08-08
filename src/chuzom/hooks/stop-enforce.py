@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 1
+# chuzom-hook-version: 2
 """Stop hook — soft stop enforcement for direct text answers.
 
 When Claude answers a Q&A prompt in plain text (no tool call), the
@@ -93,6 +93,7 @@ def _log_direct_answer(session_id: str, expected_tool: str, strikes: int) -> Non
         _ROUTER_DIR.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         with _LOG_PATH.open("a", encoding="utf-8") as f:
+            # chz-surface-ok: strike LOG record — logical name, tier-independent.
             f.write(
                 f"[{ts}] DIRECT_ANSWER session={session_id[:12]} "
                 f"expected={expected_tool} strikes={strikes}\n"

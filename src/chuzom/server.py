@@ -131,6 +131,31 @@ _gate = make_should_register(_slim)
 if _slim != "off":
     log.info("tool_slim_mode", slim_mode=_slim, summary=_tier_summary(_slim))
 
+# ── CHZ-SURF-01: startup self-check on the emittable tool surface ─────────────
+# Every name a routing hook can put in a directive must resolve to a tool that is
+# actually registered under the active tier. When it does not, the caller gets
+# "No such tool available", silently falls back to the expensive model, and the
+# savings dashboard shows exactly what it shows for "chose not to route" — the
+# failure is invisible in every metric we have. So assert it out loud at boot.
+try:
+    from chuzom.tool_surface import unregistered as _unregistered_tools  # noqa: E402
+
+    _bad_surface = _unregistered_tools(slim=_slim)
+    if _bad_surface:
+        log.error(
+            "tool_surface_unroutable",
+            slim_mode=_slim,
+            tools=_bad_surface,
+            detail=(
+                "These tool names can be emitted by a routing hook but are NOT "
+                "registered under this tier. Hints naming them fail with 'No such "
+                "tool available' and silently cost full model price. Fix the door "
+                "map or fallback chain in chuzom/tool_surface.py."
+            ),
+        )
+except Exception as _surface_err:  # noqa: BLE001 — never block startup on the check
+    log.warning("tool_surface_check_failed", error=str(_surface_err))
+
 # ── Register all tool groups ──────────────────────────────────────────────────
 
 routing.register(mcp, _gate)

@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
 # ── State locations (overridable for tests via CHUZOM_STATE_DIR) ─────────────
 def _state_dir() -> Path:
@@ -320,7 +321,7 @@ def _compute_health(
         return HEALTH_DOWN, "no model provider reachable (no API key / local model)"
 
     if _is_usage_stale(now):
-        return HEALTH_DEGRADED, "usage data stale (>30 min) — run llm_check_usage"
+        return HEALTH_DEGRADED, f"usage data stale (>30 min) — run {route_tool('llm_check_usage')}"
 
     return HEALTH_OK, "routing normally"
 

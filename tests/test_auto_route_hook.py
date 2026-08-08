@@ -10,6 +10,23 @@ from pathlib import Path
 
 import pytest
 
+# CHZ-SURF-01: hints name the tool registered under the ACTIVE tier, and the
+# shipping default is `consolidated` (llm_code -> llm(task="code")). Asserting a
+# raw legacy literal here is what made these tests pass while the emitted hint
+# was unroutable in production.
+from chuzom.tool_surface import route_tool
+
+
+def _names_a_chuzom_tool(hint: str) -> bool:
+    """True if the hint names SOME chuzom tool the caller can call.
+
+    Checked with a regex rather than `"llm_" in hint`: under the consolidated
+    default the door is `llm(task="query")`, which contains no underscore, so the
+    old substring check silently passed on tiers where it meant nothing.
+    """
+    import re as _re
+    return bool(_re.search(r"\b(llm|llm_\w+|chuzom_\w+)\b", hint))
+
 ROOT = Path(__file__).resolve().parents[1]
 HOOK_PATH = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"
 
@@ -140,7 +157,7 @@ def test_golden_prompt_routing_matrix(
     hint = _extract_hint(out)
     # Check for the task/complexity pair (may be wrapped with sparkles ✨)
     assert f"{expected_task}/{expected_complexity}" in hint
-    assert expected_tool in hint
+    assert route_tool(expected_tool) in hint
 
 
 class TestAutoRouteClassification:
@@ -149,35 +166,35 @@ class TestAutoRouteClassification:
         assert out is not None
         hint = _extract_hint(out)
         assert "research/" in hint
-        assert "llm_research" in hint
+        assert route_tool("llm_research") in hint
 
     def test_generate_prompt(self):
         out = run_hook("Write a blog post about machine learning")
         assert out is not None
         hint = _extract_hint(out)
         assert "generate/" in hint
-        assert "llm_generate" in hint
+        assert route_tool("llm_generate") in hint
 
     def test_analyze_prompt(self):
         out = run_hook("Analyze the pros and cons of microservices vs monolith")
         assert out is not None
         hint = _extract_hint(out)
         assert "analyze/" in hint
-        assert "llm_analyze" in hint
+        assert route_tool("llm_analyze") in hint
 
     def test_code_prompt(self):
         out = run_hook("Implement a binary search tree in Python")
         assert out is not None
         hint = _extract_hint(out)
         assert "code/" in hint
-        assert "llm_code" in hint
+        assert route_tool("llm_code") in hint
 
     def test_image_prompt(self):
         out = run_hook("Generate an image of a futuristic city at night")
         assert out is not None
         hint = _extract_hint(out)
         assert "image/" in hint
-        assert "llm_image" in hint
+        assert route_tool("llm_image") in hint
 
     def test_complex_code_prompt(self):
         out = run_hook(
@@ -200,7 +217,7 @@ class TestAutoRouteClassification:
         assert out is not None
         hint = _extract_hint(out)
         assert "code/" in hint
-        assert "llm_code" in hint
+        assert route_tool("llm_code") in hint
 
     def test_code_modify_prompt(self):
         out = run_hook("modify the authentication middleware to support OAuth")
@@ -234,7 +251,7 @@ class TestAutoRouteSkips:
         # v7.5.0: git commands are now routed as coordination tasks for cheap classification
         out = run_hook("git push origin main")
         if out is not None:
-            assert "coordination" in _extract_hint(out).lower() or "llm_" in _extract_hint(out)
+            assert "coordination" in _extract_hint(out).lower() or _names_a_chuzom_tool(_extract_hint(out))
 
     def test_short_greeting(self):
         assert run_hook("hello") is None
@@ -246,7 +263,7 @@ class TestAutoRouteSkips:
         # "read the config.py file" is now routed (query) rather than skipped
         out = run_hook("read the config.py file")
         if out is not None:
-            assert "llm_" in _extract_hint(out)
+            assert _names_a_chuzom_tool(_extract_hint(out))
 
     def test_slash_command(self):
         assert run_hook("/help") is None
@@ -255,19 +272,19 @@ class TestAutoRouteSkips:
         # v7.5.0: npm commands are now routed as coordination tasks for cheap classification
         out = run_hook("npm install express")
         if out is not None:
-            assert "llm_" in _extract_hint(out)
+            assert _names_a_chuzom_tool(_extract_hint(out))
 
     def test_pip_command(self):
         # v7.5.0: pip commands are now routed as coordination tasks for cheap classification
         out = run_hook("pip install requests")
         if out is not None:
-            assert "llm_" in _extract_hint(out)
+            assert _names_a_chuzom_tool(_extract_hint(out))
 
     def test_commit_command(self):
         # "commit these changes" is now routed (code) rather than skipped
         out = run_hook("commit these changes")
         if out is not None:
-            assert "llm_" in _extract_hint(out)
+            assert _names_a_chuzom_tool(_extract_hint(out))
 
     def test_short_ambiguous(self):
         """Short prompts (<10 chars) are skipped."""
@@ -303,7 +320,7 @@ class TestAutoRouteNowRoutes:
             session_id="continuation-regression",
         )
         assert out is not None
-        assert "llm_" in _extract_hint(out)
+        assert _names_a_chuzom_tool(_extract_hint(out))
 
 
 class TestZeroClaudeMode:
@@ -385,7 +402,7 @@ class TestShortCodeFollowup:
         )
         assert out is not None
         hint = _extract_hint(out)
-        assert "llm_code" in hint
+        assert route_tool("llm_code") in hint
         assert "code-context-inherit" in hint
 
     def test_explain_why_followup_after_code_inherits_code(self):
@@ -396,7 +413,7 @@ class TestShortCodeFollowup:
         )
         assert out is not None
         hint = _extract_hint(out)
-        assert "llm_code" in hint
+        assert route_tool("llm_code") in hint
         assert "code-context-inherit" in hint
 
     def test_short_followup_after_generate_does_not_inherit_code(self):

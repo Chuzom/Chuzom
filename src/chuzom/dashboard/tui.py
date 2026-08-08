@@ -24,6 +24,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.timer import Timer
 from textual.widgets import Footer, Static
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -851,7 +852,8 @@ class ActivityPanel(Static):
                 )
         else:
             lines.append(_dim("  No activity data in the last 14 days."))
-            lines.append(_dim("  Route tasks via llm_query / llm_code to start tracking."))
+            lines.append(_dim(f"  Route tasks via {route_tool('llm_query')} / "
+                              f"{route_tool('llm_code')} to start tracking."))
 
         self.query_one("#activity-content").update("\n".join(lines))
 

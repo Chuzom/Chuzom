@@ -5,6 +5,7 @@ from __future__ import annotations
 from chuzom import providers
 from chuzom.config import get_config
 from chuzom.cost import rate_routing_decision
+from chuzom.tool_surface import localize, route_call# CHZ-SURF-01
 
 
 # ── Provider registry ──────────────────────────────────────────────────────────
@@ -292,7 +293,7 @@ def _setup_status() -> str:
 
 def _setup_guide() -> str:
     """Return a static markdown quick-start guide for new users."""
-    return """# Quick Start Guide — Get Running in 5 Minutes
+    return localize("""# Quick Start Guide — Get Running in 5 Minutes
 
 ## Step 1: Gemini (FREE — best starting point)
 1. Go to https://aistudio.google.com/apikey
@@ -337,7 +338,7 @@ CHUZOM_MONTHLY_BUDGET=20.00
 - `.env` should be in `.gitignore` (the router checks this)
 - Keys are loaded into environment variables at runtime only
 - No keys are ever logged or sent to third parties
-"""
+""")
 
 
 async def _setup_discover() -> str:
@@ -484,7 +485,7 @@ def _setup_add(provider: str, api_key: str) -> str:
 
     return (
         f"Added **{reg['name']}** (`{masked}`) to `{env_path}`\n\n"
-        f"Run `llm_health()` to verify the key works."
+        f"Run `{route_call('llm_health')}` to verify the key works."
         f"{gitignore_warning}"
         f"{budget_nudge}"
     )

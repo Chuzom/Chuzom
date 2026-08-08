@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01: never print a raw tool name
 
 
 # ── ANSI helpers (respect NO_COLOR / non-tty) ─────────────────────────────────
@@ -291,6 +292,14 @@ def _run_install_headless() -> None:
 
 # ── install --host (print config snippets for non-Claude Code hosts) ──────────
 
+# CHZ-SURF-01: snippets are .format() templates, so tool names are placeholders
+# resolved against the live tier rather than baked in as literals.
+_SNIPPET_TOOLS = {
+    "savings_tool": route_tool("llm_savings"),
+    "research_tool": route_tool("llm_research"),
+    "query_tool": route_tool("llm_query"),
+}
+
 _HOST_SNIPPETS: dict[str, str] = {
     "codex": """\
 {bold}Codex CLI{reset}  (capability extension — no cost-routing)
@@ -308,7 +317,7 @@ _HOST_SNIPPETS: dict[str, str] = {
    cp "$(python3 -c "import chuzom; import pathlib; print(pathlib.Path(chuzom.__file__).parent / 'rules' / 'codex-rules.md')")" \\
       ~/.codex/instructions.md
 
-3. Restart Codex — run llm_savings to verify the DB is shared.
+3. Restart Codex — run {savings_tool} to verify the DB is shared.
 """,
 
     "desktop": """\
@@ -330,7 +339,7 @@ Add inside the top-level object:
     }}
   }}
 
-Restart Claude Desktop. Run llm_savings to confirm DB is shared.
+Restart Claude Desktop. Run {savings_tool} to confirm DB is shared.
 Note: cost-routing is not available in Desktop (no hook system).
 """,
 
@@ -350,12 +359,12 @@ Note: cost-routing is not available in Desktop (no hook system).
 
 2. Optionally add routing guidance to .github/copilot-instructions.md:
 
-   When a task requires live web search, call the llm_research MCP tool.
+   When a task requires live web search, call the {research_tool} MCP tool.
    When a task requires image generation, call the llm_image MCP tool.
    For auto-routing with savings tracking, call llm_auto.
 
 3. Enable MCP in VS Code settings (Copilot > MCP: Enable).
-   Restart VS Code. Run @chuzom llm_savings to verify.
+   Restart VS Code. Run @chuzom {savings_tool} to verify.
 Note: cost-routing is not available in Copilot (no hook system).
 """,
 
@@ -1205,21 +1214,21 @@ def _install_host(host: str, mode: str = "auto") -> None:
     _FILE_WRITERS = {
         "codex":      (lambda: _install_codex_files(mode="gateway" if mode == "auto" else mode),
                        "Restart Codex and run `chuzom doctor --host codex` to verify automatic routing."),
-        "opencode":   (_install_opencode_files,     "Restart OpenCode and run llm_savings to verify."),
-        "gemini-cli": (_install_gemini_cli_files,   "Restart Gemini CLI and run llm_savings to verify."),
-        "copilot-cli":(_install_copilot_cli_files,  "Restart Copilot CLI and run llm_savings to verify."),
-        "openclaw":   (_install_openclaw_files,     "Restart OpenClaw and run llm_savings to verify."),
-        "trae":       (_install_trae_files,         "Restart Trae IDE and run llm_savings to verify."),
+        "opencode":   (_install_opencode_files,     f"Restart OpenCode and run {route_tool('llm_savings')} to verify."),
+        "gemini-cli": (_install_gemini_cli_files,   f"Restart Gemini CLI and run {route_tool('llm_savings')} to verify."),
+        "copilot-cli":(_install_copilot_cli_files,  f"Restart Copilot CLI and run {route_tool('llm_savings')} to verify."),
+        "openclaw":   (_install_openclaw_files,     f"Restart OpenClaw and run {route_tool('llm_savings')} to verify."),
+        "trae":       (_install_trae_files,         f"Restart Trae IDE and run {route_tool('llm_savings')} to verify."),
         "factory":    (_install_factory_files,      "Run: factory plugin install ypollak2/chuzom"),
         "vscode":     (_install_vscode_files,       "Restart VS Code and enable MCP in Copilot settings."),
-        "cursor":     (_install_cursor_files,       "Restart Cursor and run llm_savings to verify."),
-        "windsurf":   (_install_windsurf_files,     "Restart Windsurf and run llm_savings to verify."),
+        "cursor":     (_install_cursor_files,       f"Restart Cursor and run {route_tool('llm_savings')} to verify."),
+        "windsurf":   (_install_windsurf_files,     f"Restart Windsurf and run {route_tool('llm_savings')} to verify."),
     }
 
     for h in hosts_to_show:
         if h in _FILE_WRITERS:
             install_fn, verify_hint = _FILE_WRITERS[h]
-            label = _HOST_SNIPPETS[h].format(bold=bold, reset=reset).strip()
+            label = _HOST_SNIPPETS[h].format(bold=bold, reset=reset, **_SNIPPET_TOOLS).strip()
             print(f"{label}\n")
             actions = install_fn()
             for action in actions:
@@ -1227,7 +1236,7 @@ def _install_host(host: str, mode: str = "auto") -> None:
             print()
             print(f"  {verify_hint}")
         else:
-            snippet = _HOST_SNIPPETS[h].format(bold=bold, reset=reset)
+            snippet = _HOST_SNIPPETS[h].format(bold=bold, reset=reset, **_SNIPPET_TOOLS)
             print(snippet)
         print("─" * min(w, 70))
 

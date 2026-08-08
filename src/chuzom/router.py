@@ -64,6 +64,7 @@ from chuzom.profiles import get_model_chain, provider_from_model
 from chuzom.receipt_store import compute_receipt, store_receipt
 from chuzom.tracing import set_span_attributes, traced_span
 from chuzom.types import BudgetExceededError, Complexity, CostBudgetExceeded, DeadlineExceeded, LLMResponse, RoutingProfile, TaskType, WallClockExceeded
+from chuzom.tool_surface import route_call, route_tool# CHZ-SURF-01
 
 # Foundational routing rule: complexity always determines the profile.
 # This mapping is the single source of truth — every call through route_and_call
@@ -3075,7 +3076,7 @@ async def _dispatch_model_loop(
         " Run `chuzom setup` to configure provider API keys, or "
         "`chuzom doctor` to diagnose all issues."
         if last_is_auth else
-        " Run `llm_health()` to see circuit breaker status, or "
+        f" Run `{route_call('llm_health')}` to see circuit breaker status, or "
         "`chuzom doctor` to diagnose all issues."
     )
     set_span_attributes(
@@ -3646,8 +3647,8 @@ async def route_and_call(
                     _enforce_or_warn(BudgetExceededError(
                         f"Monthly budget of ${budget:.2f} exceeded "
                         f"(spent: ${monthly_spend:.2f}). "
-                        "To continue: run llm_usage() to see the breakdown, or "
-                        "llm_set_profile(profile='budget') to switch to cheaper models. "
+                        f"To continue: run {route_call('llm_usage')} to see the breakdown, or "
+                        f"or switch profiles via {route_tool('llm_set_profile')} to use cheaper models. "
                         "To raise the limit: set CHUZOM_MONTHLY_BUDGET env var."
                     ))
                 if (monthly_spend + _pending_spend) >= budget * 0.9:

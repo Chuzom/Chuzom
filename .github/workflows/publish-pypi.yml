@@ -1,14 +1,13 @@
 name: Publish to PyPI
 
-# PyPI publishing is PAUSED — aligned with publish.yml. The v* tag trigger auto-published
-# on every release tag, which contradicted publish.yml's deliberate pause ("not ready to
-# publish yet"). Switched to manual dispatch so tagging a release (e.g. v1.0.0) no longer
-# ships to PyPI. To RESUME automated releases, restore the tag trigger:
-#   on:
-#     push:
-#       tags:
-#         - 'v*'
+# PyPI publishing RESUMED at v1.1.1 (CHZ-SURF-01 hotfix). The pause was lifted
+# deliberately: with the routing hints unroutable under the default tier, every
+# install in the wild was silently paying full model price, so the fix has to reach
+# users. Pushing a `v*` tag publishes; manual dispatch still works for re-runs.
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:

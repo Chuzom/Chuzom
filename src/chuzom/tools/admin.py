@@ -28,6 +28,7 @@ from chuzom.health import get_tracker
 from chuzom.provider_budget import get_provider_budgets
 from chuzom.types import RoutingProfile, colorize_provider, MODEL_COST_PER_1K
 from chuzom import state as _state
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
 
 async def llm_save_session(ctx: Context) -> str:
@@ -1098,7 +1099,7 @@ async def llm_approve_route(
             f"Routing cancelled.\n\n"
             f"Blocked call was: {pending.get('model', 'unknown')} "
             f"(estimated ${pending.get('estimated_cost', 0):.4f})\n"
-            f"Use a cheaper tool like `llm_query` for simple tasks."
+            f"Use a cheaper tool like `{route_tool('llm_query')}` for simple tasks."
         )
 
     model = downgrade_to or pending.get("model", "")

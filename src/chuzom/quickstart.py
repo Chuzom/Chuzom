@@ -16,6 +16,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
 
 def detect_hosts() -> list[str]:
@@ -201,7 +202,7 @@ def main() -> None:
     print("  │ 2000 calls/day  │ ~$90/mo    │ ~$18/mo    │ 80%      │")
     print("  └─────────────────┴────────────┴────────────┴──────────┘")
     print("")
-    print("  Track your actual savings: llm_usage (in Claude Code)")
+    print(f"  Track your actual savings: {route_tool('llm_usage')} (in Claude Code)")
 
     # ── Done ──────────────────────────────────────────────────────────────────
     print("\n" + "═" * 54)

@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+
 HOOK = Path(__file__).resolve().parents[1] / "src" / "chuzom" / "hooks" / "auto-route.py"
 
 
@@ -139,7 +140,11 @@ def test_context_dependent_prompt_gets_no_draft_and_a_context_directive(tmp_path
     ctx = _context_text(out)
     # The context-needed directive is present...
     assert "CONTEXT-DEPENDENT PROMPT" in ctx
-    assert "llm_query(context" in ctx
+    # CHZ-SURF-01: the directive must name a tool that is registered under the
+    # ACTIVE tier — llm_query(context=…) on a legacy tier, and
+    # llm(task="query", context=…) under the consolidated default.
+    from chuzom.tool_surface import route_call
+    assert route_call("llm_query", "context=…") in ctx
     # ...and no blind draft was relayed.
     assert "UNVERIFIED DRAFT" not in ctx
     assert "ROUTING NOTICE" not in ctx

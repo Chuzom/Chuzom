@@ -29,6 +29,7 @@ from chuzom.types import (
     RoutingProfile, RoutingRecommendation, TaskType, _budget_bar,
 )
 from chuzom import state as _state
+from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
 
 async def llm_classify(
@@ -610,7 +611,7 @@ async def llm_auto(
         net = lifetime["net_savings"]
         lines.append(
             f"\n📊 **{tasks_routed} tasks routed** — ~${net:.2f} net saved lifetime. "
-            "Run `llm_savings` for the full breakdown."
+            f"Run `{route_tool('llm_savings')}` for the full breakdown."
         )
 
     return "\n".join(lines)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 18
+# chuzom-hook-version: 19
 """SessionStart hook — inject routing banner, start Ollama, refresh Claude usage.
 
 Fires once when a new Claude Code session begins. Four jobs:
@@ -95,6 +95,7 @@ _load_dotenv()
 
 _CC_MODE = os.environ.get("CHUZOM_CLAUDE_SUBSCRIPTION", "").lower() in ("true", "1", "yes")
 
+# chz-surface-ok: names resolved at render time by _localize_banner()
 BANNER_ZERO_CLAUDE = """
 ╔════════════════════════════════════════════════════════════════╗
 ║  ⚡ chuzom ACTIVE — strict zero-Claude routing             ║
@@ -105,6 +106,7 @@ BANNER_ZERO_CLAUDE = """
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
+# chz-surface-ok: names resolved at render time by _localize_banner()
 BANNER_SUBSCRIPTION = """
 ╔════════════════════════════════════════════════════════════════╗
 ║  ⚡ chuzom ACTIVE — subscription mode (MCP-tool routing)  ║
@@ -123,6 +125,7 @@ BANNER_SUBSCRIPTION = """
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
+# chz-surface-ok: names resolved at render time by _localize_banner()
 BANNER_API_KEYS = """
 ╔════════════════════════════════════════════════════════════════╗
 ║  ⚡ chuzom ACTIVE — API-key routing in effect             ║
@@ -141,6 +144,7 @@ BANNER_API_KEYS = """
 ╚════════════════════════════════════════════════════════════════╝
 """.strip()
 
+# chz-surface-ok: names resolved at render time by _localize_banner()
 BANNER_LOCAL = """
 ╔════════════════════════════════════════════════════════════════╗
 ║  ⚡ chuzom ACTIVE — local routing (no cloud keys set)     ║
@@ -169,12 +173,84 @@ def _any_cloud_key() -> bool:
     return any(os.environ.get(k, "").strip() for k in _CLOUD_KEY_VARS)
 
 
+# ── Registered-tool surface (CHZ-SURF-01) ────────────────────────────────────
+# The banner is injected into the model's context at session start, so the tool
+# names in it TEACH the model what to call for the rest of the session. When the
+# banner advertised llm_query/llm_analyze/llm_code/llm_research under the
+# consolidated default — where none of them are registered — it was training the
+# model to make calls that fail. Names are resolved against the live tier.
+def _load_route_tool():
+    """Return `chuzom.tool_surface.route_tool`, or None if unavailable."""
+    try:
+        from chuzom.tool_surface import route_tool
+        return route_tool
+    except ImportError:
+        pass
+    try:
+        import importlib.util as _ilu
+        _here = Path(__file__).resolve().parent
+        for _cand in (_here / "chuzom_tool_surface.py", _here.parent / "tool_surface.py"):
+            if not _cand.exists():
+                continue
+            _spec = _ilu.spec_from_file_location("chuzom_tool_surface", _cand)
+            _mod = _ilu.module_from_spec(_spec)
+            sys.modules["chuzom_tool_surface"] = _mod
+            _spec.loader.exec_module(_mod)
+            return _mod.route_tool
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+_ROUTE_TOOL = _load_route_tool()
+
+# Longest-first so no name is a prefix of a later match.
+_BANNER_TOOL_NAMES = ("llm_research", "llm_generate", "llm_analyze", "llm_query", "llm_code")
+
+
+def _fit(body: str, target: int) -> str:
+    """Fit ``body`` to exactly ``target`` characters for the banner box.
+
+    Resolved names are longer than the legacy ones (``llm(task="research")`` vs
+    ``llm_research``), so reclaim room from the alignment padding first, and only
+    then elide the trailing provider parenthetical. The box must stay square —
+    a ragged banner reads as a broken install.
+    """
+    while len(body) > target and "  " in body:
+        body = body.replace("  ", " ", 1)
+    if len(body) > target:
+        cut = body.rfind(" (")
+        if cut > 0:
+            body = body[:cut]
+    return body[:target].ljust(target)
+
+
+def _localize_banner(banner: str) -> str:
+    """Rewrite legacy tool names in a banner to the ones actually registered."""
+    if _ROUTE_TOOL is None:
+        return banner
+    out = []
+    for line in banner.splitlines():
+        hit = next((t for t in _BANNER_TOOL_NAMES if t in line), None)
+        if hit is None or not (line.startswith("║") and line.endswith("║")):
+            out.append(line)
+            continue
+        try:
+            replacement = _ROUTE_TOOL(hit)
+        except Exception:  # noqa: BLE001
+            out.append(line)
+            continue
+        width = len(line) - 2
+        out.append("║" + _fit(line[1:-1].replace(hit, replacement), width) + "║")
+    return "\n".join(out)
+
+
 def _resolve_banner(is_subscription: bool) -> str:
     if is_subscription or _CC_MODE:
-        return BANNER_SUBSCRIPTION
+        return _localize_banner(BANNER_SUBSCRIPTION)
     if _any_cloud_key():
-        return BANNER_API_KEYS
-    return BANNER_LOCAL  # honest: no cloud keys configured
+        return _localize_banner(BANNER_API_KEYS)
+    return _localize_banner(BANNER_LOCAL)  # honest: no cloud keys configured
 
 
 BANNER = _resolve_banner(_CC_MODE)
@@ -309,7 +385,7 @@ def _zero_claude_enabled() -> bool:
 
 def _select_banner(is_subscription: bool) -> str:
     if _zero_claude_enabled():
-        return BANNER_ZERO_CLAUDE
+        return _localize_banner(BANNER_ZERO_CLAUDE)
     # RED2-8-03: honest — fall to the local banner when no cloud keys are set
     # instead of claiming "API-key routing in effect".
     return _resolve_banner(is_subscription)

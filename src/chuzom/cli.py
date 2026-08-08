@@ -53,6 +53,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from chuzom.tool_surface import localize# CHZ-SURF-01
 
 
 # ── Helper functions: JSON MCP config management ────────────────────────────────
@@ -171,7 +172,7 @@ def _append_routing_rules(
 # ── Platform-specific install functions ────────────────────────────────────────
 
 
-_COPILOT_AGENT_CONTENT = """\
+_COPILOT_AGENT_CONTENT = localize("""\
 ---
 description: Cost-optimized assistant that routes every task through Chuzom first.
 tools: ['chuzom']
@@ -192,7 +193,7 @@ then relay the routed result to the user. Do NOT generate your own answer first.
 
 Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable
 model (Ollama → Flash → GPT-4o-mini → Claude), conserving premium quota.
-"""
+""")
 
 
 def _install_vscode_files() -> list[str]:
@@ -474,7 +475,7 @@ def _install_kimi_files() -> list[str]:
 
     # KIMI.md — project-level instructions (Kimi Code's equivalent of CLAUDE.md)
     kimi_md = Path.cwd() / "KIMI.md"
-    kimi_rules = """\
+    kimi_rules = localize("""\
 
 ## Chuzom routing — cost-aware LLM routing
 
@@ -494,7 +495,7 @@ Call the relevant tool BEFORE generating your own answer — relay the routed re
 | Deep reasoning, proofs, root cause | `llm_reason` |
 
 Never skip routing for non-trivial tasks. Chuzom routes to the cheapest capable model.
-"""
+""")
     if kimi_md.exists():
         content = kimi_md.read_text()
         if "chuzom" not in content.lower():

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from chuzom.terminal_style import Color
+from chuzom.tool_surface import route_call, route_tool  # CHZ-SURF-01
 
 
 # ── Formatting utilities ────────────────────────────────────────────────────
@@ -306,6 +307,8 @@ def _render_host_explainer() -> str:
     deliver. Surfaced via ``chuzom doctor --explain-host`` so the
     answer lives next to the savings posture report.
     """
+    # chz-surface-ok: explanatory prose about the cost model, not an instruction
+    # to call anything — the names here are illustrative, not a call-to-action.
     return (
         f"\n{_bold('  Why is my host on Opus 4.7 / Sonnet 4.6 and not on a local model?')}\n\n"
 
@@ -436,7 +439,7 @@ def _check_savings_posture() -> list[str]:
     else:
         lines.append(_warn(
             "CHUZOM_SIDECAR_PREFETCH not set — introspection prompts ('show me "
-            "my routing today', 'git status') still go through llm_query + tool "
+            f"my routing today', 'git status') still go through {route_tool('llm_query')} + tool "
             "calls. Set =1 to let the hook pre-execute and inject the result."
         ))
 
@@ -880,7 +883,7 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
     if not usage_path.exists():
         print(
             _warn(
-                "usage.json not found — run `llm_check_usage` in Claude Code to populate"
+                f"usage.json not found — run `{route_tool('llm_check_usage')}` in Claude Code to populate"
             )
         )
     else:
@@ -892,14 +895,14 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
             elif age_s < 3600:
                 print(
                     _warn(
-                        f"getting stale ({int(age_s / 60)}m old) — run `llm_check_usage`"
+                        f"getting stale ({int(age_s / 60)}m old) — run `{route_tool('llm_check_usage')}`"
                     )
                 )
             else:
                 print(
                     _fail(
                         f"stale ({int(age_s / 3600)}h old) — routing may use wrong pressure",
-                        fix="Run llm_check_usage in Claude Code",
+                        fix=f"Run {route_tool('llm_check_usage')} in Claude Code",
                     )
                 )
                 issues.append("Usage data is stale")
@@ -941,7 +944,7 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
             # breaker the router enforces is open (the exact C10 divergence).
             issues.append(
                 f"Provider '{name}' circuit breaker is open — router is skipping it; "
-                f"run llm_health() for live detail"
+                f"run {route_call('llm_health')} for live detail"
             )
     except Exception as _h_err:  # fail-open: health reporting must never break doctor
         print(_dim(f"  (health snapshot unavailable: {_h_err})"))

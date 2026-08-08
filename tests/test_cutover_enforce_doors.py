@@ -41,7 +41,9 @@ def test_consolidated_tier_directive_names_llm_door(tmp_path):
              tmp_path, {"CHUZOM_ENFORCE": "hard", "CHUZOM_SLIM": "consolidated"})
     out = json.loads(r.stdout)
     assert out["decision"] == "block"
-    assert "call llm\n" in out["reason"]              # the door, not llm_query
+    # CHZ-SURF-01: the door CARRIES the task discriminator. A bare `llm` would be
+    # callable but would throw away the specialization the classifier just chose.
+    assert 'call llm(task="query")' in out["reason"]
     assert "call llm_query" not in out["reason"]
 
 
@@ -52,7 +54,7 @@ def test_default_unset_names_the_door(tmp_path):
              tmp_path, {"CHUZOM_ENFORCE": "hard"})  # no CHUZOM_SLIM → default consolidated
     out = json.loads(r.stdout)
     assert out["decision"] == "block"
-    assert "call llm\n" in out["reason"]
+    assert 'call llm(task="query")' in out["reason"]
     assert "call llm_query" not in out["reason"]
 
 

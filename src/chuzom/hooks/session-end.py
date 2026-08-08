@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 15
+# chuzom-hook-version: 16
 """Stop hook — unified session summary: CC subscription delta + external routing costs."""
 
 from __future__ import annotations
@@ -609,6 +609,8 @@ def _format_routing_section(tools: dict[str, dict]) -> list[str]:
 
         cost_color = _C_GREEN if d["cost"] == 0 else _C_LABEL
         lines.append(
+            # chz-surface-ok: HISTORICAL report of tools that were actually called;
+            # renaming them would misreport what happened.
             f"    {_C_LABEL}{tool:<12}{_RESET}  {d['count']:>3}×  "
             f"{tool_tokens_str:>6}  {model_short:<20}  {cost_color}${d['cost']:.4f}{_RESET}"
         )
