@@ -360,3 +360,41 @@ def test_lint_scans_workflows_and_shell_by_default():
         f"only {m.group(1)} files checked vs {py_only} python files — "
         "workflows/shell scripts are not being scanned"
     )
+
+
+def test_lint_result_does_not_depend_on_the_python_version(tmp_path):
+    """The lint IS the guarantee, so it must not be version-sensitive.
+
+    PEP 701 (3.12) gave f-string literal parts their real line numbers, where 3.11
+    had them inherit the enclosing node's. A pragma check anchored to line
+    PROXIMITY therefore passed on 3.11 and failed on 3.12+ — the lint looked clean
+    locally and broke CI. Pragmas are now anchored to the enclosing statement,
+    whose position is stable. This test pins the property on the running
+    interpreter; CI runs it on 3.11/3.12/3.13/3.14.
+    """
+    src = REPO / "src" / "chuzom" / "commands" / "doctor.py"
+    r = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "lint_tool_surface.py"), str(src)],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, (
+        f"pragma resolution is version-sensitive on {sys.version_info[:2]}:\n{r.stdout}"
+    )
+
+
+def test_pragma_is_honoured_inside_a_multiline_statement(tmp_path):
+    """A multi-line call puts the offending argument several lines in; the natural
+    place to justify it is right there, not above the statement."""
+    f = tmp_path / "m.py"
+    f.write_text(
+        "print(\n"
+        "    'a',\n"
+        "    # chz-surface-ok: internal log record\n"
+        "    'calling llm_code now',\n"
+        ")\n"
+    )
+    r = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "lint_tool_surface.py"), str(f)],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stdout

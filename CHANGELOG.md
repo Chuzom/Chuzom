@@ -53,6 +53,11 @@ indistinguishable in the savings dashboard.
   YAML. The lint now also scans `.github/workflows/*.yml` and `scripts/*.sh` for tool names
   in assertions or printed output. It found three more in `scripts/install.sh`, whose
   post-install "Available tools" list named five tools the default tier does not register.
+- **Guard: the lint is version-independent.** Its first version anchored `chz-surface-ok`
+  pragmas to line PROXIMITY, which passed on 3.11 and failed on 3.12+: PEP 701 gives
+  f-string literal parts their real line numbers, where 3.11 had them inherit the enclosing
+  node's. It looked clean locally and broke CI on three interpreters. Pragmas now anchor to
+  the enclosing statement, whose position is stable, and a test pins the property.
 - **Guard: startup self-check.** The server logs `tool_surface_unroutable` at boot if any
   emittable name fails to resolve under the active tier.
 - **Also fixed:** `enforce-route.py` kept a private 6-entry copy of the legacy→door map — the

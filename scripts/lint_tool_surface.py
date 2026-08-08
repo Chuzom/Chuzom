@@ -90,23 +90,51 @@ DOUBLE_CALL = re.compile(r"\{\s*route_tool\([^)]*\)\s*\}\(")
 PRAGMA = re.compile(r"#\s*chz-surface-ok:\s*\S+")
 
 
-def _has_pragma(src_lines: list[str], lineno: int) -> bool:
-    """True if the statement opening at ``lineno`` carries a justified pragma.
+def _stmt_spans(tree: ast.AST) -> list[tuple[int, int]]:
+    """(lineno, end_lineno) for every statement, innermost-first by span width.
 
-    Checked on the statement's own line OR the line immediately above it. The
-    line-above form is the one to use for triple-quoted templates: a trailing
-    ``#`` comment after ``\"\"\"`` is not a comment at all, it is the first line of
-    the string, and it would print inside the banner.
+    Pragmas are anchored to the enclosing STATEMENT rather than to a fixed number
+    of lines above the offending node, because node line numbers are NOT stable
+    across Python versions: PEP 701 (3.12) gives f-string literal parts their real
+    positions, where 3.11 had them inherit the enclosing node's. A proximity-based
+    lookback therefore passed on 3.11 and failed on 3.12+ — which is exactly how
+    this lint broke CI while looking clean locally. Statement positions do not move.
+    """
+    spans = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.stmt):
+            end = getattr(node, "end_lineno", None) or node.lineno
+            spans.append((node.lineno, end))
+    spans.sort(key=lambda s: s[1] - s[0])
+    return spans
+
+
+def _has_pragma(src_lines: list[str], lineno: int, spans: list[tuple[int, int]]) -> bool:
+    """True if the statement containing ``lineno`` carries a justified pragma.
+
+    A pragma is honoured on the statement's own opening line, or on the comment
+    lines directly above it. The line-above form is the one to use for
+    triple-quoted templates: a trailing ``#`` after ``\"\"\"`` is not a comment at
+    all, it is the first line of the string, and it would print inside the banner.
     """
     if not 1 <= lineno <= len(src_lines):
         return False
-    # Look back a few lines: Python folds adjacent string literals into a SINGLE
-    # Constant node reported at the first literal's line, so the pragma often sits
-    # above the enclosing `return (` rather than immediately above the text.
-    for back in range(0, 4):
-        idx = lineno - 1 - back
-        if idx >= 0 and PRAGMA.search(src_lines[idx]):
+    if PRAGMA.search(src_lines[lineno - 1]):
+        return True
+
+    start, end = next(((s, e) for s, e in spans if s <= lineno <= e), (lineno, lineno))
+    # Anywhere INSIDE the statement counts: a multi-line call puts the offending
+    # argument several lines in, and the natural place to justify it is right
+    # there next to it, not above the statement's opening line.
+    for i in range(start - 1, min(end, len(src_lines))):
+        if PRAGMA.search(src_lines[i]):
             return True
+    # Walk up through the contiguous comment block immediately above the statement.
+    i = start - 2
+    while i >= 0 and src_lines[i].strip().startswith("#"):
+        if PRAGMA.search(src_lines[i]):
+            return True
+        i -= 1
     return False
 
 
@@ -156,7 +184,9 @@ LOGICAL_TOOL_VARS = {
 }
 
 
-def _logical_var_interpolations(tree: ast.AST, src_lines: list[str]) -> list[tuple[int, str, str]]:
+def _logical_var_interpolations(
+    tree: ast.AST, src_lines: list[str], spans: list[tuple[int, int]]
+) -> list[tuple[int, str, str]]:
     """(lineno, var, suggestion) for each f-string interpolation of a logical var."""
     out = []
     for node in ast.walk(tree):
@@ -168,7 +198,7 @@ def _logical_var_interpolations(tree: ast.AST, src_lines: list[str]) -> list[tup
             v = part.value
             if isinstance(v, ast.Name) and v.id in LOGICAL_TOOL_VARS:
                 ln = getattr(part, "lineno", getattr(node, "lineno", 0))
-                if _has_pragma(src_lines, ln):
+                if _has_pragma(src_lines, ln, spans):
                     continue
                 out.append((ln, v.id, LOGICAL_TOOL_VARS[v.id]))
     return out
@@ -191,9 +221,11 @@ def check_file(path: Path) -> list[str]:
     except SyntaxError as e:
         return problems + [f"{path}: SyntaxError: {e}"]
 
+    spans = _stmt_spans(tree)
+
     # Only the routing hooks carry these variable names with this meaning.
     if path.parent.name == "hooks":
-        for ln, var, better in _logical_var_interpolations(tree, src_lines):
+        for ln, var, better in _logical_var_interpolations(tree, src_lines, spans):
             problems.append(
                 f"{path}:{ln}: f-string interpolates the LOGICAL tool variable "
                 f"{var!r} — this emits an unresolved name (the CHZ-SURF-01 bug). "
@@ -214,7 +246,7 @@ def check_file(path: Path) -> list[str]:
             continue
         if _BARE.match(text.strip()):
             continue  # bare logical identifier — allowed
-        if _has_pragma(src_lines, getattr(node, "lineno", 0)):
+        if _has_pragma(src_lines, getattr(node, "lineno", 0), spans):
             continue  # explicitly resolved elsewhere; reason required on the line
         problems.append(
             f"{path}:{getattr(node, 'lineno', '?')}: tool name {hit!r} embedded in an "
