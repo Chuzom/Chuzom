@@ -214,7 +214,12 @@ def collect(
             (input_tokens / 1000) * _BASELINE_PER_1K_INPUT
             + (output_tokens / 1000) * _BASELINE_PER_1K_OUTPUT
         )
-    data.savings_usd = max(0.0, data.baseline_cost_usd - data.total_cost_usd)
+    # AUD-06: signed, not clamped. This clamp was present at 7c6fdaa — the commit
+    # certified RELEASE QUALIFIED under Gate 7 ("surfaces reconcile, no
+    # estimate-as-measured"). Gate 7 therefore passed on a surface structurally
+    # incapable of reporting a loss, which is how the defect survived an audit
+    # whose whole purpose was reconciling this figure.
+    data.savings_usd = data.baseline_cost_usd - data.total_cost_usd
     if data.baseline_cost_usd > 0:
         data.savings_pct = data.savings_usd / data.baseline_cost_usd
     inv_total = len(data.up_inversions) + len(data.down_inversions)

@@ -206,7 +206,8 @@ def query_window(
             out_tok = int(row[2])
             cost = float(row[3])
             opus_baseline = (in_tok * _OPUS_IN_PER_M + out_tok * _OPUS_OUT_PER_M) / 1_000_000
-            saved = max(0.0, opus_baseline - cost)
+            # AUD-06: signed. Clamping here made the aggregate a sum of wins.
+            saved = opus_baseline - cost
             by_source[_LEGACY_TABLE] = {
                 "calls": calls, "tokens": in_tok + out_tok,
                 "cost_usd": cost, "saved_usd": saved,
@@ -318,7 +319,9 @@ def query_daily(
                 b["calls"] += int(calls)
                 b["tokens"] += int(in_tok) + int(out_tok)
                 opus_baseline = (int(in_tok) * _OPUS_IN_PER_M + int(out_tok) * _OPUS_OUT_PER_M) / 1_000_000
-                b["saved"] += max(0.0, opus_baseline - float(cost))
+                # AUD-06: `+=` on a clamped term is the exact defect — a loss
+                # on one item could never offset a gain on another.
+                b["saved"] += opus_baseline - float(cost)
 
         for table in _PLATFORM_TABLES:
             if not _table_exists(conn, table):
