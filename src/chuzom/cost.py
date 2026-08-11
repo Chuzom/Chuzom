@@ -19,6 +19,7 @@ from pathlib import Path
 
 import aiosqlite
 
+from chuzom import pricing as _pricing
 from chuzom.config import get_config
 from chuzom.types import (
     LLMResponse, MODEL_COST_PER_1K, MODEL_SPEED_TPS,
@@ -2187,10 +2188,17 @@ async def get_savings_summary(period: str = "today") -> dict:
 
 # Configurable baseline pricing for savings calculations
 # Users can override via CHUZOM_SAVINGS_BASELINE env var (default: "sonnet")
+# RED2-01: this table held $15/$75 for Opus — the retired Opus 3 rate, 3x the
+# current one — and fed the ledger write path, so stored savings were overstated
+# by that factor. Haiku's $0.80/$4.00 was wrong too (the real rate is $1.00/$5.00).
+# Now derived from chuzom.pricing so a family alias can never carry its own
+# number again; the alias resolves to a model ID and the ID carries the price.
 BASELINE_PRICING = {
-    "haiku":  {"input": 0.80, "output": 4.0},    # $ per 1M tokens (v9.2.2)
-    "sonnet": {"input": 3.0,  "output": 15.0},
-    "opus":   {"input": 15.0, "output": 75.0},
+    family: {
+        "input": _pricing.input_rate(family),
+        "output": _pricing.output_rate(family),
+    }
+    for family in ("haiku", "sonnet", "opus")
 }
 
 def _get_baseline_model() -> str:

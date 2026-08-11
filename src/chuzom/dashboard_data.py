@@ -38,6 +38,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from chuzom import pricing as _pricing
+
+#: Counterfactual model these savings are computed against. Named once so the
+#: baseline is a stated choice rather than a number buried in an expression.
+_BASELINE_MODEL = "claude-opus-5"
+
 WindowLiteral = Literal["today", "week", "month", "lifetime", "14d"]
 
 DEFAULT_DB_PATH = Path.home() / ".chuzom" / "usage.db"
@@ -179,8 +185,12 @@ def query_window(
         # Opus: $15/M input, $75/M output.  Stored saved_usd used a blended
         # $0.045/1K estimate that is inaccurate for input-heavy calls.
         # Subscription provider rows have no meaningful token cost so exclude them.
-        _OPUS_IN_PER_M = 15.0
-        _OPUS_OUT_PER_M = 75.0
+        # RED8-01: these were hardcoded at $15/$75 — the retired Opus 3 rate,
+        # 3x the real one — and this read path feeds ~26 reporting surfaces, so
+        # every savings figure downstream was overstated by the same factor.
+        # Sourced from chuzom.pricing now; a literal here fails scripts/lint_pricing.py.
+        _OPUS_IN_PER_M = _pricing.input_rate(_BASELINE_MODEL)
+        _OPUS_OUT_PER_M = _pricing.output_rate(_BASELINE_MODEL)
         if _table_exists(conn, _LEGACY_TABLE):
             cols = _columns(conn, _LEGACY_TABLE)
             row = conn.execute(  # nosec B608 — table/where are module constants & validated enum, not user input
@@ -283,8 +293,12 @@ def query_daily(
 
     conn = sqlite3.connect(str(db))
     try:
-        _OPUS_IN_PER_M = 15.0
-        _OPUS_OUT_PER_M = 75.0
+        # RED8-01: these were hardcoded at $15/$75 — the retired Opus 3 rate,
+        # 3x the real one — and this read path feeds ~26 reporting surfaces, so
+        # every savings figure downstream was overstated by the same factor.
+        # Sourced from chuzom.pricing now; a literal here fails scripts/lint_pricing.py.
+        _OPUS_IN_PER_M = _pricing.input_rate(_BASELINE_MODEL)
+        _OPUS_OUT_PER_M = _pricing.output_rate(_BASELINE_MODEL)
         if _table_exists(conn, _LEGACY_TABLE):
             cols = _columns(conn, _LEGACY_TABLE)
             rows = conn.execute(
