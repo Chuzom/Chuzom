@@ -39,6 +39,14 @@ jobs:
         # so it can only be caught statically.
         run: uv run python scripts/lint_tool_surface.py
 
+      - name: Pricing guard (INV-COST-004 — one source of truth for money)
+        # Same failure shape as the tool-surface guard above: a wrong price
+        # produces a plausible number, not an error, so nothing downstream can
+        # notice. The audit found the retired Opus 3 rate ($15/$75, 3x the real
+        # one) in five tables; this lint found thirteen. Baselined as accepted
+        # debt that may shrink but never grow — a NEW price table fails the build.
+        run: uv run python scripts/lint_pricing.py
+
   quality-gates:
     # v1.0.1 mitigation gates (G4/G5/G6). These target the audit's recurrence
     # patterns directly: new can't-fail tests (G4), regressions of the six fixed

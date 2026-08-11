@@ -1,0 +1,30 @@
+# INV-COST-004 accepted debt — price tables not yet migrated to chuzom.pricing.
+# This list may SHRINK, never grow. A new entry means a new price table
+# was introduced, which is the defect this lint exists to prevent.
+# Regenerate ONLY after migrating a table, never to silence a new one.
+chuzom/benchmarks.py	price-table	`_MODEL_COST_PER_1K` looks like a price table with 23 literal(s). Import from chuzom.pricing instead.
+chuzom/bounded_operational.py	price-table	`_TIER_PRICING_MODEL` looks like a price table with 4 literal(s). Import from chuzom.pricing instead.
+chuzom/calibration.py	price-table	`_PRICING_PER_M` looks like a price table with 44 literal(s). Import from chuzom.pricing instead.
+chuzom/calibration.py	retired-rate	`_PRICING_PER_M` contains 0.25/1.25
+chuzom/calibration.py	retired-rate	`_PRICING_PER_M` contains 0.8/4.0
+chuzom/calibration.py	retired-rate	`_PRICING_PER_M` contains 15.0/75.0
+chuzom/cost.py	price-table	`CLAUDE_RATES_PER_M` looks like a price table with 12 literal(s). Import from chuzom.pricing instead.
+chuzom/cost.py	price-table	`GEMINI_RATES_PER_M` looks like a price table with 24 literal(s). Import from chuzom.pricing instead.
+chuzom/cost.py	price-table	`OPENAI_RATES_PER_M` looks like a price table with 28 literal(s). Import from chuzom.pricing instead.
+chuzom/cost.py	price-table	`_OPUS_PRICING` looks like a price table with 8 literal(s). Import from chuzom.pricing instead.
+chuzom/cost.py	retired-rate	`CLAUDE_RATES_PER_M` contains 0.8/4.0
+chuzom/cost.py	retired-rate	`CLAUDE_RATES_PER_M` contains 15.0/75.0
+chuzom/hooks/agent-route.py	price-table	`rates` looks like a price table with 10 literal(s). Import from chuzom.pricing instead.
+chuzom/hooks/agent-route.py	retired-rate	`rates` contains 0.8/4.0
+chuzom/hooks/agent-route.py	retired-rate	function `_estimate_agent_cost` contains 0.8/4.0
+chuzom/hooks/cc-usage-track.py	price-table	`_PRICES` looks like a price table with 6 literal(s). Import from chuzom.pricing instead.
+chuzom/hooks/enforce-route.py	retired-rate	function `main` contains 0.8/4.0
+chuzom/hooks/savings_logger.py	price-table	`_PRICING_PER_MTOK` looks like a price table with 22 literal(s). Import from chuzom.pricing instead.
+chuzom/hooks/usage-refresh.py	price-table	`EST_CLAUDE_COST_PER_CALL` looks like a price table with 2 literal(s). Import from chuzom.pricing instead.
+chuzom/model_registry.py	retired-rate	`_BUNDLED_DEFAULTS` contains 0.8/4.0
+chuzom/model_registry.py	retired-rate	`_BUNDLED_DEFAULTS` contains 15.0/75.0
+chuzom/router.py	retired-rate	function `_dispatch_model_loop` contains 0.8/4.0
+chuzom/router.py	retired-rate	function `_estimate_opus_cost` contains 15.0/75.0
+chuzom/tools/routing.py	price-table	`_COST_PER_1K_OUT` looks like a price table with 3 literal(s). Import from chuzom.pricing instead.
+chuzom/tools/text.py	price-table	`_COST_PER_1K` looks like a price table with 15 literal(s). Import from chuzom.pricing instead.
+chuzom/types.py	price-table	`MODEL_COST_PER_1K` looks like a price table with 3 literal(s). Import from chuzom.pricing instead.
