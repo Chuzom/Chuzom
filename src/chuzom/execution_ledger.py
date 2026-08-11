@@ -30,6 +30,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+import logging
+
+from chuzom.sqlite_wal import enable_wal
+
+_log = logging.getLogger("chuzom.execution_ledger")
+
 SCHEMA_VERSION = 1
 
 # ── Event taxonomy ────────────────────────────────────────────────────────────
@@ -269,7 +275,10 @@ def _connect(path: Path | None = None) -> sqlite3.Connection:
     # close cycles can transiently hold the WAL lock long enough that a 5s wait errored
     # with `database is locked`. A longer wait lets the writer drain instead of failing.
     conn = sqlite3.connect(str(p), timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL")
+    # RED5-01 (P0): guarded. Second of three copies of the same cold-start bug —
+    # see chuzom/sqlite_wal.py for why the bare form fails both by raising AND,
+    # more dangerously, by returning a mode nobody checks.
+    enable_wal(conn, label="execution_ledger")
     conn.executescript(_DDL)
     for _stmt in _MIGRATIONS:
         try:
@@ -294,11 +303,38 @@ def _row_to_value(field_name: str, ev: LedgerEvent) -> Any:
     return v
 
 
+#: RED5-02 (P0): how many events this process failed to persist.
+#:
+#: ``record_event`` is fail-open by design — a ledger write must never break the
+#: routing path — but fail-open only works if the failure is *counted*. It was
+#: not: the function returned False, all seven call sites discarded the value,
+#: and nothing logged. 66 events vanished across 2400 concurrent writes and the
+#: only evidence was a total that did not add up. A success signal nobody reads
+#: is not a signal, and a fail-open path with no counter is indistinguishable
+#: from a path that works.
+_dropped_events = 0
+
+
+def dropped_event_count() -> int:
+    """Events this process failed to persist. Surfaced by `doctor` and telemetry."""
+    return _dropped_events
+
+
+def reset_dropped_event_count() -> None:
+    """Test seam. Never call this to make a number look better."""
+    global _dropped_events
+    _dropped_events = 0
+
+
 def record_event(ev: LedgerEvent, *, path: Path | None = None) -> bool:
     """Append *ev* to the canonical ledger. Idempotent on ``event_id`` (INV-COST-003).
 
-    FAIL-OPEN: returns False on any error, never raises into the caller (routing path).
+    FAIL-OPEN: returns False on any error, never raises into the caller (routing
+    path). A False return is also LOGGED and COUNTED here, so a caller that
+    ignores the boolean still cannot make the loss invisible — see
+    :func:`dropped_event_count`.
     """
+    global _dropped_events
     try:
         if not ev.ts:
             ev.ts = time.time()
@@ -315,7 +351,15 @@ def record_event(ev: LedgerEvent, *, path: Path | None = None) -> bool:
         finally:
             conn.close()
         return True
-    except Exception:  # noqa: BLE001 — a ledger failure must never break routing
+    except Exception as exc:  # noqa: BLE001 — a ledger failure must never break routing
+        _dropped_events += 1
+        _log.warning(
+            "LEDGER_EVENT_DROPPED event_id=%s type=%s: %s (dropped this process: %d)",
+            getattr(ev, "event_id", "?"),
+            getattr(ev, "event_type", "?"),
+            exc,
+            _dropped_events,
+        )
         return False
 
 

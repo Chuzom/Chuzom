@@ -22,9 +22,10 @@ import urllib.request
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
+from chuzom.paths import state_path
 from chuzom.types import QualityMode, RoutingProfile, Tier
 from chuzom.routing_hints import validate_config_upgrade, log_routing_decision
 
@@ -262,7 +263,14 @@ class RouterConfig(BaseSettings):
     # ── Router settings ──
     chuzom_profile: RoutingProfile = RoutingProfile.BALANCED
     chuzom_tier: Tier = Tier.FREE
-    chuzom_db_path: Path = Path.home() / ".chuzom" / "usage.db"
+    # RED2-07: a default_factory, not a bare default. As a bare default this
+    # expression ran at CLASS-DEFINITION time, freezing the real home directory
+    # at import — so CHUZOM_HOME could not redirect it, and neither could
+    # monkeypatching Path.home() afterwards. A test that believed it was
+    # sandboxed wrote to the operator's live usage.db and destroyed real data
+    # (evidence/AUDITOR_INCIDENT.md). Resolved per instantiation through
+    # chuzom.paths, which reads CHUZOM_HOME at call time.
+    chuzom_db_path: Path = Field(default_factory=lambda: state_path("usage.db"))
     chuzom_monthly_budget: float = 20.0  # $20/month default cap
     chuzom_daily_spend_limit: float = 0.0  # 0 = disabled; >0 fires alert when crossed
 

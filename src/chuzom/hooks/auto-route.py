@@ -3755,7 +3755,13 @@ def main() -> None:
     # previously unmeasured. Estimated at chars/4; fail-open (a hook must never raise).
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
-        record_event(LedgerEvent(
+        # RED5-02: the boolean is BOUND, never discarded. record_event()
+        # is fail-open and returns False on loss; all seven call sites threw
+        # that away, so 66 dropped events across 2400 writes produced no
+        # error, no log and no counter. The visibility now lives inside
+        # record_event() too, but a discarded return value is the habit that
+        # caused this and it should not survive in the source.
+        _ledger_ok = record_event(LedgerEvent(
             session_id=session_id or os.environ.get("CHUZOM_SESSION_ID", ""),
             event_type="directive_injected",
             task_type=str(task_type),

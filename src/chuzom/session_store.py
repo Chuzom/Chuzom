@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
@@ -37,6 +38,28 @@ from typing import Any
 from chuzom.compaction import collapse_whitespace, dedup_sections
 from chuzom.file_lock import exclusive_lock
 from chuzom.token_budget import truncate_to_budget
+
+_log = logging.getLogger("chuzom.session_store")
+
+#: RED5-03: lock acquisitions that timed out and were therefore declined.
+#: Counted rather than merely logged, so "did we lose writes under load?" has an
+#: answer that does not require grepping logs nobody kept.
+_lock_timeouts = 0
+
+
+def lock_timeout_count() -> int:
+    return _lock_timeouts
+
+
+def _note_lock_timeout(what: str) -> None:
+    global _lock_timeouts
+    _lock_timeouts += 1
+    _log.warning(
+        "SESSION_LOCK_TIMEOUT (%s): declined rather than proceeding unlocked "
+        "(timeouts this process: %d)",
+        what,
+        _lock_timeouts,
+    )
 
 # ── Self-injection guard ─────────────────────────────────────────────────────
 # Context blocks we inject are wrapped in this sentinel. When recording new
@@ -372,7 +395,13 @@ def purge_expired(session_id: str | None) -> None:
         path = _session_path(session_id)
         if not path.exists():
             return
-        with exclusive_lock(_lock_path(path)):
+        # RED5-03: see the note at the append site. Compaction rewrites the file
+        # from a snapshot; doing that without the lock is how a concurrent
+        # append gets os.replace()'d out of existence.
+        with exclusive_lock(_lock_path(path)) as locked:
+            if not locked:
+                _note_lock_timeout("session compaction")
+                return
             _maybe_compact(path)
     except Exception:
         pass
@@ -428,7 +457,16 @@ def record_event(
         # compaction it triggers; a sibling `.lock` file is used rather than
         # locking the JSONL itself, so compaction's os.replace() swap of the
         # data file's inode never disturbs the lock's identity.
-        with exclusive_lock(_lock_path(path)):
+        # RED5-03: the yielded boolean is BOUND, not discarded. exclusive_lock
+        # yields False when acquisition times out and degrades to "unlocked"
+        # rather than raising — a sane default for best-effort callers, and the
+        # wrong one here. Running this block unlocked is precisely the race the
+        # comment above describes, so an unlocked run does not silently do the
+        # dangerous thing: it declines, counts, and says so.
+        with exclusive_lock(_lock_path(path)) as locked:
+            if not locked:
+                _note_lock_timeout("session append")
+                return
             prev = _last_record(path)
             if prev and prev.get("h") == content_hash:
                 return  # consecutive-duplicate dedupe

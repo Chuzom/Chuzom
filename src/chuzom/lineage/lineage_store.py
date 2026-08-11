@@ -7,6 +7,8 @@ import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from chuzom.sqlite_wal import enable_wal
+
 if TYPE_CHECKING:
     from chuzom.lineage.decision_logger import RoutingDecision
 
@@ -34,8 +36,12 @@ def _connect(db_file: Path | str) -> sqlite3.Connection:
     once; ``busy_timeout`` is per-connection and must be set on every connect.
     """
     conn = sqlite3.connect(str(db_file))
-    conn.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
-    conn.execute("PRAGMA journal_mode = WAL")
+    # RED5-01 (P0): the WAL switch takes an exclusive lock, and on a cold start
+    # several hooks race for it. Unguarded, the loser's PRAGMA raised straight
+    # out of this constructor — 4 of 12 concurrent LineageStore constructions
+    # died that way. enable_wal() also inspects the RETURNED mode, because the
+    # non-raising failure is reported by answering "delete".
+    enable_wal(conn, busy_timeout_ms=_BUSY_TIMEOUT_MS, label="lineage_store")
     return conn
 
 
