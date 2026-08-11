@@ -5,6 +5,44 @@
 > sensitive prompts, and writes audit-grade logs. This document covers what
 > Chuzom does to protect those flows and how to report security issues.
 
+## ⚠️ Active advisory — CHZ-SA-2026-001
+
+**Affected:** all released versions **≤ 1.1.1**, when the agentic delegation surface
+(`llm_act` / `llm_delegate`) is used.
+**Severity:** high. **Status:** open; fix tracked as WP-01.
+**Published:** 2026-08-11.
+
+**Do not run `llm_act` or `llm_delegate` against a repository, issue tracker, or any other content
+you do not trust.** Set `CHUZOM_DELEGATE=off` if you do not use these tools.
+
+Two defects combine into a working prompt-injection → credential-exfiltration chain:
+
+1. **Delegated subprocesses inherit the full parent environment.** `agentic/react.py` and
+   `agentic/adapters.py` spawn child processes without an explicit `env=` allowlist, so every
+   provider API key in the parent environment is readable by anything the child runs. The
+   repository already contains `safe_subprocess.py` for exactly this purpose; these two paths do
+   not use it. `CodexAdapter` additionally bypasses the codebase's own safe
+   `codex_agent.run_codex()`.
+2. **The agentic path does not apply the injection boundary it ships with.** The existing
+   `wrap_prompt_with_boundaries` / `_is_injection_attempt` guards are not called on the
+   `agentic/service.py` → `TaskLedger` → `pack_prompt` route, so hostile text in repository
+   content reaches the planner as if it were user instruction.
+
+Together, untrusted repository content can direct a delegated agent to run a shell command that
+reads the environment and writes the values somewhere it controls. The command blocklist in
+`_bash_block_reason` is not a mitigation: a model that can emit arbitrary shell can trivially
+evade a keyword list, and it is treated as defence in depth only.
+
+**Workarounds until the fix ships**
+- `CHUZOM_DELEGATE=off` disables the affected surface.
+- Only delegate against repositories you control end to end.
+- Run provider keys out of the environment where your host supports it, or use a shell whose
+  environment holds no long-lived credentials.
+
+Related, same advisory: the reversibility gate is not wired. Irreversible milestones execute in the
+working tree rather than an isolated git worktree, and "verified" means a syntactic check passed —
+a `return True` stub is currently accepted. Tracked as WP-09.
+
 ## Reporting a vulnerability
 
 If you find a vulnerability, **please do not open a public issue.**
@@ -27,7 +65,9 @@ work to it.
 
 | Version | Supported | Security fixes through |
 |---|---|---|
-| 0.0.x (current dogfood) | ✅ | All releases |
+| 1.1.x (current) | ✅ | All releases |
+| ≤ 1.1.1 | ⚠️ | Affected by **CHZ-SA-2026-001** (above) |
+| 0.0.x | ✅ | All releases |
 | Pre-fork llm-router | ⚠️ | Use Chuzom; llm-router gets best-effort |
 
 Production users should upgrade to the latest 0.0.x release. v0.1.0 (the

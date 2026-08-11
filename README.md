@@ -4,7 +4,6 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/chuzom-router?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=ORANGE&left_text=downloads)](https://pepy.tech/projects/chuzom-router)
 [![Python](https://img.shields.io/pypi/pyversions/chuzom-router?style=flat-square&color=3572A5)](https://pypi.org/project/chuzom-router/)
 [![CI](https://img.shields.io/github/actions/workflow/status/Chuzom/Chuzom/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Chuzom/Chuzom/actions/workflows/ci.yml)
-[![Audited](https://img.shields.io/badge/audit-RELEASE_QUALIFIED-10B981?style=flat-square)](https://github.com/Chuzom/Chuzom/blob/main/Docs/correctness-reset/03_RELEASE_GATES.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-10B981?style=flat-square)](https://github.com/Chuzom/Chuzom/blob/main/LICENSE)
 
 <p align="center">
@@ -21,8 +20,9 @@
 sends the eligible ones to a free local or subscription model, and spends Claude quota only on
 work that truly needs it — so a day's quota stretches across a week of sessions.
 Context-dependent prompts (which a stateless local model can't answer) and provider outages fall
-back to Claude by design. Drop-in, zero workflow change, and **independently audited** — see
-[Measured results](#-measured-results-audited).
+back to Claude by design. Drop-in, zero workflow change, with **cost and quality independently
+benchmarked** — see [Measured results](#-measured-results-audited). That benchmark covers routing
+economics and answer quality; it is not a security or privacy audit.
 
 ```bash
 pip install chuzom-router && chuzom install --host claude-code
@@ -114,11 +114,18 @@ metering* (every escalation is a real, priced API call — no free-tier confound
 | **Quality delta** | **−0.21** on a 0–5 judge scale — **within** the 0.5 non-inferiority margin |
 | **Exhaustions** (dropped answers) | **0** |
 | **Robustness** | held across **4 independent runs** (−0.18 / −0.21 / −0.21 / +0.00) |
-| **Verdict** | **RELEASE QUALIFIED** — two consecutive clean audit passes on a frozen commit |
+| **Verdict** | Two consecutive clean passes on a frozen commit, **at that commit** — see the note below |
 
 All 20 release gates pass, including a positive-net-savings gate, a quality-non-inferiority gate,
 and a mutation-testing bar. Full evidence: [Release Gates][gates] · [Benchmark log][bench] ·
 [Audit runbook][runbook].
+
+> **⚠️ The qualification does not hold at HEAD.** It was granted at a specific frozen commit, and
+> the project's own restart-at-zero rule means it lapses the moment the tree moves. A later audit
+> found open P0 defects — including savings figures overstated ~3× by a stale price table, and a
+> savings surface structurally incapable of displaying a loss, which Gate 7 certified anyway. The
+> audit badge has been removed until a re-qualification passes at the shipping SHA.
+> Remediation is tracked in `.chuzom/zero-tolerance-audit/`.
 
 > **On the "3×" / "80%" headline numbers.** Those are *illustrative estimates* for a heavy-Opus
 > workload — real savings depend entirely on your prompt mix. The **measured** figures above are
@@ -260,8 +267,14 @@ Execution):
 2. **Delegate** — each milestone runs on the cheapest capable tier (local agent → Codex → premium).
 3. **Escalate without rework** — a failed check escalates to a stronger tier, carrying
    already-passed milestones forward as frozen context.
-4. **Flow, not stall** — escalation is bounded; irreversible steps run in an isolated git worktree,
-   merged only after they verify.
+4. **Flow, not stall** — escalation is bounded.
+
+> **⚠️ Not yet true as shipped.** This section previously stated that irreversible steps run in an
+> isolated git worktree, merged only after they verify. The reversibility gate is **not wired up**:
+> milestones execute in the working tree, and "verified" currently means a syntactic check passed —
+> a `return True` stub is accepted. Do not run `llm_act` / `llm_delegate` on a repository whose
+> contents you do not trust, and see the security advisory in [SECURITY.md](SECURITY.md). Tracked
+> as WP-09 in `.chuzom/zero-tolerance-audit/`.
 
 ```bash
 llm_act(task="…")   # → JSON: outcome, per-milestone status, events, savings
@@ -365,8 +378,12 @@ python -m chuzom benchmark   # run your own
 **Do I need to bring API keys?** No — not if you use Claude Code Pro/Max or Codex subscriptions.
 Optional for other providers.
 
-**What data does Chuzom collect?** None. Everything stays on your machine — no telemetry, no cloud
-calls to Chuzom.
+**What data does Chuzom collect?** None, and Chuzom itself makes no cloud calls — no telemetry, no
+servers of ours. Your prompts are a separate question: **whether they stay on your machine depends
+on which providers you configure.** With only Ollama, they do. Configure `OPENAI_API_KEY`,
+`GEMINI_API_KEY` or any other cloud provider and prompt text is sent to *that* provider whenever the
+router selects it — which is the normal case, since routing to cheap cloud models is a core feature.
+See [Local-first](#local-first-no-chuzom-telemetry).
 
 **How much can I actually save?** It depends entirely on your prompt mix. The honest, reproducible
 number is the audited **+$0.027/run net at −0.21 quality** control-group result above.

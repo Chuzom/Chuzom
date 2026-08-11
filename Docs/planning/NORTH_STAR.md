@@ -10,21 +10,36 @@
 capable of completing the task at the required quality. The selected model must be able to
 perform the _real work_ — local file operations, tool use, command execution, and
 verification. The _most capable_ tier is used only when a cheaper model fails to meet the
-required quality bar — and "most capable" is defined by the live external model leaderboard,
-not by any one vendor. Claude is one candidate on that ladder, not axiomatically the top.**
+required quality bar — and "most capable" is defined by an external model ranking, not by any one
+vendor. Claude is one candidate on that ladder, not axiomatically the top.**
 
-### Capability is external and live — the leaderboard, not a hardcoded ranking
+### Capability is external — a curated ranking, not a hardcoded "Claude is best"
 
 Which models are "better/most capable" is **not** decided inside Chuzom and is **not** a fixed
-"Claude is best" assumption. It is read from a continuously-updated external ranking:
+"Claude is best" assumption. It is read from an external ranking:
 
 > **https://artificialanalysis.ai/leaderboards/models**
 
 The frontier moves weekly (new Claude, Gemini, DeepSeek, Qwen, Llama, GPT, … releases). The
 router's cost/capability ordering — and therefore what sits at the *top* of the escalation
-ladder for a given task — must track this leaderboard, so escalation always reaches the current
+ladder for a given task — must track that ranking, so escalation reaches the current
 best-capable model, which may or may not be Claude on any given day. Pinning "Claude = top" is a
 North-Star violation the moment another model leads.
+
+> **⚠️ Correction (WP-00). This document previously described the ranking as "live" and
+> "continuously-updated". It is neither, and never has been.** What ships is a **curated static
+> snapshot**, refreshed manually via `scripts/refresh-model-registry.py`. Nothing fetches a ranking
+> at runtime.
+>
+> This matters more than a wording slip, because that clause was the load-bearing justification for
+> the whole "Claude is not axiomatically the top" position. With a manually-curated ladder, **vendor
+> neutrality is a goal of this project, not a capability it currently has** — the ladder is only as
+> neutral and as current as its last manual refresh. That is honest and defensible. Asserting it is
+> live was not.
+>
+> Whether to implement runtime fetching or formalise the manual cadence is decided in WP-12
+> (`.chuzom/zero-tolerance-audit/18_REMEDIATION_EXECUTION_PLAN.md`); Option B — a documented refresh
+> cadence with a CI check that fails when the snapshot exceeds it — is the locked owner decision.
 
 ## The core reframe: route *executions*, not *completions*
 
@@ -68,11 +83,11 @@ A change is North-Star-positive iff it does one or more of:
 5. Makes **escalation** cheaper, faster, or better-targeted.
 6. Makes routing quality **measurable** rather than assumed.
 7. Reduces the cases where work needlessly reaches the frontier (most-expensive) tier —
-   whichever model the leaderboard currently ranks there, Claude or otherwise.
+   whichever model the ranking currently places there, Claude or otherwise.
 
 A change is North-Star-negative if it: blocks a tool-needing task behind a no-tools tool;
 exempts offloadable work straight to the frontier tier; adds surface without adding capability;
-assumes a fixed "Claude is best" ranking instead of the live leaderboard; or claims a guarantee
+assumes a fixed "Claude is best" ranking instead of the curated ranking; or claims a guarantee
 that isn't measured.
 
 ## Required measurements (measured, not assumed)
@@ -95,7 +110,8 @@ that isn't measured.
 - Exempting file/repo/operational prompts straight to the frontier tier instead of routing them
   to the cheapest tool-capable model.
 - Treating any single vendor (e.g. Claude) as the fixed "best" model instead of reading the
-  current capability ranking from the live leaderboard (https://artificialanalysis.ai/leaderboards/models).
+  curated capability ranking (https://artificialanalysis.ai/leaderboards/models), refreshed
+  manually — see the correction under "Capability is external".
 - "Guaranteed savings" claims under a default that doesn't enforce routing.
 - Routing decisions that are logged but never verified against actual outcome.
 
