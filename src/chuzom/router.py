@@ -356,7 +356,10 @@ async def _build_and_filter_chain(
                 f"Invalid model_override format: {model_override!r}. "
                 "Use 'provider/model' format (e.g. 'openai/gpt-4o', "
                 "'anthropic/claude-haiku-4-5-20251001', 'gemini/gemini-2.5-flash'). "
-                "Run llm_providers() to see all available models."
+                # RED1-22: named an unregistered tool in a user-facing error.
+                # Found only once GUARDED was derived from DEPRECATED_TOOLS —
+                # llm_providers was one of the 11 names the hand-list omitted.
+                f"Run {route_call('llm_providers')} to see all available models."
             )
         if (
             (config.chuzom_claude_subscription and model_override.startswith("anthropic/"))

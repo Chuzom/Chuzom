@@ -28,6 +28,8 @@ Usage:
     chuzom savings-report   — detailed token/cost breakdown (all-time, by model/provider)
     chuzom savings-report --period week  — weekly savings report
     chuzom doctor           — check that everything is wired up correctly
+    chuzom okf status       — what knowledge is stored and injected for this project
+    chuzom okf gc           — find stored model prose; --apply quarantines it
     chuzom demo             — show routing decisions for sample prompts
     chuzom dashboard        — launch interactive TUI dashboard (real-time monitoring)
     chuzom dashboard --web [--port 7338]  — legacy web dashboard at localhost:7337
@@ -126,47 +128,26 @@ def _append_routing_rules(
     dest_path: Path | str,
     rules_filename: str,
 ) -> list[str]:
-    """Append routing rules from template file, idempotently.
+    """Append routing rules from a template file, idempotently.
 
-    Args:
-        dest_path: Destination file path
-        rules_filename: Name of rules file in src/chuzom/rules/ (e.g., "vscode-rules.md")
+    RED1-20 / RED8-06 (WP-08): this WAS a second, independent implementation of
+    the same installer, and it differed from the one in `commands/install.py` in
+    two ways that both mattered:
 
-    Returns:
-        List of action strings describing what was done
+    * it did not localize tool names against the active surface, so every
+      non-Claude host it served got a rules file naming tools that are not
+      registered — the defect CHZ-SURF-01 fixed for Claude Code only;
+    * it never recorded to the install manifest, so the rules files it wrote
+      survived `chuzom uninstall` entirely.
+
+    Two copies is how one gets fixed and the other does not. There is now one
+    implementation; this delegates to it. Kept as a thin alias rather than
+    deleted because eight call sites in this module reference it by name, and
+    renaming them would be churn with no reader benefit.
     """
-    dest_path = Path(dest_path)
-    actions = []
+    from chuzom.commands.install import _append_routing_rules as _impl
 
-    # Load template rules
-    rules_dir = Path(__file__).parent / "rules"
-    rules_file = rules_dir / rules_filename
-
-    if not rules_file.exists():
-        actions.append(f"warning: {rules_filename} not found in {rules_dir}")
-        return actions
-
-    rules_content = rules_file.read_text()
-
-    # Create parent directories if needed
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Check if already present (idempotency)
-    if dest_path.exists():
-        existing = dest_path.read_text()
-        if "chuzom" in existing:
-            actions.append(f"skipped: {dest_path.name} already contains chuzom rules")
-            return actions
-        # Append to existing file
-        with open(dest_path, "a") as f:
-            f.write("\n\n" + rules_content)
-        actions.append(f"Appended: routing rules to {dest_path}")
-    else:
-        # Create new file
-        dest_path.write_text(rules_content)
-        actions.append(f"Created: {dest_path} with routing rules")
-
-    return actions
+    return _impl(Path(dest_path), rules_filename)
 
 
 # ── Platform-specific install functions ────────────────────────────────────────
@@ -847,6 +828,9 @@ def main() -> None:
     elif args and args[0] == "init-claude-memory":
         from chuzom.cli_init_memory import run_init_claude_memory
         run_init_claude_memory()
+    elif args and args[0] == "okf":
+        from chuzom.commands.okf import cmd_okf
+        cmd_okf(args[1:])
     elif args and args[0] == "doctor":
         from chuzom.commands.doctor import cmd_doctor
         cmd_doctor(args[1:])

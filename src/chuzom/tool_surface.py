@@ -122,6 +122,12 @@ DEPRECATED_TOOLS: dict[str, str] = {
     # completion → llm
     "llm_query": "llm", "llm_analyze": "llm", "llm_code": "llm",
     "llm_research": "llm", "llm_generate": "llm",
+    # RED1-21: llm_reason was in NONE of the three surface sets, so localize()
+    # never rewrote it and the lint never saw it — while three generated rules
+    # tables (install_hooks.py, cli.py x2) instructed models to call it. Emitted
+    # but unknown to the resolver is the worst pairing available: taught to the
+    # model, invisible to the guard.
+    "llm_reason": "llm",
     # agentic → llm_act
     "llm_delegate": "llm_act",
     # observability → chuzom_status
@@ -148,6 +154,13 @@ _DOOR_TASK_ARG: dict[str, str] = {
     "llm_code": "code",
     "llm_research": "research",
     "llm_generate": "generate",
+    # Deep reasoning maps to the analyze specialization and deliberately pins NO
+    # tier. Pinning tier="best" would look faithful to the old name and would be
+    # North-Star-negative: it sends every reasoning call straight to the frontier
+    # instead of letting the router escalate only when a cheaper tier misses the
+    # quality bar. The task carries the specialization; the tier stays a routing
+    # decision.
+    "llm_reason": "analyze",
 }
 
 # Capability-ordered degradation used when neither the tool NOR its front door is

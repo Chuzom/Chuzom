@@ -267,7 +267,12 @@ async def llm_usage(period: str = "today") -> str:
             lines.append(row(f"  Projected:   ${forecast.projected_monthly_usd:.2f} for full month"))
         lines.append(HR)
 
-    lines.append(row("  Tip: use llm_dashboard to open the visual web dashboard"))
+    # RED1-22: was a bare `llm_dashboard`, which is not registered under the
+    # consolidated default tier. Surfaced only once GUARDED became derived from
+    # DEPRECATED_TOOLS — the hand-maintained list omitted this name.
+    lines.append(
+        row(f"  Tip: use {route_tool('llm_dashboard')} to open the visual web dashboard")
+    )
     lines.append(HR)
     return "\n".join(lines)
 
@@ -413,7 +418,10 @@ async def llm_health() -> str:
         ollama_status = "reachable ✅" if ollama_reachable else "unreachable ❌ — run: ollama serve"
         lines.append(f"\n🦙 Ollama ({config.ollama_base_url}): {ollama_status}")
 
-    lines.append("\nTip: use llm_dashboard to open the visual web dashboard at localhost:7337")
+    lines.append(
+        f"\nTip: use {route_tool('llm_dashboard')} to open the visual web "
+        "dashboard at localhost:7337"
+    )
     return "\n".join(lines)
 
 
