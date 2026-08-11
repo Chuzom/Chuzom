@@ -16,6 +16,7 @@ from typing import Any
 
 from chuzom.agentic.engine import AgentRunResult
 from chuzom.agentic.ledger import Milestone
+from chuzom.safe_subprocess import get_delegated_env
 
 
 @dataclass(frozen=True)
@@ -28,16 +29,42 @@ class ProcResult:
 # runner(argv, input_text) -> ProcResult. Injected so tests never spawn a model.
 Runner = Callable[[list[str], str], ProcResult]
 
+#: Non-secret configuration an agent CLI needs, passed through explicitly.
+#:
+#: No credential belongs here. The Codex CLI authenticates from ``~/.codex/auth.json``
+#: (reachable via HOME, which the allowlist carries), so it does not need a key
+#: in its environment — and it must not have one, because it is the process that
+#: runs model-authored commands.
+_AGENT_CLI_PASSTHROUGH: tuple[str, ...] = (
+    "CODEX_PATH",             # a filesystem path to the binary, not a secret
+    "CHUZOM_CODEX_MODELS",
+    "CHUZOM_CODEX_TIMEOUT",
+)
+
+
+def _agent_cli_env() -> dict[str, str]:
+    import os
+
+    return {k: os.environ[k] for k in _AGENT_CLI_PASSTHROUGH if k in os.environ}
+
 
 def subprocess_runner(
     argv: list[str], input_text: str, *, cwd: str | None = None, timeout: float = 300.0
 ) -> ProcResult:
     """Real subprocess runner. A missing binary / timeout is a captured result,
-    not an exception — the flow must never hang on a backend."""
+    not an exception — the flow must never hang on a backend.
+
+    RED6-01 (P0): the child gets an allowlisted environment. This runner spawns
+    an agent CLI that executes model-authored work, and it inherited the parent's
+    entire environment — every provider key the router holds. It also bypassed
+    the codebase's own ``codex_agent.run_codex()``, the guarded path, so the
+    protection that already existed was routed around rather than missing.
+    """
     try:
         proc = subprocess.run(
             argv, input=input_text, capture_output=True, text=True,
             cwd=cwd, timeout=timeout, check=False,
+            env=get_delegated_env(_agent_cli_env()),
         )
     except FileNotFoundError:
         return ProcResult(127, "", f"binary not found: {argv[0]}")

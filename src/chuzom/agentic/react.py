@@ -24,6 +24,7 @@ from typing import Any
 from chuzom.agentic.adapters import pack_prompt
 from chuzom.agentic.engine import AgentRunResult
 from chuzom.agentic.ledger import Milestone
+from chuzom.safe_subprocess import get_delegated_env
 
 
 @dataclass
@@ -95,16 +96,60 @@ _BASH_SENSITIVE_RE = re.compile(
 )
 _BASH_NET_TOOL_RE = re.compile(r"(?i)\b(curl|wget|httpie|http|nc|ncat|telnet|ssh|scp|sftp|rsync)\b")
 _BASH_LOCALHOST_RE = re.compile(r"(?i)(localhost|127\.0\.0\.1|::1|0\.0\.0\.0)")
+# RED6-01: environment reads. DEFENCE IN DEPTH ONLY — see _bash_block_reason.
+_BASH_ENV_DUMP_RE = re.compile(
+    r"(?xi)"
+    r"\b(env|printenv|set|export|declare|typeset)\b |"
+    r"/proc/[^/\s]+/environ |"                        # cat /proc/self/environ
+    r"os\.environ |"                                  # python -c '...os.environ...'
+    # A shell expansion of anything credential-shaped: $FOO_KEY, ${FOO_TOKEN}.
+    r"\$\{?[A-Za-z_]*(KEY|TOKEN|SECRET|PASSWORD|CRED|PAT)\b"
+)
+_HEX_ESCAPE_RE = re.compile(r"\\x([0-9a-fA-F]{2})")
+
+
+def _normalize_command(command: str) -> str:
+    """Undo the cheapest ways to hide a keyword from a regex.
+
+    ``e''nv``, ``e""nv`` and ``$'\\x65nv'`` are all ``env``. A matcher that only
+    sees the raw string is defeated by a shell feature, not by cleverness, so it
+    is worth spending five lines to close. This does NOT make the blocklist
+    complete — nothing does — it just stops the trivial cases from being free.
+    """
+    c = _HEX_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), command or "")
+    return c.replace("'", "").replace('"', "").replace("\\", "")
 
 
 def _bash_block_reason(command: str) -> str | None:
-    """Return a reason if the shell command is disallowed by the sandbox, else None."""
-    c = command or ""
-    if _BASH_DESTRUCTIVE_RE.search(c):
+    """Return a reason if the shell command is disallowed by the sandbox, else None.
+
+    **This function is not the security boundary and must never be treated as
+    one.** It pattern-matches a string that a language model wrote, and a model
+    that can emit arbitrary shell can defeat any pattern list — ``$'\\x65nv'``,
+    ``e''nv``, ``cat /proc/self/environ``, a base64'd payload, a Python
+    one-liner. Every entry here is a speed bump.
+
+    The boundary for credential exposure is the allowlisted ``env=`` passed to
+    the subprocess in :func:`default_tool_executor`: the secrets are not present
+    in the child, so there is nothing for a bypass to read. If you find yourself
+    adding a pattern here to close a hole, the hole is somewhere else.
+    """
+    raw = command or ""
+    # Match against the raw string AND a de-quoted/de-escaped form, so `e''nv`
+    # is not a free bypass. Both, not just the normalized one: normalization
+    # strips quotes, which could in principle join two harmless tokens.
+    forms = (raw, _normalize_command(raw))
+
+    def _hit(rx: re.Pattern[str]) -> bool:
+        return any(rx.search(f) for f in forms)
+
+    if _hit(_BASH_DESTRUCTIVE_RE):
         return "destructive or privilege-escalating command"
-    if _BASH_SENSITIVE_RE.search(c):
+    if _hit(_BASH_SENSITIVE_RE):
         return "access to a sensitive credential path"
-    if _BASH_NET_TOOL_RE.search(c) and not _BASH_LOCALHOST_RE.search(c):
+    if _hit(_BASH_ENV_DUMP_RE):
+        return "environment inspection"
+    if _hit(_BASH_NET_TOOL_RE) and not _hit(_BASH_LOCALHOST_RE):
         return "external network egress"
     return None
 
@@ -132,8 +177,15 @@ def default_tool_executor(cwd: str | None = None, timeout: float = 30.0) -> Tool
                 reason = _bash_block_reason(command)
                 if reason is not None:
                     return f"tool error: blocked ({reason}) — refusing: {command[:120]}"
+                # RED6-01 (P0): an explicit allowlisted env. Without `env=` the
+                # child inherited every provider key in the parent process, so a
+                # single injected `env` / `printenv` in a model-authored command
+                # exfiltrated the user's credentials. The blocklist above is not
+                # what stops that — this is. The keys are not in the child to be
+                # read in the first place.
                 proc = subprocess.run(
                     ["/bin/sh", "-c", command], cwd=str(base),
+                    env=get_delegated_env(),
                     capture_output=True, text=True, timeout=timeout, check=False,
                 )
                 out = (proc.stdout or "") + (proc.stderr or "")

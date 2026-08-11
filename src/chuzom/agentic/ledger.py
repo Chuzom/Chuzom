@@ -114,18 +114,33 @@ class TaskLedger:
             for m in self.milestones
             if m.status is MilestoneStatus.DONE
         ]
+        # RED6-02 (P0): both context blocks are UNTRUSTED and are neutralised
+        # here — the last point before pack_prompt renders them into a delegated
+        # prompt. Doing it here rather than at each caller means an escalation to
+        # a different tier cannot route around it: every tier takes its context
+        # from this one method.
+        from chuzom.prompt_injection import wrap_untrusted_context
+
         if self.session_context:
             # Prepended, distinct id — pack_prompt renders it as conversation
             # context, NOT as a completed milestone.
-            frozen.insert(0, {"id": "SESSION_CONTEXT", "description": self.session_context,
+            frozen.insert(0, {"id": "SESSION_CONTEXT",
+                              "description": wrap_untrusted_context(
+                                  self.session_context, "CONVERSATION CONTEXT"),
                               "achieved_by": None, "artifacts": {}})
         if self.relevant_context is not None:
             # CF-2: a separate RELEVANT_CONTEXT entry (candidate files / repo state),
             # prepended ahead of SESSION_CONTEXT. Ledger-level, so it survives
             # escalation and is not truncated with conversation history.
+            #
+            # The sharper risk of the two: this is literal repository content,
+            # and on the delegation path the repository is precisely the thing
+            # the user may not control.
             from chuzom.capabilities import serialize_relevant_context
             frozen.insert(0, {"id": "RELEVANT_CONTEXT",
-                              "description": serialize_relevant_context(self.relevant_context),
+                              "description": wrap_untrusted_context(
+                                  serialize_relevant_context(self.relevant_context),
+                                  "REPOSITORY CONTEXT"),
                               "achieved_by": None, "artifacts": {}})
         return frozen
 
