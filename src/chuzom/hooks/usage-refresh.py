@@ -19,6 +19,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from chuzom import pricing as _pricing
+except ImportError:  # pragma: no cover — chuzom not importable from this interpreter
+    # Copied to ~/.claude/hooks/ and run standalone; same reasoning as the guard
+    # in cc-usage-track.py. With no price source the estimate table is empty and
+    # the savings figures it feeds are suppressed rather than reported as zero.
+    _pricing = None  # type: ignore[assignment]
+
 
 # ── Registered-tool surface (CHZ-SURF-01) ────────────────────────────────────
 # Tool names are tier-dependent (CHUZOM_SLIM). NEVER put a raw tool name in
@@ -89,13 +97,35 @@ SKIP_TOOLS = {
 # The doors that DO represent real routing work and must stay counted.
 ROUTING_DOORS = {"llm", "llm_act"}
 
-# Estimated Claude token costs per routed call (conservative averages)
-# Based on typical prompt+response: ~1500 input + ~2000 output tokens
-EST_CLAUDE_COST_PER_CALL = {
-    "opus": 0.2625,     # $15/M in + $75/M out
-    "sonnet": 0.033,    # $3/M in + $15/M out
-}
-EST_SAVINGS_PER_CALL = EST_CLAUDE_COST_PER_CALL["sonnet"]  # Conservative: compare to Sonnet
+# Estimated Claude token costs per routed call (conservative averages) for a
+# typical prompt+response.
+#
+# WP-03: computed from chuzom.pricing rather than pre-multiplied by hand. The
+# old literals were 0.2625 for Opus and 0.033 for Sonnet — arithmetic on the
+# retired $15/$75 and pre-intro $3/$15 tiers. Pre-multiplied constants are the
+# worst variety of stale price: the rate is not even visible in the file, so
+# grepping for "15.0" would never have found this one.
+_EST_INPUT_TOKENS = 1500
+_EST_OUTPUT_TOKENS = 2000
+
+EST_CLAUDE_COST_PER_CALL = (
+    {
+        _family: _c
+        for _family in ("opus", "sonnet")
+        if (
+            _c := _pricing.cost_usd(
+                _family, input_tokens=_EST_INPUT_TOKENS, output_tokens=_EST_OUTPUT_TOKENS
+            )
+        )
+        is not None
+    }
+    if _pricing is not None
+    else {}
+)
+#: Conservative: compare to Sonnet. 0.0 only when there is no price source at
+#: all, in which case every figure derived from it is a suppressed zero rather
+#: than a claim of zero savings.
+EST_SAVINGS_PER_CALL = EST_CLAUDE_COST_PER_CALL.get("sonnet", 0.0)
 
 
 def _ensure_state_dir() -> None:

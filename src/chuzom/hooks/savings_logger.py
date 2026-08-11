@@ -35,6 +35,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from chuzom import pricing as _pricing
+
 if TYPE_CHECKING:
     from chuzom.hooks.direct_executor import DirectResult
     from chuzom.receipt_store import Receipt
@@ -51,27 +53,32 @@ _INFLIGHT_PERSISTS: set = set()
 # savings estimation in the JSONL — not for billing. Unknown models map to
 # (0.0, 0.0) so they don't crash and don't claim spurious savings.
 
-# NOTE: these should ideally derive from config/models.yaml (the canonical
-# registry) rather than being hand-maintained here — a follow-up. Updated
-# 2026-07-10 to current prices; the prior table (opus $15/$75, o3 $15/$60) was
-# badly stale and INFLATED reported savings on complex tasks by ~3x.
+# WP-03: the rates come from chuzom.pricing now; only provider→model membership
+# is stated here. This table's own history is the argument for that. Its comment
+# recorded a hand-update on 2026-07-10 to undo a ~3x inflation, and it was the
+# ONLY table in the codebase that had o3 right — "repriced from stale $15/$60"
+# while three others kept $15/$60. A fix applied to one copy is not a fix; it is
+# a divergence with a good changelog entry.
+_PROVIDER_MODELS: dict[str, tuple[str, ...]] = {
+    # Claude — baseline references: what the subscription would otherwise spend.
+    "claude": ("claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-8"),
+    "gemini": ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-pro"),
+    "openai": ("gpt-4o-mini", "gpt-4o", "o3"),
+}
+
+# Prepaid or local: marginal cost is genuinely zero for every model served this
+# way, which is why these are wildcards rather than per-model rates.
+_ZERO_MARGINAL_PROVIDERS: tuple[str, ...] = ("ollama", "codex")
+_ZERO_RATE = (0.0, 0.0)
+
 _PRICING_PER_MTOK: dict[tuple[str, str], tuple[float, float]] = {
-    # Claude (baseline references — what the user's subscription would otherwise spend)
-    ("claude", "claude-haiku-4-5"):   (1.00,  5.00),
-    ("claude", "claude-sonnet-5"):    (2.00, 10.00),   # intro; standard $3/$15 from 2026-09-01
-    ("claude", "claude-opus-4-8"):    (5.00, 25.00),
-    # Ollama — local, free
-    ("ollama", "*"):                  (0.00,  0.00),
-    # Gemini
-    ("gemini", "gemini-2.5-flash"):   (0.075, 0.30),
-    ("gemini", "gemini-2.0-flash"):   (0.075, 0.30),
-    ("gemini", "gemini-2.0-pro"):     (1.25,  5.00),
-    # OpenAI
-    ("openai", "gpt-4o-mini"):        (0.15,  0.60),
-    ("openai", "gpt-4o"):             (2.50, 10.00),
-    ("openai", "o3"):                 (2.00,  8.00),   # repriced from stale $15/$60
-    # Codex — prepaid subscription, marginal cost ≈ 0
-    ("codex",  "*"):                  (0.00,  0.00),
+    **{
+        (_provider, _model): (_p.input, _p.output)
+        for _provider, _models in _PROVIDER_MODELS.items()
+        for _model in _models
+        if (_p := _pricing.price_for(_model)) is not None
+    },
+    **{(_provider, "*"): _ZERO_RATE for _provider in _ZERO_MARGINAL_PROVIDERS},
 }
 
 # 2026-07-12 (user decision): savings are reported as OPUS-EQUIVALENT only —

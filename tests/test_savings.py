@@ -231,11 +231,21 @@ class TestCacheAwareCost:
     and price each at its own published Anthropic rate."""
 
     def test_claude_cost_input_output_only(self):
+        """Sonnet's rate is date-dependent, so this pins the *arithmetic*.
+
+        WP-03: this previously hardcoded $3/$15 and asserted $0.0105. Sonnet 5
+        runs introductory pricing until 2026-08-31, so a frozen expectation here
+        is a test that changes its own answer on 1 September. The rate values
+        are pinned in tests/economics/test_pricing_single_source.py; cost.py's
+        job is to apply whatever chuzom.pricing says, and that is asserted here.
+        """
+        from chuzom import pricing
         from chuzom.cost import _claude_cost
-        # Sonnet: 1000 input × $3/Mtok + 500 output × $15/Mtok
-        #       = (3000 + 7500) / 1_000_000 = $0.0105
+
+        rate = pricing.price_for("sonnet")
+        expected = (1000 * rate.input + 500 * rate.output) / 1_000_000
         cost_usd = _claude_cost("sonnet", input_t=1000, output_t=500)
-        assert abs(cost_usd - 0.0105) < 1e-6
+        assert abs(cost_usd - expected) < 1e-9
 
     def test_claude_cost_with_cache_read_is_much_cheaper(self):
         from chuzom.cost import _claude_cost
@@ -253,14 +263,23 @@ class TestCacheAwareCost:
         assert write > regular
 
     def test_claude_cost_full_4_component(self):
+        """Opus is not date-dependent, so the expected dollar figure stays hard.
+
+        WP-03: the previous expectation, $0.06375, was computed from $15/$75 —
+        the retired Opus 3 tier. This test therefore asserted a 3x overstatement
+        was correct, and any fix to the rate would have been reported as the
+        regression. Current Opus is $5/$25 with cache derived at 0.1x / 1.25x:
+            1000 in × 5 + 500 out × 25 + 200 cw × 6.25 + 5000 cr × 0.50
+          = 5_000 + 12_500 + 1_250 + 2_500 = 21_250 / 1_000_000 = $0.02125
+        Kept as a literal on purpose: this is one of the assertions the Opus
+        mutation gate relies on.
+        """
         from chuzom.cost import _claude_cost
-        # Opus: 1000 in × 15 + 500 out × 75 + 200 cw × 18.75 + 5000 cr × 1.50
-        # = 15_000 + 37_500 + 3750 + 7500 = 63_750 / 1_000_000 = $0.06375
         cost_usd = _claude_cost(
             "opus", input_t=1000, output_t=500,
             cache_write_t=200, cache_read_t=5000,
         )
-        assert abs(cost_usd - 0.06375) < 1e-6
+        assert abs(cost_usd - 0.02125) < 1e-6
 
     def test_claude_cost_unknown_model_returns_zero(self):
         from chuzom.cost import _claude_cost

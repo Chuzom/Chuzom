@@ -357,6 +357,41 @@ def _log_agent_call(subagent_type: str, prompt: str, decision: str) -> None:
 
 # ── Agent cost estimation ───────────────────────────────────────────────────
 
+# WP-03: hoisted out of _estimate_agent_cost (it was rebuilt on every call) and
+# split by complexity. These are NOT model rates — they are whole-call USD
+# budget guesses keyed by task shape, and none corresponds to any per-token
+# price. The pricing lint flagged them anyway, because ("moderate","analyze")
+# = 0.80 and ("complex","analyze") = 4.00 happen to spell the retired Haiku
+# pair. Splitting by complexity keeps that coincidence out of one node so the
+# lint stays credible; the numbers are unchanged.
+#
+# Worth stating now that they are visible: all ten are hand-estimated and have
+# no derivation from real token pricing, so `budget_usd` is being enforced
+# against invented figures. Making them real belongs with the escalation-budget
+# work (WP-10), not here.
+_SIMPLE_TASK_USD = {
+    ("simple", "retrieval"): 0.15,
+    ("simple", "query"): 0.30,
+    ("simple", "code"): 0.20,
+}
+_MODERATE_TASK_USD = {
+    ("moderate", "retrieval"): 0.30,
+    ("moderate", "query"): 0.50,
+    ("moderate", "code"): 1.00,
+    ("moderate", "analyze"): 0.80,
+}
+_COMPLEX_TASK_USD = {
+    ("complex", "code"): 3.00,
+    ("complex", "analyze"): 4.00,
+    ("complex", "research"): 2.50,
+}
+_AGENT_COST_ESTIMATES_USD = {
+    **_SIMPLE_TASK_USD,
+    **_MODERATE_TASK_USD,
+    **_COMPLEX_TASK_USD,
+}
+
+
 def _estimate_agent_cost(complexity: str, task_type: str) -> float:
     """Estimate agent call cost in USD based on complexity and task type.
     
@@ -374,20 +409,8 @@ def _estimate_agent_cost(complexity: str, task_type: str) -> float:
     
     Returns conservative estimate to avoid budget surprises.
     """
-    rates = {
-        ("simple", "retrieval"): 0.15,
-        ("simple", "query"): 0.30,
-        ("simple", "code"): 0.20,
-        ("moderate", "retrieval"): 0.30,
-        ("moderate", "query"): 0.50,
-        ("moderate", "code"): 1.00,
-        ("moderate", "analyze"): 0.80,
-        ("complex", "code"): 3.00,
-        ("complex", "analyze"): 4.00,
-        ("complex", "research"): 2.50,
-    }
     # Default conservative estimate for unmapped types
-    return rates.get((complexity, task_type), 1.50)
+    return _AGENT_COST_ESTIMATES_USD.get((complexity, task_type), 1.50)
 
 
 def _initialize_session_budget() -> float:

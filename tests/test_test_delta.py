@@ -169,15 +169,30 @@ def test_diff_tier_histogram_surfaces_only_growth(tmp_path):
 
 
 def test_opus_baseline_pricing_constants():
-    """If the constants drift away from the published Opus 4.6 prices,
-    every historical delta report becomes incomparable. Pin them."""
-    assert OPUS_INPUT_PER_M == 15.0
-    assert OPUS_OUTPUT_PER_M == 75.0
+    """Pin the constants to the canonical source, not to a copy of the numbers.
+
+    WP-03: this asserted 15.0/75.0 — the retired Opus 3 tier — with the
+    rationale that drift makes historical reports incomparable. The rationale is
+    right and the implementation inverted it: pinning a literal here made the
+    test defend a rate that was already 3x too high, so correcting the price
+    would have surfaced as this test failing. Current Opus is $5/$25. Pinned
+    against chuzom.pricing so the two can no longer disagree; the value itself
+    is pinned in tests/economics/test_pricing_single_source.py.
+    """
+    from chuzom import pricing
+
+    opus = pricing.price_for("opus")
+    assert OPUS_INPUT_PER_M == opus.input
+    assert OPUS_OUTPUT_PER_M == opus.output
+    # Belt and braces: whatever else changes, the retired tier must not return.
+    assert (OPUS_INPUT_PER_M, OPUS_OUTPUT_PER_M) != (15.0, 75.0)
 
 
 def test_opus_baseline_for_routed_uses_token_arithmetic(tmp_path):
-    """1_000_000 input tokens + 1_000_000 output tokens at Opus baseline
-    = $15 + $75 = $90. Verify the calculation."""
+    """1M input + 1M output tokens at the Opus baseline = $5 + $25 = $30.
+
+    WP-03: was $90, computed from the retired $15/$75 tier.
+    """
     db = _seed_db(tmp_path)
     before = snapshot(db)
     conn = sqlite3.connect(db)
@@ -190,8 +205,11 @@ def test_opus_baseline_for_routed_uses_token_arithmetic(tmp_path):
     conn.close()
     after = snapshot(db)
     report = diff(before, after)
-    assert report.opus_baseline_for_routed == pytest.approx(90.0)
-    assert report.savings_usd_vs_opus == pytest.approx(85.0)
+    assert report.opus_baseline_for_routed == pytest.approx(30.0)
+    # The routed call cost $5.00, so the saving is $30 - $5 = $25 (was $85 when
+    # the baseline was inflated 3x — the overstatement lands entirely in the
+    # headline savings number, which is the point of the finding).
+    assert report.savings_usd_vs_opus == pytest.approx(25.0)
 
 
 def test_simple_share_proportional(tmp_path):

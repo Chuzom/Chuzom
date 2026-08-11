@@ -41,11 +41,18 @@ from pathlib import Path
 DEFAULT_DB_PATH = Path.home() / ".chuzom" / "usage.db"
 SNAPSHOT_DIR = Path.home() / ".chuzom" / "test_delta"
 
-# Headline metric: what the same number of input/output tokens would have
-# cost if every routed call had gone to Opus 4.6 (the host model). Keeps
-# the comparison apples-to-apples even as model pricing drifts.
-OPUS_INPUT_PER_M = 15.0
-OPUS_OUTPUT_PER_M = 75.0
+# Headline metric: what the same number of input/output tokens would have cost
+# if every routed call had gone to Opus (the host model).
+#
+# WP-03: the comment here claimed this "keeps the comparison apples-to-apples
+# even as model pricing drifts", directly above two literals frozen at the
+# retired $15/$75 Opus 3 tier. The claim was true of the *method* and false of
+# the implementation — and it is the headline metric, so it was wrong by 3x.
+from chuzom import pricing as _pricing  # noqa: E402
+
+_opus_price = _pricing.price_for("opus")
+OPUS_INPUT_PER_M = _opus_price.input if _opus_price else 0.0
+OPUS_OUTPUT_PER_M = _opus_price.output if _opus_price else 0.0
 
 SNAPSHOT_SCHEMA = 1
 

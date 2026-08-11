@@ -22,7 +22,16 @@ import webbrowser
 from dataclasses import dataclass
 
 # Baseline = always-Sonnet (the model a developer's tool would otherwise pick).
-SONNET_IN, SONNET_OUT = 3.0, 15.0
+#
+# WP-03: was a hardcoded 3.0/15.0. This command renders a shareable savings
+# card, so a stale rate here is published rather than merely displayed. It also
+# would not have tracked Sonnet 5's introductory pricing, which is live right
+# now — the card would have overstated the baseline, and therefore the saving,
+# by 50%.
+from chuzom import pricing as _pricing  # noqa: E402
+
+_sonnet = _pricing.price_for("sonnet")
+SONNET_IN, SONNET_OUT = (_sonnet.input, _sonnet.output) if _sonnet else (0.0, 0.0)
 FREE_PROVIDERS = {"ollama", "codex", "gemini_cli"}
 DEFAULT_SVG_PATH = os.path.expanduser("~/.chuzom/savings-card.svg")
 REPO = "github.com/ypollak2/chuzom"

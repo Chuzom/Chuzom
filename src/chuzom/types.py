@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
+from chuzom import pricing as _pricing
 from chuzom.capabilities import CapabilityRequirement, RelevantContext
 
 
@@ -255,13 +256,17 @@ MODEL_QUALITY: dict[str, float] = {
 }
 
 # Blended cost per 1K tokens (average of input and output pricing).
-# Based on Anthropic's API pricing. Even under a Claude Code subscription
-# (where API calls are "free"), these values let the savings calculator
-# estimate how much money the routing decisions would save at API rates.
+#
+# WP-03: derived from chuzom.pricing rather than restated. The old literals were
+# $0.045 for Opus (the retired $15/$75 tier) and $0.001 for Haiku — which did not
+# even match its own comment, since $1/$5 blends to $0.003. Two wrong numbers and
+# a comment that disagreed with one of them is what a hand-maintained copy decays
+# into; the comment is the only part anyone re-reads, and nobody re-does the
+# arithmetic.
 MODEL_COST_PER_1K: dict[str, float] = {
-    "haiku": 0.001,    # $1/M input, $5/M output -> ~$0.001/1K blended
-    "sonnet": 0.009,   # $3/M input, $15/M output -> ~$0.009/1K blended
-    "opus": 0.045,     # $15/M input, $75/M output -> ~$0.045/1K blended
+    _family: _blended
+    for _family in ("haiku", "sonnet", "opus")
+    if (_blended := _pricing.blended_per_1k(_family)) is not None
 }
 
 # Approximate generation speed (tokens per second) for each model tier.

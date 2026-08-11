@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from chuzom import pricing as _pricing
 from chuzom.types import TaskType
 
 __all__ = [
@@ -79,43 +80,52 @@ _N_SAMPLES_THRESHOLD = 30
 # referencing un-calibrated (model, task) pairs match historical projections.
 _LEGACY_FALLBACK_OUTPUT = 80
 
-# Per-million-token pricing snapshot. Kept local (vs. importing from cost.py)
-# so this module stays free of cross-module dependencies and remains pure.
-# Update alongside cost.py BASELINE_PRICING when provider rates change.
-_PRICING_PER_M: dict[str, dict[str, float]] = {
-    # Anthropic — keys match the names in src/chuzom/profiles.py chain entries
-    # after stripping the "anthropic/" prefix.
-    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.25, "output": 1.25},
-    "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.0},
-    "claude-opus-4-6": {"input": 15.0, "output": 75.0},
+# Per-million-token pricing, projected out of chuzom.pricing.
+#
+# WP-03: this was a local snapshot, justified in its own comment as keeping the
+# module "pure" and free of cross-module dependencies, with an instruction to
+# "update alongside cost.py BASELINE_PRICING". That instruction was not
+# followed — and could not be, reliably: it asks a human to remember a second
+# file. By the time of the audit this table held THREE separate retired rates
+# ($15/$75 Opus, and Haiku at both $0.25/$1.25 and $0.80/$4.00 under two keys
+# for the *same model*). Purity that costs correctness is not a good trade.
+_CALIBRATED_MODELS: tuple[str, ...] = (
+    # Anthropic — keys match src/chuzom/profiles.py chain entries after the
+    # "anthropic/" prefix is stripped.
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+    "claude-haiku-4-5-20251001",
+    "claude-opus-4-6",
     # OpenAI
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4o": {"input": 2.50, "output": 10.0},
-    "gpt-4.1": {"input": 2.00, "output": 8.00},
-    "gpt-4.1-mini": {"input": 0.10, "output": 0.40},
-    "o3": {"input": 15.0, "output": 60.0},
-    "o3-mini": {"input": 1.10, "output": 4.40},
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "o3",
+    "o3-mini",
     # Google
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
-    "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
-    "gemini-2.5-pro": {"input": 1.25, "output": 7.00},
-    # OpenRouter open-weight workhorse pool (Plan 06 Step 2).
-    # Per-million USD pricing approximated from public OpenRouter listings
-    # at the time of writing. The cost_aggressive policy references these
-    # models and the bandit / policy-diff need pricing to compute expected
-    # value, so the entries must exist; the *exact* numbers can drift up to
-    # ~20% before the policy diff materially misranks. Update alongside
-    # OpenRouter's pricing page when rates shift.
-    "qwen/qwen3-235b-a22b-2507": {"input": 0.15, "output": 0.55},
-    "deepseek/deepseek-v4-flash": {"input": 0.07, "output": 0.50},
-    "google/gemini-3.1-flash-lite": {"input": 0.10, "output": 0.40},
-    "qwen/qwen3-coder-next": {"input": 0.25, "output": 0.90},
-    "qwen/qwen3-next-80b-a3b-instruct": {"input": 0.10, "output": 0.40},
-    "x-ai/grok-4.3": {"input": 0.50, "output": 1.50},
-    "anthropic/claude-sonnet-4": {"input": 3.00, "output": 15.00},
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    # OpenRouter open-weight workhorse pool (Plan 06 Step 2). The cost_aggressive
+    # policy references these and the bandit / policy-diff need a price to
+    # compute expected value, so the entries must resolve; the exact numbers can
+    # drift ~20% before the policy diff materially misranks.
+    "qwen/qwen3-235b-a22b-2507",
+    "deepseek/deepseek-v4-flash",
+    "google/gemini-3.1-flash-lite",
+    "qwen/qwen3-coder-next",
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "x-ai/grok-4.3",
+    "anthropic/claude-sonnet-4",
+)
+
+_PRICING_PER_M: dict[str, dict[str, float]] = {
+    _m: {"input": _r["input"], "output": _r["output"]}
+    for _m in _CALIBRATED_MODELS
+    if (_r := _pricing.rates_per_m(_m)) is not None
 }
 
 _FREE_MODEL_PREFIXES = ("ollama", "codex", "gemini_cli")

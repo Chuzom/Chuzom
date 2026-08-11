@@ -22,8 +22,19 @@ STAR_CTA_FILE        = os.path.join(STATE_DIR, "star_cta_shown.txt")
 
 STAR_CTA_THRESHOLD_USD = 0.50
 
-HOST_INPUT_PER_M  = 15.0   # Opus 4.6 ($15/$75 per M tokens)
-HOST_OUTPUT_PER_M = 75.0
+# WP-03: was 15.0/75.0 — the retired Opus 3 tier, so the end-of-session savings
+# summary overstated by 3x. Two separate scalars, the shape the pricing lint
+# cannot see; see the longer note in status-bar.py.
+try:
+    from chuzom import pricing as _pricing
+
+    _host_price = _pricing.price_for("opus")
+except ImportError:  # pragma: no cover — copied to ~/.claude/hooks/, runs standalone
+    _host_price = None
+
+HOST_PRICE_KNOWN = _host_price is not None
+HOST_INPUT_PER_M = _host_price.input if _host_price else 0.0
+HOST_OUTPUT_PER_M = _host_price.output if _host_price else 0.0
 WIDTH = 64
 
 

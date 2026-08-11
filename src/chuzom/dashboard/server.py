@@ -121,8 +121,16 @@ async def _get_stats() -> dict:
                 for r in await c.fetchall()
             ]
 
-            # Savings = baseline Sonnet cost minus actual external spend
-            SONNET_IN, SONNET_OUT = 3.0, 15.0  # $/M tokens
+            # Savings = baseline Sonnet cost minus actual external spend.
+            # WP-03: rates from chuzom.pricing. They were 3.0/15.0 inline, which
+            # does not follow Sonnet 5's introductory pricing and so overstates
+            # the dashboard's headline saving by 50% while that is live.
+            from chuzom import pricing as _pricing
+
+            _sonnet = _pricing.price_for("sonnet")
+            SONNET_IN, SONNET_OUT = (
+                (_sonnet.input, _sonnet.output) if _sonnet else (0.0, 0.0)
+            )  # $/M tokens
             c = await db.execute(
                 "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), "
                 "COALESCE(SUM(cost_usd),0) FROM usage "

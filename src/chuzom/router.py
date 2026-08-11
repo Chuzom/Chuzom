@@ -72,18 +72,11 @@ from chuzom.tool_surface import route_call, route_tool# CHZ-SURF-01
 # (Sonnet/GPT-4o), complex→PREMIUM (Opus/o3). An explicit profile= argument
 # overrides this (escape hatch for power users), but no caller should need to.
 
-def _estimate_opus_cost(input_tokens: int, output_tokens: int) -> float:
-    """Estimate what this call would have cost if handled by Claude Opus.
-    
-    Used for savings calculation: actual_cost - opus_estimate = savings.
-    
-    Opus cost: $15/M input tokens, $75/M output tokens
-    Blended rate: ~$0.045/1K tokens
-    """
-    # Opus pricing: $15/1M input, $75/1M output
-    input_cost = (input_tokens / 1_000_000) * 15.0
-    output_cost = (output_tokens / 1_000_000) * 75.0
-    return input_cost + output_cost
+# WP-03: `_estimate_opus_cost` was deleted here rather than repriced. It carried
+# the retired $15/$75 Opus 3 rate — a 3x overstatement, in the module that prices
+# the router's own counterfactual — and it had **zero call sites**. Repricing a
+# dead function would have left a fourth Opus rate in the tree for someone to
+# wire up by accident later. Live callers price via chuzom.pricing.cost_usd().
 
 _COMPLEXITY_TO_PROFILE: dict[Complexity, RoutingProfile] = {
     Complexity.SIMPLE: RoutingProfile.BUDGET,

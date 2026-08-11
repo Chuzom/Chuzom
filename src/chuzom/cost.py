@@ -1366,30 +1366,32 @@ async def get_quality_report(days: int = 7) -> dict:
 # ── Claude Code token tracking ───────────────────────────────────────────────
 
 
-# v9.2.2 — Anthropic public per-million-token rates split by token component.
-# Matches Claude Code's upstream 4-component billing formula:
+# v9.2.2 — per-million-token rates split by token component, matching Claude
+# Code's upstream 4-component billing formula:
 #   cost = input_t × input_$/M + output_t × output_$/M
 #        + cache_write_t × cache_write_$/M + cache_read_t × cache_read_$/M
-# Keep in sync with https://www.anthropic.com/pricing. All values $/Mtok.
-CLAUDE_RATES_PER_M: dict[str, dict[str, float]] = {
-    "haiku":  {"input": 0.80,  "output": 4.00,  "cache_read": 0.08, "cache_write": 1.00},
-    "sonnet": {"input": 3.00,  "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
-    "opus":   {"input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_write": 18.75},
-}
+#
+# The numbers no longer live here. These three tables held their own copies of
+# the Opus and Haiku rates and both were stale ($15/$75 is Opus *3*); they are
+# now projections of chuzom.pricing, so the shape callers rely on survives and
+# the drift does not. The per-provider key lists are deliberate: _claude_cost
+# must not silently price a Gemini model just because pricing.py knows it.
+def _rate_table(names: tuple[str, ...]) -> dict[str, dict[str, float]]:
+    """Project ``names`` out of chuzom.pricing into the legacy table shape."""
+    out: dict[str, dict[str, float]] = {}
+    for name in names:
+        rates = _pricing.rates_per_m(name)
+        if rates is not None:
+            out[name] = rates
+    return out
 
-# v9.3.0 — OpenAI public per-million-token rates for models commonly invoked
-# from Codex CLI. Keep in sync with https://openai.com/api/pricing.
-# Cache rates use OpenAI's documented prompt-caching discount where applicable.
-# All values $/Mtok. NOTE: verify against current pricing before each release.
-OPENAI_RATES_PER_M: dict[str, dict[str, float]] = {
-    "gpt-5.5":       {"input": 3.00,  "output": 12.00, "cache_read": 0.30, "cache_write": 3.75},
-    "gpt-5.4":       {"input": 5.00,  "output": 20.00, "cache_read": 1.25, "cache_write": 6.25},
-    "gpt-5-mini":    {"input": 0.40,  "output": 2.00,  "cache_read": 0.10, "cache_write": 0.50},
-    "o3":            {"input": 15.00, "output": 60.00, "cache_read": 3.75, "cache_write": 18.75},
-    "o3-mini":       {"input": 1.10,  "output": 4.40,  "cache_read": 0.275, "cache_write": 1.375},
-    "gpt-4o":        {"input": 2.50,  "output": 10.00, "cache_read": 1.25, "cache_write": 3.125},
-    "gpt-4o-mini":   {"input": 0.15,  "output": 0.60,  "cache_read": 0.075, "cache_write": 0.1875},
-}
+
+CLAUDE_RATES_PER_M: dict[str, dict[str, float]] = _rate_table(("haiku", "sonnet", "opus"))
+
+# v9.3.0 — OpenAI models commonly invoked from Codex CLI.
+OPENAI_RATES_PER_M: dict[str, dict[str, float]] = _rate_table(
+    ("gpt-5.5", "gpt-5.4", "gpt-5-mini", "o3", "o3-mini", "gpt-4o", "gpt-4o-mini")
+)
 
 
 def _codex_cost(
@@ -1438,18 +1440,17 @@ def _get_codex_baseline_for_task(task_type: str | None, complexity: str | None) 
     return "gpt-5.4"
 
 
-# v9.3.1 — Google AI public per-million-token rates for Gemini models commonly
-# invoked from Gemini CLI. Keep in sync with https://ai.google.dev/pricing.
-# Cache rates use Google's documented context-caching discount where applicable.
-# All values $/Mtok. NOTE: verify against current pricing before each release.
-GEMINI_RATES_PER_M: dict[str, dict[str, float]] = {
-    "gemini-2.5-flash": {"input": 0.30, "output": 2.50, "cache_read": 0.075, "cache_write": 0.375},
-    "gemini-2.5-pro":   {"input": 1.25, "output": 10.0, "cache_read": 0.31,  "cache_write": 1.5625},
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40, "cache_read": 0.025, "cache_write": 0.125},
-    "gemini-2.0-pro":   {"input": 1.25, "output": 5.00, "cache_read": 0.31,  "cache_write": 1.5625},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30, "cache_read": 0.019, "cache_write": 0.0938},
-    "gemini-1.5-pro":   {"input": 1.25, "output": 5.00, "cache_read": 0.31, "cache_write": 1.5625},
-}
+# v9.3.1 — Gemini models commonly invoked from Gemini CLI.
+GEMINI_RATES_PER_M: dict[str, dict[str, float]] = _rate_table(
+    (
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-pro",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+    )
+)
 
 
 def _gemini_cost(
@@ -2676,14 +2677,21 @@ async def get_model_latency_stats(window_days: int = 7) -> dict[str, dict]:
 LATEST_OPUS_MODEL = "claude-opus-4-8"
 """The current host/baseline Opus model. Bump when a newer Opus ships."""
 
-# Opus per-million-token pricing (input, output) in USD, from the Claude model
-# catalog. Opus 4.5+ is $5/$25. Extend as new Opus models release; the values
-# can also be refreshed at runtime via refresh_baseline_pricing_from_api().
+# Opus per-million-token pricing (input, output) in USD, projected out of
+# chuzom.pricing rather than restated. Extend the tuple as new Opus models
+# release; the values can also be refreshed at runtime via
+# refresh_baseline_pricing_from_api().
+_OPUS_MODELS: tuple[str, ...] = (
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-opus-4-6",
+    "claude-opus-4-5",
+)
 _OPUS_PRICING: dict[str, tuple[float, float]] = {
-    "claude-opus-4-8": (5.0, 25.0),
-    "claude-opus-4-7": (5.0, 25.0),
-    "claude-opus-4-6": (5.0, 25.0),
-    "claude-opus-4-5": (5.0, 25.0),
+    _m: (_p.input, _p.output)
+    for _m in _OPUS_MODELS
+    if (_p := _pricing.price_for(_m)) is not None
 }
 
 BASELINE_MODEL_FOR_SAVINGS = LATEST_OPUS_MODEL

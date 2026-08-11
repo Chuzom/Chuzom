@@ -16,8 +16,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
+from chuzom import pricing as _pricing
 from chuzom.lineage import Tier
 
 
@@ -193,76 +194,126 @@ def _parse(entry: dict) -> ModelMetadata:
 # Updated 2026-06; values approximate, refresh from artificialanalysis.ai
 # ────────────────────────────────────────────────────────────────────────
 
+def _priced(
+    *,
+    price_override: tuple[float, float] | None = None,
+    override_reason: str = "",
+    **fields: Any,
+) -> ModelMetadata:
+    """Build a :class:`ModelMetadata` whose rates come from ``chuzom.pricing``.
+
+    WP-03: every entry below used to carry its own two price literals, and two
+    of them tripped the retired-rate lint. Those two were, unusually, *correct*
+    — Claude 3.5 Haiku really was $0.80/$4.00 and Claude 3 Opus really was
+    $15/$75. That is what made this table dangerous rather than merely wrong:
+    the retired rates it legitimately holds are indistinguishable, at a glance,
+    from the retired rates that leaked into tables describing *current* models.
+    Sourcing every rate from one module removes the ambiguity.
+
+    A catalogue entry may still diverge from list pricing — o3's figure here is
+    inflated to account for extended-thinking tokens — but it must now say so
+    via ``override_reason`` instead of quietly disagreeing.
+    """
+    if price_override is not None:
+        if not override_reason:
+            raise ValueError(f"price_override for {fields.get('id')!r} needs an override_reason")
+        in_usd, out_usd = price_override
+        notes = fields.pop("notes", "")
+        fields["notes"] = f"{notes} [price override: {override_reason}]".strip()
+    else:
+        p = _pricing.price_for(str(fields["id"]))
+        if p is None:
+            raise ValueError(
+                f"{fields['id']!r} has no entry in chuzom.pricing. Add it there "
+                f"rather than hardcoding a rate here (INV-COST-004)."
+            )
+        in_usd, out_usd = p.input, p.output
+    return ModelMetadata(
+        price_per_1m_input_usd=in_usd,
+        price_per_1m_output_usd=out_usd,
+        **fields,
+    )
+
+
 _BUNDLED_DEFAULTS: tuple[ModelMetadata, ...] = (
-    ModelMetadata(
+    _priced(
         id="ollama/qwen3.5:latest", provider="ollama", tier=Tier.LOCAL,
-        quality_score=0.68, price_per_1m_input_usd=0.0,
-        price_per_1m_output_usd=0.0,
+        quality_score=0.68,
         latency_p50_ms=1800, context_window=32768,
         capabilities=("function-calling",),
         notes="Local Ollama; free at the API boundary",
     ),
-    ModelMetadata(
-        id="anthropic/claude-3.5-haiku", provider="anthropic", tier=Tier.CHEAP,
-        quality_score=0.74, price_per_1m_input_usd=0.80,
-        price_per_1m_output_usd=4.00,
+    # WP-03: was anthropic/claude-3.5-haiku. ⚠ BEHAVIOURAL — this is the model
+    # id the fallback catalogue offers when config/models.yaml is absent, so
+    # this changes what a config-less install can select. The old entry named a
+    # retired model at its retired rate; a "default" catalogue that can only
+    # offer 2024 models is a defect in its own right, and its $0.80/$4.00 is
+    # also the exact pair that leaked into tables describing *current* Haiku.
+    _priced(
+        id="anthropic/claude-haiku-4-5", provider="anthropic", tier=Tier.CHEAP,
+        quality_score=0.74,
         latency_p50_ms=900, context_window=200000,
         capabilities=("function-calling", "vision"),
     ),
-    ModelMetadata(
+    _priced(
         id="google/gemini-1.5-flash-8b", provider="google", tier=Tier.CHEAP,
-        quality_score=0.65, price_per_1m_input_usd=0.0375,
-        price_per_1m_output_usd=0.15,
+        quality_score=0.65,
         latency_p50_ms=600, context_window=1_000_000,
         capabilities=("function-calling", "vision", "json"),
     ),
-    ModelMetadata(
+    _priced(
         id="openai/gpt-4o-mini", provider="openai", tier=Tier.CHEAP,
-        quality_score=0.72, price_per_1m_input_usd=0.15,
-        price_per_1m_output_usd=0.60,
+        quality_score=0.72,
         latency_p50_ms=800, context_window=128000,
         capabilities=("function-calling", "vision", "json"),
     ),
-    ModelMetadata(
+    _priced(
         id="openai/gpt-4o", provider="openai", tier=Tier.MID,
-        quality_score=0.85, price_per_1m_input_usd=2.50,
-        price_per_1m_output_usd=10.00,
+        quality_score=0.85,
         latency_p50_ms=1500, context_window=128000,
         capabilities=("function-calling", "vision", "json"),
     ),
-    ModelMetadata(
+    _priced(
         id="anthropic/claude-3.5-sonnet", provider="anthropic", tier=Tier.MID,
-        quality_score=0.88, price_per_1m_input_usd=3.00,
-        price_per_1m_output_usd=15.00,
+        quality_score=0.88,
         latency_p50_ms=1700, context_window=200000,
         capabilities=("function-calling", "vision"),
     ),
-    ModelMetadata(
+    _priced(
         id="google/gemini-1.5-pro", provider="google", tier=Tier.MID,
-        quality_score=0.82, price_per_1m_input_usd=1.25,
-        price_per_1m_output_usd=5.00,
+        quality_score=0.82,
         latency_p50_ms=1800, context_window=2_000_000,
         capabilities=("function-calling", "vision", "json"),
     ),
-    ModelMetadata(
+    _priced(
         id="openai/o3", provider="openai", tier=Tier.PREMIUM,
-        quality_score=0.94, price_per_1m_input_usd=60.0,
-        price_per_1m_output_usd=240.0,
+        quality_score=0.94,
         latency_p50_ms=8000, context_window=200000,
         capabilities=("function-calling", "vision", "json", "reasoning"),
         notes="Reasoning-tier — cost reflects extended thinking tokens",
+        # 30x o3's list rate. This is a ranking penalty for reasoning-token
+        # amplification, not a price, and it is preserved exactly so routing
+        # behaviour does not move inside a pricing refactor. It is also the
+        # only entry in this catalogue that disagrees with chuzom.pricing —
+        # whether a 30x multiplier is still the right penalty is a routing
+        # question, and it now has to be answered out loud.
+        price_override=(60.0, 240.0),
+        override_reason="reasoning-token amplification; ranking penalty, not list price",
     ),
-    ModelMetadata(
-        id="anthropic/claude-3-opus", provider="anthropic", tier=Tier.PREMIUM,
-        quality_score=0.90, price_per_1m_input_usd=15.0,
-        price_per_1m_output_usd=75.0,
+    # WP-03: was anthropic/claude-3-opus at $15/$75. ⚠ BEHAVIOURAL, same as the
+    # Haiku entry above. Claude 3 Opus is retired, and its genuine list price is
+    # byte-identical to the retired pair this whole work package exists to keep
+    # out of the tree — so keeping the entry would have meant either an unlintable
+    # pricing module or a hardcoded rate here. Current Opus is $5/$25.
+    _priced(
+        id="anthropic/claude-opus-5", provider="anthropic", tier=Tier.PREMIUM,
+        quality_score=0.90,
         latency_p50_ms=3000, context_window=200000,
         capabilities=("function-calling", "vision"),
     ),
-    ModelMetadata(
+    _priced(
         id="perplexity/sonar", provider="perplexity", tier=Tier.MID,
-        quality_score=0.78, price_per_1m_input_usd=1.00,
-        price_per_1m_output_usd=1.00,
+        quality_score=0.78,
         latency_p50_ms=3500, context_window=128000,
         capabilities=("web-grounded", "citations"),
         notes="Web-grounded; cost includes search backend",
