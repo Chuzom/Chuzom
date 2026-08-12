@@ -755,19 +755,19 @@ def main() -> None:
 
     if args and args[0] == "install":
         from chuzom.commands.install import cmd_install
-        cmd_install(args[1:])
+        sys.exit(cmd_install(args[1:]))
     elif args and args[0] == "uninstall":
         from chuzom.commands.uninstall import cmd_uninstall
-        cmd_uninstall(args[1:])
+        sys.exit(cmd_uninstall(args[1:]))
     elif args and args[0] == "update":
         from chuzom.commands.update import cmd_update
-        cmd_update(args[1:])
+        sys.exit(cmd_update(args[1:]))
     elif args and args[0] == "setup":
         from chuzom.commands.setup import cmd_setup
-        cmd_setup(args[1:])
+        sys.exit(cmd_setup(args[1:]))
     elif args and args[0] == "status":
         from chuzom.commands.status import cmd_status
-        cmd_status(args[1:])
+        sys.exit(cmd_status(args[1:]))
     elif args and args[0] == "probe":
         # Probe which locally-installed Ollama models can actually drive the
         # agentic tool-loop, cache the verdicts, and show the dynamic pick.
@@ -821,10 +821,10 @@ def main() -> None:
         sys.exit(cmd_cp(args[1:]))
     elif args and args[0] == "routing":
         from chuzom.commands.routing import cmd_routing
-        cmd_routing(args[1:])
+        sys.exit(cmd_routing(args[1:]))
     elif args and args[0] == "profile":
         from chuzom.commands.profile import cmd_profile
-        cmd_profile(args[1:])
+        sys.exit(cmd_profile(args[1:]))
     elif args and args[0] == "init-claude-memory":
         from chuzom.cli_init_memory import run_init_claude_memory
         run_init_claude_memory()
@@ -833,16 +833,16 @@ def main() -> None:
         cmd_okf(args[1:])
     elif args and args[0] == "doctor":
         from chuzom.commands.doctor import cmd_doctor
-        cmd_doctor(args[1:])
+        sys.exit(cmd_doctor(args[1:]))
     elif args and args[0] == "quickstart":
         from chuzom.quickstart import main as _qs_main
         _qs_main()
     elif args and args[0] == "demo":
         from chuzom.commands.demo import cmd_demo
-        cmd_demo(args[1:])
+        sys.exit(cmd_demo(args[1:]))
     elif args and args[0] == "dashboard":
         from chuzom.commands.dashboard import cmd_dashboard
-        cmd_dashboard(args[1:])
+        sys.exit(cmd_dashboard(args[1:]))
     elif args and args[0] == "summary":
         # Session Summary Dashboard — rich terminal overview.
         # Flags: --since-hours N, --limit N, --markdown, --watch,
@@ -887,28 +887,28 @@ def main() -> None:
         _tui_run()
     elif args and args[0] == "share":
         from chuzom.commands.share import cmd_share
-        cmd_share(args[1:])
+        sys.exit(cmd_share(args[1:]))
     elif args and args[0] == "test":
         from chuzom.commands.test import cmd_test
-        cmd_test(args[1:])
+        sys.exit(cmd_test(args[1:]))
     elif args and args[0] == "onboard":
         from chuzom.commands.onboard import cmd_onboard
-        cmd_onboard(args[1:])
+        sys.exit(cmd_onboard(args[1:]))
     elif args and args[0] == "config":
         from chuzom.commands.config import cmd_config
-        cmd_config(args[1:])
+        sys.exit(cmd_config(args[1:]))
     elif args and args[0] == "init-policy":
         from chuzom.cli_init_policy import run_init_policy_wizard
         run_init_policy_wizard()
     elif args and args[0] == "set-enforce":
         from chuzom.commands.set_enforce import cmd_set_enforce
-        cmd_set_enforce(args[1:])
+        sys.exit(cmd_set_enforce(args[1:]))
     elif args and args[0] == "team":
         from chuzom.commands.team import cmd_team
-        cmd_team(args[1:])
+        sys.exit(cmd_team(args[1:]))
     elif args and args[0] == "budget":
         from chuzom.commands.budget import cmd_budget
-        cmd_budget(args[1:])
+        sys.exit(cmd_budget(args[1:]))
     elif args and args[0] == "replay":
         from chuzom.commands.replay import main as _replay_main
         _replay_main(args[1:])

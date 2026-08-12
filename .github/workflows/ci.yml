@@ -39,6 +39,26 @@ jobs:
         # so it can only be caught statically.
         run: uv run python scripts/lint_tool_surface.py
 
+      - name: "North-star trace (RED1-23 — the hook→server seam, end to end)"
+        # The lint above is STATIC and, by its own docstring, checks that no
+        # emitter hardcodes a tool name into prose. It cannot see the seam where
+        # the shipped bug lived: the hook's idea of the tool surface versus the
+        # server's actual registration, which are separate processes that never
+        # compared notes. This script runs the REAL hook and resolves tools from
+        # the REAL server object.
+        #
+        # It existed and was referenced by a CHANGELOG line and nothing else —
+        # not by CI, not by doctor. A guard nobody invokes is documentation.
+        #
+        # It also needed hardening before it was worth invoking: "every hint
+        # names a registered tool" is necessary but not sufficient. With a bogus
+        # name in CORE_TOOLS the server simply cannot register it, the tier
+        # silently shrinks 4→3, and the fallback chain degrades llm_query hints
+        # to llm_code — every hint still valid, query prompts routed to the code
+        # tool, trace reporting CLEAN. It now also asserts the reverse direction:
+        # every tool a tier DECLARES must actually be registered.
+        run: uv run python scripts/trace_northstar.py
+
       - name: Pricing guard (INV-COST-004 — one source of truth for money)
         # Same failure shape as the tool-surface guard above: a wrong price
         # produces a plausible number, not an error, so nothing downstream can

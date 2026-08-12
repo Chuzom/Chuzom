@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 __all__ = [
     "CORE_TOOLS",
@@ -66,6 +67,8 @@ __all__ = [
     "KNOWN_TOOLS",
     "is_registered",
     "unregistered",
+    "implemented_tools",
+    "phantom_tools",
     "EMITTABLE_TOOLS",
 ]
 
@@ -474,6 +477,63 @@ def call_parts(logical: str, slim: str | None = None) -> tuple[str, list[str]]:
     """
     call = resolve(logical, slim)
     return call.name, [f'{k}="{v}"' for k, v in call.pinned]
+
+
+#: Prefixes a tool coroutine's name begins with. Kept beside the scanner so a
+#: new naming convention has one place to be declared.
+_TOOL_NAME_PREFIXES = ("llm", "chuzom_")
+
+
+def implemented_tools() -> frozenset[str]:
+    """Tool functions that actually EXIST, read from chuzom/tools/ by AST.
+
+    This is the ground truth :func:`unregistered` does not have. That function
+    checks names against ``_TIERS``, which IS the tier constants — rename a tool
+    inside ``CORE_TOOLS`` and the "registered" set contains the new name, so it
+    reports clean. Self-consistency, not validation. A bogus canonical tool name
+    passed the whole suite and ``doctor`` on the strength of it (audit Q3(c)).
+
+    Parsed rather than imported: importing the tool modules drags in the server
+    stack, and a check that only runs when the world is healthy is a poor check
+    for the case where it is not. Returns an empty set if the directory cannot be
+    read, and callers must treat empty as UNKNOWN rather than as "nothing is
+    implemented" — see :func:`phantom_tools`.
+    """
+    import ast
+
+    tools_dir = Path(__file__).resolve().parent / "tools"
+    names: set[str] = set()
+    try:
+        paths = sorted(tools_dir.glob("*.py"))
+    except OSError:
+        return frozenset()
+    for path in paths:
+        try:
+            tree = ast.parse(path.read_text())
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
+                if node.name.startswith(_TOOL_NAME_PREFIXES):
+                    names.add(node.name)
+    return frozenset(names)
+
+
+def phantom_tools(slim: str | None = None) -> list[str]:
+    """Tier entries that name a tool nothing implements. Must always be empty.
+
+    Returns ``[]`` when ground truth is unavailable rather than reporting every
+    tool as phantom — an unreadable tools/ directory is not evidence that the
+    surface is broken, and a check that screams on its own failure gets muted.
+    """
+    implemented = implemented_tools()
+    if not implemented:
+        return []
+    offered = registered_tools(slim)
+    if offered is None:
+        offered = KNOWN_TOOLS
+    deprecated = frozenset(DEPRECATED_TOOLS)
+    return sorted(n for n in offered if n not in implemented and n not in deprecated)
 
 
 def unregistered(names=None, slim: str | None = None) -> list[str]:
