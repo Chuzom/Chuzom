@@ -93,6 +93,14 @@ def pack_prompt(milestone: Milestone, frozen_context: list[dict[str, Any]]) -> s
         lines += ["", "ALREADY COMPLETED — build on these, do NOT redo:"]
         for c in completed:
             lines.append(f"  - [{c.get('id')}] {c.get('description') or c.get('id')}")
+            # RED3-06: forward what the milestone PRODUCED, not just that it ran.
+            # Without this a milestone that semantically depends on an earlier
+            # one's output was told "M1: done" and nothing more, so it could only
+            # guess or redo the work. Already neutralised as untrusted by
+            # TaskLedger.frozen_context() — do not re-wrap or unwrap it here.
+            rendered = c.get("artifacts_rendered")
+            if rendered:
+                lines += [f"    {line}" for line in str(rendered).splitlines()]
     lines += ["", "An objective check will verify your work — make real, correct changes."]
     return "\n".join(lines)
 

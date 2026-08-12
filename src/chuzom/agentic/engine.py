@@ -44,7 +44,7 @@ class Agent(Protocol):
 
 
 EVENT_KINDS = frozenset(
-    {"plan", "execute", "pass", "fail", "retry", "escalate", "replan", "surface", "complete"}
+    {"plan", "execute", "pass", "fail", "retry", "escalate", "surface", "complete"}
 )
 
 
@@ -61,7 +61,7 @@ class Event:
 
     def render(self) -> str:
         icon = {"plan": "🗺", "execute": "⚙", "pass": "✓", "fail": "✗",
-                "retry": "↻", "escalate": "↑", "replan": "✎", "surface": "⚠",
+                "retry": "↻", "escalate": "↑", "surface": "⚠",
                 "complete": "✅"}.get(self.kind, "·")
         bits = [icon, self.kind, self.milestone_id]
         if self.tier >= 0:
@@ -94,9 +94,8 @@ class TaskResult:
     reason: str = ""
 
 
-# route(milestone) -> starting tier; replan(ledger) mutates remaining tail once.
+# route(milestone) -> starting tier.
 Router = Callable[[Milestone], int]
-ReplanFn = Callable[[TaskLedger], None]
 # gate(milestone, result) -> True if an irreversible action is confirmed/safe to freeze.
 Gate = Callable[[Milestone, AgentRunResult], bool]
 
@@ -126,7 +125,6 @@ class MGEEEngine:
         *,
         max_attempts_per_tier: int = 2,
         router: Router | None = None,
-        replan_fn: ReplanFn | None = None,
         gate: Gate | None = None,
         event_sink: Callable[[Event], None] | None = None,
         workdir: str | None = None,
@@ -137,7 +135,6 @@ class MGEEEngine:
         self.top_tier = max(self.agents)
         self.k = max(1, max_attempts_per_tier)
         self.router = router or (lambda _m: min(self.agents))
-        self.replan_fn = replan_fn
         # RED3-01 (P0): the default REFUSES to freeze irreversible work that was
         # not isolated. It used to be `lambda _m, _r: True` — approve everything.
         #
@@ -217,7 +214,7 @@ class MGEEEngine:
                 m.status = MilestoneStatus.BLOCKED
                 blocked.append(f"{m.id}: {reason}")
                 self._emit("surface", m.id, reason=reason)
-            # "done" / "replan" → just continue the outer loop
+            # "done" → just continue the outer loop
 
         if ledger.complete():
             self._emit("complete")
@@ -231,7 +228,7 @@ class MGEEEngine:
     ) -> tuple[str, str]:
         """Attempt/escalation loop for ONE milestone (bounded ⇒ terminates).
 
-        Returns (status, reason): 'done' | 'blocked' | 'replan' | 'budget'.
+        Returns (status, reason): 'done' | 'blocked' | 'budget'.
         """
         while True:
             if ledger.budget_left() <= 0:
@@ -256,11 +253,13 @@ class MGEEEngine:
                 tier += 1  # monotonic escalation, frozen ledger carried forward
                 self._emit("escalate", m.id, tier, res.reason)
                 continue
-            if self.replan_fn and not ledger.replanned:
-                ledger.replanned = True
-                self.replan_fn(ledger)
-                self._emit("replan", m.id, tier)
-                return "replan", ""
+            # WP-10: the replan path is deleted, not disabled. It worked when
+            # called and had NO production caller -- run_delegation threaded
+            # replan_fn through to here and nothing ever supplied one; a single
+            # test was its only caller. Dead safety code reads as coverage, and
+            # this codebase has already had such a path silently wired back up
+            # (RED3-01). Exhausting the ladder now blocks, which is what actually
+            # happened in production the whole time.
             return "blocked", res.reason
 
     def _run_and_verify(

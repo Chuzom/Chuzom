@@ -17,7 +17,6 @@ from chuzom.agentic.engine import (
     Gate,
     MGEEEngine,
     Outcome,
-    ReplanFn,
     Router,
 )
 from chuzom.agentic.ledger import Milestone, TaskLedger
@@ -58,7 +57,6 @@ def delegate(
     budget_cap_usd: float = 1.0,
     max_attempts_per_tier: int = 2,
     router: Router | None = None,
-    replan_fn: ReplanFn | None = None,
     gate: Gate | None = None,
     event_sink: Callable[[Event], None] | None = None,
     session_context: str = "",
@@ -93,7 +91,6 @@ def delegate(
         adapters_by_tier,
         max_attempts_per_tier=max_attempts_per_tier,
         router=router,
-        replan_fn=replan_fn,
         gate=gate,
         event_sink=event_sink,
         workdir=workdir,

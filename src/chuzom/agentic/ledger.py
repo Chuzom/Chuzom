@@ -60,6 +60,24 @@ class Milestone:
     attempts: list[Attempt] = field(default_factory=list)
 
 
+#: Hard ceiling on artifact text handed to a downstream milestone. An artifact is
+#: agent output and can be arbitrarily large; an unbounded one would push the real
+#: task out of the context window, which fails as "the agent ignored its
+#: instructions" rather than as a size error.
+_MAX_ARTIFACT_CHARS = 2000
+
+
+def _render_artifacts(artifacts: dict) -> str:
+    """Flatten an artifact map to bounded text for the delegated prompt."""
+    parts: list[str] = []
+    for key, value in sorted(artifacts.items()):
+        text = str(value)
+        if len(text) > _MAX_ARTIFACT_CHARS:
+            text = text[:_MAX_ARTIFACT_CHARS] + f"… [truncated, {len(text)} chars total]"
+        parts.append(f"{key}: {text}")
+    return "\n".join(parts)
+
+
 @dataclass
 class TaskLedger:
     """Ordered milestones + the frozen done-frontier + budget/tier cursor."""
@@ -69,7 +87,6 @@ class TaskLedger:
     current_tier: int = 0
     budget_cap_usd: float = 1.0
     spent_usd: float = 0.0
-    replanned: bool = False
     # P1-S2 (Known Limit A): conversation context from the calling session, handed
     # to every delegated agent via frozen_context() so a routed model isn't blind
     # to what was discussed (not just its own milestones).
@@ -108,9 +125,21 @@ class TaskLedger:
     def frozen_context(self) -> list[dict[str, Any]]:
         """Read-only view of achieved milestones handed to an escalated tier so
         it resumes at the frontier instead of redoing completed work."""
+        from chuzom.prompt_injection import wrap_untrusted_context
+
         frozen = [
             {"id": m.id, "description": m.description,
-             "achieved_by": m.achieved_by, "artifacts": m.artifacts}
+             "achieved_by": m.achieved_by, "artifacts": m.artifacts,
+             # RED3-06: pack_prompt renders these so a later milestone can build
+             # on what an earlier one PRODUCED, not merely learn that it ran.
+             # RED6-02: artifacts are agent output — untrusted by construction —
+             # so they are neutralised HERE, alongside the other context blocks,
+             # rather than at the render site. Wrapping at the point of rendering
+             # would let an escalated tier that packs its own prompt route around
+             # it, which is the whole reason the other two are wrapped here.
+             "artifacts_rendered": wrap_untrusted_context(
+                 _render_artifacts(m.artifacts), f"ARTIFACTS FROM {m.id}"
+             ) if m.artifacts else ""}
             for m in self.milestones
             if m.status is MilestoneStatus.DONE
         ]
