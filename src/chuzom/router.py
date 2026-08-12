@@ -809,6 +809,7 @@ async def _build_and_filter_chain(
         # intentionally excluded so dedicated coders still win coding tasks.
         # env takes precedence over the YAML pin (env > repo > user).
         _agentic_model = config.chuzom_agentic_model or repo_cfg.agentic_model
+        _agentic_pin_is_explicit = bool(_agentic_model)
         if not _agentic_model and ollama_models:
             # Dynamic fallback (Fix #3): with no explicit env/repo pin, use the
             # best VERIFIED model from THIS machine's registry. Gated on
@@ -843,13 +844,30 @@ async def _build_and_filter_chain(
                     provider=_blocked_prov, model=_agentic_model, action="not_pinned",
                 )
                 _agentic_model = None
-        if _agentic_model and task_type in AGENTIC_TASK_TYPES:
+        # An EXPLICIT pin front-loads every agentic task type: the user named a
+        # model, and honouring that everywhere is the point of the setting.
+        #
+        # A DYNAMIC pick must not. AGENTIC_TASK_TYPES covers four of the five
+        # task types, so front-pinning one registry-chosen model there put the
+        # SAME model at index 0 for QUERY/ANALYZE/GENERATE/RESEARCH and left
+        # only CODE to vary — reinstating, for every user with a verified
+        # agentic model, the single-model collapse that _task_aware_default_order
+        # exists to prevent. The pin (v0.5.5) predates that fix, so the fix never
+        # covered this path, and the guarding test read the developer's own
+        # registry and so passed in CI. The dynamic pick is therefore narrowed to
+        # the task types where tool-calling capability is actually the
+        # differentiator; elsewhere task-aware ordering decides.
+        _pin_scope = (
+            AGENTIC_TASK_TYPES if _agentic_pin_is_explicit else DYNAMIC_AGENTIC_TASK_TYPES
+        )
+        if _agentic_model and task_type in _pin_scope:
             models_to_try = [_agentic_model] + [
                 m for m in models_to_try if m != _agentic_model
             ]
             log.debug(
-                "Agentic model pinned at front: %s (%s task)",
+                "Agentic model pinned at front: %s (%s task, %s pin)",
                 _agentic_model, task_type.value,
+                "explicit" if _agentic_pin_is_explicit else "dynamic",
             )
 
         # Dedup: preserve free-first order, remove injected duplicates
@@ -1238,6 +1256,16 @@ _SLOW_MODEL_MARKERS = frozenset({
 # CODE is intentionally excluded so dedicated coder models still win coding tasks.
 AGENTIC_TASK_TYPES = {
     TaskType.ANALYZE, TaskType.GENERATE, TaskType.QUERY, TaskType.RESEARCH,
+}
+
+# Scope for a DYNAMICALLY chosen agentic model (no explicit env/repo pin).
+# Deliberately narrower than AGENTIC_TASK_TYPES: the two task types where
+# tool-calling / multi-step reasoning is what actually distinguishes the model.
+# QUERY and GENERATE are the cheap-and-fast lanes — pinning one registry pick
+# there buys little and costs all per-task variation. See the pin site for the
+# collapse this bound prevents.
+DYNAMIC_AGENTIC_TASK_TYPES = {
+    TaskType.ANALYZE, TaskType.RESEARCH,
 }
 
 # Allowed keys per media task type.  Caller-supplied media_params are filtered
