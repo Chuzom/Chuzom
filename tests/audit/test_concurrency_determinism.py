@@ -86,34 +86,64 @@ async def test_concurrent_calls_cannot_exceed_monthly_budget_cap(
     config_module._config = None
 
     # Real DB starts empty (temp_db) — get_monthly_spend() reads it fresh on
-    # every check, but the calls below all complete only after `_sleep_s`,
-    # so during the concurrent admission burst it stays at 0 and the cap is
-    # governed purely by the in-flight `_pending_spend` reservations, which
-    # is exactly the race the lock is meant to prevent.
-    _sleep_s = 0.15
-
+    # every check, so during the admission burst it stays at 0 and the cap is
+    # governed purely by the in-flight `_pending_spend` reservations, which is
+    # exactly the race the lock is meant to prevent.
+    #
+    # THE BURST IS HELD BY A BARRIER, NOT BY A SLEEP. The original version used
+    # `await asyncio.sleep(0.15)` inside the fake provider and assumed that was
+    # long enough for all ten calls to pass admission before any completed. That
+    # premise holds on an idle machine and BREAKS UNDER LOAD: sampling
+    # router._pending_spend under CPU starvation showed calls 4 and 5 admitted
+    # roughly TWELVE SECONDS after calls 1-3 had completed and released, when
+    # in-flight spend genuinely was 1R against a 2.5R budget. The guard admitted
+    # them because there really was headroom — correct behaviour — but the
+    # assertion read it as a TOCTOU overrun and this test failed 4/4 under
+    # contention while passing in isolation.
+    #
+    # A sleep cannot express "nobody finishes until everybody has been decided";
+    # it only expresses "wait a while and hope". The gate below states it
+    # directly: an admitted call parks at the provider, a rejected call raises,
+    # and only when all ten have resolved one way or the other is the gate
+    # opened. The assertion then measures MUTUAL EXCLUSION rather than scheduler
+    # timing, which is what it always claimed to measure.
     success_response = LLMResponse(
         content="ok", model="openai/gpt-4o", input_tokens=5, output_tokens=5,
         cost_usd=0.001, latency_ms=10.0, provider="openai",
     )
 
-    async def _slow_call_llm(model, *args, **kwargs):
-        await asyncio.sleep(_sleep_s)
+    n_concurrent = 10
+    _gate = asyncio.Event()
+    _resolved = 0
+
+    def _mark_resolved() -> None:
+        """One more call has finished its admission decision (either way)."""
+        nonlocal _resolved
+        _resolved += 1
+        if _resolved >= n_concurrent:
+            _gate.set()
+
+    async def _gated_call_llm(model, *args, **kwargs):
+        # Reached only by calls the budget guard ADMITTED. Park here holding the
+        # reservation until every sibling has also been decided.
+        _mark_resolved()
+        await _gate.wait()
         return success_response
 
-    monkeypatch.setattr("chuzom.providers.call_llm", _slow_call_llm)
+    monkeypatch.setattr("chuzom.providers.call_llm", _gated_call_llm)
 
-    n_concurrent = 10
-    results = await asyncio.gather(
-        *[
-            route_and_call(
-                TaskType.QUERY, prompt,
-                model_override="openai/gpt-4o",
+    async def _one():
+        try:
+            return await route_and_call(
+                TaskType.QUERY, prompt, model_override="openai/gpt-4o",
             )
-            for _ in range(n_concurrent)
-        ],
-        return_exceptions=True,
-    )
+        except BaseException as exc:  # noqa: BLE001 — rejection is a valid outcome
+            # Rejected before reaching the provider, so it must self-report or
+            # the gate would never open and the test would hang.
+            _mark_resolved()
+            return exc
+
+    results = await asyncio.gather(*[_one() for _ in range(n_concurrent)])
 
     successes = [r for r in results if isinstance(r, LLMResponse)]
     budget_errors = [r for r in results if isinstance(r, BudgetExceededError)]
