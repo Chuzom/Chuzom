@@ -620,7 +620,13 @@ def _format_routing_section(
     total_out   = sum(t["out"]   for t in tools.values())
     total_cost  = sum(t["cost"]  for t in tools.values())
     total_base  = _host_baseline(total_in, total_out)
-    total_saved = max(0.0, total_base - total_cost)
+    # AUD-06 / WP-04: NO max(0.0, ...) here. Routing can cost more than the
+    # baseline -- overhead, an escalated cheap attempt, a paid provider on a
+    # prompt the subscription covered -- and when it does the honest figure is
+    # negative. Clamping made a session that lost money render identically to one
+    # that broke even, on the one surface users actually read, while calc_savings
+    # and compute_receipt reported the loss correctly all along.
+    total_saved = total_base - total_cost
     savings_pct = round(total_saved / total_base * 100) if total_base > 0 else 0
     total_tokens = total_in + total_out
 
@@ -651,15 +657,30 @@ def _format_routing_section(
             f"{_C_MUTED}this session{_RESET}",
         ]
     else:
+        # AUD-06: a loss is reported in DOLLARS, not as a negative percentage.
+        # Unclamping alone produced "-571329% saved" on a small overspending
+        # session -- technically honest, operationally unreadable, and a number
+        # that shape invites someone to "fix" it by restoring the clamp. The
+        # magnitude of a loss is what the user can act on; the ratio is not.
+        if total_saved < 0:
+            figure = (
+                f"{_C_ORANGE}${abs(total_saved):.4f} overspent{_RESET} "
+                f"{_C_MUTED}(gross, {provenance}){_RESET}"
+            )
+        else:
+            # D9: this is baseline-avoided GROSS of routing overhead — qualify it so
+            # it's not equated with the Codex/Gemini "realized" (gross − overhead).
+            # "% saved" is kept contiguous (the savings-clamp test relies on it).
+            figure = (
+                f"{pct_color}{savings_pct}% saved{_RESET} "
+                f"{_C_MUTED}(gross, {provenance}){_RESET}"
+            )
         lines = [
             f"    {_C_WHITE}{total_calls}{_RESET} calls  "
             f"{tokens_str} tokens  "
             f"${total_cost:.4f} actual  "
             f"${total_base:.4f} baseline  "
-            # D9: this is baseline-avoided GROSS of routing overhead — qualify it so
-            # it's not equated with the Codex/Gemini "realized" (gross − overhead).
-            # "% saved" is kept contiguous (the savings-clamp test relies on it).
-            f"{pct_color}{savings_pct}% saved{_RESET} {_C_MUTED}(gross, {provenance}){_RESET}  "
+            f"{figure}  "
             # D5: explicit window so this panel isn't read as comparable to the
             # (today) provider panels or the lifetime cumulative panel beside it.
             f"{_C_MUTED}this session{_RESET}",
@@ -695,7 +716,9 @@ def _total_saved(tools: dict[str, dict]) -> float:
     total_out  = sum(t["out"]  for t in tools.values())
     total_cost = sum(t["cost"] for t in tools.values())
     baseline   = _host_baseline(total_in, total_out)
-    return max(0.0, baseline - total_cost)
+    # Unclamped (AUD-06): other surfaces consume this, so clamping here would
+    # launder the loss before any caller could see it.
+    return baseline - total_cost
 
 
 def _net_session_line(free_rows: list[dict], paid_rows: list[dict]) -> str | None:
@@ -1717,7 +1740,10 @@ def _lifetime_saved() -> float:
             if provider in _FREE_PROVIDERS:
                 saved += base
             elif provider != "subscription":
-                saved += max(0.0, base - (cost or 0.0))
+                # Unclamped (AUD-06): a provider that overspent must subtract
+                # from the total, not contribute zero. Clamping per-row let a
+                # loss-making provider hide inside a profitable aggregate.
+                saved += base - (cost or 0.0)
         return saved
     except Exception:
         return 0.0
