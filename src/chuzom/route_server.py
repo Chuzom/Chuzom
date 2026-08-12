@@ -247,6 +247,10 @@ def main(argv=None) -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7338)
     args = ap.parse_args(argv)
+    # RED6-04: chuzom-route has no auth checks at all; a public bind exposes the
+    # router -- and the paid calls it makes -- to the network.
+    from chuzom.net_bind import refuse_public_bind_or_exit
+    refuse_public_bind_or_exit(args.host, component="route")
     serve(args.host, args.port)
 
 

@@ -8,8 +8,17 @@ cloud) by flipping one env var. Individual env vars still override the preset.
 Example ~/.chuzom/presets.yaml:
 
     local:       {gateway: "http://127.0.0.1:17900/v1", host: 127.0.0.1, port: 17900, profile: budget}
-    team-server: {gateway: "http://10.0.0.5:17900/v1",  host: 0.0.0.0,   port: 17900, profile: balanced}
+    team-server: {gateway: "http://10.0.0.5:17900/v1",  host: 10.0.0.5,  port: 17900, profile: balanced}
     cloud:       {gateway: "https://chuzom.internal/v1", profile: premium}
+
+SECURITY (RED6-04): ``host`` is passed straight to the gateway's bind, and the
+gateway has NO request authentication -- any client that can reach the port can
+trigger real, paid model calls. The team-server example therefore names a SPECIFIC
+interface, not a wildcard: this docstring is where a user learns the file format,
+and it previously demonstrated a wildcard bind as ordinary practice.
+``chuzom.net_bind`` now refuses a wildcard bind unless CHUZOM_ALLOW_PUBLIC_BIND is
+set explicitly, but a refusal is a backstop, not a substitute for putting
+authentication in front of an exposed gateway.
 """
 from __future__ import annotations
 

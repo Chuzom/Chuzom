@@ -385,7 +385,15 @@ def main() -> None:
     import uvicorn
 
     from chuzom import presets
+    from chuzom.net_bind import refuse_public_bind_or_exit
+
     host, port = presets.bind()
+    # RED6-04: this app has NO request authentication -- a whole-file grep for
+    # `Depends(` returns zero, and _guard_cross_origin is a browser
+    # CSRF/DNS-rebinding check that by its own docstring lets CLI/SDK traffic
+    # through. Binding it publicly therefore exposes paid model calls to anything
+    # that can reach the port.
+    refuse_public_bind_or_exit(host, component="gateway")
     print(f"Chuzom Gateway [{presets.active_name()}] → http://{host}:{port}")
     print("  OpenAI    /v1/chat/completions   |  Anthropic /v1/messages   |  Ollama /api/chat,/api/generate")
     uvicorn.run(app, host=host, port=port, log_level="warning")

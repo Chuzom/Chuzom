@@ -63,9 +63,34 @@ def test_valid_flags_invoke_uvicorn(monkeypatch, capsys) -> None:
     import uvicorn
 
     monkeypatch.setattr(uvicorn, "run", fake_run)
+    # RED6-04: a wildcard bind is now REFUSED unless the operator opts in
+    # explicitly. This test is about flag PARSING -- 0.0.0.0 was only ever a
+    # distinctive value -- so it opts in, which also documents that the gate is
+    # bypassable on purpose rather than by accident.
+    monkeypatch.setenv("CHUZOM_ALLOW_PUBLIC_BIND", "on")
     rc = cmd_admin_api(["--host", "0.0.0.0", "--port", "8080"])
     assert rc == 0
     assert captured == {"host": "0.0.0.0", "port": 8080, "log_level": "info"}
+
+
+def test_public_bind_is_refused_without_opt_in(monkeypatch, capsys) -> None:
+    """RED6-04: the help text advertised `--host 0.0.0.0` with only a prose
+    security note. A note is not a gate -- the operator has already typed the
+    flag by the time they could read it."""
+    import uvicorn
+
+    def _must_not_run(*a, **k):  # pragma: no cover - reached only on regression
+        raise AssertionError("uvicorn.run was reached despite a refused bind")
+
+    monkeypatch.setattr(uvicorn, "run", _must_not_run)
+    monkeypatch.delenv("CHUZOM_ALLOW_PUBLIC_BIND", raising=False)
+    monkeypatch.delenv("CHUZOM_SSE_ALLOW_PUBLIC", raising=False)
+
+    import pytest as _pytest
+    with _pytest.raises(SystemExit) as exc:
+        cmd_admin_api(["--host", "0.0.0.0", "--port", "8080"])
+    assert exc.value.code == 2
+    assert "admin-api" in capsys.readouterr().err
 
 
 def test_default_host_and_port_when_no_flags(monkeypatch) -> None:

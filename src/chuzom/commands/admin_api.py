@@ -100,6 +100,12 @@ def cmd_admin_api(args: list[str]) -> int:
         return 1
 
     from chuzom.admin_api import create_app
+    from chuzom.net_bind import refuse_public_bind_or_exit
+
+    # RED6-04: the help text advertises `--host 0.0.0.0` ("bind all interfaces")
+    # with only a prose security note. A note is not a gate -- the operator has
+    # already typed the flag by the time they could read it.
+    refuse_public_bind_or_exit(host, component="admin-api")
 
     app = create_app()
     print(

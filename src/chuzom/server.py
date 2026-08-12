@@ -520,11 +520,16 @@ _SSE_ALLOW_PUBLIC_VALUES = {"on", "1", "true", "yes"}
 
 
 def _allow_public_bind() -> bool:
-    import os as _os
-    return (
-        (_os.environ.get(_SSE_ALLOW_PUBLIC_ENV) or "")
-        .strip().lower() in _SSE_ALLOW_PUBLIC_VALUES
-    )
+    """Delegates to the shared gate (RED6-04).
+
+    This module had the ONLY correct implementation while gateway.py,
+    route_server.py and commands/admin_api.py each shipped without one. Keeping a
+    private copy here would preserve exactly the arrangement that produced three
+    misses out of four. CHUZOM_SSE_ALLOW_PUBLIC is still honoured by the shared
+    gate, so an existing opt-in keeps working.
+    """
+    from chuzom.net_bind import allow_public_bind as _shared
+    return _shared()
 
 
 def main_sse_secured(
