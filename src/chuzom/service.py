@@ -198,15 +198,20 @@ def _score_confidence(task_type: str, complexity: str, heuristic_score: int) -> 
 # Routing Decision
 
 def _route_for_task(task_type: str) -> str:
-    """Pick the appropriate MCP tool for the task type."""
-    task_to_tool = {
-        "query": "llm_query",
-        "code": "llm_code",
-        "research": "llm_research",
-        "generate": "llm_generate",
-        "analyze": "llm_analyze",
-    }
-    return task_to_tool.get(task_type, "llm_route")
+    """Pick the appropriate MCP tool for the task type.
+
+    RED8-06: this was the THIRD independently-maintained task->tool map. Its five
+    keys and its llm_route fallback happened to agree with auto-route.py, so it
+    looked harmless -- but a third copy is a third thing to forget when the set
+    of task types changes, and agent-route.py's copy had already drifted to an
+    llm_analyze fallback (a completion door that cannot run tools).
+
+    Kept as a function rather than deleted: service.py:239 calls it, so this is a
+    live sidecar endpoint, not dead code. Only the private map is gone.
+    """
+    from chuzom.tool_surface import tool_for_task
+
+    return tool_for_task(task_type)
 
 
 # ────────────────────────────────────────────────────────────────────────────
