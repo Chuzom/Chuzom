@@ -288,7 +288,19 @@ def main() -> int:
     if report["scored"] < total:
         print(f"WARNING: only {report['scored']}/{total} mutations were scored. "
               f"A score over a reduced denominator is not comparable across SHAs.")
-    if report["scored"] < 8:
+
+    # Persist BEFORE any verdict check. The first version returned early on
+    # "<8 scored" and so wrote nothing for the baseline run -- which is exactly
+    # the run that is SUPPOSED to score fewer than 8, because most mutations
+    # target code the remediation created. The guard destroyed the artifact it
+    # was meant to qualify.
+    if args.json:
+        Path(args.json).write_text(json.dumps(report, indent=2) + "\n")
+        print(f"wrote {args.json}")
+
+    # A baseline run legitimately scores few mutations; only a HEAD run claims a
+    # verdict, so only a HEAD run can fail this way.
+    if not args.baseline_sha and report["scored"] < 8:
         print("FAIL: fewer than 8 mutations scored — the sample cannot support "
               "a WP-14 or G-F verdict.", file=sys.stderr)
         return 4
@@ -296,10 +308,6 @@ def main() -> int:
         print("FAIL: worktree dirty after run:", report["dirty_after"], file=sys.stderr)
         return 3
     print("worktree clean after run ✓")
-
-    if args.json:
-        Path(args.json).write_text(json.dumps(report, indent=2) + "\n")
-        print(f"wrote {args.json}")
     return 0
 
 
