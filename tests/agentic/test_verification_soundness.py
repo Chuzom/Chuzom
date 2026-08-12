@@ -183,3 +183,90 @@ def test_deleting_the_work_flips_the_verdict(repo):
     assert chk({}).ok
     (repo / "mod.py").unlink()
     assert not chk({}).ok
+
+
+# ── RED3-01: irreversible work does not auto-freeze ──────────────────────────
+
+
+def _irreversible(**artifacts):
+    from chuzom.agentic.engine import AgentRunResult
+    from chuzom.agentic.ledger import Milestone
+
+    m = Milestone(
+        id="m1", description="push to production",
+        acceptance=_real_check, reversible=False,
+    )
+    return m, AgentRunResult(artifacts=artifacts)
+
+
+def test_the_default_gate_refuses_unisolated_irreversible_work():
+    """RED3-01 (P0). The gate mechanism was wired; its DEFAULT said yes.
+
+    `self.gate = gate or (lambda _m, _r: True)` approved every irreversible
+    milestone, and no caller ever supplied a real gate. That is what made the
+    README's "irreversible steps run in an isolated git worktree, merged only
+    after they verify" false — not a missing mechanism, a permissive default on
+    the one it had. In review that reads as though the protection is present.
+    """
+    from chuzom.agentic.engine import MGEEEngine
+
+    engine = MGEEEngine({0: object()})
+    milestone, run = _irreversible()  # no worktree — ran in the live tree
+    assert not engine.gate(milestone, run), (
+        "an irreversible milestone froze without ever being isolated"
+    )
+
+
+def test_reversible_work_is_unaffected():
+    """The gate must not turn into a blanket stall — most work is reversible."""
+    from chuzom.agentic.engine import AgentRunResult, MGEEEngine
+    from chuzom.agentic.ledger import Milestone
+
+    engine = MGEEEngine({0: object()})
+    m = Milestone(id="m1", description="edit a file", acceptance=_real_check)
+    assert engine.gate(m, AgentRunResult(artifacts={}))
+
+
+def test_isolated_irreversible_work_may_freeze():
+    from chuzom.agentic.engine import MGEEEngine
+
+    engine = MGEEEngine({0: object()})
+    milestone, run = _irreversible(worktree="wt-1")
+    assert engine.gate(milestone, run)
+
+
+def test_reversibility_gate_discards_a_worktree_that_fails_to_merge():
+    """Unverified work must never reach the main tree."""
+    from chuzom.agentic.worktree import FakeWorktreeOps, reversibility_gate
+
+    ops = FakeWorktreeOps(merge_ok=False)
+    gate = reversibility_gate(ops)
+    milestone, run = _irreversible(worktree="wt-1")
+
+    assert not gate(milestone, run)
+    assert ops.discarded == ["wt-1"], "a failed merge left the worktree behind"
+
+
+def test_the_real_gate_is_actually_constructed_somewhere():
+    """RED3-01's root cause: `reversibility_gate` had ZERO importers.
+
+    The function was written, tested in isolation, and never reached production
+    — dead safety code, which reads as coverage. This asserts a caller exists.
+    """
+    import ast
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[2] / "src" / "chuzom"
+    callers = []
+    for path in src.rglob("*.py"):
+        if path.name == "worktree.py":
+            continue  # the definition itself
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "reversibility_gate"
+            ):
+                callers.append(f"{path.relative_to(src)}:{node.lineno}")
+    assert callers, "reversibility_gate is defined but never constructed"

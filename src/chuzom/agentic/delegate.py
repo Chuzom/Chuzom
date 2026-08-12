@@ -74,6 +74,21 @@ def delegate(
     """
     ledger = TaskLedger(goal=goal, milestones=milestones, budget_cap_usd=budget_cap_usd,
                         session_context=session_context)
+
+    # RED3-01 (P0): supply a REAL reversibility gate when we can isolate.
+    # `reversibility_gate` existed in chuzom/agentic/worktree.py and nothing
+    # imported it — the README described code that was written and never wired.
+    # Without a caller the engine fell back to its default, which used to
+    # approve every irreversible milestone.
+    #
+    # Only when workdir is a git repository: GitWorktreeOps needs one, and
+    # claiming isolation we cannot provide is the failure being fixed. Elsewhere
+    # the engine's fail-closed default surfaces the milestone instead.
+    if gate is None and workdir and _is_git_repo(workdir):
+        from chuzom.agentic.worktree import GitWorktreeOps, reversibility_gate
+
+        gate = reversibility_gate(GitWorktreeOps(repo=workdir))
+
     engine = MGEEEngine(
         adapters_by_tier,
         max_attempts_per_tier=max_attempts_per_tier,
@@ -92,3 +107,23 @@ def delegate(
         savings=savings,
         reason=result.reason,
     )
+
+
+def _is_git_repo(path: str) -> bool:
+    """True when ``path`` is inside a git work tree.
+
+    RED3-01: gates the worktree isolation. GitWorktreeOps cannot isolate outside
+    a repository, and offering isolation that silently does nothing is the exact
+    shape of the defect being fixed — so the check is explicit rather than
+    optimistic.
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=path, capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"

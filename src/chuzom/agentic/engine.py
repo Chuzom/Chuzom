@@ -101,6 +101,24 @@ ReplanFn = Callable[[TaskLedger], None]
 Gate = Callable[[Milestone, AgentRunResult], bool]
 
 
+def _refuse_unisolated_irreversible(milestone: Milestone, result: AgentRunResult) -> bool:
+    """Default gate: reversible work freezes; irreversible work needs isolation.
+
+    RED3-01 (P0). An irreversible milestone — push, merge, delete, external send
+    — that ran straight in the working tree cannot be rolled back if its
+    acceptance check turns out to be wrong, so it does not auto-freeze on a bare
+    pass. It is surfaced instead.
+
+    Callers that CAN isolate should pass ``reversibility_gate(ops)`` from
+    chuzom.agentic.worktree, which merges the worktree when the milestone
+    verified there and discards it otherwise. This default is the honest answer
+    for callers that cannot: refuse, rather than pretend.
+    """
+    if milestone.reversible:
+        return True
+    return bool(result.artifacts.get("worktree"))
+
+
 class MGEEEngine:
     def __init__(
         self,
@@ -120,7 +138,16 @@ class MGEEEngine:
         self.k = max(1, max_attempts_per_tier)
         self.router = router or (lambda _m: min(self.agents))
         self.replan_fn = replan_fn
-        self.gate = gate or (lambda _m, _r: True)
+        # RED3-01 (P0): the default REFUSES to freeze irreversible work that was
+        # not isolated. It used to be `lambda _m, _r: True` — approve everything.
+        #
+        # The gate mechanism was wired all along (see the call site in
+        # _work_milestone); what made the README's "irreversible steps run in an
+        # isolated git worktree, merged only after they verify" false was that
+        # its default said yes and no caller ever supplied a real one. A
+        # permissive default on a safety gate is indistinguishable from no gate,
+        # and reads in review as though the protection is present.
+        self.gate = gate or _refuse_unisolated_irreversible
         self.event_sink = event_sink
         # RED3-08: the directory the agents actually work in, threaded to the
         # acceptance check so a repository-reading check looks at the right tree.
