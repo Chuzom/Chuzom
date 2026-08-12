@@ -3,8 +3,23 @@
 Sourced primarily from https://artificialanalysis.ai/leaderboards/models
 which publishes quality scores, prices, latency p50, and capabilities
 across all major LLMs. We ship a static snapshot under
-``config/models.yaml`` so the registry works offline; it's refreshed
-periodically via ``scripts/refresh-model-registry.py``.
+``config/models.yaml`` so the registry works offline.
+
+.. warning::
+   This docstring used to end "it's refreshed periodically via
+   ``scripts/refresh-model-registry.py``". **That script does not exist and
+   never did** (WP-12 / RED8-08), so the documented refresh path pointed at a
+   file nobody wrote — which is how "periodically" became "not since July".
+
+   The registry is a MANUALLY CURATED SNAPSHOT; nothing fetches a ranking at
+   runtime. NORTH_STAR described it as a "live", "continuously-updated"
+   leaderboard, and that clause was the load-bearing justification for the
+   whole "Claude is not axiomatically the top" position.
+
+   Refresh by hand-editing ``config/models.yaml`` and bumping its
+   ``snapshot_date``. ``scripts/check_model_registry_freshness.py`` fails CI once
+   the snapshot exceeds the cadence, so the schedule now has a mechanism instead
+   of a dead pointer.
 
 The router consumes this registry to:
     - Tag each routing decision with the chosen model's tier + quality

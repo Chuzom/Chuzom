@@ -1,7 +1,27 @@
 # Chuzom Model Registry
 #
-# Sourced primarily from https://artificialanalysis.ai/leaderboards/models
-# Refresh periodically via scripts/refresh-model-registry.py.
+# Sourced from https://artificialanalysis.ai/leaderboards/models
+#
+# THIS IS A MANUALLY CURATED SNAPSHOT, NOT A LIVE FEED (WP-12 / RED8-08).
+# Nothing fetches a ranking at runtime. NORTH_STAR.md previously described this
+# as a "live" and "continuously-updated" leaderboard; it is neither, and the
+# distinction matters because that clause was the load-bearing justification for
+# the whole "Claude is not axiomatically the top" position. With a hand-curated
+# ladder, vendor neutrality is a GOAL of this project, not a capability it has.
+#
+# The header used to say "Refresh periodically via scripts/refresh-model-registry.py".
+# That script does not exist and is not in the repository history. The documented
+# refresh path was a file that was never written — so "periodically" had no
+# mechanism behind it, which is how a snapshot dated 2026-07-10 went unnoticed.
+#
+# To refresh: update the entries below by hand from the leaderboard, then bump
+# `snapshot_date`. scripts/check_model_registry_freshness.py fails CI once the
+# snapshot exceeds MAX_SNAPSHOT_AGE_DAYS, so staleness surfaces as a red build
+# rather than as a quietly wrong routing decision.
+#
+# Prices are NOT read from here — chuzom.pricing owns those (INV-COST-004).
+#
+snapshot_date: 2026-07-10
 #
 # Schema (all required unless marked optional):
 #   id                       canonical "provider/model-name" string
