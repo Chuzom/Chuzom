@@ -20,6 +20,7 @@ from pathlib import Path
 import aiosqlite
 
 from chuzom import pricing as _pricing
+from chuzom.provenance import Measured
 from chuzom.config import get_config
 from chuzom.types import (
     LLMResponse, MODEL_COST_PER_1K, MODEL_SPEED_TPS,
@@ -2148,14 +2149,37 @@ async def get_savings_summary(period: str = "today") -> dict:
                 f"COALESCE(SUM(cost_saved_usd), 0), COALESCE(SUM(time_saved_sec), 0) "
                 f"FROM claude_usage {where}"
             )
-        except Exception:
-            return {"total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
-                    "time_saved_sec": 0.0, "by_model": {}}
+        except Exception as exc:
+            # RED2-02 (P1): a FAILED QUERY is not a zero-saving week.
+            #
+            # This branch returned exactly the dict the genuine-zero branch
+            # below returns, so a broken telemetry path rendered as a confident
+            # "$0.00 saved" on every downstream surface. Two entirely different
+            # situations, one indistinguishable output — and it fails in the
+            # direction that looks harmless, which is why it survived.
+            #
+            # `provenance` is what callers key on. The numeric fields stay (as
+            # 0.0) so existing consumers do not KeyError, and they must not be
+            # DISPLAYED when provenance is "unknown".
+            return {
+                "total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
+                "time_saved_sec": 0.0, "by_model": {},
+                "provenance": "unknown",
+                "detail": f"savings query failed: {exc}",
+                "saved": Measured.unknown(f"savings query failed: {exc}"),
+            }
 
         row = await cursor.fetchone()
         if not row or row[0] == 0:
-            return {"total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
-                    "time_saved_sec": 0.0, "by_model": {}}
+            # A real, MEASURED zero: the table was readable and holds no rows
+            # for this period. Distinct from the branch above, and now says so.
+            return {
+                "total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
+                "time_saved_sec": 0.0, "by_model": {},
+                "provenance": "measured",
+                "detail": "no routed calls in this period",
+                "saved": Measured.measured(0.0),
+            }
 
         total_calls, total_tokens, cost_saved, time_saved = row
 
@@ -2180,6 +2204,9 @@ async def get_savings_summary(period: str = "today") -> dict:
             "cost_saved_usd": float(cost_saved),
             "time_saved_sec": float(time_saved),
             "by_model": by_model,
+            "provenance": "measured",
+            "detail": "",
+            "saved": Measured.measured(float(cost_saved)),
         }
     finally:
         await db.close()
