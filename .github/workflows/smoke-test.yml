@@ -122,13 +122,28 @@ jobs:
           print('chain_builder research bypass ✓')
           "
 
-      - name: Verify install_hooks runs without error (dry-run)
+      - name: Verify install_hooks preserves a PRE-EXISTING host config
+        # WP-14: this step used to point HOME at an EMPTY temp dir, which is
+        # exactly why it could not have caught RED4-01 (install destroying the
+        # user's statusLine). An install that clobbers user config looks perfect
+        # when there is no user config to clobber. The realistic case -- a
+        # settings.json that already has a foreign statusLine and unrelated keys
+        # the user cares about -- is the only one that can fail.
         run: |
           python -c "
-          import os, tempfile, sys
-          # Point HOME at a temp dir so we don't pollute the real ~/.claude
+          import json, os, tempfile
           with tempfile.TemporaryDirectory() as tmp:
               os.environ['HOME'] = tmp
+              claude_dir = os.path.join(tmp, '.claude')
+              os.makedirs(claude_dir, exist_ok=True)
+              settings_path = os.path.join(claude_dir, 'settings.json')
+              seeded = {
+                  'statusLine': {'type': 'command', 'command': '~/.local/bin/my-own-statusline'},
+                  'model': 'opus',
+                  'env': {'MY_OWN_VAR': 'do-not-touch'},
+              }
+              with open(settings_path, 'w') as fh:
+                  json.dump(seeded, fh, indent=2)
               try:
                   from chuzom.install_hooks import install
                   actions = install()
@@ -136,4 +151,98 @@ jobs:
               except Exception as e:
                   # Acceptable: may fail on Windows if Git Bash absent, etc.
                   print(f'install() raised (expected on some platforms): {e}')
+              with open(settings_path) as fh:
+                  after = json.load(fh)
+              # Keys chuzom has no business touching must survive verbatim.
+              assert after.get('model') == 'opus', f'install() clobbered model: {after.get(\"model\")}'
+              assert after.get('env', {}).get('MY_OWN_VAR') == 'do-not-touch', \
+                  f'install() clobbered env: {after.get(\"env\")}'
+              # The foreign statusLine may be replaced -- that is chuzom's job --
+              # but it must be RECOVERABLE, not silently destroyed.
+              sl = after.get('statusLine')
+              if sl != seeded['statusLine']:
+                  backups = [f for f in os.listdir(claude_dir) if 'settings' in f and f != 'settings.json']
+                  assert backups, (
+                      'install() replaced the user statusLine and left no backup: '
+                      f'{os.listdir(claude_dir)}'
+                  )
+                  print(f'statusLine replaced, backup present: {backups}')
+              else:
+                  print('statusLine preserved as-is')
+              print('pre-existing host config survived install ✓')
           "
+
+  # ── G-D: the suite must be green on the BUILT WHEEL ────────────────────────
+  #
+  # This gate was previously unsatisfiable, and not merely unimplemented.
+  # `pythonpath = ["src"]` in pyproject.toml forces chuzom to resolve from the
+  # source tree regardless of which venv runs pytest, so installing a wheel and
+  # running the suite still tested the source and reported green. Every green CI
+  # run before this job was evidence about the editable install only.
+  #
+  # That setting is right for the ordinary run — without it a bare `uv run
+  # pytest` on a Python lacking chuzom silently ERRORed 67 enforcement tests into
+  # a false pass (CHZ-AUD-002). Two different false-greens; they need two
+  # invocations rather than one compromise. This job passes `-o pythonpath=` and
+  # sets CHUZOM_REQUIRE_WHEEL=1, which makes tests/conftest.py refuse to run
+  # unless chuzom resolves from site-packages. Without that assertion the job
+  # would degrade silently into a second source-tree run the moment anything put
+  # src/ back on the path.
+  #
+  # Editable installs cannot catch packaging defects at all: missing
+  # package_data, modules absent from the wheel, entry points that do not
+  # resolve, hook scripts not shipped. src/chuzom/hooks/*.py are executed as
+  # standalone scripts by path, which is exactly the shape that works in-tree
+  # and breaks when packaged.
+  wheel-suite:
+    name: G-D · full suite on the built wheel · py${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Build the wheel
+        run: uv build --wheel --out-dir dist
+
+      - name: Create a clean venv with NO source tree on the path
+        run: uv venv .wheelvenv --python ${{ matrix.python }}
+
+      - name: Install the built wheel plus test-only dependencies
+        # The wheel carries runtime deps only, so the test toolchain is installed
+        # explicitly. Installing the project itself here (even as an extra) would
+        # defeat the point by pulling in the source.
+        run: |
+          uv pip install --python .wheelvenv/bin/python dist/*.whl
+          uv pip install --python .wheelvenv/bin/python \
+            pytest pytest-asyncio pytest-timeout pytest-cov \
+            aiosqlite hypothesis freezegun respx
+
+      - name: Confirm chuzom resolves from site-packages, not src/
+        run: |
+          .wheelvenv/bin/python - <<'PY'
+          import pathlib, sys
+          import chuzom
+          p = pathlib.Path(chuzom.__file__).resolve()
+          print("chuzom resolved from:", p)
+          if "site-packages" not in p.parts:
+              sys.exit(f"FAIL: resolved from the source tree, not the wheel: {p}")
+          PY
+
+      - name: Run the full suite against the wheel
+        env:
+          CHUZOM_REQUIRE_WHEEL: "1"
+        run: .wheelvenv/bin/python -m pytest -o pythonpath= -q

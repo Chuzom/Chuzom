@@ -7,6 +7,41 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+# ── G-D: prove the wheel is what is under test ──────────────────────────────
+def pytest_configure(config):
+    """When CHUZOM_REQUIRE_WHEEL=1, fail unless chuzom resolves from an install.
+
+    Hard gate G-D requires the suite to be green on the BUILT WHEEL, not an
+    editable install. That was previously unsatisfiable, and not merely
+    unimplemented: ``pythonpath = ["src"]`` in pyproject.toml forces chuzom to
+    resolve from the source tree no matter which venv runs pytest, so installing
+    a wheel and running the suite still tested the source and reported green.
+
+    That setting is correct for the ordinary run — it exists because a bare
+    ``uv run pytest`` on a Python without chuzom silently ERRORed 67 enforcement
+    tests into a false pass (CHZ-AUD-002). Two different false-greens; they need
+    two invocations, not one compromise. The wheel job passes ``-o pythonpath=``
+    and sets this flag.
+
+    Without this assertion the wheel job degrades silently into a second
+    source-tree run the moment anything puts src/ back on the path — a gate that
+    stops testing what it claims to test while still reporting green is the
+    exact failure this audit keeps finding.
+    """
+    if os.environ.get("CHUZOM_REQUIRE_WHEEL", "").strip().lower() not in ("1", "true", "yes", "on"):
+        return
+    import chuzom
+
+    resolved = Path(chuzom.__file__).resolve()
+    if "site-packages" not in resolved.parts:
+        raise pytest.UsageError(
+            "CHUZOM_REQUIRE_WHEEL=1 but chuzom resolved from the source tree, not "
+            f"an installed wheel: {resolved}\n"
+            "Run with `-o pythonpath=` in a venv where the wheel is installed."
+        )
+    print(f"\n[G-D] chuzom under test: {resolved}")
+
+
 # ── Chuzom disk-write isolation (INV-TEST-000) ──────────────────────────────
 @pytest.fixture(autouse=True)
 def _isolate_chuzom_writes(tmp_path, monkeypatch):
