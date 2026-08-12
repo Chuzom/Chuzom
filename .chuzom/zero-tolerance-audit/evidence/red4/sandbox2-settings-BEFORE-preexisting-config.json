@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {"type": "command", "command": "/usr/bin/env python3 /tmp/red4-sandbox2/.claude/hooks/my-custom-hook.py"}
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {"type": "command", "command": "/usr/bin/env python3 /tmp/red4-sandbox2/.claude/hooks/my-bash-logger.py"}
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "/tmp/red4-sandbox2/.claude/hooks/my-statusline.sh"
+  },
+  "permissions": {
+    "allow": ["Bash(git status)", "Bash(npm test)"]
+  },
+  "myCustomUserSetting": "do-not-touch-me",
+  "env": {
+    "MY_EXISTING_VAR": "keep-me"
+  }
+}

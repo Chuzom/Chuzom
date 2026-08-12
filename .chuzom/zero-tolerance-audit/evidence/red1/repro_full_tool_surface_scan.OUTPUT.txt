@@ -1,0 +1,59 @@
+==============================================================================
+Registered under CHUZOM_SLIM=consolidated: ['chuzom_admin', 'chuzom_agent_route', 'chuzom_agent_start_session', 'chuzom_session', 'chuzom_status', 'llm', 'llm_act', 'llm_audio', 'llm_edit', 'llm_image', 'llm_route']
+==============================================================================
+
+--- (A) src/chuzom/rules/*.md — installed via _append_routing_rules(),
+    which NEVER calls localize()/route_tool() (confirmed by reading cli.py
+    lines 125-169: reads rules_file.read_text() and writes it VERBATIM) ---
+
+  chuzom.md                unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate']
+  codex-rules.md           unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_auto']
+  copilot-cli-rules.md     unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_savings', 'llm_auto']
+  copilot-rules.md         unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_auto']
+  cursor-rules.md          unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_auto']
+  desktop-rules.md         unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_health', 'llm_auto']
+  gemini-cli-rules.md      unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_savings', 'llm_auto']
+  gemini-rules.md          unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_auto']
+  openclaw-rules.md        unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_auto']
+  opencode-rules.md        unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_auto']
+  pi-rules.md              unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_auto']
+  trae-rules.md            unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_savings', 'llm_auto']
+  vscode-rules.md          unresolved legacy names taught verbatim: ['llm_query', 'llm_code', 'llm_analyze', 'llm_research', 'llm_generate', 'llm_reason', 'llm_savings', 'llm_auto']
+
+  -> 13 of the per-host rules/*.md templates teach at least one
+     tool name that is NOT registered under the shipped default tier,
+     with ZERO localize() pass ever applied to this whole file family.
+
+--- Which install functions ship these files, and to what host? ---
+
+  installs vscode-rules.md
+  installs cursor-rules.md
+  installs opencode-rules.md
+  installs gemini-cli-rules.md
+  installs copilot-cli-rules.md
+  installs vscode-rules.md
+  installs openclaw-rules.md
+  installs trae-rules.md
+  installs pi-rules.md
+  installs codex-rules.md
+
+--- (B) In-code templates wrapped in localize() — proves the mechanism
+    works for names IN DEPRECATED_TOOLS but not for llm_reason ---
+
+  cli._COPILOT_AGENT_CONTENT (-> .github/agents/chuzom.agent.md)
+      contains 'llm_reason'   -> registered=False *** UNRESOLVED — SHIPS BROKEN ***
+
+  install_hooks._CURSOR_RULE_CONTENT (-> <proj>/.cursor/rules/use-chuzom.mdc)
+      contains 'llm_reason'   -> registered=False *** UNRESOLVED — SHIPS BROKEN ***
+
+  install_hooks._VSCODE_MCP_CONTENT (-> <proj>/.vscode/mcp.json)
+
+==============================================================================
+CONCLUSION: the CHZ-SURF-01 fix (localize()) is correct but incomplete for
+the ~11 in-code templates it was applied to (misses llm_reason everywhere),
+and was NEVER APPLIED AT ALL to the 12-file src/chuzom/rules/*.md template
+family, which is the actual install payload for VS Code/Copilot, Cursor
+(global rules), OpenCode, Gemini CLI, Copilot CLI, OpenClaw, Trae, Pi, and
+Codex CLI. Every one of those hosts' default install teaches unresolved,
+uncallable legacy tool names for the majority of task categories.
+==============================================================================

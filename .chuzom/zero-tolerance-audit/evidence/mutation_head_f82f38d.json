@@ -1,0 +1,93 @@
+{
+  "results": [
+    {
+      "id": "M1",
+      "area": "money",
+      "status": "killed",
+      "tests": [
+        "tests/economics/"
+      ]
+    },
+    {
+      "id": "M2",
+      "area": "money",
+      "status": "killed",
+      "tests": [
+        "tests/economics/",
+        "tests/test_savings.py"
+      ]
+    },
+    {
+      "id": "M3",
+      "area": "money",
+      "status": "killed",
+      "tests": [
+        "tests/economics/test_savings_sign.py"
+      ]
+    },
+    {
+      "id": "M4",
+      "area": "money",
+      "status": "killed",
+      "tests": [
+        "tests/economics/"
+      ]
+    },
+    {
+      "id": "M5",
+      "area": "routing",
+      "status": "killed",
+      "tests": [
+        "tests/test_tool_surface.py",
+        "tests/routing/"
+      ]
+    },
+    {
+      "id": "M6",
+      "area": "routing",
+      "status": "killed",
+      "tests": [
+        "tests/audit/test_provider_matrix.py"
+      ]
+    },
+    {
+      "id": "M7",
+      "area": "routing",
+      "status": "killed",
+      "tests": [
+        "tests/audit/",
+        "tests/routing/"
+      ]
+    },
+    {
+      "id": "M8",
+      "area": "verification",
+      "status": "killed",
+      "tests": [
+        "tests/telemetry/"
+      ]
+    },
+    {
+      "id": "M9",
+      "area": "verification",
+      "status": "killed",
+      "tests": [
+        "tests/telemetry/"
+      ]
+    },
+    {
+      "id": "M10",
+      "area": "verification",
+      "status": "killed",
+      "tests": [
+        "tests/test_execution_ledger.py"
+      ]
+    }
+  ],
+  "killed": 10,
+  "scored": 10,
+  "not_applicable": 0,
+  "score": 1.0,
+  "worktree_clean_after": true,
+  "dirty_after": []
+}

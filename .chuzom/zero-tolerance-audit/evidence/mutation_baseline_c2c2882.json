@@ -1,0 +1,76 @@
+{
+  "results": [
+    {
+      "id": "M1",
+      "area": "money",
+      "status": "n/a",
+      "note": "mutation did not apply at this SHA"
+    },
+    {
+      "id": "M2",
+      "area": "money",
+      "status": "n/a",
+      "note": "mutation did not apply at this SHA"
+    },
+    {
+      "id": "M3",
+      "area": "money",
+      "status": "n/a",
+      "note": "mutation did not apply at this SHA"
+    },
+    {
+      "id": "M4",
+      "area": "money",
+      "status": "n/a",
+      "note": "mutation did not apply at this SHA"
+    },
+    {
+      "id": "M5",
+      "area": "routing",
+      "status": "SURVIVED",
+      "tests": [
+        "tests/test_tool_surface.py"
+      ]
+    },
+    {
+      "id": "M6",
+      "area": "routing",
+      "status": "n/a",
+      "note": "mutation did not apply at this SHA"
+    },
+    {
+      "id": "M7",
+      "area": "routing",
+      "status": "killed",
+      "tests": [
+        "tests/audit/"
+      ]
+    },
+    {
+      "id": "M8",
+      "area": "verification",
+      "status": "n/a",
+      "note": "mutation did not apply at this SHA"
+    },
+    {
+      "id": "M9",
+      "area": "verification",
+      "status": "n/a",
+      "note": "mutation did not apply at this SHA"
+    },
+    {
+      "id": "M10",
+      "area": "verification",
+      "status": "killed",
+      "tests": [
+        "tests/test_execution_ledger.py"
+      ]
+    }
+  ],
+  "killed": 2,
+  "scored": 3,
+  "not_applicable": 7,
+  "score": 0.6666666666666666,
+  "worktree_clean_after": true,
+  "dirty_after": []
+}

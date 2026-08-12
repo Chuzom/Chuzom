@@ -57,6 +57,19 @@ jobs:
         # empty.
         run: uv run python scripts/lint_fail_open.py
 
+      - name: "G-C: acceptance criteria unchanged (the executor cannot edit its own oracle)"
+        # The remediation plan says criteria are hashed before a run and
+        # re-verified after, and G-C makes a mismatch a disqualifier. No hash was
+        # ever computed, so G-C could not fire — the same defect as
+        # unregistered() and lint_tool_surface.py: check-shaped, reporting
+        # nothing, counted as protection.
+        #
+        # Deliberately over-reports: it hashes whole files, not criteria blocks,
+        # so unrelated prose edits trip it and must be re-baselined on purpose. A
+        # block parser could silently narrow coverage instead, which is the
+        # under-reporting failure the env-registry scanner already demonstrated.
+        run: uv run python scripts/verify_criteria_hashes.py
+
       - name: "North-star trace (RED1-23 — the hook→server seam, end to end)"
         # The lint above is STATIC and, by its own docstring, checks that no
         # emitter hardcodes a tool name into prose. It cannot see the seam where

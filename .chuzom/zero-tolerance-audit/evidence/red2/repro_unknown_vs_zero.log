@@ -1,0 +1,5 @@
+CASE A (genuinely no data): {'total_calls': 1, 'total_tokens': 1133, 'cost_saved_usd': 0.005965000000000001, 'time_saved_sec': 0.0, 'by_model': {'ollama/qwen2.5-coder:7b': {'calls': 1, 'tokens': 1133, 'cost_saved': 0.005965000000000001, 'time_saved': 0.0}}}
+DB path: /Users/yaliandrona/.chuzom/usage.db
+CASE B (query FAILS due to missing column / corruption): {'total_calls': 0, 'total_tokens': 0, 'cost_saved_usd': 0.0, 'time_saved_sec': 0.0, 'by_model': {}}
+
+Indistinguishable? False

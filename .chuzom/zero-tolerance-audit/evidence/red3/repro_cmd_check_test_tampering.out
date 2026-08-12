@@ -1,0 +1,14 @@
+=== calc.py BEFORE 'fix' (the actual bug) ===
+def add(a, b):
+    # BUG: should be a+b, subtracts instead
+    return a - b
+
+=== calc.py AFTER 'fix' (UNCHANGED -- bug still present) ===
+def add(a, b):
+    # BUG: should be a+b, subtracts instead
+    return a - b
+
+=== acceptance check result ===
+ok: True reason: 
+calc.add(2, 3) == -1  (correct answer is 5)
+>>> PROVEN: cmd_check reported PASS while the actual requested behavior (add(2,3) == 5) remains broken. The milestone would freeze DONE. Nothing in the acceptance/engine/adapter layers detects or prevents the executor editing the test file itself instead of the source file the milestone was about -- the executor has full write access to the whole working tree for any 'reversible' milestone (the default), and cmd_check is exit-code-only.

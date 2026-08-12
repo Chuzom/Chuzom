@@ -1,0 +1,10 @@
+
+══════════════════════════════════════════════════════════════════════════════
+  CHUZOM_SLIM=consolidated   server registers 11 tools
+══════════════════════════════════════════════════════════════════════════════
+  [32m✓[0m write a python function to sort a list       hint→ llm(task="code")         registered=True
+  [32m✓[0m what is the capital of France                hint→ llm(task="query")        registered=True
+  [32m✓[0m summarize the difference between TCP and UDP hint→ llm(task="generate")     registered=True
+
+──────────────────────────────────────────────────────────────────────────────
+[32mTRACE CLEAN — every emitted hint names a tool the server registers[0m

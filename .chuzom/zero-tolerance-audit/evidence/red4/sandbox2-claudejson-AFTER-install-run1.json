@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "chuzom": {
+      "command": "/Users/yaliandrona/.local/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "/private/tmp/red4-venv/lib/python3.11",
+        "chuzom"
+      ]
+    }
+  }
+}
