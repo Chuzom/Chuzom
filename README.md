@@ -269,12 +269,21 @@ Execution):
    already-passed milestones forward as frozen context.
 4. **Flow, not stall** — escalation is bounded.
 
-> **⚠️ Not yet true as shipped.** This section previously stated that irreversible steps run in an
-> isolated git worktree, merged only after they verify. The reversibility gate is **not wired up**:
-> milestones execute in the working tree, and "verified" currently means a syntactic check passed —
-> a `return True` stub is accepted. Do not run `llm_act` / `llm_delegate` on a repository whose
-> contents you do not trust, and see the security advisory in [SECURITY.md](SECURITY.md). Tracked
-> as WP-09 in `.chuzom/zero-tolerance-audit/`.
+> **⚠️ Partially true — read the specifics.** This section used to claim that irreversible steps
+> run in an isolated git worktree, merged only after they verify. Two thirds of that is now real and
+> one third is still not, so here is the exact state:
+>
+> - **Verification is real.** A milestone's acceptance check reads the repository (`git diff`, plus
+>   newly created files) rather than the executing agent's own report of what it did. A `return True`
+>   stub submitted as an acceptance check is rejected instead of accepted.
+> - **Irreversible steps fail closed.** An irreversible milestone that was not isolated is *surfaced*
+>   rather than frozen. It cannot silently complete on a bare acceptance pass.
+> - **Isolation itself is still not wired.** Nothing creates a worktree, so irreversible milestones
+>   are refused rather than sandboxed. The merge-only-if-verified half exists and is connected; the
+>   run-it-somewhere-safe half is not.
+>
+> Continue to treat `llm_act` / `llm_delegate` as unsafe against untrusted repository contents — see
+> [SECURITY.md](SECURITY.md). Tracked as WP-09 in `.chuzom/zero-tolerance-audit/`.
 
 ```bash
 llm_act(task="…")   # → JSON: outcome, per-milestone status, events, savings

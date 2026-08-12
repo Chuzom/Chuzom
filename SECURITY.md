@@ -39,9 +39,15 @@ evade a keyword list, and it is treated as defence in depth only.
 - Run provider keys out of the environment where your host supports it, or use a shell whose
   environment holds no long-lived credentials.
 
-Related, same advisory: the reversibility gate is not wired. Irreversible milestones execute in the
-working tree rather than an isolated git worktree, and "verified" means a syntactic check passed —
-a `return True` stub is currently accepted. Tracked as WP-09.
+Related, same advisory — **updated 2026-08-12, partially resolved.** "Verified" now means the
+repository actually changed: acceptance checks read `git diff` and newly created files rather than
+the executing agent's own report, and a `return True` stub submitted as an acceptance check is
+rejected. Irreversible milestones no longer auto-freeze on a bare pass; an unisolated one is
+surfaced instead.
+
+Still open: irreversible milestones are **refused rather than sandboxed**. Nothing creates a git
+worktree, so the "runs in an isolated worktree" half of the original claim remains unimplemented —
+the merge-only-if-verified half is wired, the run-it-somewhere-safe half is not. Tracked as WP-09.
 
 ## Reporting a vulnerability
 
