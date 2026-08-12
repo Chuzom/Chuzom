@@ -67,10 +67,49 @@ __all__ = [
     "KNOWN_TOOLS",
     "is_registered",
     "unregistered",
+    "TASK_TOOL_MAP",
+    "DEFAULT_TASK_TOOL",
+    "tool_for_task",
     "implemented_tools",
     "phantom_tools",
     "EMITTABLE_TOOLS",
 ]
+
+# ── Task type → tool (canonical home; RED8-06) ───────────────────────────────
+# Three independently-maintained copies of this map existed — auto-route.py
+# (8 keys), agent-route.py (5 keys) and service.py (5 keys) — with TWO DIFFERENT
+# fallbacks for an unrecognised task type. The five shared keys agreed, so they
+# looked consistent; the divergence was in what happened to everything else.
+#
+# auto-route fell back to llm_route, which can pick a tool. agent-route fell back
+# to llm_analyze, a COMPLETION DOOR that cannot run tools. So the same ambiguous
+# prompt reached a working router on one path and a structural dead-end on the
+# other — the outcome NORTH_STAR lists first among its anti-goals.
+#
+# It lives here because this module is deliberately dependency-free and loadable
+# by path: a hook running under a bare `python3` with no chuzom importable can
+# still read it. That constraint is precisely why the copies existed.
+TASK_TOOL_MAP: dict[str, str] = {
+    "research": "llm_research",
+    "generate": "llm_generate",
+    "analyze": "llm_analyze",
+    "code": "llm_code",
+    "query": "llm_query",
+    "image": "llm_image",
+    # Coordination is cheap and wants an instant decision, not deep reasoning.
+    "coordination": "llm_query",
+    "auto": "llm_route",
+}
+
+#: Fallback for an unrecognised task type. MUST be a tool that can route to
+#: others — a completion door here silently caps the task's capability.
+DEFAULT_TASK_TOOL = "llm_route"
+
+
+def tool_for_task(task_type: str) -> str:
+    """Canonical task->tool lookup. Use this instead of a private dict."""
+    return TASK_TOOL_MAP.get(task_type, DEFAULT_TASK_TOOL)
+
 
 # ── Tier membership (canonical home; re-exported by chuzom.tool_tiers) ───────
 CORE_TOOLS: frozenset[str] = frozenset({

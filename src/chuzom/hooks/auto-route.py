@@ -1728,16 +1728,25 @@ def _match_mcp_server(prompt: str, capability_map: dict[str, list[str]]) -> str 
 
 # ── Tool Mapping ─────────────────────────────────────────────────────────────
 
-TOOL_MAP = {
-    "research": "llm_research",
-    "generate": "llm_generate",
-    "analyze": "llm_analyze",
-    "code": "llm_code",
-    "query": "llm_query",
-    "image": "llm_image",
-    "coordination": "llm_query",  # Use llm_query for coordination (cheap model, instant decision)
-    "auto": "llm_route",
-}
+# RED8-06: the canonical task->tool map now lives in chuzom.tool_surface, which
+# is dependency-free and loadable by path — the same reason this copy existed.
+# Three copies drifted apart on their FALLBACK (llm_route here, llm_analyze in
+# agent-route), so the same ambiguous prompt reached a router on one path and a
+# no-tools completion door on the other.
+def _load_task_tool_map():
+    try:
+        from chuzom.tool_surface import TASK_TOOL_MAP as _m, tool_for_task as _f
+        return _m, _f
+    except Exception:  # noqa: BLE001 — hook must survive a partial install
+        _fallback = {
+            "research": "llm_research", "generate": "llm_generate",
+            "analyze": "llm_analyze", "code": "llm_code", "query": "llm_query",
+            "image": "llm_image", "coordination": "llm_query", "auto": "llm_route",
+        }
+        return _fallback, (lambda t: _fallback.get(t, "llm_route"))
+
+
+TOOL_MAP, tool_for_task = _load_task_tool_map()
 
 _ROUTER_DIR = Path.home() / ".chuzom"
 _ENFORCEMENT_LOG_PATH = _ROUTER_DIR / "enforcement.log"
@@ -3031,7 +3040,7 @@ def main() -> None:
             task_type  = result["task_type"]
             complexity = result["complexity"]
             method     = result["method"]
-            tool       = TOOL_MAP.get(task_type, "llm_route")
+            tool       = tool_for_task(task_type)
 
             # ── v6.1: Check for learned routing overrides ─────────────────────────────
             learned_routes = _load_learned_routes()

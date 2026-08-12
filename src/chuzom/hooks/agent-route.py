@@ -44,7 +44,7 @@ from pathlib import Path
 # it silently does the work on the expensive model and the savings dashboard
 # cannot distinguish that from "chose not to route".
 def _load_tool_surface_fns():
-    """(route_tool, route_call, route_call_with_complexity) from chuzom.tool_surface.
+    """(route_tool, route_call, route_call_with_complexity, call_parts, tool_for_task).
 
     Falls back to the stdlib-only copy the installer drops next to the hooks, then
     to the in-repo source, then to identity (correct only for tier `off`).
@@ -55,8 +55,9 @@ def _load_tool_surface_fns():
             route_call,
             route_call_with_complexity,
             route_tool,
+            tool_for_task,
         )
-        return route_tool, route_call, route_call_with_complexity, call_parts
+        return route_tool, route_call, route_call_with_complexity, call_parts, tool_for_task
     except ImportError:
         pass
     try:
@@ -71,7 +72,8 @@ def _load_tool_surface_fns():
             sys.modules["chuzom_tool_surface"] = _mod  # dataclasses needs this
             _spec.loader.exec_module(_mod)
             return (_mod.route_tool, _mod.route_call,
-                    _mod.route_call_with_complexity, _mod.call_parts)
+                    _mod.route_call_with_complexity, _mod.call_parts,
+                    _mod.tool_for_task)
     except Exception:  # noqa: BLE001 — a broken support module must not kill the hook
         pass
     return (
@@ -79,11 +81,17 @@ def _load_tool_surface_fns():
         lambda n, *a, **k: (f"{n}({', '.join(a)})" if a else n),
         lambda n, c, *a, **k: f"{n}(complexity='{c}'" + ("".join(', ' + x for x in a)) + ")",
         lambda n, **k: (n, []),
+        # Last-resort fallback mirrors tool_surface.DEFAULT_TASK_TOOL: llm_route,
+        # never a completion door — see RED8-06.
+        lambda t: {"research": "llm_research", "generate": "llm_generate",
+                   "analyze": "llm_analyze", "code": "llm_code",
+                   "query": "llm_query", "image": "llm_image",
+                   "coordination": "llm_query", "auto": "llm_route"}.get(t, "llm_route"),
     )
 
 
 (route_tool, route_call,
- route_call_with_complexity, call_parts) = _load_tool_surface_fns()
+ route_call_with_complexity, call_parts, tool_for_task) = _load_tool_surface_fns()
 
 # ── .env loader (mirrors auto-route.py) ──────────────────────────────────────
 # PreToolUse[Agent] runs without an interactive shell, so OLLAMA_BUDGET_MODELS,
@@ -212,13 +220,12 @@ _TASK_SIGNALS: dict[str, re.Pattern] = {
     ),
 }
 
-_TOOL_MAP = {
-    "code": "llm_code",
-    "analyze": "llm_analyze",
-    "research": "llm_research",
-    "generate": "llm_generate",
-    "query": "llm_query",
-}
+# RED8-06: the private _TOOL_MAP is gone. It held 5 of the 8 task types and fell
+# back to llm_analyze — a COMPLETION DOOR that cannot run tools — while
+# auto-route.py fell back to llm_route for the same unrecognised input. The five
+# shared keys agreed, so the maps looked consistent; the divergence only showed
+# on everything else, and no test drove one prompt through both. The canonical
+# map now lives in chuzom.tool_surface (see tool_for_task above).
 
 
 # ── Agent loop circuit breaker ──────────────────────────────────────────────
@@ -1104,7 +1111,7 @@ def main() -> None:
         pass
 
     profile = _complexity_to_profile(complexity, _p["session"], _p["sonnet"], _p["weekly"])
-    tool = _TOOL_MAP.get(task_type, "llm_analyze")
+    tool = tool_for_task(task_type)
 
     _model_hint = {
         "budget": "Gemini Flash / Groq (session pressure — cheap external)",
