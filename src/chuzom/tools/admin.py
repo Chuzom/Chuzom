@@ -245,6 +245,18 @@ async def llm_usage(period: str = "today") -> str:
     config = get_config()
     if config.chuzom_monthly_budget > 0:
         monthly_spend = await get_monthly_spend()
+        # WP-13: spend getters return inf when a component could not be read
+        # (fail closed). inf is right for the cap COMPARISON and wrong here --
+        # "$inf spent, 0% of budget remaining" is a fabricated number, and a
+        # NaN percentage would render as a bar of unpredictable length.
+        import math as _math
+        if not _math.isfinite(monthly_spend):
+            lines.append(section("MONTHLY BUDGET"))
+            lines.append(
+                "  Unknown — spend could not be read, so routing is denying paid "
+                "models until it can. See `chuzom doctor`."
+            )
+            return "\n".join(lines)
         budget = config.chuzom_monthly_budget
         remaining = max(0, budget - monthly_spend)
         pct = monthly_spend / budget if budget > 0 else 0

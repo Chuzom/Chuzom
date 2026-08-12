@@ -501,8 +501,12 @@ async def _safe_migrate(db: aiosqlite.Connection, stmt: str) -> None:
             return  # already migrated — skip
     try:
         await db.execute(stmt)
-    except Exception:
-        pass  # last-resort fallback for non-standard ALTER forms
+    except Exception as exc:
+        # Non-standard ALTER forms. Benign individually; a spike means schema
+        # migration is silently not happening, and every later query then fails
+        # on a missing column somewhere far from here.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-MIGRATE-ALTER", exc)
 
 
 def _mark_worker_daemon(conn: "aiosqlite.Connection") -> None:
@@ -654,7 +658,11 @@ def _get_team_identity() -> tuple[str, str]:
         uid = get_user_id(override=cfg.chuzom_user_id)
         pid = get_project_id()
         return uid, pid
-    except Exception:
+    except Exception as exc:
+        # Empty identity means rows are attributed to nobody. Team reporting then
+        # shows a plausible, quietly incomplete picture.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-IDENTITY", exc)
         return "", ""
 
 
@@ -808,6 +816,22 @@ async def get_correction_count(tool: str) -> int:
         await db.close()
 
 
+def format_spend_for_display(spend_usd: float) -> str:
+    """Render a spend figure for humans, or "Unknown" when it is not a number.
+
+    Spend getters return ``inf`` when a component could not be read (fail
+    closed). That sentinel is correct for a cap COMPARISON and wrong for a
+    dashboard: a user told they spent "$inf" learns less than one told
+    "Unknown", and a fabricated infinity is the same class of lie as a
+    fabricated zero.
+    """
+    import math
+
+    if spend_usd is None or not math.isfinite(spend_usd):
+        return "Unknown"
+    return f"${spend_usd:.2f}" if spend_usd >= 1.0 else f"${spend_usd:.4f}"
+
+
 async def get_monthly_spend() -> float:
     """Get total USD spent on external LLMs in the current calendar month.
 
@@ -855,8 +879,19 @@ async def _rejected_attempt_spend(db, period: str = "day", task_type: str | None
 
     ``period`` is "day" (local calendar day) or "month" (local calendar month),
     matching the frames of get_daily_spend*/get_monthly_spend respectively.
-    Fail-open: any error returns 0.0 so the cap-check degrades to the previous
-    under-count rather than breaking routing.
+    FAIL CLOSED (owner decision 2026-08-12). Any error returns ``inf``, not 0.0.
+
+    Returning 0.0 under-reports total spend, so the cap comparison PASSES — a
+    guard that cannot read the ledger did not reject, it silently approved. Same
+    failure direction as the budget TOCTOU race and the savings query that
+    rendered "$0.00 saved": failing where it looks harmless, which is why it
+    survived. ``inf`` makes every cap comparison deny.
+
+    Routing is not broken by this: free and local providers do not consult the
+    cap, so work continues — money is simply not spent against a total we cannot
+    account for. Display consumers must render non-finite spend as "Unknown"
+    (see :func:`format_spend_for_display`); a dashboard showing "$inf" is its own
+    fabrication.
     """
     try:
         if period == "month":
@@ -879,8 +914,18 @@ async def _rejected_attempt_spend(db, period: str = "day", task_type: str | None
         )
         row = await cursor.fetchone()
         return float(row[0]) if row else 0.0
-    except Exception:  # noqa: BLE001 — cap-check must never break on ledger read
-        return 0.0
+    except Exception as exc:  # noqa: BLE001 — must not raise into the routing path
+        # A MISSING TABLE is not an unreadable one. On a fresh install
+        # execution_events does not exist yet, and that genuinely means "no
+        # rejected attempts" — returning inf there would deny every paid route on
+        # a new machine until the first ledger write, which is an outage dressed
+        # as prudence. Fail closed on the unknown, not on the known-empty.
+        if "no such table" in str(exc).lower():
+            return 0.0
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-CAP-LEDGER-READ", exc)
+        # inf, not 0.0 — see the docstring. Deny rather than approve blind.
+        return float("inf")
 
 
 async def _rejected_attempt_spend_today(db, task_type: str | None = None) -> float:
@@ -975,8 +1020,11 @@ def fire_budget_alert(title: str, message: str) -> None:
                     "Budget alert: %s — %s (install win10toast for desktop notifications)",
                     title, message,
                 )
-    except Exception:
-        pass  # notification is best-effort — never block routing
+    except Exception as exc:
+        # Best-effort by design, but a budget alert that never fires means the
+        # user learns about an overrun from the bill.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-BUDGET-ALERT", exc)
 
 
 async def rate_routing_decision(decision_id: int | None, good: bool) -> int | None:
@@ -1272,8 +1320,11 @@ async def log_routing_decision(
                     task_type=task_type,
                     routing_decision_id=routing_decision_id,
                 )
-            except Exception:
-                pass  # Silent failure — judge is optional enhancement
+            except Exception as exc:
+                # The judge is optional, but a permanently failing judge means
+                # quality telemetry is empty rather than good.
+                from chuzom import failopen
+                failopen.record("CHZ-FO-COST-JUDGE-EVAL", exc)
     finally:
         await db.close()
 
@@ -1944,8 +1995,11 @@ async def get_realized_savings(period: str = "today", *, platform: str = "all") 
             )
             row = await cursor.fetchone()
             return float(row[0] if row else 0.0), float(row[1] if row else 0.0)
-        except Exception:
-            # Table may not exist on older DBs — treat as zero.
+        except Exception as exc:
+            # Table may not exist on older DBs — treat as zero. But a persistent
+            # failure here UNDERSTATES savings without any visible symptom.
+            from chuzom import failopen
+            failopen.record("CHZ-FO-COST-PLATFORM-TABLE", exc)
             return 0.0, 0.0
 
     db = await _get_db()
@@ -2165,6 +2219,10 @@ async def get_savings_summary(period: str = "today") -> dict:
                 f"FROM claude_usage {where}"
             )
         except Exception as exc:
+            # Counted as well as flagged: provenance already tells the CALLER, but
+            # nothing told an operator how often this fires.
+            from chuzom import failopen
+            failopen.record("CHZ-FO-COST-SAVINGS-QUERY", exc)
             # RED2-02 (P1): a FAILED QUERY is not a zero-saving week.
             #
             # This branch returned exactly the dict the genuine-zero branch
@@ -2285,7 +2343,11 @@ def _coverage_counts() -> dict:
 
         snap = _coverage.snapshot()
         return {"observed_n": snap.observed_n, "unobserved_n": snap.unobserved_n}
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # Zero denominators make every rate render Unknown downstream (correct),
+        # but nothing said the telemetry itself was broken.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-COVERAGE-COUNTS", exc)
         return {"observed_n": 0, "unobserved_n": 0}
 
 
@@ -2444,7 +2506,9 @@ async def get_cache_hit_stats(period: str = "today") -> dict:
             "hit_rate_pct": float(hit_rate),
             "estimated_saved_usd": round(estimated_saved, 4),
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-CACHE-STATS", exc)
         return {"total_requests": 0, "cache_hits": 0, "hit_rate_pct": 0.0, "estimated_saved_usd": 0.0}
     finally:
         await db.close()
@@ -2699,7 +2763,9 @@ async def get_model_latency_stats(window_days: int = 7) -> dict[str, dict]:
             (f"-{window_days} days",),
         )
         rows = await cursor.fetchall()
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-LATENCY-STATS", exc)
         return {}
     finally:
         await db.close()
@@ -2820,8 +2886,12 @@ def refresh_baseline_pricing_from_api() -> bool:
             _HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = float(in_pm), float(out_pm)
             _OPUS_PRICING[LATEST_OPUS_MODEL] = (_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M)
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        # Live pricing refresh failed, so the BASELINE stays at whatever the
+        # static table holds. Stale prices produce plausible wrong money — the
+        # exact RED2-01 shape, which shipped a 3x overstatement.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-PRICING-REFRESH", exc)
     return False
 
 
@@ -2940,7 +3010,11 @@ async def get_model_failure_rates(window_days: int = 30) -> dict[str, float]:
             for row in rows
             if row[1] > 0
         }
-    except Exception:
+    except Exception as exc:
+        # An empty quality map reads as "no quality signal yet", which is what a
+        # fresh install looks like. A broken query is indistinguishable from it.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-QUALITY-AGG", exc)
         return {}
     finally:
         await db.close()
@@ -2978,7 +3052,9 @@ async def get_model_acceptance_scores(window_days: int = 30) -> dict[str, float]
         )
         rows = await cursor.fetchall()
         return {row[0]: row[2] / row[1] for row in rows if row[1] > 0}
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-RATING-AGG", exc)
         return {}
     finally:
         await db.close()
@@ -3040,7 +3116,11 @@ async def get_team_savings(
             params,
         )
         rows = await cursor.fetchall()
-    except Exception:
+    except Exception as exc:
+        # Zeroes here render as "you routed nothing and saved nothing" — a
+        # working install that looks idle.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-ROUTING-SUMMARY", exc)
         return {"total_calls": 0, "saved_usd": 0.0, "actual_usd": 0.0, "free_pct": 0.0, "top_models": []}
     finally:
         await db.close()
@@ -3158,7 +3238,9 @@ async def get_routing_savings_vs_sonnet(days: int = 0) -> dict:
             "output_tokens": int(out_tok),
             "by_model": by_model,
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-SAVINGS-BREAKDOWN", exc)
         return empty
     finally:
         await db.close()
@@ -3212,7 +3294,9 @@ async def get_cache_savings(period: str = "today") -> dict[str, float]:
             "total_savings_usd": float(cached_savings),
             "cache_hit_rate": float(cache_hit_rate),
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-CACHE-SAVINGS", exc)
         return {
             "total_calls_cached": 0,
             "total_savings_usd": 0.0,
@@ -3411,7 +3495,9 @@ async def get_compression_stats(days: int = 7) -> dict:
             "by_strategy": strategies,
             "total_tokens_saved": total_saved,
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-TOKEN-SAVER-STATS", exc)
         return {
             "period_days": days,
             "total_operations": 0,

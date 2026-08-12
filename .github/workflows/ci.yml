@@ -39,6 +39,24 @@ jobs:
         # so it can only be caught statically.
         run: uv run python scripts/lint_tool_surface.py
 
+      - name: "Fail-open guard (CHZ-FO-01 — no SILENT broad catch where money is)"
+        # RED8-09. ~810 broad `except Exception` handlers exist and most are
+        # correct: a UserPromptSubmit hook that raises kills the user's turn, and
+        # a telemetry write that raises turns observability into an outage.
+        # Removing them would trade a known degradation for a crash.
+        #
+        # The defect is the SILENCE. A handler ending in bare `pass` is
+        # indistinguishable from the happy path in every surface we have — the
+        # same shape as the ledger drop that looked like no traffic and the
+        # savings query failure that rendered "$0.00 saved". This bans catches
+        # that leave NO TRACE, only in the five modules where a silent
+        # degradation mis-reports money or changes a routing decision.
+        #
+        # Zero tolerance, no baseline: WP-13's criterion names those modules
+        # explicitly, so a baseline would list exactly the places that must be
+        # empty.
+        run: uv run python scripts/lint_fail_open.py
+
       - name: "North-star trace (RED1-23 — the hook→server seam, end to end)"
         # The lint above is STATIC and, by its own docstring, checks that no
         # emitter hardcodes a tool name into prose. It cannot see the seam where

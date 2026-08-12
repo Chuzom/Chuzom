@@ -266,11 +266,20 @@ def collect(
             try:
                 rollup = session_store.rollup(sid)
                 data.agent_sessions.append(rollup)
-            except Exception:
-                # Skip sessions whose store entry is gone
+            except Exception as exc:
+                # Skip sessions whose store entry is gone. Expected and benign
+                # individually; a SPIKE means the store is being pruned out from
+                # under the dashboard, which shows up as silently shrinking
+                # history rather than as an error.
+                from chuzom import failopen
+                failopen.record("CHZ-FO-SUMMARY-SESSION-ROLLUP", exc, detail=str(sid))
                 continue
-    except Exception:
-        pass
+    except Exception as exc:
+        # The whole agent-session block failed, not one session. The dashboard
+        # then renders with NO agent sessions, which is indistinguishable from
+        # "you ran none" -- the RED2-02 shape on a different surface.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-SUMMARY-AGENT-SESSIONS", exc)
 
     return data
 

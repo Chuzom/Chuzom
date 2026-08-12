@@ -596,7 +596,11 @@ async def _build_and_filter_chain(
             try:
                 from chuzom.session_broker import broker_providers
                 _broker_provs = await broker_providers()
-            except Exception:
+            except Exception as exc:
+                # Empty broker set silently narrows the candidate chain, so the
+                # router picks from fewer providers and nothing says why.
+                from chuzom import failopen
+                failopen.record("CHZ-FO-ROUTER-BROKER-PROVIDERS", exc)
                 _broker_provs = frozenset()
 
         # ── Codex injection ───────────────────────────────────────────────────
@@ -826,8 +830,9 @@ async def _build_and_filter_chain(
                     _cand.split("/", 1)[-1] == m.split("/", 1)[-1] for m in ollama_models
                 ):
                     _agentic_model = _cand
-            except Exception:
-                pass
+            except Exception as exc:
+                from chuzom import failopen
+                failopen.record("CHZ-FO-ROUTER-AGENTIC-PICK", exc)
         # If dynamically selected agentic model is blocked, don't pin it.
         # The dynamic pick (best_agentic_model above) is chosen independently of
         # the block/allow filter, so without this guard it would re-inject a
@@ -1438,8 +1443,9 @@ def _native_notify(message: str, title: str = "chuzom ⚡") -> None:
                     ["notify-send", "--urgency=low", f"--app-name={title}", message],
                     timeout=2.0, capture_output=True,
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            from chuzom import failopen
+            failopen.record("CHZ-FO-ROUTER-DESKTOP-NOTIFY", exc)
 
     threading.Thread(target=_fire, daemon=True).start()
 
@@ -1508,8 +1514,9 @@ async def _heartbeat_notify(
             try:
                 pct = min(95.0, elapsed / max(1.0, warn_after_s) * 100)
                 await ctx.report_progress(pct, 100, msg)
-            except Exception:
-                pass
+            except Exception as exc:
+                from chuzom import failopen
+                failopen.record("CHZ-FO-ROUTER-PROGRESS-REPORT", exc)
 
 
 def _enrich_response(
@@ -1552,7 +1559,9 @@ def _model_tier(model: str | None, profile: "RoutingProfile | None" = None) -> i
         return None
     try:
         prov = provider_from_model(model)
-    except Exception:  # noqa: BLE001 — unknown model shape → treat as mid external
+    except Exception as exc:  # noqa: BLE001 — unknown model shape → treat as mid external
+        from chuzom import failopen
+        failopen.record("CHZ-FO-ROUTER-PROVIDER-PARSE", exc, detail=str(model))
         return 2
     if prov in ("ollama",):
         return 0
@@ -1568,7 +1577,9 @@ def _price_table_version() -> str:
     try:
         from chuzom import calibration
         return str(getattr(calibration, "PRICE_TABLE_VERSION", "unknown"))
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        from chuzom import failopen
+        failopen.record("CHZ-FO-ROUTER-PRICE-TABLE-VERSION", exc)
         return "unknown"
 
 
@@ -1583,7 +1594,11 @@ def _baseline_cost(
         return float(_estimate_cost(
             _BASELINE_COMPLETION_MODEL, int(input_tokens or 0), int(output_tokens or 0)
         ))
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # A 0.0 baseline makes the comparison read as "saved nothing" rather
+        # than "could not compute" — the RED2-02 shape on the routing surface.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-ROUTER-BASELINE-ESTIMATE", exc)
         return 0.0
 
 
@@ -1750,8 +1765,13 @@ def _emit_ledger_attempt(
             baseline_equivalent_cost_usd=baseline_equivalent_cost_usd,
             baseline_tokens=baseline_tokens,
         ))
-    except Exception:  # noqa: BLE001 — ledger emission must never break routing
-        pass
+    except Exception as exc:  # noqa: BLE001 — ledger emission must never break routing
+        # A DROPPED LEDGER EVENT. WP-06 hardened the ledger against losing
+        # events under concurrency; this path loses them before they arrive.
+        # Counted so the loss has a number instead of being inferred later from
+        # a reconciliation gap.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-ROUTER-LEDGER-EMIT", exc)
 
 
 def _emit_ledger_terminal(
@@ -1778,8 +1798,11 @@ def _emit_ledger_terminal(
             event_type="route_completed" if route_succeeded else "route_failed",
             terminal_state=terminal_state,  # type: ignore[arg-type]
         ))
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        # Terminal-state ledger event lost: the route's outcome never lands, so
+        # reconciliation sees a started-but-never-finished route.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-ROUTER-LEDGER-TERMINAL", exc)
 
 
 async def _finalize_successful_route(
@@ -2355,7 +2378,13 @@ async def _dispatch_model_loop(
                         else 500
                     )
                     _turn_projected = _est_turn(model, _est_in_turn, _est_out_turn)
-                except Exception:
+                except Exception as exc:
+                    # inf fails CLOSED (the model is rejected as too expensive),
+                    # which is the right default — but a persistent failure here
+                    # rejects every candidate and looks like a routing policy
+                    # decision rather than a broken estimator.
+                    from chuzom import failopen
+                    failopen.record("CHZ-FO-ROUTER-TURN-PROJECTION", exc, detail=str(model))
                     _turn_projected = float("inf")
                 if _turn_projected > routing_policy.max_cost_per_turn_usd:
                     route_log.info(
@@ -2725,7 +2754,9 @@ async def _dispatch_model_loop(
                 _baseline_equivalent_cost_usd = cost._get_baseline_cost(
                     response.input_tokens or 0, response.output_tokens or 0, _baseline_model,
                 )
-            except Exception:
+            except Exception as exc:
+                from chuzom import failopen
+                failopen.record("CHZ-FO-ROUTER-BASELINE-COST", exc)
                 _baseline_equivalent_cost_usd = None
             # Phase 0 (Gap 2): baseline_tokens is the actual_proxy for
             # quota-tokens-saved — the actual input+output token count on
@@ -2971,7 +3002,9 @@ async def _dispatch_model_loop(
                         est_in_eb = max(1, len(prompt) // 4)
                         est_out_eb = max_tokens if isinstance(max_tokens, int) and max_tokens > 0 else 500
                         projected_eb = _est_per_model_eb(model, est_in_eb, est_out_eb)
-                    except Exception:
+                    except Exception as exc:
+                        from chuzom import failopen
+                        failopen.record("CHZ-FO-ROUTER-TASK-PROJECTION", exc, detail=str(model))
                         projected_eb = float("inf")
                     if projected_eb > max_cost_per_task:
                         cost_skipped.append((model, projected_eb))
@@ -3012,7 +3045,9 @@ async def _dispatch_model_loop(
                         _baseline_equivalent_cost_usd_eb = cost._get_baseline_cost(
                             response.input_tokens or 0, response.output_tokens or 0, _baseline_model_eb,
                         )
-                    except Exception:
+                    except Exception as exc:
+                        from chuzom import failopen
+                        failopen.record("CHZ-FO-ROUTER-BASELINE-COST-EB", exc)
                         _baseline_equivalent_cost_usd_eb = None
                     # Phase 0 (Gap 2): symmetric with the primary accepted-attempt
                     # site above — actual_proxy baseline_tokens.
@@ -3733,8 +3768,12 @@ async def route_and_call(
             if _env_key is not None:
                 try:
                     await release_envelope(_env_key, _reservation)
-                except Exception:  # noqa: BLE001 — release must never break the exit path
-                    pass
+                except Exception as exc:  # noqa: BLE001 — release must never break the exit path
+                    # An unreleased budget reservation stays held, so subsequent
+                    # calls see less headroom than they have. Silent leakage of a
+                    # money control.
+                    from chuzom import failopen
+                    failopen.record("CHZ-FO-ROUTER-ENVELOPE-RELEASE", exc)
 
         # Structural compaction — shrink prompt before sending to external LLMs
         # Guard: compaction_mode/threshold may be MagicMock in test mocks
@@ -4000,8 +4039,9 @@ async def route_and_call(
         if ctx is not None:
             try:
                 await ctx.report_progress(5, 100, _chain_msg)
-            except Exception:
-                pass
+            except Exception as exc:
+                from chuzom import failopen
+                failopen.record("CHZ-FO-ROUTER-PROGRESS-CHAIN", exc)
 
         # Warn when a RESEARCH task falls back to a non-web-grounded model.
         # Perplexity is the only model in the chain with real-time web access.
@@ -4157,8 +4197,9 @@ async def route_and_call(
                         _notify(ctx, "info", f"📚 OKF: injected {len(_okf_concepts)} context doc(s)"),
                         name="okf_notify",
                     )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            from chuzom import failopen
+            failopen.record("CHZ-FO-ROUTER-OKF-NOTIFY", exc)
 
         # Dispatch through the extracted model loop, which handles both primary
         # and emergency BUDGET fallback chains atomically.
@@ -4392,8 +4433,9 @@ async def route_and_call(
             # release_envelope(None, ...) is a safe no-op in off-mode.
             try:
                 await release_envelope(_env_key, _reservation)
-            except Exception:  # noqa: BLE001 — cleanup must not mask the original error
-                pass
+            except Exception as exc:  # noqa: BLE001 — cleanup must not mask the original error
+                from chuzom import failopen
+                failopen.record("CHZ-FO-ROUTER-ENVELOPE-CLEANUP", exc)
             raise
         finally:
             # CHZ-AUD-A-02: always clear the ledger session override so it cannot
@@ -4469,8 +4511,9 @@ async def route_and_call(
                     ),
                     name="okf_session",
                 )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            from chuzom import failopen
+            failopen.record("CHZ-FO-ROUTER-OKF-SESSION", exc)
 
         # RED2-02: surface a daily-cap downgrade on the response so a caller/CLI/
         # dashboard can explain the (cheaper, local) route instead of leaving an
@@ -4485,8 +4528,9 @@ async def route_and_call(
                     cap_downgraded=True,
                     cap_downgrade_reason=_cap_downgrade_applied,
                 )
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                from chuzom import failopen
+                failopen.record("CHZ-FO-ROUTER-CAP-DOWNGRADE", exc)
 
         return response
 
@@ -4942,8 +4986,9 @@ async def route_and_stream(
                     try:
                         from chuzom.discover import mark_ollama_ok
                         mark_ollama_ok()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        from chuzom import failopen
+                        failopen.record("CHZ-FO-ROUTER-OLLAMA-MARK", exc)
                 return
 
             except Exception as e:
@@ -4990,7 +5035,12 @@ async def route_and_stream(
         }
 
     except Exception as e:
-        # Top-level unhandled exception during streaming
+        # Top-level unhandled exception during streaming. The route.aborted event
+        # below DOES surface it to the caller, so this is not silent — but it is
+        # not COUNTED, and a rising rate of internal_error aborts is the thing an
+        # operator needs to see before users report it.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-ROUTER-STREAM-ABORT", e)
         seq += 1
         yield {
             "seq": seq,

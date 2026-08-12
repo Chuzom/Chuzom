@@ -452,7 +452,13 @@ def _host_opus_rates() -> tuple[float, float]:
     try:
         from chuzom.cost import _HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M
         return float(_HOST_INPUT_PER_M), float(_HOST_OUTPUT_PER_M)
-    except Exception:
+    except Exception as exc:
+        # Falling back to (0.0, 0.0) is the conservative default -- but it makes
+        # every baseline read as free, so savings compute as zero and the ledger
+        # reports a quiet, plausible nothing. Counted so that "savings collapsed
+        # to 0" has a cause an operator can find.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-LEDGER-HOST-RATES", exc)
         return 0.0, 0.0
 
 

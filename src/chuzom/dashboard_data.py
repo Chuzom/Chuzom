@@ -72,7 +72,12 @@ def _coverage_fields() -> dict:
             "unobserved_n": snap.unobserved_n,
             "coverage_readable": snap.readable,
         }
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # coverage_readable=False already renders "Unknown" downstream, so the
+        # user is not misled -- but nothing said WHY, and a permanently unknown
+        # coverage figure looks like a missing feature rather than a broken one.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-DASHBOARD-COVERAGE", exc)
         return {"observed_n": 0, "unobserved_n": 0, "coverage_readable": False}
 
 
