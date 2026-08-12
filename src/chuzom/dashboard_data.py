@@ -56,6 +56,26 @@ _LEGACY_TABLE = "usage"
 _JSONL_TABLE = "savings_stats"
 
 
+def _coverage_fields() -> dict:
+    """Observed/unobserved counts for WindowTotals. Never raises.
+
+    A dashboard that cannot render because coverage telemetry is unavailable
+    would trade a known blind spot for an outage. Unreadable coverage is
+    reported AS unreadable (-> "Unknown"), not as zero traffic.
+    """
+    try:
+        from chuzom import coverage as _coverage
+
+        snap = _coverage.snapshot()
+        return {
+            "observed_n": snap.observed_n,
+            "unobserved_n": snap.unobserved_n,
+            "coverage_readable": snap.readable,
+        }
+    except Exception:  # noqa: BLE001
+        return {"observed_n": 0, "unobserved_n": 0, "coverage_readable": False}
+
+
 def _window_sql(window: WindowLiteral) -> str:
     """Return the WHERE clause body for the given window.
 
@@ -111,6 +131,38 @@ class WindowTotals:
     saved_usd: float
     # Per-source breakdown so consumers can show drill-down detail.
     by_source: dict[str, dict] = field(default_factory=dict)
+
+    # WP-07 / I-1: `calls` counts traffic Chuzom OBSERVED. Without a count of
+    # what it missed, every rate derived from `calls` silently redefines its own
+    # denominator -- "100% of the calls we saw" is not "100% of the calls", and
+    # the gap is invisible exactly when routing is broken. These carry the
+    # denominator alongside the numerator so no consumer has to assume one.
+    #
+    # Rolling, not windowed: the coverage store is a capped append-only log with
+    # no per-window partition, so this describes recent routing health rather
+    # than this window specifically. Labelled that way wherever it is rendered --
+    # quietly presenting it as window-scoped would be its own false precision.
+    observed_n: int = 0
+    unobserved_n: int = 0
+    coverage_readable: bool = True
+
+    @property
+    def coverage_pct(self) -> float | None:
+        """Observed share of routed traffic, or ``None`` when unknowable."""
+        total = self.observed_n + self.unobserved_n
+        if not self.coverage_readable or total == 0:
+            return None
+        return 100.0 * self.observed_n / total
+
+    @property
+    def coverage_is_degraded(self) -> bool:
+        pct = self.coverage_pct
+        return pct is not None and pct < 90.0
+
+    def render_coverage(self) -> str:
+        """``Unknown`` when the denominator is -- never a fabricated number."""
+        pct = self.coverage_pct
+        return "Unknown" if pct is None else f"{pct:.1f}%"
 
 
 @dataclass(frozen=True)
@@ -174,7 +226,9 @@ def query_window(
     """
     db = Path(db_path) if db_path else DEFAULT_DB_PATH
     if not db.exists():
-        return WindowTotals(window=window, calls=0, tokens=0, saved_usd=0.0)
+        return WindowTotals(
+            window=window, calls=0, tokens=0, saved_usd=0.0, **_coverage_fields()
+        )
 
     where = _window_sql(window)
     conn = sqlite3.connect(str(db))
@@ -266,6 +320,7 @@ def query_window(
         tokens=total_tokens,
         saved_usd=total_saved,
         by_source=by_source,
+        **_coverage_fields(),
     )
 
 

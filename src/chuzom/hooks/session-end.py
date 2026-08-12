@@ -820,8 +820,26 @@ def _query_router_efficiency() -> dict:
             return {}
         total, on_target = row
         efficiency_pct = (on_target / total) * 100 if total > 0 else 0.0
-        return {"total": total, "on_target": on_target, "efficiency_pct": efficiency_pct}
+        # WP-07: carry the denominator. This rate is over routing decisions we
+        # RECORDED; unobserved_n is the traffic that never reached the table.
+        cov = {"observed_n": 0, "unobserved_n": 0}
+        try:
+            from chuzom.coverage import snapshot as _cov_snapshot
+
+            _s = _cov_snapshot()
+            cov = {"observed_n": _s.observed_n, "unobserved_n": _s.unobserved_n}
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "total": total, "on_target": on_target,
+            "efficiency_pct": efficiency_pct, **cov,
+        }
     except Exception:
+        # WP-13 note: this returns the same {} as the no-rows branch above, so a
+        # broken query is indistinguishable from a quiet day. Left as-is here
+        # deliberately — it is one instance of the ~810-site fail-open triage
+        # that WP-13 sequences late, on purpose, so the whole class is fixed
+        # with one policy rather than piecemeal.
         return {}
 
 

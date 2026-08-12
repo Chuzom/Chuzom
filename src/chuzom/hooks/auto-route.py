@@ -1780,6 +1780,31 @@ def _zero_claude_enabled() -> bool:
     return bool(bool_match and bool_match.group(1).lower() in ("1", "true", "yes", "on"))
 
 
+def _coverage_unobserved(reason_name: str) -> None:
+    """Record that this prompt produced NO routing directive.
+
+    I-1: six sys.exit(0) sites left no trace, so a run where nearly everything
+    bypassed was indistinguishable from a clean one. Best-effort by design --
+    an observability call that can raise would take down the turn it observes.
+    """
+    try:
+        from chuzom.coverage import Reason, record_unobserved
+
+        record_unobserved(Reason[reason_name])
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _coverage_observed(tool: str) -> None:
+    """Record that this prompt produced a routing directive."""
+    try:
+        from chuzom.coverage import record_observed
+
+        record_observed(tool)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _block_zero_claude(reason: str, task_type: str = "unknown", complexity: str = "unknown") -> None:
     """Fail closed rather than letting a routed prompt invoke Claude."""
     message = (
@@ -1787,6 +1812,10 @@ def _block_zero_claude(reason: str, task_type: str = "unknown", complexity: str 
         "Claude was not invoked, so this turn does not consume Claude Code model quota. "
         "To intentionally use Claude, resubmit the prompt prefixed with `claude:`."
     )
+    # Recorded HERE, not at the call sites: this function exits, so a
+    # _coverage_* call placed after a call to it never runs. A block is an
+    # OBSERVED outcome -- the router made and enforced a decision.
+    _coverage_observed("zero_claude_block")
     json.dump({"decision": "block", "reason": message}, sys.stdout)
     sys.exit(0)
 
@@ -2765,6 +2794,11 @@ def main() -> None:
                     "native Claude on parse failures."
                 ),
             }))
+            _coverage_observed("zero_claude_parse_failure")
+        else:
+            # Normal mode: an unparseable payload is traffic we could not route
+            # and, until now, did not record. Exactly the I-1 blind spot.
+            _coverage_unobserved("UNHANDLED_EXCEPTION")
         sys.exit(0)
 
     prompt = hook_input.get("prompt", "")
@@ -2776,6 +2810,7 @@ def main() -> None:
         if _zero_claude_enabled():
             _debug_log(f"[INVOCATION {invocation_id:.3f}] ZERO_CLAUDE BLOCKED_EMPTY_PROMPT")
             _block_zero_claude("empty prompt — nothing to route under zero-Claude")
+        _coverage_unobserved("EMPTY_PROMPT")
         sys.exit(0)
 
     # Self-reference bypass: skip routing when the user is debugging chuzom
@@ -2793,6 +2828,7 @@ def main() -> None:
             )
         else:
             _debug_log(f"[INVOCATION {invocation_id:.3f}] SELF_REFERENCE_BYPASS — chuzom-debug prompt, skipping routing")
+            _coverage_unobserved("SELF_REFERENCE_BYPASS")
             sys.exit(0)
 
     session_id = hook_input.get("session_id", "")
@@ -2825,6 +2861,7 @@ def main() -> None:
     # the prompt as a visible record that the user chose quota-consuming work.
     if zero_claude and _EXPLICIT_CLAUDE_PREFIX_RE.match(prompt):
         _debug_log(f"[INVOCATION {invocation_id:.3f}] ZERO_CLAUDE EXPLICIT_NATIVE")
+        _coverage_unobserved("EXPLICIT_CLAUDE_PREFIX")
         sys.exit(0)
 
     # ── v6.0 Visibility: Initialize HUD session state ─────────────────────────
@@ -2871,6 +2908,7 @@ def main() -> None:
                             ),
                         }
                     }
+                    _coverage_observed("sidecar_context")
                     json.dump(
                         _normalize_output_for_platform(_sidecar_output, hook_input),
                         sys.stdout,
@@ -2900,6 +2938,7 @@ def main() -> None:
             _debug_log(f"[INVOCATION {invocation_id:.3f}] CONTINUATION: bypass disabled via env, routing instead")
         else:
             _debug_log(f"[INVOCATION {invocation_id:.3f}] CONTINUATION: bypass to host agent (strict ack)")
+            _coverage_unobserved("CONTINUATION_BYPASS")
             sys.exit(0)
 
     previous_unrouted = _consume_unresolved_pending(session_id) if session_id else None
@@ -2932,6 +2971,7 @@ def main() -> None:
             }
         }
         _debug_log(f"[INVOCATION {invocation_id:.3f}] EARLY EXIT: direct MCP route to {matched_server}")
+        _coverage_observed(f"mcp:{matched_server}")
         json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
         sys.exit(0)
 
@@ -2985,6 +3025,7 @@ def main() -> None:
                 method = "zero-claude-default"
                 tool = "llm_query"
             else:
+                _coverage_unobserved("CLASSIFY_FAILED")
                 sys.exit(0)
         else:
             task_type  = result["task_type"]
@@ -3030,6 +3071,7 @@ def main() -> None:
                     f"| Handle directly (subscription included). Do NOT call llm_* tools."
                 )
                 _debug_log(f"[INVOCATION {invocation_id:.3f}] CRITICAL PRESSURE: routing to Opus")
+                _coverage_observed("subscription_override")
                 json.dump({"decision": "block", "reason": _prior_violation_notice(previous_unrouted) + directive}, sys.stdout)
                 sys.exit(0)
 
@@ -3414,6 +3456,7 @@ def main() -> None:
                         _output["reason"] = _violation_notice + "\n" + _output["reason"]
                     if _mini_summary_block:
                         _output["reason"] = _output["reason"] + "\n\n" + _mini_summary_block
+                _coverage_observed(str(tool))
                 json.dump(_normalize_output_for_platform(_output, hook_input), sys.stdout)
                 sys.exit(0)
             else:
@@ -3796,4 +3839,5 @@ if __name__ == "__main__":
             _debug_log("fail-open: unhandled exception in main(); exiting 0")
         except Exception:
             pass
+        _coverage_unobserved("UNHANDLED_EXCEPTION")
         sys.exit(0)

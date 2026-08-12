@@ -2274,6 +2274,21 @@ def _get_baseline_cost(in_tokens: int, out_tokens: int, baseline_model: str = No
     return (in_tokens * in_rate + out_tokens * out_rate) / 1_000_000
 
 
+def _coverage_counts() -> dict:
+    """observed_n / unobserved_n for a rate metric. Never raises.
+
+    WP-07: a rate is a fraction of traffic Chuzom SAW. Shipping it without its
+    denominator lets it silently redefine itself when routing degrades.
+    """
+    try:
+        from chuzom import coverage as _coverage
+
+        snap = _coverage.snapshot()
+        return {"observed_n": snap.observed_n, "unobserved_n": snap.unobserved_n}
+    except Exception:  # noqa: BLE001
+        return {"observed_n": 0, "unobserved_n": 0}
+
+
 async def get_router_efficiency(period: str = "today") -> dict:
     """Get router efficiency score: what % of routing decisions matched recommendations.
     
@@ -2303,15 +2318,34 @@ async def get_router_efficiency(period: str = "today") -> dict:
             FROM routing_decisions {where}"""
         )
         row = await cursor.fetchone()
+        _cov = _coverage_counts()
         if not row or row[0] == 0:
-            return {"total": 0, "on_target": 0, "efficiency_pct": 0.0}
-        
+            # WP-07 / RED2-02: no routing decisions is NOT a 0%-effective
+            # router. The previous 0.0 was indistinguishable from a router that
+            # got every decision wrong, and it failed in the direction that
+            # looks like a real measurement. `efficiency_pct` is None and
+            # provenance says why; callers must render "Unknown", not a number.
+            return {
+                "total": 0,
+                "on_target": 0,
+                "efficiency_pct": None,
+                "provenance": "unknown",
+                "detail": "no routing decisions recorded for this period",
+                **_cov,
+            }
+
         total, on_target = row
         efficiency_pct = round(on_target / total * 100) if total > 0 else 0
         return {
             "total": int(total),
             "on_target": int(on_target),
             "efficiency_pct": float(efficiency_pct),
+            # The rate is over OBSERVED decisions. unobserved_n says how much
+            # traffic never reached the decision table at all, so a consumer can
+            # tell "90% on-target over everything" from "90% over the 3% we saw".
+            "provenance": "measured",
+            "detail": "",
+            **_cov,
         }
     finally:
         await db.close()
