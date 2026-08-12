@@ -336,7 +336,8 @@ class TestSavingsMath:
             "query": {"count": 5, "in": 5000, "out": 2500, "cost": 0.01,
                       "models": {"gpt-4o-mini": 5}},
         }
-        lines = se._format_routing_section(tools)
+        # Cash rendering — pin the mode rather than inheriting the dev's config.
+        lines = se._format_routing_section(tools, subscription=False)
         text = "\n".join(lines)
         assert "actual" in text
         assert "baseline" in text
@@ -348,7 +349,8 @@ class TestSavingsMath:
             "query": {"count": 1, "in": 100, "out": 50, "cost": 10.0,
                       "models": {"o3": 1}},
         }
-        lines = se._format_routing_section(tools)
+        # Cash rendering — pin the mode rather than inheriting the dev's config.
+        lines = se._format_routing_section(tools, subscription=False)
         text = "\n".join(lines)
         assert "0% saved" in text  # clamped to 0
 

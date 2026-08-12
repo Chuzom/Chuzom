@@ -472,6 +472,48 @@ def _host_baseline(in_tok: int, out_tok: int) -> float:
     return (in_tok * HOST_INPUT_PER_M + out_tok * HOST_OUTPUT_PER_M) / 1_000_000
 
 
+def _load_config_for_subscription():
+    """Return the Chuzom config. Split out so a test can force the failure path."""
+    from chuzom.config import get_config
+
+    return get_config()
+
+
+def _is_subscription_mode() -> bool:
+    """True when Claude usage is already covered by a Pro/Max subscription.
+
+    Fails CLOSED to False. If config cannot be read we must not conclude the user
+    is a subscriber: that would suppress a cash figure a pay-per-token user is
+    entitled to see. A hook must also never crash.
+    """
+    try:
+        cfg = _load_config_for_subscription()
+        return bool(getattr(cfg, "chuzom_claude_subscription", False))
+    except Exception:
+        return False
+
+
+def _baseline_provenance() -> str:
+    """``measured`` | ``estimated`` | ``unknown`` for the baseline projection.
+
+    WP-05 requires every displayed number to state where it came from. Only
+    ``measured`` if the savings baseline actually has an empirical calibration
+    profile — and it does not: INITIAL_CALIBRATION covers claude-sonnet-4-6 alone,
+    so the baseline's output-token count comes from _LEGACY_FALLBACK_OUTPUT and
+    the figure is an estimate. Calling that "measured" is precisely the
+    claim-accuracy failure the audit scores.
+    """
+    try:
+        from chuzom.calibration import INITIAL_CALIBRATION
+        from chuzom.pricing import savings_baseline_model
+
+        model = savings_baseline_model()
+        calibrated = {key[0] for key in INITIAL_CALIBRATION}
+        return "measured" if model in calibrated else "estimated"
+    except Exception:
+        return "unknown"
+
+
 # ── Formatting ─────────────────────────────────────────────────────────────────
 
 def _bar(pct: float, bar_width: int = 20) -> str:
@@ -559,7 +601,20 @@ def _format_cc_model_section(cc_rows: list[dict]) -> list[str]:
     return lines
 
 
-def _format_routing_section(tools: dict[str, dict]) -> list[str]:
+def _format_routing_section(
+    tools: dict[str, dict], *, subscription: bool | None = None
+) -> list[str]:
+    """Render the routing panel.
+
+    ``subscription`` is an explicit parameter rather than an ambient config read
+    because the branch below changes what the panel says. Left implicit, this
+    function's output depended on the developer's own config: the cash-rendering
+    tests passed on a pay-per-token machine and failed on a subscriber's — the
+    same by-whose-laptop verdict that made the provider-matrix test useless.
+    ``None`` means "detect", which is what the hook itself passes.
+    """
+    if subscription is None:
+        subscription = _is_subscription_mode()
     total_calls = sum(t["count"] for t in tools.values())
     total_in    = sum(t["in"]    for t in tools.values())
     total_out   = sum(t["out"]   for t in tools.values())
@@ -578,19 +633,37 @@ def _format_routing_section(tools: dict[str, dict]) -> list[str]:
         tokens_str = str(total_tokens)
 
     pct_color = _C_GREEN if savings_pct >= 80 else (_C_YELLOW if savings_pct >= 50 else _C_ORANGE)
-    lines = [
-        f"    {_C_WHITE}{total_calls}{_RESET} calls  "
-        f"{tokens_str} tokens  "
-        f"${total_cost:.4f} actual  "
-        f"${total_base:.4f} baseline  "
-        # D9: this is baseline-avoided GROSS of routing overhead — qualify it so
-        # it's not equated with the Codex/Gemini "realized" (gross − overhead).
-        # "% saved" is kept contiguous (the savings-clamp test relies on it).
-        f"{pct_color}{savings_pct}% saved{_RESET} {_C_MUTED}(gross){_RESET}  "
-        # D5: explicit window so this panel isn't read as comparable to the
-        # (today) provider panels or the lifetime cumulative panel beside it.
-        f"{_C_MUTED}this session{_RESET}",
-    ]
+    provenance = _baseline_provenance()
+
+    if subscription:
+        # WP-05: a subscriber never had the option of spending this money —
+        # their Claude usage is already bought by the subscription, so the
+        # counterfactual is quota consumed, not cash outlaid. README already
+        # says the value is "quota runway, not cash"; this panel used to
+        # contradict it by printing dollars to everyone. The benefit is still
+        # reported, in the unit that is actually real for this user: tokens
+        # kept off the Claude quota.
+        lines = [
+            f"    {_C_WHITE}{total_calls}{_RESET} calls  "
+            f"{tokens_str} tokens  "
+            f"{pct_color}{tokens_str} quota preserved{_RESET}  "
+            f"{_C_MUTED}({savings_pct}% of baseline, {provenance}){_RESET}  "
+            f"{_C_MUTED}this session{_RESET}",
+        ]
+    else:
+        lines = [
+            f"    {_C_WHITE}{total_calls}{_RESET} calls  "
+            f"{tokens_str} tokens  "
+            f"${total_cost:.4f} actual  "
+            f"${total_base:.4f} baseline  "
+            # D9: this is baseline-avoided GROSS of routing overhead — qualify it so
+            # it's not equated with the Codex/Gemini "realized" (gross − overhead).
+            # "% saved" is kept contiguous (the savings-clamp test relies on it).
+            f"{pct_color}{savings_pct}% saved{_RESET} {_C_MUTED}(gross, {provenance}){_RESET}  "
+            # D5: explicit window so this panel isn't read as comparable to the
+            # (today) provider panels or the lifetime cumulative panel beside it.
+            f"{_C_MUTED}this session{_RESET}",
+        ]
     for tool, d in sorted(tools.items(), key=lambda x: -x[1]["count"]):
         clean_models = {m: c for m, c in d["models"].items() if not _is_test_model(m)}
         if not clean_models:
