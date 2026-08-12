@@ -63,6 +63,11 @@ class Mutation:
     new: str
     tests: list[str] = field(default_factory=list)
     rationale: str = ""
+    #: A Python expression, run under ``PYTHONPATH=src``, whose printed value
+    #: must DIFFER between clean and mutated source. This is how a SURVIVOR is
+    #: distinguished from an EQUIVALENT MUTANT (see ``evaluate``). Killed
+    #: mutants need no probe: failing a test IS proof the behaviour changed.
+    probe: str = ""
 
 
 MUTATIONS: list[Mutation] = [
@@ -73,6 +78,7 @@ MUTATIONS: list[Mutation] = [
         '"claude-opus-5": Price("claude-opus-5", 999.00, 25.00)',
         ["tests/economics/"],
         "Stale baseline price. The audit's own Q3(b) ran this and every test passed.",
+        probe="__import__('chuzom.pricing', fromlist=['x']).rates_per_m('claude-opus-5')",
     ),
     Mutation(
         "M2", "money", "src/chuzom/cost.py",
@@ -86,6 +92,10 @@ MUTATIONS: list[Mutation] = [
         "behaviour and was briefly misreported as a coverage hole. A survivor is "
         "only evidence of a missing test once the mutation is confirmed to change "
         "observable behaviour.",
+        # The probe that would have caught the original M2 immediately: it
+        # returned 0.03 both before and after, because the pricing fallback
+        # absorbed the mutation.
+        probe="__import__('chuzom.cost', fromlist=['x'])._claude_cost('claude-opus-5', 1000, 1000)",
     ),
     Mutation(
         "M3", "money", "src/chuzom/hooks/session-end.py",
@@ -100,6 +110,7 @@ MUTATIONS: list[Mutation] = [
         'SAVINGS_BASELINE_MODEL = "claude-haiku-4-5"',
         ["tests/economics/"],
         "Silently understates every savings figure by choosing a cheaper counterfactual.",
+        probe="__import__('chuzom.pricing', fromlist=['x']).savings_baseline_rates()",
     ),
     # ── routing ──────────────────────────────────────────────────────────────
     Mutation(
@@ -107,7 +118,8 @@ MUTATIONS: list[Mutation] = [
         'CORE_TOOLS: frozenset[str] = frozenset({\n    "llm_query",',
         'CORE_TOOLS: frozenset[str] = frozenset({\n    "llm_bogus_xyz",',
         ["tests/test_tool_surface.py", "tests/routing/"],
-        "Bogus canonical tool name in the CORE tier. Audit Q3(c): lint clean, "
+        probe="sorted(__import__('chuzom.tool_surface', fromlist=['x']).CORE_TOOLS)",
+        rationale="Bogus canonical tool name in the CORE tier. Audit Q3(c): lint clean, "
         "106 tests green. NOTE: the first anchor here was the bare string "
         '\'"llm_query"\', which matches 20 sites in this file -- it rewrote the '
         "whole tool surface at once and still reported 'killed', which measures "
@@ -190,11 +202,26 @@ def _apply(root: Path, m: Mutation) -> str | None:
     return original
 
 
+def _probe(root: Path, python: str, expr: str) -> str | None:
+    """Print one observable value from the current source. None if it errored.
+
+    An errored probe is NOT treated as a difference: "it used to return 0.03 and
+    now it raises" is a real behaviour change, but "the probe was written wrong"
+    looks identical from here, and this audit has already been misled once by a
+    probe that emitted nothing and was read as a result.
+    """
+    rc, out = _run([python, "-c", f"import sys; sys.path.insert(0,'src'); print({expr})"], root)
+    return out.strip() if rc == 0 else None
+
+
 def evaluate(root: Path, python: str, only: list[str] | None = None) -> dict:
     results: list[dict] = []
     for m in MUTATIONS:
         if only and m.mid not in only:
             continue
+        # Taken BEFORE the mutation is applied, so the comparison has a real
+        # reference point rather than one derived from the mutated tree.
+        clean_probe = _probe(root, python, m.probe) if m.probe else None
         try:
             original = _apply(root, m)
         except AmbiguousMutation as exc:
@@ -217,11 +244,46 @@ def evaluate(root: Path, python: str, only: list[str] | None = None) -> dict:
             rc, _out = _run([python, "-m", "pytest", "-q", "-x", "--no-header",
                              "-p", "no:cacheprovider", *tests], root)
             killed = rc != 0
-            results.append({"id": m.mid, "area": m.area,
-                            "status": "killed" if killed else "SURVIVED",
-                            "tests": tests})
-            print(f"  {m.mid:4} {m.area:12} {'killed' if killed else 'SURVIVED':9}"
-                  f" via {' '.join(tests)}")
+
+            if killed:
+                # No probe needed: a failing test IS the proof that observable
+                # behaviour changed.
+                results.append({"id": m.mid, "area": m.area, "status": "killed",
+                                "tests": tests})
+                print(f"  {m.mid:4} {m.area:12} {'killed':9} via {' '.join(tests)}")
+            else:
+                # #16 action 2. A survivor is evidence of a missing test ONLY
+                # once the mutation is confirmed to change observable behaviour.
+                # M2's first version did not: the chuzom.pricing fallback
+                # absorbed it, and it was briefly reported as a coverage hole
+                # because the consequence was inferred from the mutation's
+                # stated INTENT rather than measured. This is that missing step.
+                mutated_probe = _probe(root, python, m.probe) if m.probe else None
+                if not m.probe:
+                    status, note = "UNVERIFIED", (
+                        "survived but carries no behaviour probe -- cannot tell a "
+                        "missing test from an equivalent mutant, so NOT counted"
+                    )
+                elif clean_probe is None or mutated_probe is None:
+                    status, note = "UNVERIFIED", (
+                        f"probe did not evaluate (clean={clean_probe!r}, "
+                        f"mutated={mutated_probe!r}); a probe that emits nothing "
+                        "proves nothing"
+                    )
+                elif clean_probe == mutated_probe:
+                    status, note = "EQUIVALENT", (
+                        f"probe identical before and after ({clean_probe!r}): the "
+                        "mutation changes no observable behaviour, so no test "
+                        "could kill it. NOT a coverage hole."
+                    )
+                else:
+                    status, note = "SURVIVED", (
+                        f"behaviour confirmed changed ({clean_probe!r} -> "
+                        f"{mutated_probe!r}) and no named test caught it"
+                    )
+                results.append({"id": m.mid, "area": m.area, "status": status,
+                                "tests": tests, "note": note})
+                print(f"  {m.mid:4} {m.area:12} {status:11} {note}")
         finally:
             (root / m.path).write_text(original)
 
@@ -238,11 +300,24 @@ def evaluate(root: Path, python: str, only: list[str] | None = None) -> dict:
     ]
     scored = [r for r in results if r["status"] in ("killed", "SURVIVED")]
     killed_n = sum(1 for r in scored if r["status"] == "killed")
+    equivalent = [r["id"] for r in results if r["status"] == "EQUIVALENT"]
+    unverified = [r["id"] for r in results if r["status"] == "UNVERIFIED"]
+
+    # Reported, not just excluded. Dropping mutations from the denominator
+    # silently would let the score be improved by writing mutations that cannot
+    # change behaviour -- the same gaming the frozen sample exists to prevent.
+    if equivalent:
+        print(f"\n  EQUIVALENT (excluded, change no behaviour): {', '.join(equivalent)}")
+    if unverified:
+        print(f"  UNVERIFIED (excluded, no usable probe):      {', '.join(unverified)}")
+
     return {
         "results": results,
         "killed": killed_n,
         "scored": len(scored),
-        "not_applicable": len(results) - len(scored),
+        "equivalent": equivalent,
+        "unverified": unverified,
+        "not_applicable": len(results) - len(scored) - len(equivalent) - len(unverified),
         "score": (killed_n / len(scored)) if scored else None,
         "worktree_clean_after": not dirty,
         "dirty_after": dirty,
