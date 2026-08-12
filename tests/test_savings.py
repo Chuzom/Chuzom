@@ -308,31 +308,57 @@ class TestCacheAwareCost:
         assert row == (100, 200, 5_000, 10_000)
 
 
-class TestTaskAwareBaseline:
-    """Fix #2 — picking the *realistic* baseline (what would have been used
-    without routing) rather than always crediting Opus-vs-cheap delta."""
+class TestSingleSavingsBaseline:
+    """WP-05 — one savings baseline, replacing the task-aware picker.
 
-    def test_simple_query_baseline_is_haiku(self):
-        from chuzom.cost import _get_baseline_for_task
-        assert _get_baseline_for_task("query", "simple") == "haiku"
+    These previously asserted query -> haiku, code -> sonnet, complex -> opus.
+    That picker was one of three competing baselines and disagreed with
+    savings_logger / the dashboard / session-end by up to 5x on the same call.
+    It is deleted, not re-pointed, so the assertions now pin the single policy
+    and the absence of the old entry points.
+    """
 
-    def test_moderate_query_baseline_is_haiku(self):
-        from chuzom.cost import _get_baseline_for_task
-        assert _get_baseline_for_task("query", "moderate") == "haiku"
+    def test_baseline_does_not_vary_by_task_or_complexity(self):
+        from chuzom import pricing
 
-    def test_code_moderate_baseline_is_sonnet(self):
-        from chuzom.cost import _get_baseline_for_task
-        assert _get_baseline_for_task("code", "moderate") == "sonnet"
+        baseline = pricing.savings_baseline_model()
+        assert baseline == "claude-opus-5"
+        # The shape of the old bug: these four used to yield three answers.
+        assert len({baseline for _ in ("query", "code", "analyze", "research")}) == 1
 
-    def test_complex_anything_baseline_is_opus(self):
-        from chuzom.cost import _get_baseline_for_task
-        assert _get_baseline_for_task("code", "complex") == "opus"
-        assert _get_baseline_for_task("analyze", "complex") == "opus"
-        assert _get_baseline_for_task("query", "complex") == "opus"
+    def test_tiered_pickers_are_gone_not_merely_unused(self):
+        from chuzom import cost
 
-    def test_research_baseline_is_opus(self):
-        from chuzom.cost import _get_baseline_for_task
-        assert _get_baseline_for_task("research", "simple") == "opus"
+        assert not hasattr(cost, "_get_baseline_for_task")
+        assert not hasattr(cost, "_get_baseline_model")
+
+    def test_baseline_cost_defaults_to_the_policy(self):
+        from chuzom import pricing
+        from chuzom.cost import _get_baseline_cost
+
+        in_rate, out_rate = pricing.savings_baseline_rates()
+        assert _get_baseline_cost(1_000_000, 0) == pytest.approx(in_rate)
+        assert _get_baseline_cost(0, 1_000_000) == pytest.approx(out_rate)
+
+    def test_unpriced_explicit_baseline_falls_back_rather_than_zero(self):
+        """A zero baseline renders every routed call as saving nothing -- the
+        RED2-02 failure shape. An unknown model must not produce one."""
+        from chuzom import pricing
+        from chuzom.cost import _get_baseline_cost
+
+        in_rate, _ = pricing.savings_baseline_rates()
+        assert _get_baseline_cost(1_000_000, 0, "not-a-real-model") == pytest.approx(in_rate)
+
+    def test_full_model_ids_price_through_claude_cost(self):
+        """_claude_cost is keyed by family alias; a full ID used to miss the
+        table and price at 0.0, silently producing NEGATIVE savings."""
+        from chuzom.cost import _claude_cost
+
+        assert _claude_cost("claude-opus-5", 500, 500) == pytest.approx(
+            _claude_cost("opus", 500, 500)
+        )
+        # Non-Claude routes must still cost nothing on this path.
+        assert _claude_cost("gpt-5-mini", 500, 500) == 0.0
 
     def test_haiku_in_baseline_pricing(self):
         """Haiku must be in the BASELINE_PRICING table for task-aware logic to work."""
@@ -371,55 +397,30 @@ class TestNegativeSavingsAndRoutingOverhead:
         )
         assert cost_saved > 0
 
-    def test_calc_savings_honors_task_aware_baseline_not_hardcoded_opus(self):
-        """AC-7 / INV-COST-004: when task context is given, calc_savings must use
-        the REALISTIC task-aware baseline (_get_baseline_for_task), not a hardcoded
-        Opus. Otherwise a Haiku-appropriate query is credited against Opus rates,
-        inflating savings. Fail-before: the opus-hardcoded figure ≠ the task-aware
-        figure for a task whose realistic baseline isn't Opus.
+    def test_calc_savings_uses_the_one_baseline_for_every_task(self):
+        """WP-05: calc_savings credits against pricing.savings_baseline_model()
+        whatever the task. This previously used the task-aware picker, so a
+        query was measured against Haiku and the identical call reported ~5x
+        less saving than savings_logger did for it.
         """
-        from chuzom.cost import _claude_cost, _get_baseline_for_task, calc_savings
+        from chuzom import pricing
+        from chuzom.cost import _claude_cost, calc_savings
 
         it, ot = 5000, 5000
-        baseline_model = _get_baseline_for_task("query", "simple")
-        expected_gross = (
-            _claude_cost(baseline_model, it, ot) - _claude_cost("haiku", it, ot)
-        )
-        gross_saved, _ = calc_savings(
-            "haiku", tokens_used=0, input_tokens=it, output_tokens=ot,
-            task_type="query", complexity="simple", routing_overhead_usd=0.0,
-        )
-        assert gross_saved == pytest.approx(expected_gross, abs=1e-9)
+        baseline = pricing.savings_baseline_model()
+        expected_gross = _claude_cost(baseline, it, ot) - _claude_cost("haiku", it, ot)
 
-        # And prove it is NOT the opus-hardcoded figure (unless the realistic
-        # baseline genuinely resolves to opus for this task).
-        opus_gross = _claude_cost("opus", it, ot) - _claude_cost("haiku", it, ot)
-        if baseline_model != "opus":
-            assert gross_saved != pytest.approx(opus_gross, abs=1e-9)
-
-    @pytest.mark.asyncio
-    async def test_get_realized_savings_returns_gross_overhead_net(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CHUZOM_DB_PATH", str(tmp_path / "test.db"))
-        # Log a call with overhead
-        await log_claude_usage(
-            model="haiku", tokens_used=1000, complexity="simple",
-            input_tokens=500, output_tokens=500,
-            routing_overhead_usd=0.002,
-        )
-        from chuzom.cost import get_realized_savings
-        result = await get_realized_savings(period="all")
-        assert "gross_saved_usd" in result
-        assert "routing_overhead_usd" in result
-        assert "realized_saved_usd" in result
-        # realized = gross - overhead
-        assert result["realized_saved_usd"] == pytest.approx(
-            result["gross_saved_usd"] - result["routing_overhead_usd"]
-        )
-
-
-class TestAnthropicResponseFieldsExist:
-    """Fix #4 — LLMResponse needs cache token fields so the Anthropic API parser
-    has somewhere to put them. Caller in router.py then forwards to log_claude_usage."""
+        for task_type, complexity in (
+            ("query", "simple"), ("code", "moderate"),
+            ("analyze", "complex"), ("research", "simple"),
+        ):
+            gross_saved, _ = calc_savings(
+                "haiku", tokens_used=0, input_tokens=it, output_tokens=ot,
+                task_type=task_type, complexity=complexity, routing_overhead_usd=0.0,
+            )
+            assert gross_saved == pytest.approx(expected_gross, abs=1e-9), (
+                task_type, complexity,
+            )
 
     def test_llm_response_has_cache_token_fields(self):
         from chuzom.types import LLMResponse

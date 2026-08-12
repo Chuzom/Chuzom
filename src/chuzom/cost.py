@@ -706,7 +706,7 @@ async def log_usage(
         # realized-savings metric has data. Previously baseline_model was
         # NULL and potential_cost_usd/saved_usd defaulted to 0.0, so every
         # routed call appeared to save nothing.
-        baseline_model = _get_baseline_for_task(task_type.value, complexity)
+        baseline_model = _pricing.savings_baseline_model()
         potential_cost_usd = _claude_cost(
             baseline_model,
             response.input_tokens,
@@ -1511,8 +1511,23 @@ def _claude_cost(
     """Compute the actual $ cost of a Claude API call using the 4-component formula.
 
     Unknown models return 0.0 (graceful — non-Claude routes don't trip this).
+
+    WP-05: ``CLAUDE_RATES_PER_M`` is keyed by FAMILY ALIAS ("opus", "sonnet",
+    "haiku"), so a full model ID such as ``claude-opus-5`` missed the table and
+    priced at 0.0 — silently, because the miss is indistinguishable from a
+    legitimately-unpriced non-Claude route. Passing a baseline model ID through
+    here therefore produced a zero baseline and NEGATIVE savings. Resolve
+    through chuzom.pricing before giving up, so an ID that the price table knows
+    can never read as free.
     """
     rates = CLAUDE_RATES_PER_M.get(model)
+    if rates is None:
+        # Claude IDs only. Widening this to every priced model would change what
+        # the function means: callers rely on non-Claude routes costing 0.0 here
+        # and being priced on their own provider's path.
+        _resolved = _pricing.resolve(model)
+        if _resolved is not None and _resolved.startswith("claude-"):
+            rates = _pricing.rates_per_m(_resolved)
     if rates is None:
         return 0.0
     return (
@@ -1543,11 +1558,11 @@ def calc_savings(
        cost is computed via the 4-component formula (input + output +
        cache_write + cache_read at separate rates) rather than a single
        lumped per-1K rate. The lumped path is kept for back-compat.
-    2. **Task-aware baseline**: if `task_type` and `complexity` are
-       provided, the counterfactual model is picked via
-       `_get_baseline_for_task()` (Haiku for simple Q&A, Sonnet for code,
-       Opus only for genuinely complex work). Without task context, the
-       baseline defaults to Opus (matching legacy behaviour).
+    2. **One baseline** (WP-05): the counterfactual is always
+       `pricing.savings_baseline_model()`, regardless of task_type or
+       complexity. The former task-aware picker (Haiku for simple Q&A,
+       Sonnet for code, Opus for complex work) was a second savings policy
+       and disagreed with every other surface by up to 5x.
     3. **No floor**: returned savings are NOT clamped to >= 0. Routing
        overhead can exceed gross savings on small prompts; that should
        surface as a negative number, not be hidden.
@@ -1566,15 +1581,15 @@ def calc_savings(
     Returns:
         (net_cost_saved_usd, net_time_saved_sec). May be negative.
     """
-    # Task-aware baseline (INV-COST-004 / AC-7): credit against the REALISTIC
-    # model that would have handled this task without routing, not always Opus —
-    # otherwise a Haiku-appropriate query is measured against Opus rates and
-    # savings are wildly overstated. Falls back to Opus only when no task context
-    # is supplied (legacy default), exactly as this function's docstring promises.
-    if task_type is not None and complexity is not None:
-        baseline = _get_baseline_for_task(task_type, complexity)
-    else:
-        baseline = "opus"
+    # WP-05: one baseline, whatever the task. This used to credit against a
+    # task-aware "realistic" model (query -> Haiku), on the reasoning that
+    # measuring a Haiku-appropriate query at Opus rates overstates savings. That
+    # reasoning priced a counterfactual nobody performs — a subscriber runs their
+    # top model, they do not hand-pick a cheaper Claude per prompt — and it put
+    # this function 5x apart from savings_logger, the dashboard and session-end
+    # on the identical call. task_type/complexity remain in the signature for
+    # callers and telemetry; they no longer select a baseline.
+    baseline = _pricing.savings_baseline_model()
 
     # Cache-aware path: when any sub-component count is provided, use the
     # 4-component formula. Otherwise fall back to the lumped per-1K rate.
@@ -2229,48 +2244,34 @@ BASELINE_PRICING = {
     for family in ("haiku", "sonnet", "opus")
 }
 
-def _get_baseline_model() -> str:
-    """Legacy: returns the env-configured global baseline (default: sonnet).
+# WP-05 removed `_get_baseline_model()` (env-or-sonnet) and
+# `_get_baseline_for_task()` (research/complex -> opus, query -> haiku, else
+# sonnet). Both were savings-baseline policies of their own, and the tiered one
+# contradicted the flat baseline that savings_logger, the dashboard and the
+# session-end hook already used — 5x apart on a QUERY call.
+#
+# They are deleted rather than re-pointed. A second baseline function left
+# importable is a second policy waiting for a caller, and this codebase has
+# already demonstrated that dead safety/duplicate code gets wired back up
+# (RED3-01, RED3-10). The one policy is pricing.savings_baseline_model().
 
-    Prefer `_get_baseline_for_task()` when task_type / complexity are known —
-    that picks a *realistic* counterfactual model per call instead of crediting
-    every routed call against a single fixed baseline.
-    """
-    import os
-    return os.environ.get("CHUZOM_SAVINGS_BASELINE", "sonnet")
-
-
-def _get_baseline_for_task(task_type: str | None, complexity: str | None) -> str:
-    """Pick the *realistic* baseline model — what would have been used without routing.
-
-    Without this, every cheap-model call gets credited against the full Opus rate,
-    overstating savings. The heuristic mirrors COMPLEXITY_BASE_MODEL but accounts
-    for task_type since the same complexity can imply different default models
-    (e.g., a "moderate" query task realistically goes to Haiku, not Sonnet).
-
-    v9.2.2.
-    """
-    import os
-    # Env override still wins (back-compat with CHUZOM_SAVINGS_BASELINE).
-    override = os.environ.get("CHUZOM_SAVINGS_BASELINE", "").strip().lower()
-    if override in CLAUDE_RATES_PER_M:
-        return override
-
-    if task_type == "research":
-        return "opus"
-    if complexity == "complex":
-        return "opus"
-    if task_type in ("query",):
-        return "haiku"
-    return "sonnet"
 
 def _get_baseline_cost(in_tokens: int, out_tokens: int, baseline_model: str = None) -> float:
-    """Calculate cost using specified baseline model (default: sonnet)."""
+    """Cost of ``in_tokens``/``out_tokens`` at the savings baseline.
+
+    ``baseline_model`` is retained for callers that price against a specific
+    model, but it no longer defaults to a second policy: with no argument this
+    uses the one baseline. An unpriced model falls back to the baseline rates
+    instead of 0.0, so a bad model name can never render as "saved nothing".
+    """
     if baseline_model is None:
-        baseline_model = _get_baseline_model()
-    
-    pricing = BASELINE_PRICING.get(baseline_model, BASELINE_PRICING["sonnet"])
-    return (in_tokens * pricing["input"] + out_tokens * pricing["output"]) / 1_000_000
+        in_rate, out_rate = _pricing.savings_baseline_rates()
+    else:
+        in_rate = _pricing.input_rate(baseline_model)
+        out_rate = _pricing.output_rate(baseline_model)
+        if in_rate is None or out_rate is None:
+            in_rate, out_rate = _pricing.savings_baseline_rates()
+    return (in_tokens * in_rate + out_tokens * out_rate) / 1_000_000
 
 
 async def get_router_efficiency(period: str = "today") -> dict:
@@ -2701,8 +2702,14 @@ async def get_model_latency_stats(window_days: int = 7) -> dict[str, dict]:
 # Opus-4.1-and-earlier tier; Opus 4.5 onward (incl. 4.6/4.7/4.8) is $5/$25 per
 # million tokens. Every historical `saved_usd` was therefore ~3x inflated.
 
-LATEST_OPUS_MODEL = "claude-opus-4-8"
-"""The current host/baseline Opus model. Bump when a newer Opus ships."""
+LATEST_OPUS_MODEL = "claude-opus-5"
+"""The current host Opus model. Bump when a newer Opus ships.
+
+This lagged at claude-opus-4-8 while chuzom.pricing already priced claude-opus-5
+— the "bump when a newer Opus ships" instruction was not followed, which is the
+same failure mode WP-03 removed by deriving prices rather than restating them.
+It is no longer a savings baseline (see pricing.SAVINGS_BASELINE_MODEL); it only
+answers "which Opus is current"."""
 
 # Opus per-million-token pricing (input, output) in USD, projected out of
 # chuzom.pricing rather than restated. Extend the tuple as new Opus models
@@ -2721,13 +2728,17 @@ _OPUS_PRICING: dict[str, tuple[float, float]] = {
     if (_p := _pricing.price_for(_m)) is not None
 }
 
-BASELINE_MODEL_FOR_SAVINGS = LATEST_OPUS_MODEL
-"""Reference model for savings. All savings = host Opus cost - actual routed
-cost; the host model is the latest Opus (Claude Code subscription)."""
+BASELINE_MODEL_FOR_SAVINGS = _pricing.savings_baseline_model()
+"""Reference model for savings, projected from the ONE policy in chuzom.pricing.
 
-_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = _OPUS_PRICING[LATEST_OPUS_MODEL]
-"""Baseline per-million-token rates ($/M) for the latest Opus, derived from
-_OPUS_PRICING so there is a single source of truth (was a hardcoded $15/$75)."""
+WP-05: this used to be its own binding (``LATEST_OPUS_MODEL``), one of three
+competing baselines. It is now a view onto ``pricing.savings_baseline_model()``
+so it cannot drift from the dashboard, the session-end hook, or the ledger
+writer again. ``LATEST_OPUS_MODEL`` remains, but only as "which Opus is current"
+— it is no longer a savings policy."""
+
+_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = _pricing.savings_baseline_rates()
+"""Baseline per-million-token rates ($/M), from the one savings policy."""
 
 _FREE_PROVIDERS = {"ollama", "codex", "gemini_cli"}
 """Providers that incur zero cost (local or included in subscription)."""

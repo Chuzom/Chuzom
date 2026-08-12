@@ -63,6 +63,9 @@ __all__ = [
     "rates_per_m",
     "output_per_1k",
     "blended_per_1k",
+    "SAVINGS_BASELINE_MODEL",
+    "savings_baseline_model",
+    "savings_baseline_rates",
 ]
 
 # Date the Anthropic rates below were last confirmed against published pricing.
@@ -77,6 +80,34 @@ STALENESS_DAYS = 90
 # fixed multiples, so deriving them removes an entire class of drift.
 _CACHE_READ_RATIO = 0.10
 _CACHE_WRITE_RATIO = 1.25  # 5-minute TTL; the 1-hour TTL is 2.0x
+
+# ── Savings baseline policy (WP-05) ───────────────────────────────────────────
+# THE counterfactual: what the same work would have cost had Chuzom not routed
+# it. Exactly one policy, defined here, next to the rates it resolves against.
+#
+# Three policies used to coexist, two of them introduced to override the other:
+# a tiered picker in cost.py (query -> haiku, complex -> opus, else sonnet,
+# justified as stopping savings being "overstated"), a flat opus-4-8 table in
+# savings_logger.py (justified by the tiered baseline "not reflecting how the
+# user actually works" -- the direct negation), and a flat opus list rate in the
+# dashboard and session-end hook. For a QUERY task the first credits haiku
+# ($1/$5) and the second opus ($5/$25): a 5x spread on the identical call,
+# settled by whichever surface happened to render it.
+#
+# Resolved flat, because the honest counterfactual is what the user would
+# ACTUALLY have spent: a Claude Code subscriber runs their top model, they do
+# not hand-pick a cheaper Claude per prompt. The tiered version priced a
+# counterfactual nobody performs, and it read as conservative while in fact
+# comparing against a workflow that did not exist.
+#
+# This yields the larger number, so it carries the heavier burden: every surface
+# reporting it must label WHAT it is measured against, and quota runway must
+# never be added to a cash figure.
+SAVINGS_BASELINE_MODEL = "claude-opus-5"
+
+#: Env override, retained for back-compat. Routed through this module so no
+#: surface reads it directly -- per-surface reads are how the policies diverged.
+_SAVINGS_BASELINE_ENV = "CHUZOM_SAVINGS_BASELINE"
 
 
 @dataclass(frozen=True)
@@ -389,6 +420,34 @@ def known_models() -> frozenset[str]:
 def unverified_models() -> frozenset[str]:
     """Models whose rates were carried forward without independent confirmation."""
     return frozenset(k for k, v in _PRICES.items() if not v.verified)
+
+
+def savings_baseline_model() -> str:
+    """The one model every savings figure is measured against.
+
+    Honours ``CHUZOM_SAVINGS_BASELINE`` for back-compat, but only when the value
+    resolves to a model this table actually prices. An unrecognised override
+    falls back to the default rather than propagating: an unpriced baseline
+    yields a 0.0 rate, which renders every routed call as having saved nothing —
+    the exact "a failure that looks like data" shape RED2-02 was raised over.
+    """
+    override = os.environ.get(_SAVINGS_BASELINE_ENV, "").strip().lower()
+    if override:
+        resolved = resolve(override)
+        if resolved is not None:
+            return resolved
+    return SAVINGS_BASELINE_MODEL
+
+
+def savings_baseline_rates() -> tuple[float, float]:
+    """``(input_per_m, output_per_m)`` for :func:`savings_baseline_model`."""
+    model = savings_baseline_model()
+    in_rate = input_rate(model)
+    out_rate = output_rate(model)
+    if in_rate is None or out_rate is None:  # pragma: no cover — resolve() gates this
+        in_rate = input_rate(SAVINGS_BASELINE_MODEL)
+        out_rate = output_rate(SAVINGS_BASELINE_MODEL)
+    return float(in_rate), float(out_rate)
 
 
 def staleness_days(*, as_of: _dt.date | None = None) -> int:

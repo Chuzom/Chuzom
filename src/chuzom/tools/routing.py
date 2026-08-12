@@ -9,7 +9,7 @@ from mcp.server.fastmcp import Context
 from chuzom.config import get_config
 from chuzom.ensemble import classify_for_routing
 from chuzom.cost import (
-    _claude_cost, _get_baseline_for_task, get_correction_count,
+    _claude_cost, get_correction_count,
     get_daily_claude_breakdown, get_daily_claude_tokens, get_savings_summary,
     log_claude_usage, log_correction, log_usage,
 )
@@ -28,6 +28,7 @@ from chuzom.types import (
     ClassificationResult, Complexity, QualityMode,
     RoutingProfile, RoutingRecommendation, TaskType, _budget_bar,
 )
+from chuzom import pricing as _pricing
 from chuzom import state as _state
 from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
@@ -415,9 +416,7 @@ async def llm_route(
     # HUD's session savings match usage.saved_usd instead of the historical
     # permanent $0 (AC-7: baseline_cost was never supplied). Fail-open to None.
     try:
-        _baseline_model = _get_baseline_for_task(
-            resolved_task_type.value, classification.complexity.value
-        )
+        _baseline_model = _pricing.savings_baseline_model()
         _hud_baseline_cost = _claude_cost(
             _baseline_model,
             resp.input_tokens,

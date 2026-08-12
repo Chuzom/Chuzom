@@ -53,6 +53,7 @@ from chuzom.contract import build_contract
 from chuzom.gates import run_gates
 from chuzom.gemini_cli_agent import GEMINI_MODELS, is_gemini_cli_available, run_gemini_cli
 from chuzom import okf as _okf
+from chuzom import pricing as _pricing
 from chuzom.logging import get_logger
 from chuzom.streaming_types import RouterStreamEvent
 from chuzom.compaction import compact_structural
@@ -2720,7 +2721,7 @@ async def _dispatch_model_loop(
                 if classification_data else 0.0
             )
             try:
-                _baseline_model = cost._get_baseline_for_task(task_type.value, c.value)
+                _baseline_model = _pricing.savings_baseline_model()
                 _baseline_equivalent_cost_usd = cost._get_baseline_cost(
                     response.input_tokens or 0, response.output_tokens or 0, _baseline_model,
                 )
@@ -3007,7 +3008,7 @@ async def _dispatch_model_loop(
                         if classification_data else 0.0
                     )
                     try:
-                        _baseline_model_eb = cost._get_baseline_for_task(task_type.value, c.value)
+                        _baseline_model_eb = _pricing.savings_baseline_model()
                         _baseline_equivalent_cost_usd_eb = cost._get_baseline_cost(
                             response.input_tokens or 0, response.output_tokens or 0, _baseline_model_eb,
                         )

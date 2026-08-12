@@ -40,9 +40,10 @@ from typing import Literal
 
 from chuzom import pricing as _pricing
 
-#: Counterfactual model these savings are computed against. Named once so the
-#: baseline is a stated choice rather than a number buried in an expression.
-_BASELINE_MODEL = "claude-opus-5"
+#: Counterfactual model these savings are computed against. WP-05: projected
+#: from the ONE policy in chuzom.pricing rather than restated here, so this
+#: surface cannot drift from the ledger writer or the session-end hook.
+_BASELINE_MODEL = _pricing.savings_baseline_model()
 
 WindowLiteral = Literal["today", "week", "month", "lifetime", "14d"]
 

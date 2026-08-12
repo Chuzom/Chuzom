@@ -3,7 +3,7 @@
 
 import pytest
 
-from chuzom import cost
+from chuzom import cost, pricing
 from chuzom.types import LLMResponse, RoutingProfile, TaskType
 
 
@@ -446,7 +446,10 @@ async def test_log_usage_ollama_zero_cost_full_baseline_savings(temp_db):
 
 @pytest.mark.asyncio
 async def test_log_usage_baseline_picker_haiku_for_simple_query(temp_db):
-    """Simple query tasks should use haiku as baseline, not Sonnet/Opus."""
+    """WP-05: every task records the ONE savings baseline.
+
+    This used to assert haiku for simple queries, from the task-aware picker
+    that disagreed with savings_logger by 5x on the same call."""
     resp = LLMResponse(
         content="x",
         model="ollama/qwen3.5:latest",
@@ -461,7 +464,7 @@ async def test_log_usage_baseline_picker_haiku_for_simple_query(temp_db):
     )
 
     row = await _last_usage_row(temp_db)
-    assert row["baseline_model"] == "haiku"
+    assert row["baseline_model"] == pricing.savings_baseline_model()
 
 
 @pytest.mark.asyncio
@@ -481,7 +484,7 @@ async def test_log_usage_baseline_picker_opus_for_complex(temp_db):
     )
 
     row = await _last_usage_row(temp_db)
-    assert row["baseline_model"] == "opus"
+    assert row["baseline_model"] == pricing.savings_baseline_model()
 
 
 @pytest.mark.asyncio

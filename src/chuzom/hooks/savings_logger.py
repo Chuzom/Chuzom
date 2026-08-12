@@ -81,19 +81,14 @@ _PRICING_PER_MTOK: dict[tuple[str, str], tuple[float, float]] = {
     **{(_provider, "*"): _ZERO_RATE for _provider in _ZERO_MARGINAL_PROVIDERS},
 }
 
-# 2026-07-12 (user decision): savings are reported as OPUS-EQUIVALENT only —
-# the counterfactual is always claude-opus-4-8 regardless of complexity. The
-# earlier complexity-tiered ("honest") baseline was dropped because routing
-# baseline comparison doesn't reflect how the user actually works. This keeps
-# the inline DIRECT-hook path consistent with receipt_store.compute_receipt and
-# cost._OPUS_PRICING, which price savings against Opus at $5/$25 per 1M (the
-# current rate — the stale $15/$75 tier inflated reported savings ~3x).
-_BASELINE_MODEL_BY_COMPLEXITY: dict[str, str] = {
-    "simple":   "claude-opus-4-8",
-    "moderate": "claude-opus-4-8",
-    "complex":  "claude-opus-4-8",
-}
-
+# 2026-07-12 (user decision): savings are reported as OPUS-EQUIVALENT only — the
+# counterfactual does not vary by complexity. The earlier complexity-tiered
+# ("honest") baseline was dropped because it did not reflect how the user
+# actually works. WP-05 keeps that decision and finishes it: the flat baseline is
+# no longer restated here as a per-complexity table, it is read from the one
+# policy in chuzom.pricing. The table shape was itself the hazard — a mapping
+# keyed by complexity invites a future edit to make one row differ, which is
+# precisely how this file and cost.py ended up 5x apart.
 _SAVINGS_LOG_FILENAME = "savings_log.jsonl"
 
 
@@ -114,11 +109,22 @@ def _cost_for(provider: str, model: str, input_tokens: int, output_tokens: int) 
 
 
 def _baseline_cost(complexity: str, input_tokens: int, output_tokens: int) -> float:
-    # Fallback default is the latest Opus (the "always Opus-equivalent" decision
-    # above), not Sonnet — an unknown complexity string must not silently switch
-    # the baseline model and understate savings.
-    baseline_model = _BASELINE_MODEL_BY_COMPLEXITY.get(complexity, "claude-opus-4-8")
-    return _cost_for("claude", baseline_model, input_tokens, output_tokens)
+    """Counterfactual cost at the one savings baseline.
+
+    ``complexity`` is accepted (callers still pass it, and it stays in the logged
+    record) but deliberately does not select a model — see the note above.
+    """
+    del complexity  # retained in the signature; no longer a baseline input
+    try:
+        from chuzom import pricing as _pricing
+
+        in_rate, out_rate = _pricing.savings_baseline_rates()
+    except Exception:
+        # A hook must never crash. Fall open to the current Opus list rate,
+        # which is what the policy resolves to — not 0.0, which would log every
+        # routed call as having saved nothing.
+        in_rate, out_rate = 5.0, 25.0
+    return (input_tokens / 1_000_000) * in_rate + (output_tokens / 1_000_000) * out_rate
 
 
 def _savings_log_path() -> Path:

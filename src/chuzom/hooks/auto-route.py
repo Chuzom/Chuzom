@@ -2416,6 +2416,7 @@ def _estimate_cost(task_type: str, complexity: str) -> dict:
     """
     try:
         from chuzom.calibration import predict_cost
+        from chuzom.pricing import savings_baseline_model as _savings_baseline_model
         from chuzom.types import TaskType
     except Exception:
         return _legacy_static_savings(task_type, complexity)
@@ -2431,7 +2432,9 @@ def _estimate_cost(task_type: str, complexity: str) -> dict:
     except ValueError:
         tt = TaskType.QUERY
 
-    baseline = predict_cost("claude-sonnet-4-6", tt, input_tokens, quantile=0.5)
+    # WP-05: the one savings baseline, not a sonnet literal. This surface
+    # priced its hint against Sonnet while every other surface used Opus.
+    baseline = predict_cost(_savings_baseline_model(), tt, input_tokens, quantile=0.5)
     if baseline <= 0:
         # predict_cost returns 0 when the model isn't priced — fall back so
         # the display never reads "$0.0000".

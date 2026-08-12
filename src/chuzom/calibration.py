@@ -146,10 +146,30 @@ def _lookup_pricing(model: str) -> dict[str, float]:
     Unknown models return zero rates — the caller (typically ``predict_cost``)
     decides whether to emit a calibration warning. Keeping this lookup
     permissive avoids raising on every novel model name introduced upstream.
+
+    WP-05: ``_PRICING_PER_M`` is a local table that never covered Opus, so every
+    Opus model priced at 0.0 here — and a zero rate is indistinguishable from a
+    genuinely free local model. Pointing the savings baseline at Opus therefore
+    made ``predict_cost`` return 0.0 and silently dropped auto-route onto its
+    legacy static map, with no error and a plausible-looking number. Fall back
+    to chuzom.pricing (the WP-03 single source) before conceding zero, so a
+    model the price table knows can never be treated as free.
     """
     if any(model.startswith(prefix) for prefix in _FREE_MODEL_PREFIXES):
         return {"input": 0.0, "output": 0.0}
-    return _PRICING_PER_M.get(_normalize_model_name(model), {"input": 0.0, "output": 0.0})
+    normalized = _normalize_model_name(model)
+    local = _PRICING_PER_M.get(normalized)
+    if local is not None:
+        return local
+    try:
+        from chuzom import pricing as _pricing
+
+        rates = _pricing.rates_per_m(normalized)
+        if rates is not None:
+            return {"input": rates["input"], "output": rates["output"]}
+    except Exception:  # noqa: BLE001 — pricing must never break a projection
+        pass
+    return {"input": 0.0, "output": 0.0}
 
 
 def cost_for_tokens(

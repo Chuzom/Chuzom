@@ -163,7 +163,7 @@ def record_routing_decision(
             savings to be non-zero — historically this was never supplied, so the
             statusline permanently displayed $0 saved (AC-7). Compute it with the
             same canonical functions ``log_usage`` uses
-            (``cost._get_baseline_for_task`` + ``cost._claude_cost``) so the HUD
+            (``pricing.savings_baseline_model`` + ``cost._claude_cost``) so the HUD
             and the persisted ``usage.saved_usd`` agree.
 
     Returns:
