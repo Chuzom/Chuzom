@@ -57,6 +57,32 @@ def test_unknown_override_falls_back_rather_than_pricing_at_zero(monkeypatch):
     assert pricing.savings_baseline_rates() == (5.0, 25.0)
 
 
+def test_no_claude_model_costs_nothing():
+    """A known Claude model must never price at zero for non-zero tokens.
+
+    Found by the WP-14 mutation sample (M2): forcing the rate lookup in
+    _claude_cost to miss made it return 0.0 for EVERY Claude model, and the full
+    suite stayed green. _claude_cost is the actual-cost side of every savings
+    subtraction, so a zero there makes savings = baseline - 0 = baseline: every
+    surface OVERSTATES savings by the full actual cost and labels it "measured".
+
+    The existing tests pin specific inputs to specific outputs, which cannot
+    catch the lookup going dead. This gates the contract instead: not "this model
+    costs 0.015" but "no Claude model costs nothing".
+    """
+    from chuzom.cost import CLAUDE_RATES_PER_M, _claude_cost
+
+    zero_priced = [
+        model for model in CLAUDE_RATES_PER_M
+        if _claude_cost(model, 1_000, 1_000) <= 0.0
+    ]
+    assert not zero_priced, f"Claude models pricing at zero: {zero_priced}"
+
+    # And via the canonical ids, which is the path the baseline policy uses.
+    for model in ("claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"):
+        assert _claude_cost(model, 1_000, 1_000) > 0.0, model
+
+
 def test_cost_module_delegates_to_the_policy():
     from chuzom import cost
 
