@@ -5,7 +5,6 @@ from log records before they're written to stdout/files. It prevents accidental
 leakage of API keys, tokens, passwords, and other credentials.
 """
 
-import os
 import re
 from typing import Any
 

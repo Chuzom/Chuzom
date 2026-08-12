@@ -19,7 +19,6 @@ merely reassuring.
 
 from __future__ import annotations
 
-import pytest
 
 from chuzom import tool_surface as ts
 from chuzom.commands import doctor as doc

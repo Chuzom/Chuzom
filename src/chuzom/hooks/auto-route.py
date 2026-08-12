@@ -2453,7 +2453,7 @@ def _estimate_cost(task_type: str, complexity: str) -> dict:
     installed) so a partial install can still produce a routing directive.
     """
     try:
-        from chuzom.calibration import predict_cost
+        from chuzom.calibration import predict_cost_measured
         from chuzom.pricing import savings_baseline_model as _savings_baseline_model
         from chuzom.types import TaskType
     except Exception:
@@ -2472,12 +2472,21 @@ def _estimate_cost(task_type: str, complexity: str) -> dict:
 
     # WP-05: the one savings baseline, not a sonnet literal. This surface
     # priced its hint against Sonnet while every other surface used Opus.
-    baseline = predict_cost(_savings_baseline_model(), tt, input_tokens, quantile=0.5)
+    # #12(b): carry HOW the number was arrived at. The corpus holds one
+    # empirical profile — (claude-sonnet-4-6, QUERY) — so this projection, made
+    # against the savings BASELINE, rests on a static 80-token assumption. A
+    # figure that cannot say that is an assumption wearing a measurement's
+    # clothes, which is the quiet form of the defect RED2-02 showed loudly.
+    est = predict_cost_measured(_savings_baseline_model(), tt, input_tokens, quantile=0.5)
+    baseline = est.or_zero()
     if baseline <= 0:
         # predict_cost returns 0 when the model isn't priced — fall back so
         # the display never reads "$0.0000".
         return _legacy_static_savings(task_type, complexity)
-    return {"savings": _format_usd(baseline)}
+    # `savings` stays a bare parseable "$X" string: callers lstrip('$') it, and
+    # reformatting to embed the label would trade one defect for another. The
+    # tag is an ADDITIONAL key.
+    return {"savings": _format_usd(baseline), "provenance": est.provenance}
 
 
 def _format_usd(amount: float) -> str:
@@ -2501,7 +2510,10 @@ def _legacy_static_savings(task_type: str, complexity: str) -> dict:
         "code": {"simple": "$0.001", "moderate": "$0.003", "complex": "$0.010"},
     }
     task_costs = cost_map.get(task_type, {"simple": "$0.001", "moderate": "$0.002", "complex": "$0.005"})
-    return {"savings": task_costs.get(complexity, "$0.002")}
+    # #12(b): this is the LEAST-measured path in the system — a hardcoded table
+    # used when calibration will not even import. If the calibrated path has to
+    # admit it is estimating, this one certainly does.
+    return {"savings": task_costs.get(complexity, "$0.002"), "provenance": "estimated"}
 
 
 def _prior_violation_notice(pending: dict | None) -> str:

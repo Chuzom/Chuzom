@@ -148,7 +148,6 @@ def test_pack_prompt_forwards_artifacts_not_just_completion():
     one's OUTPUT was told only that it ran, so it could guess or redo — never
     build on it."""
     from chuzom.agentic.adapters import pack_prompt
-    from chuzom.agentic.ledger import MilestoneStatus
 
     m1 = Milestone("M1", "produce the token", lambda a: True)
     m3 = Milestone("M3", "use M1's token", lambda a: True, deps=("M1",))

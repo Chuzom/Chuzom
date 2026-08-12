@@ -25,12 +25,16 @@ import logging
 from dataclasses import dataclass
 
 from chuzom import pricing as _pricing
+from chuzom.provenance import Measured
 from chuzom.types import TaskType
 
 __all__ = [
     "TokenShapeProfile",
     "INITIAL_CALIBRATION",
+    "CalibrationCoverage",
+    "calibration_coverage",
     "predict_cost",
+    "predict_cost_measured",
     "cost_for_tokens",
     "projection_check",
 ]
@@ -225,6 +229,97 @@ def predict_cost(
         output_estimate = _LEGACY_FALLBACK_OUTPUT
 
     return (input_tokens * pricing["input"] + output_estimate * pricing["output"]) / 1_000_000
+
+
+def _has_profile(model: str, task_type: TaskType) -> bool:
+    """True only for a pair with enough real observations to supersede the
+    static fallback. Keyed on (model, task) because that is how the corpus is
+    keyed — a calibrated model is NOT a calibrated task."""
+    profile = INITIAL_CALIBRATION.get((_normalize_model_name(model), task_type))
+    return profile is not None and profile.n_samples >= _N_SAMPLES_THRESHOLD
+
+
+def predict_cost_measured(
+    model: str,
+    task_type: TaskType,
+    input_tokens: int,
+    quantile: float = 0.5,
+) -> Measured:
+    """:func:`predict_cost`, carrying how the number was arrived at.
+
+    #12(b). The corpus holds ONE empirical profile — (claude-sonnet-4-6, QUERY),
+    n=1114. Every other pair, *including the savings baseline every savings
+    figure is computed against*, uses ``_LEGACY_FALLBACK_OUTPUT``: a static 80
+    tokens carried over from pre-calibration code.
+
+    ``predict_cost`` returns a bare float for both, so a projection resting on a
+    hardcoded 80 is indistinguishable from one resting on 1114 observations.
+    That is the quiet form of the defect this audit keeps finding — not a wrong
+    number, an *unmarked* one. WP-05's rule already exists in
+    :mod:`chuzom.provenance`; calibration simply never used it.
+
+    The VALUE is identical to ``predict_cost``'s, deliberately: this labels the
+    projection, it does not change it. A test pins that.
+    """
+    value = predict_cost(model, task_type, input_tokens, quantile)
+    if _has_profile(model, task_type):
+        return Measured.measured(value)
+    return Measured.estimated(
+        value,
+        f"no calibration profile for ({_normalize_model_name(model)}, "
+        f"{task_type.value}); assumed {_LEGACY_FALLBACK_OUTPUT} output tokens",
+    )
+
+
+@dataclass(frozen=True)
+class CalibrationCoverage:
+    """How much of the routable surface the corpus actually describes."""
+
+    profiled: int
+    total: int
+    #: Named, not just counted: a bare percentage does not get the corpus
+    #: extended, whereas a list of models does.
+    unprofiled_models: tuple[str, ...]
+
+    @property
+    def fraction(self) -> float:
+        return self.profiled / self.total if self.total else 0.0
+
+
+def calibration_coverage() -> CalibrationCoverage:
+    """Report the corpus's own blind spot.
+
+    WP-07's principle applied to calibration: a surface that cannot say how much
+    of its traffic it has no profile for cannot be audited for coverage.
+
+    THE DENOMINATOR IS DELIBERATELY NOT THE CORPUS. Counting profiled pairs
+    against ``INITIAL_CALIBRATION``'s own keys would report 100% coverage
+    forever — the same self-resolving trap as
+    ``tool_surface.unregistered()`` (tier constants checked against the tier
+    constants) and ``scripts/lint_tool_surface.py`` (emitters against emitters),
+    both of which reported clean while blind. It is instead the priced-model
+    list crossed with the routable task types.
+
+    The savings baseline is unioned in explicitly because it is NOT in
+    ``_CALIBRATED_MODELS`` — measured 2026-08-12: ``claude-opus-5`` resolves a
+    price only through the :mod:`chuzom.pricing` fallback added in #12(a).
+    Leaving it out would hide the single most consequential gap, since every
+    savings figure is computed against it.
+    """
+    models = set(_CALIBRATED_MODELS) | {_pricing.savings_baseline_model()}
+    tasks = tuple(TaskType)
+
+    profiled = sum(
+        1 for m in models for t in tasks if _has_profile(m, t)
+    )
+    unprofiled = tuple(
+        sorted(m for m in models if not any(_has_profile(m, t) for t in tasks))
+    )
+    return CalibrationCoverage(
+        profiled=profiled,
+        total=len(models) * len(tasks),
+        unprofiled_models=unprofiled,
+    )
 
 
 def projection_check(

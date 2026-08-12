@@ -123,9 +123,16 @@ class TestAutoRouteEstimateCost:
         assert 0.001 < val < 0.010, f"unexpected baseline cost {out['savings']!r}"
 
     def test_legacy_fallback_renders_when_calibration_unavailable(self, hook):
-        """If the calibration import path is broken, the static map still ships a string."""
+        """If the calibration import path is broken, the static map still ships a string.
+
+        Asserts the VALUE, not the exact dict. #12(b) added a `provenance` key —
+        this path is the least-measured in the system, a hardcoded table used
+        when calibration will not import, and it now says so. Exact-dict
+        equality was stricter than this test's own stated purpose and would
+        reject any strictly-more-informative return.
+        """
         out = hook._legacy_static_savings("code", "complex")
-        assert out == {"savings": "$0.010"}
+        assert out["savings"] == "$0.010"
 
     def test_unknown_task_type_does_not_crash(self, hook):
         """Coerced to QUERY internally; must still emit a savings string."""
