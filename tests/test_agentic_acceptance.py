@@ -28,12 +28,83 @@ def test_validator_pass_fail_and_error():
     assert not r.ok and "error" in r.reason
 
 
-def test_diff_check_files_and_symbols():
-    chk = diff_check(files=["a.py"], symbols=["def foo"])
-    assert chk({"files": ["a.py", "b.py"], "diff": "def foo(): ..."}).ok
-    miss = chk({"files": ["b.py"], "diff": "def bar(): ..."})
-    assert not miss.ok
-    assert "missing files" in miss.reason and "missing symbols" in miss.reason
+def _tmp_repo(tmp_path):
+    """A real git repo with one commit — diff_check reads git, so tests need one."""
+    import subprocess
+
+    d = tmp_path / "repo"
+    d.mkdir()
+    for cmd in (["init", "-q", "."], ["config", "user.email", "t@t"],
+                ["config", "user.name", "t"]):
+        subprocess.run(["git", *cmd], cwd=d, check=True, capture_output=True)
+    (d / "seed.txt").write_text("x\n")
+    subprocess.run(["git", "add", "-A"], cwd=d, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "init"], cwd=d, check=True, capture_output=True)
+    return d
+
+
+def test_diff_check_reads_the_repo_not_the_agents_claims(tmp_path):
+    """RED3-02 / RED3-08 (P0). INVERTED — this test used to assert the defect.
+
+    It previously passed an artifacts dict and took the verdict from it:
+
+        assert chk({"files": ["a.py"], "diff": "def foo(): ..."}).ok
+
+    That is the finding written as a requirement. `artifacts` is reported BY the
+    executor being graded, so the test asserted that an agent *claiming* to have
+    done the work was sufficient proof it had. Any real fix would have surfaced
+    here as the regression.
+    """
+    repo = _tmp_repo(tmp_path)
+    chk = diff_check(files=["a.py"], symbols=["def foo"], cwd=str(repo))
+
+    # The exact payload the old test accepted: a perfect claim over an untouched
+    # repository. It must now fail.
+    gamed = chk({"files": ["a.py", "b.py"], "diff": "def foo(): ..."})
+    assert not gamed.ok
+    assert "missing files" in gamed.reason
+
+    # Real work passes — including a NEW file, which `git diff HEAD` alone
+    # cannot see (verified: it prints nothing and exits 0 for an untracked path).
+    (repo / "a.py").write_text("def foo():\n    return 1\n")
+    assert chk({}).ok
+
+    # Right file, wrong content still fails.
+    (repo / "a.py").write_text("def bar():\n    return 1\n")
+    miss = chk({})
+    assert not miss.ok and "missing symbols" in miss.reason
+
+
+def test_diff_check_is_scoped_to_the_declared_files(tmp_path):
+    """An unrelated dirty file must not satisfy the assertion.
+
+    Unscoped, `git diff` over the whole tree lets any other edit in the repo
+    supply the symbol, and the milestone passes on somebody else's work.
+    """
+    repo = _tmp_repo(tmp_path)
+    (repo / "unrelated.py").write_text("def foo(): pass\n")
+    r = diff_check(files=["a.py"], symbols=["def foo"], cwd=str(repo))({})
+    assert not r.ok
+
+
+def test_diff_check_fails_when_it_cannot_see_the_repository(tmp_path):
+    """Unknown is not success.
+
+    A verification step that cannot read the repo has verified nothing. RED3-08
+    left it in that state permanently: no cwd was ever wired, so the diff was
+    always empty and the symbol assertion was vacuous.
+    """
+    not_a_repo = tmp_path / "plain"
+    not_a_repo.mkdir()
+    # No declared files => nothing to read off disk either => genuinely unknown.
+    r = diff_check(symbols=["def foo"], cwd=str(not_a_repo))({})
+    assert not r.ok
+    assert "verification did not run" in r.reason
+
+    # With declared files, the filesystem is still a witness — and a bare claim
+    # is still not one.
+    scoped = diff_check(files=["a.py"], symbols=["def foo"], cwd=str(not_a_repo))
+    assert not scoped({"files": ["a.py"], "diff": "def foo(): ..."}).ok
 
 
 def test_cmd_check_pass_fail_notfound_timeout():

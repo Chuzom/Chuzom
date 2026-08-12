@@ -111,6 +111,7 @@ class MGEEEngine:
         replan_fn: ReplanFn | None = None,
         gate: Gate | None = None,
         event_sink: Callable[[Event], None] | None = None,
+        workdir: str | None = None,
     ) -> None:
         if not agents_by_tier:
             raise ValueError("at least one tier agent is required")
@@ -121,6 +122,9 @@ class MGEEEngine:
         self.replan_fn = replan_fn
         self.gate = gate or (lambda _m, _r: True)
         self.event_sink = event_sink
+        # RED3-08: the directory the agents actually work in, threaded to the
+        # acceptance check so a repository-reading check looks at the right tree.
+        self.workdir = workdir
         self.events: list[Event] = []
 
     def _emit(self, kind: str, m: str = "", tier: int = -1, reason: str = "") -> None:
@@ -138,8 +142,30 @@ class MGEEEngine:
         return sum(1 for a in m.attempts if a.tier == tier)
 
     def _verify(self, m: Milestone, artifacts: dict[str, Any]) -> AcceptanceResult:
+        # RED3-03 (P0): reject a do-nothing oracle before trusting it. A
+        # `return True` stub submitted as the acceptance check for a
+        # security-hole task was ACCEPTED and the milestone recorded DONE — at
+        # which point "done" means "the executor said so", the one property this
+        # whole design exists to rule out.
+        #
+        # Enforced here, at the single point every milestone is verified, rather
+        # than in the check factories: a stub does not come from acceptance.py's
+        # factories, it comes from an executor asked to supply its own check.
+        # Guarding anywhere else would leave the path that actually produces
+        # stubs unguarded.
+        from chuzom.agentic.acceptance import reject_stubs
+
+        # RED3-08 (P0): the working directory reaches the check. Without it a
+        # repository-reading check resolves `cwd=None` to the PROCESS's cwd —
+        # which, when chuzom is run from its own checkout, is a different git
+        # repo entirely. It would then verify the milestone against Chuzom's
+        # source tree instead of the agent's, and confidently report the wrong
+        # answer in whichever direction that tree happened to point.
+        if "cwd" not in artifacts and self.workdir is not None:
+            artifacts = {**artifacts, "cwd": self.workdir}
+
         try:
-            return m.acceptance(artifacts)
+            return reject_stubs(m.acceptance)(artifacts)
         except Exception as exc:  # noqa: BLE001 — a broken check must never hang the flow
             return AcceptanceResult(False, f"acceptance check errored: {exc}", deterministic=True)
 

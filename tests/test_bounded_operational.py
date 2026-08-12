@@ -88,7 +88,16 @@ async def test_scenario4_bounded_edit_writes_verifies_records(tmp_path, monkeypa
     monkeypatch.setattr(tool, "adapters_factory",
                         lambda: {0: _WritingAgent(0, str(readme))})
 
-    out = json.loads(await tool.llm_delegate("Add a blank line to README.md", bounded=True))
+    # RED3-08: the acceptance check reads the repository now, so this test has
+    # to say WHERE the work happens. It did not need to before — verification
+    # was vacuous, so a milestone declaring `files: ["README.md"]` passed
+    # without anyone establishing which README.md was meant. Being forced to
+    # name the directory is the fix working, not a burden it imposed.
+    out = json.loads(
+        await tool.llm_delegate(
+            "Add a blank line to README.md", bounded=True, workdir=str(tmp_path)
+        )
+    )
 
     assert out["outcome"] == "complete" and out["ok"] is True
     assert out["route_kind"] == "bounded_operational"

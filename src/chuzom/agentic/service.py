@@ -43,8 +43,13 @@ def run_delegation(
     max_attempts_per_tier: int = 2,
     event_sink: Callable[[Event], None] | None = None,
     session_context: str = "",
+    workdir: str | None = None,
 ) -> dict[str, Any]:
-    """Run one delegation and return a JSON-serializable result dict."""
+    """Run one delegation and return a JSON-serializable result dict.
+
+    RED3-08: ``workdir`` is forwarded so the acceptance check inspects the tree
+    the agents worked in, not whatever directory the process happens to be in.
+    """
     result = delegate(
         goal,
         milestones,
@@ -54,5 +59,6 @@ def run_delegation(
         max_attempts_per_tier=max_attempts_per_tier,
         event_sink=event_sink,
         session_context=session_context,
+        workdir=workdir,
     )
     return serialize(result)
