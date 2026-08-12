@@ -33,9 +33,18 @@ def _write_md(base: Path, rel: str, content: str) -> Path:
 
 
 def _concept(base: Path, name: str, type_: str, title: str, tags: list[str], body: str) -> Path:
+    """Write a concept where retrieval will actually look for it.
+
+    CHZ-OKF-01: injection reads the per-project store plus the shared model
+    catalog, not the bare root of the knowledge dir. Fixtures dropped at the root
+    are on disk but unreachable, which would make these tests assert nothing.
+    """
     fm = {"type": type_, "title": title, "tags": tags, "description": f"Desc of {title}"}
     text = f"---\n{yaml.dump(fm).strip()}\n---\n\n{body}\n"
-    return _write_md(base, f"{name}.md", text)
+    rel = okf.project_knowledge_dir(base=base) / "source" / f"{name}.md"
+    rel.parent.mkdir(parents=True, exist_ok=True)
+    rel.write_text(text, encoding="utf-8")
+    return rel
 
 
 def _reset_cache() -> None:
@@ -439,7 +448,8 @@ class TestEnrichFromResponse:
             "gemini-2.5-flash",
             base=tmp_path,
         )
-        source_dir = tmp_path / "source"
+        # CHZ-OKF-01: docs are written under the per-project directory now.
+        source_dir = okf.project_knowledge_dir(base=tmp_path) / "source"
         assert source_dir.exists()
         md_files = list(source_dir.rglob("*.md"))
         assert len(md_files) == 1
@@ -451,7 +461,7 @@ class TestEnrichFromResponse:
             "gemini-2.5-flash",
             base=tmp_path,
         )
-        md = next((tmp_path / "source").rglob("*.md"))
+        md = next((okf.project_knowledge_dir(base=tmp_path) / "source").rglob("*.md"))
         c = _parse_okf(md.read_text(), md)
         assert c is not None
         assert c.type == "SourceFile"
@@ -463,7 +473,7 @@ class TestEnrichFromResponse:
             "gpt-5.5",
             base=tmp_path,
         )
-        md = next((tmp_path / "source").rglob("*.md"))
+        md = next((okf.project_knowledge_dir(base=tmp_path) / "source").rglob("*.md"))
         c = _parse_okf(md.read_text(), md)
         assert c is not None
         assert "route_and_call" in (c.extra.get("key_symbols") or [])
@@ -478,7 +488,7 @@ class TestEnrichFromResponse:
             "gemini-2.5-flash",
             base=tmp_path,
         )
-        md = next((tmp_path / "source").rglob("*.md"))
+        md = next((okf.project_knowledge_dir(base=tmp_path) / "source").rglob("*.md"))
         c = _parse_okf(md.read_text(), md)
         assert c is not None
         assert c.extra.get("last_model") == "gemini-2.5-flash"
@@ -490,7 +500,7 @@ class TestEnrichFromResponse:
             "gemini-2.5-flash",
             base=tmp_path,
         )
-        assert not (tmp_path / "source").exists()
+        assert not (okf.project_knowledge_dir(base=tmp_path) / "source").exists()
 
     async def test_swallows_exceptions(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         def _explode(*a, **kw):
@@ -508,14 +518,14 @@ class TestEnrichFromResponse:
             "gemini-2.5-flash",
             base=tmp_path,
         )
-        md_files = list((tmp_path / "source").rglob("*.md")) if (tmp_path / "source").exists() else []
+        md_files = list((okf.project_knowledge_dir(base=tmp_path) / "source").rglob("*.md")) if (okf.project_knowledge_dir(base=tmp_path) / "source").exists() else []
         assert len(md_files) >= 1
 
     async def test_limits_to_first_file_when_many_mentioned(self, tmp_path: Path) -> None:
         prompt = "Files: src/a.py src/b.py src/c.py src/d.py src/e.py src/f.py"
         await enrich_from_response(prompt, "some response", "x", base=tmp_path)
-        if (tmp_path / "source").exists():
-            md_files = list((tmp_path / "source").rglob("*.md"))
+        if (okf.project_knowledge_dir(base=tmp_path) / "source").exists():
+            md_files = list((okf.project_knowledge_dir(base=tmp_path) / "source").rglob("*.md"))
             assert len(md_files) == 1  # only first file enriched
 
 
