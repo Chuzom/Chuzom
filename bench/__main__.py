@@ -46,6 +46,13 @@ async def amain(args: argparse.Namespace) -> int:
         corpus = load_corpus("moderate")
     elif args.hard_only:
         corpus = load_corpus("hard")
+    elif args.corpus:
+        # WP-16 item 3: run ONE named corpus file, so a held-out set can be
+        # measured and reported SEPARATELY from the tuned one. The 33-prompt
+        # easy/moderate/hard set was tuned against by #220 (precision-tier
+        # routing was added specifically to fix mod-07 and mod-12), so its
+        # quality delta cannot also serve as evidence that the fix generalises.
+        corpus = load_corpus(args.corpus)
     else:
         corpus = load_full_corpus()
 
@@ -86,6 +93,12 @@ def main() -> int:
     parser.add_argument("--easy-only", action="store_true")
     parser.add_argument("--moderate-only", action="store_true")
     parser.add_argument("--hard-only", action="store_true")
+    parser.add_argument(
+        "--corpus",
+        help="run a single named corpus file, e.g. --corpus heldout "
+             "(bench/corpus/heldout.jsonl). Use for a held-out set whose "
+             "delta must be reported separately from the tuned corpus.",
+    )
     parser.add_argument("--routers", help="comma-separated router names (default: all)")
     parser.add_argument(
         "--judge-model", default="anthropic/claude-3.5-sonnet",
