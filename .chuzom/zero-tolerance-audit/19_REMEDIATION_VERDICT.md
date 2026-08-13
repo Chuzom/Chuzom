@@ -136,12 +136,55 @@ precision-tier fix generalises only partially: both objective failures were the
 **Not restored.** It is conditioned on score > 95% with zero P0. The score cannot
 exceed 95% with a hard gate failing.
 
-## What would change this verdict
+## Owner decisions, 2026-08-13
 
-Raise real coverage of the money/routing/verification invariants until a
-sample chosen *independently of the fixes* clears 0.80. Starting points, all
-measured here: `_host_opus_rates`' rate ordering, the registration guard's
-ability to answer "no", and the budget pressure cap.
+**G-F's record: the baseline-era sample supersedes the frozen ten.** G-F is
+recorded **0.12, FAIL**. The frozen ten are retired as a gate input and kept only
+as the historical note above, explaining why 1.00 was uninformative.
 
-**A pre-registered sample authored before the next remediation begins** would
-also restore G-F's design intent, which no sample authored afterwards can.
+The cost of that choice is stated rather than glossed: it discards a
+**pre-registered** sample in favour of a **post-hoc** one. The reason it is still
+the right record is that the pre-registered sample's baseline term was never
+computable — seven of its ten mutations do not exist at `c2c2882` — so it could
+not produce a G-F verdict at all, while the replacement can.
+
+**Two consecutive clean passes: not run, confirmed.** They cannot change a verdict
+blocked by a disqualifier.
+
+## The three measured gaps are now closed
+
+`tests/test_uncovered_invariants.py` kills all three survivors. Each was verified
+by injecting its mutation and confirming the tests go red:
+
+| survivor | injected | result |
+|---|---|---|
+| **B1** rates swapped | `_host_opus_rates` transposed | **KILLED** (2 tests) |
+| **B4** guard always `True` | `is_registered` → `return True` | **KILLED** (4 tests) |
+| **B9** cap cut tenfold | `0.5` → `0.05` | **KILLED** (1 test) |
+
+Two details worth an auditor's attention:
+
+- **B1 is covered twice, deliberately.** One test compares the pair against the
+  canonical constants; the other asserts `output > input` — a fact about how
+  every frontier provider prices tokens. If the pair is ever transposed *at the
+  source*, the first test compares two equally-swapped values and passes. The
+  second does not. Resolving against an external fact rather than against the
+  code's own constants is the same discipline the env registry needed.
+- **B4's tier sweep excludes `off` on purpose.** `_TIERS["off"] is None` means
+  every tool is registered, so `True` there is correct rather than blind.
+  Asserting over it would have made the test pass for the wrong reason in one of
+  four cases.
+
+### What closing them does NOT prove
+
+**Re-scoring the baseline-era sample now would not be evidence of improved
+coverage.** It would measure against exactly what was just fixed — the error this
+verdict exists to record, repeated one level down. The score would rise to 0.50
+by construction and mean nothing.
+
+Three named holes are closed. Whether coverage is *better* can only be answered
+by a sample drawn independently of `tests/test_uncovered_invariants.py`, and
+G-F's design intent can only be restored by **pre-registering that sample before
+the next remediation begins**.
+
+**The verdict therefore stands: NOT QUALIFIED.**
