@@ -1,0 +1,29 @@
+{
+  "protocol": ".chuzom/zero-tolerance-audit/20_GF_QUALIFICATION_PROTOCOL.md",
+  "baseline_sha": "72620b3747b7b4771a62c7d3550c79ec34fb2add",
+  "git_dirty": true,
+  "universe_sha256": "de7d12742d7b9ed60954e6036f915956249f8915fdb0a954c613baa306d36041",
+  "universe_size": 2436,
+  "seed_material": "sha256('chuzom-gf-v1' + baseline_sha + universe_sha256)",
+  "seed_sha256": "d2d93e70f0d7706a1aa4dcac7a60b7e582e1728e61711b050b7253935cf1af75",
+  "strata": 98,
+  "counts": {
+    "train": 1518,
+    "validation": 468,
+    "holdout": 450
+  },
+  "holdout_sha256": "40fc35a018c3fcaef464af58cd647bdb0abd398d85589989a113dcba06ee1398",
+  "holdout_list_location": "UNVERSIONED (.chuzom/gf/holdout.txt)",
+  "python": "3.11.15",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "modules": [
+    "cost",
+    "savings",
+    "execution_ledger",
+    "router",
+    "tool_surface",
+    "classify",
+    "budget",
+    "coverage"
+  ]
+}

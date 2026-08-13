@@ -42,6 +42,50 @@ _GATE13_ONLY_MUTATE = {
 }
 
 
+#: G-F's scope, as `config/mutmut_gf.cfg` declares it. Same independent-declaration
+#: reasoning as above: derived from neither file at runtime.
+_GF_ONLY_MUTATE = {
+    "src/chuzom/cost.py",
+    "src/chuzom/savings.py",
+    "src/chuzom/execution_ledger.py",
+    "src/chuzom/router.py",
+    "src/chuzom/tool_surface.py",
+    "src/chuzom/classify.py",
+    "src/chuzom/budget.py",
+    "src/chuzom/coverage.py",
+}
+
+
+def _is_mutmut_working_copy() -> bool:
+    """True when this file is executing inside the tree mutmut builds for a run.
+
+    mutmut copies the repo to ``<repo>/mutants`` and runs the suite from there. It
+    takes that copy WHILE gf_mutmut.py has the G-F config swapped into setup.cfg, so
+    the copy's setup.cfg legitimately holds G-F's scope rather than Gate 13's.
+
+    WHY THIS IS NOT A SKIP
+    ----------------------
+    Skipping here would leave the assertions blind in exactly the tree where a wrong
+    scope does the most damage. Instead each test asserts the scope that is CORRECT
+    for the tree it is in, so neither context has a hole.
+
+    WHY IT MATTERS ENOUGH TO DETECT AT ALL
+    --------------------------------------
+    mutmut marks a mutant KILLED whenever the suite fails. A test that fails for an
+    ENVIRONMENTAL reason fails on every mutant run it covers and marks them all
+    killed regardless of the mutation — inflating the score in the direction that
+    flatters the result. These three assertions failed inside the working copy by
+    construction, so the guard written to protect Gate 13's measurement would have
+    corrupted G-F's.
+
+    Detection is by location, not by content: mutmut's copy is always the `mutants`
+    directory of a git repository. `test_detector_is_false_in_the_real_repository`
+    pins the other direction, so this can never quietly become always-true and turn
+    the guard above into a no-op.
+    """
+    return _ROOT.name == "mutants" and (_ROOT.parent / ".git").exists()
+
+
 def _only_mutate() -> set[str]:
     cfg = configparser.ConfigParser()
     cfg.read(_SETUP_CFG)
@@ -49,9 +93,34 @@ def _only_mutate() -> set[str]:
     return {line.strip() for line in raw.splitlines() if line.strip()}
 
 
+def test_detector_is_false_in_the_real_repository():
+    """Locks the other direction of `_is_mutmut_working_copy`.
+
+    If that predicate ever became always-true, every assertion below would silently
+    switch to checking G-F's scope and the stranded-swap guard would be a no-op that
+    still reported green. CI runs this in the real repository, where it must be False.
+    """
+    if _ROOT.name == "mutants":  # pragma: no cover — only inside mutmut's copy
+        return
+    assert not _is_mutmut_working_copy(), (
+        f"detector claims {_ROOT} is mutmut's working copy; the Gate-13 assertions "
+        "would stop checking Gate 13's scope while still passing"
+    )
+
+
 def test_setup_cfg_still_holds_gate_13_scope():
     """The load-bearing assertion: a stranded G-F swap fails here."""
     actual = _only_mutate()
+
+    if _is_mutmut_working_copy():
+        # Inside mutmut's copy the G-F scope is CORRECT — the copy was taken with the
+        # swap active. Asserting it (rather than skipping) keeps this tree covered.
+        assert actual == _GF_ONLY_MUTATE, (
+            "inside mutmut's working copy setup.cfg should hold G-F's eight modules "
+            f"(the swap was active when the copy was taken), got: {sorted(actual)}"
+        )
+        return
+
     assert actual == _GATE13_ONLY_MUTATE, (
         "setup.cfg's [mutmut] scope is not Gate 13's.\n"
         f"  missing: {sorted(_GATE13_ONLY_MUTATE - actual)}\n"
@@ -68,6 +137,17 @@ def test_gate_13_keeps_its_explicit_test_selection():
     cfg = configparser.ConfigParser()
     cfg.read(_SETUP_CFG)
     sel = cfg.get("mutmut", "pytest_add_cli_args_test_selection", fallback="")
+
+    if _is_mutmut_working_copy():
+        # G-F's config deliberately omits test selection: naming the tests that
+        # "should" own a behaviour is how B8 was misread as absent coverage. Assert
+        # the absence, so this tree is checked rather than waved through.
+        assert sel == "", (
+            "inside mutmut's working copy the G-F config should carry NO test "
+            f"selection, got: {sel!r}"
+        )
+        return
+
     assert "tests/test_gates_mutation_coverage.py" in sel, (
         "Gate 13's explicit test selection is gone from setup.cfg"
     )
