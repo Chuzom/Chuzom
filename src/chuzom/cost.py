@@ -21,12 +21,56 @@ import aiosqlite
 
 from chuzom import pricing as _pricing
 from chuzom.provenance import Measured
-from chuzom.config import get_config
+from chuzom.config import get_config, state_path
 from chuzom.types import (
     LLMResponse, MODEL_COST_PER_1K, MODEL_SPEED_TPS,
     RoutingProfile, TaskType, colorize_model,
 )
 from chuzom.savings import net_saved
+
+
+def _refuse_unisolated_test_write(db_path: Path) -> bool:
+    """True when a test is about to write into the user's real database.
+
+    WHY THIS EXISTS
+    ---------------
+    A "stub-detection guard" used to be the only protection, matching an exact
+    fingerprint of token/cost values. Every fixture added after it was written walked
+    straight through. Measured against the rows that actually reached production it
+    would have blocked **0 of 28,536** — while its own comment asserted that unisolated
+    tests "can never pollute the real ~/.chuzom/usage.db".
+
+    The damage was not hypothetical. Those 28,536 synthetic rows were 69.4% of
+    `routing_decisions`, all naming `openai/gpt-4o-mini`, and the dashboard reported
+    them as routing behaviour. They are exactly the rows with
+    `classifier_type='unknown'` — the classifier never ran for one of them. Excluding
+    them, the router's real preference is `hermes3:8b` (local) at 38.6%, `gpt-4o` at
+    35.6%, and gpt-4o-mini at 0.0%. The product's primary surface understated local
+    routing threefold and invented a majority share for a model it never chose.
+
+    WHAT CHANGED
+    ------------
+    "Does this row look synthetic?" is a guess that ages badly — it enumerates the
+    values its author happened to know. "Is a test writing to the production database?"
+    is directly observable and cannot drift as fixtures change.
+
+    This takes only a path, deliberately: a guard that inspects row values is the
+    fingerprint defect returning under a new name, and `tests/test_prod_db_isolation.py`
+    asserts the signature to keep it that way.
+
+    The suite's own writes are unaffected — the `temp_db` fixture repoints
+    `CHUZOM_DB_PATH`, so `db_path` is a tmp file and this returns False. Only a test
+    aimed at the real database is refused, and `CHUZOM_ALLOW_STUBS=1` opts out
+    deliberately for tests that mean it.
+    """
+    if os.environ.get("CHUZOM_ALLOW_STUBS") == "1":
+        return False
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return False  # not a test — this is a real user's routing decision
+    try:
+        return Path(db_path).resolve() == state_path("usage.db").resolve()
+    except OSError:  # pragma: no cover — an unresolvable path is not the production one
+        return False
 
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS usage (
@@ -691,12 +735,20 @@ async def log_usage(
             trace for the same routing call (first 8 chars of UUID4).
         complexity: Task complexity level (simple, moderate, complex).
     """
-    # Stub-detection guard: reject the exact synthetic shapes used in test
+    # PRIMARY GUARD: a test must not write to the production database. See
+    # `_refuse_unisolated_test_write` for why the fingerprint below was not enough.
+    if _refuse_unisolated_test_write(get_config().chuzom_db_path):
+        return
+
+    # Secondary, retained: rejects the exact synthetic shapes used in some test
     # LLMResponse fixtures (input_tokens=100, output_tokens∈{50,100},
-    # cost_usd∈{0.001,0.003}) so unisolated tests can never pollute the real
-    # ~/.chuzom/usage.db. Tests that legitimately need to write stub rows
-    # must set CHUZOM_ALLOW_STUBS=1 or use the temp_db fixture (which
-    # repoints CHUZOM_DB_PATH and is unaffected by this guard).
+    # cost_usd∈{0.001,0.003}).
+    #
+    # This was ONCE THE ONLY GUARD, and its comment claimed unisolated tests "can
+    # never pollute the real ~/.chuzom/usage.db". Measured against the rows that
+    # reached production, it would have blocked 0 of 28,536 (0.0%): the fixtures in
+    # use are in=62/out=164, in=74/out=1, in=97/out=126 — none match. It is kept only
+    # because it costs nothing; it is not load-bearing and must not be treated as such.
     if (
         os.environ.get("CHUZOM_ALLOW_STUBS") != "1"
         and response.input_tokens == 100
@@ -1260,7 +1312,15 @@ async def log_routing_decision(
     """
     # Validate inputs before database insert
     _validate_routing_insert(final_model, final_provider, cost_usd)
-    
+
+    # THIS is the path that put 28,536 synthetic rows into a user's real database and
+    # made the dashboard report a 69% gpt-4o-mini share the router never chose.
+    # `_validate_routing_insert` above rejects obviously-fake models ("test/..."), but
+    # these rows named a real model with realistic tokens and costs, so nothing stopped
+    # them. Isolation, not plausibility, is the property that matters here.
+    if _refuse_unisolated_test_write(get_config().chuzom_db_path):
+        return
+
     db = await _get_db()
     try:
         # Track complexity mismatch: if requested_complexity differs from final complexity,
@@ -1389,16 +1449,55 @@ async def get_quality_report(days: int = 7) -> dict:
         )
         by_task_type = {r[0]: r[1] for r in await cursor.fetchall()}
 
-        # By model
+        # By model — ATTRIBUTED ONLY, i.e. decisions this router actually made.
+        #
+        # A row with classifier_type='unknown' is one where the classifier never ran, so
+        # it says nothing about routing behaviour. Mixing the two made the dashboard
+        # report the opposite of the truth: 28,536 such rows (69.4% of the table, every
+        # one of them classifier_type='unknown') all named openai/gpt-4o-mini and were
+        # written by an unisolated TEST SUITE into the user's real ~/.chuzom/usage.db.
+        # The report showed a 69% gpt-4o-mini share for a model the router never chose,
+        # while the actual top destination — ollama/hermes3:8b, local, 38.6% — appeared
+        # as 11.7%. Understating local routing threefold is the exact class of dishonesty
+        # this codebase's audit exists to remove, sitting in its most-read surface.
+        #
+        # The unattributed rows are REPORTED, not dropped. Hiding them would restore a
+        # tidy number and lose the signal that something is writing rows nobody can
+        # account for — which is how this went unnoticed in the first place.
+        attributed = f"{where} AND classifier_type != 'unknown'"
         cursor = await db.execute(
             f"""SELECT final_model, COUNT(*), AVG(latency_ms), COALESCE(SUM(cost_usd), 0)
-                FROM routing_decisions {where}
+                FROM routing_decisions {attributed}
                 GROUP BY final_model ORDER BY COUNT(*) DESC"""
         )
         by_model = {
             r[0]: {"count": r[1], "avg_latency": float(r[2]), "total_cost": float(r[3])}
             for r in await cursor.fetchall()
         }
+
+        cursor = await db.execute(
+            f"""SELECT final_model, COUNT(*) FROM routing_decisions
+                {where} AND classifier_type = 'unknown'
+                GROUP BY final_model ORDER BY COUNT(*) DESC"""
+        )
+        unattributed_by_model = {r[0]: r[1] for r in await cursor.fetchall()}
+        unattributed_total = sum(unattributed_by_model.values())
+
+        # Unattributed rows carry COST, so they do not merely mis-decorate a table.
+        # `total_cost_usd` feeds RouteredTeam._apply_budget_pressure in
+        # integrations/agno.py, which downshifts every model to the budget profile once
+        # spend crosses a threshold. Measured on this database: $3.62 of the last 30
+        # days' $39.79 (9.1%) is unattributed, so a real deployment could be downshifted
+        # early by spend that never happened.
+        #
+        # `total_cost_usd` is left as-is because changing what agno reads changes runtime
+        # behaviour, which is a separate decision from reporting. This exposes the honest
+        # figure alongside it so that decision can be made on numbers rather than guesses.
+        cursor = await db.execute(
+            f"""SELECT COALESCE(SUM(cost_usd), 0) FROM routing_decisions
+                {where} AND classifier_type != 'unknown'"""
+        )
+        attributed_cost = (await cursor.fetchone())[0]
 
         return {
             "total_decisions": int(total),
@@ -1410,7 +1509,14 @@ async def get_quality_report(days: int = 7) -> dict:
             "total_cost_usd": float(total_cost),
             "total_tokens": int(total_tok),
             "success_rate": float(success_rate or 0),
+            # Decisions the classifier actually made. NOT the same as total_decisions.
             "by_model": by_model,
+            "attributed_decisions": int(total) - unattributed_total,
+            "attributed_cost_usd": float(attributed_cost),
+            # Rows where the classifier never ran. Surfaced deliberately — see above.
+            "unattributed_decisions": unattributed_total,
+            "unattributed_by_model": unattributed_by_model,
+            "unattributed_reason": "classifier did not run (classifier_type='unknown')",
         }
     finally:
         await db.close()

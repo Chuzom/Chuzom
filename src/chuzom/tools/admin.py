@@ -374,17 +374,36 @@ async def llm_quality_report(days: int = 7) -> str:
             lines.append(row(f"  {task:<16} {count:>5}  ({pct:>5.0%})"))
         lines.append(HR)
 
-    # By model
+    # By model — attributed decisions only. Percentages are of ATTRIBUTED, not of
+    # total_decisions: dividing routing shares by a total that includes rows the
+    # classifier never touched is what produced a 69% share for a model the router
+    # never chose.
+    attributed = report.get("attributed_decisions", report["total_decisions"])
     if report["by_model"]:
-        lines.append(section("BY MODEL"))
-        lines.append(row(f"  {'Model':<24} {'Calls':>5}  {'Avg ms':>7}  {'Cost':>8}"))
+        lines.append(section("BY MODEL (routed)"))
+        lines.append(row(f"  {'Model':<20} {'Calls':>5} {'Share':>6}  {'Avg ms':>7} {'Cost':>8}"))
         lines.append(row("  " + "-" * 50))
         for model, stats in report["by_model"].items():
             short = model.split("/")[-1] if "/" in model else model
+            pct = stats["count"] / attributed if attributed else 0
             lines.append(row(
-                f"  {short:<24} {stats['count']:>5}  "
-                f"{stats['avg_latency']:>6.0f}ms  ${stats['total_cost']:>7.4f}"
+                f"  {short:<20} {stats['count']:>5} {pct:>5.0%}  "
+                f"{stats['avg_latency']:>6.0f}ms ${stats['total_cost']:>7.4f}"
             ))
+        lines.append(HR)
+
+    # Unattributed — shown, never hidden. These rows say nothing about routing, but
+    # their EXISTENCE says something: writes nobody can account for. Folding them into
+    # the table above made this dashboard report the opposite of the truth for months.
+    if report.get("unattributed_decisions"):
+        n = report["unattributed_decisions"]
+        lines.append(section("UNATTRIBUTED"))
+        lines.append(row(f"  {n} of {report['total_decisions']} decisions excluded above"))
+        lines.append(row(f"  reason: {report.get('unattributed_reason', 'unknown')}"))
+        lines.append(row("  these are NOT routing choices — the classifier never ran"))
+        for model, count in list(report.get("unattributed_by_model", {}).items())[:5]:
+            short = model.split("/")[-1] if "/" in model else model
+            lines.append(row(f"    {short:<24} {count:>6}"))
         lines.append(HR)
 
     return "\n".join(lines)
