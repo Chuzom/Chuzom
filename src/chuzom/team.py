@@ -104,6 +104,17 @@ def _savings_label(report: dict[str, Any]) -> str:
     subscription real dollars ≈ $0, so broadcasting baseline-avoided as cash (the prior
     behavior) overstated savings to external recipients (audit P0-2).
     """
+    # #24 / RED2-02: an unreadable ledger returns zeros. Rendering them as
+    # "$0.0000 vs baseline" tells a Slack channel the same thing a genuinely
+    # quiet week does. chuzom.provenance.Measured already encodes this rule --
+    # its render() never prints a number for unknown -- so use it rather than
+    # inventing a second convention.
+    if report.get("provenance") == "unknown":
+        from chuzom.provenance import Measured
+
+        detail = report.get("provenance_detail") or "ledger unreadable"
+        return Measured.unknown(detail).render()
+
     baseline = report.get("baseline_equivalent_avoided_usd",
                           report.get("saved_usd", 0.0))
     real = report.get("real_dollars_avoided_usd", 0.0)
@@ -190,8 +201,8 @@ def _telegram_message(report: dict[str, Any], chat_id: str) -> dict:
     project = _esc(report.get("project_id", "unknown"))
     period = _esc(report.get("period", "all-time"))
     calls = report.get("total_calls", 0)
-    baseline = report.get("baseline_equivalent_avoided_usd", report.get("saved_usd", 0.0))
-    real = report.get("real_dollars_avoided_usd", 0.0)
+    # baseline/real are no longer read here: #24 routed this through
+    # _savings_label so all four channels share one renderer.
     actual = report.get("actual_usd", 0.0)
     free_pct = report.get("free_pct", 0.0)
     top_models = report.get("top_models", [])
@@ -207,8 +218,11 @@ def _telegram_message(report: dict[str, Any], chat_id: str) -> dict:
         f"📁 *Project:* {project}\n"
         f"📅 *Period:* {period}\n\n"
         f"📊 *Calls:* {calls:,}\n"
-        f"💰 *Avoided:* \\${baseline:.4f} vs baseline"
-        + (f" \\(\\${real:.4f} real\\)" if real > 0 else " \\(≈\\$0 cash on subscription\\)")
+        # #24: routed through _savings_label like Slack and Discord, rather than
+        # formatting baseline/real again here. Two renderers meant a fix applied
+        # to one and not the other -- the same "fixed some surfaces, assumed
+        # global" shape as AUD-06 itself. One renderer, escaped for MarkdownV2.
+        f"💰 *Avoided:* {_esc(_savings_label(report))}"
         + f"  ·  paid \\${actual:.4f}\n"
         f"🆓 *Free tier:* {free_pct:.0%}  {_esc(_bar(free_pct))}\n\n"
         f"🏆 *Top models:*\n{model_lines}\n\n"
@@ -302,4 +316,10 @@ async def build_team_report(
         "actual_usd": data.get("actual_usd", 0.0),
         "free_pct": data.get("free_pct", 0.0),
         "top_models": data.get("top_models", []),
+        # #24: this function copies fields EXPLICITLY, so an honest cost.py is
+        # silently undone here unless provenance is forwarded too. Defaulting to
+        # "measured" would launder an unmarked source into a confident report;
+        # "unknown" is the safe default for a field that was never set.
+        "provenance": data.get("provenance", "unknown"),
+        "provenance_detail": data.get("provenance_detail", ""),
     }

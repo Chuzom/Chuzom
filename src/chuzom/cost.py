@@ -3101,8 +3101,14 @@ async def get_team_savings(
 
     _free = {"ollama", "codex", "gemini_cli", "subscription"}
 
-    db = await _get_db()
+    # #24: _get_db() was OUTSIDE this try, so the MOST LIKELY failure -- the
+    # ledger missing, locked, or permission-denied at OPEN time -- propagated
+    # instead of returning a provenance-marked result. The except path below
+    # then only covered query failures, which is the rarer case. An honest
+    # "unknown" beats an exception a caller may swallow into a silent broadcast.
+    db = None
     try:
+        db = await _get_db()
         cursor = await db.execute(
             f"""
             SELECT model, provider,
@@ -3122,9 +3128,17 @@ async def get_team_savings(
         # working install that looks idle.
         from chuzom import failopen
         failopen.record("CHZ-FO-COST-ROUTING-SUMMARY", exc)
-        return {"total_calls": 0, "saved_usd": 0.0, "actual_usd": 0.0, "free_pct": 0.0, "top_models": []}
+        # RED2-02 / #24: the zeros are unavoidable (callers index these keys),
+        # but they must not READ as data. provenance="unknown" is what lets
+        # team.py print "unknown" instead of "$0.0000" to a Slack channel.
+        # failopen.record above counts this internally; a counter the caller
+        # cannot see does not stop a false broadcast.
+        return {"total_calls": 0, "saved_usd": 0.0, "actual_usd": 0.0, "free_pct": 0.0,
+                "top_models": [], "provenance": "unknown",
+                "provenance_detail": "usage ledger unreadable"}
     finally:
-        await db.close()
+        if db is not None:
+            await db.close()
 
     total_calls = sum(r[2] for r in rows)
     actual_usd = sum(r[3] for r in rows)
@@ -3156,6 +3170,10 @@ async def get_team_savings(
         "actual_usd": actual_usd,
         "free_pct": free_pct,
         "top_models": top_models,
+        # The tag must DISTINGUISH: if it only appeared on the error path it
+        # would carry no information, since a caller cannot tell "absent
+        # because measured" from "absent because nobody set it".
+        "provenance": "measured",
     }
 
 
