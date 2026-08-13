@@ -154,7 +154,22 @@ jobs:
         # at its layer; all five injections turn this red. See
         # evidence/wp16_gate7_loss.md.
         run: uv run pytest -q tests/soak/test_gate7_loss_representable.py
-      - name: "G4: test-hygiene ratchet (no new can't-fail tests)"
+      - name: "G4: test-hygiene ratchet (no new SWALLOWED-EXCEPTION tests)"
+        # Renamed from "(no new can't-fail tests)". The script is honest about
+        # itself -- it counts except-handlers whose body is pass/.../continue --
+        # but the step NAME generalised that to the whole class, and a reader
+        # concluding "can't-fail tests are covered" would be wrong.
+        #
+        # A swallowed exception is ONE way a test cannot fail. Others this gate
+        # structurally cannot see, all found in this remediation:
+        #   * a tautological assertion (`assert quota >= 0` on a sum of counts,
+        #     inside Gate 7 itself),
+        #   * an assertion on logic RE-IMPLEMENTED in the test body rather than
+        #     imported (my own first draft of the Gate 7 loss tests),
+        #   * a scan that silently returns nothing, making every later assertion
+        #     vacuous.
+        # Naming the gate for what it measures is cheaper than the alternative,
+        # which is a release note that overstates what was checked.
         run: bash scripts/quality_gate_test_hygiene.sh
       - name: "G5: audit regression suite (the six fixed criticals + follow-ons)"
         run: >

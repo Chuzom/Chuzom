@@ -46,10 +46,19 @@ def _env_reads_in_source() -> dict[str, set[str]]:
     for path in sorted(_SRC.rglob("*.py")):
         if path.name == "env_registry.py":
             continue
-        try:
-            tree = ast.parse(path.read_text())
-        except SyntaxError:
-            continue
+        # Deliberately NOT wrapped in try/except SyntaxError: continue.
+        #
+        # Skipping a file that will not parse makes the scan silently cover less
+        # of the codebase than it claims -- the exact under-reporting this file's
+        # header warns about, and worse here than elsewhere because the scan is
+        # the INDEPENDENT ground truth the registry is checked against. A source
+        # file under src/chuzom that cannot be parsed is a real problem and
+        # should fail loudly with a traceback naming it, not vanish from the
+        # denominator.
+        #
+        # It was also a G4 violation: `except SyntaxError: continue` is a no-op
+        # handler, and this one pushed the ratchet to 35 > 34.
+        tree = ast.parse(path.read_text())
         rel = str(path.relative_to(_SRC))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
