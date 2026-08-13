@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from chuzom.plugins.redaction import (
     Redactor,
     RedactionResult,
     get_redactor,
     register_redactor,
 )
-from chuzom.redaction_routing import maybe_redact
+from chuzom.redaction_routing import RedactionUnavailable, maybe_redact
 
 
 # Test utilities
@@ -86,13 +88,18 @@ class TestMaybeRedactNoPlugin:
         assert text == prompt
         assert counts == {}
 
-    def test_redaction_on_but_no_plugin_fails_open(self):
-        """CHUZOM_REDACTION=on with no plugin returns prompt unchanged, logs warning."""
+    def test_redaction_on_but_no_plugin_fails_closed(self):
+        """CHUZOM_REDACTION=on with no plugin REFUSES rather than sending the prompt.
+
+        Was `..._fails_open`, asserting the prompt came back unchanged. Enabled but
+        unconfigured is the worst of both: the operator asked for redaction and got
+        none, with only a log line to say so. Note the prompt here is an API key —
+        the assertion it used to make was that the key goes out.
+        """
         os.environ["CHUZOM_REDACTION"] = "on"
         prompt = "secret api key sk-ant-12345"
-        text, counts = maybe_redact(prompt)
-        assert text == prompt
-        assert counts == {}
+        with pytest.raises(RedactionUnavailable):
+            maybe_redact(prompt)
 
 
 class TestMaybeRedactWithPlugin:
@@ -130,7 +137,7 @@ class TestMaybeRedactWithPlugin:
 
 
 class TestMaybeRedactFailureHandling:
-    """Test that broken redactors fail open."""
+    """Test that broken redactors fail CLOSED."""
 
     def setup_method(self):
         """Clear registry and register a failing redactor."""
@@ -144,13 +151,16 @@ class TestMaybeRedactFailureHandling:
         import chuzom.plugins.redaction as r
         r._REDACTORS.clear()
 
-    def test_failing_redactor_fails_open(self):
-        """If plugin.redact_prompt() raises, return prompt unchanged."""
+    def test_failing_redactor_fails_closed(self):
+        """If plugin.redact_prompt() raises, REFUSE — do not return the prompt.
+
+        Was `..._fails_open`. Inverted with the production change: returning the
+        prompt when the scrub failed is the leak, not the recovery.
+        """
         os.environ["CHUZOM_REDACTION"] = "on"
         prompt = "test prompt"
-        text, counts = maybe_redact(prompt)
-        assert text == prompt
-        assert counts == {}
+        with pytest.raises(RedactionUnavailable):
+            maybe_redact(prompt)
 
 
 class TestEnterpriseBootstrap:
