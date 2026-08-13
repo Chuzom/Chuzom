@@ -137,6 +137,23 @@ jobs:
         run: uv run pytest -q tests/test_g3_realization_soak.py
       - name: "G7: realized-savings soak — a defensible number exists (Phase 0)"
         run: uv run pytest -q tests/soak/realized_savings_soak.py
+
+      - name: "G7: …and a LOSS survives every layer (WP-16 item 1)"
+        # "A defensible number exists" is satisfied by a clamped zero, which is
+        # how Gate 7 certified a release carrying AUD-06 — the max(0.0, …) clamp
+        # that rendered overspend as "$0.00 saved". The gate asked whether a
+        # figure was produced, never whether an UNFAVOURABLE one could survive
+        # being produced.
+        #
+        # test_savings_sign.py (WP-04, immutable) pins the source arithmetic.
+        # This pins the rest of the chain — statistics, cross-run aggregator,
+        # the savings_claim_supported label, and the printer — because a signed
+        # subtraction feeding a clamped mean is still a lie to the operator.
+        #
+        # Each assertion was verified to FIRE by injecting an AUD-06-style clamp
+        # at its layer; all five injections turn this red. See
+        # evidence/wp16_gate7_loss.md.
+        run: uv run pytest -q tests/soak/test_gate7_loss_representable.py
       - name: "G4: test-hygiene ratchet (no new can't-fail tests)"
         run: bash scripts/quality_gate_test_hygiene.sh
       - name: "G5: audit regression suite (the six fixed criticals + follow-ons)"
