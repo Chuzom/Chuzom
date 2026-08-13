@@ -29,9 +29,21 @@ across the codebase, not those three lines.
 
 ## 1 · Instrument
 
-**Use `mutmut` 3.6.0** — already declared in `pyproject.toml:60` and installed,
-and per `scripts/mutation_sample.py`'s own docstring "never wired to anything".
-Wiring it is the missing piece.
+**Use `mutmut` 3.6.0.**
+
+> **CORRECTION (Phase 0, measured).** This section originally said mutmut "was
+> never wired to anything", quoting `scripts/mutation_sample.py`'s docstring. **That
+> claim is false, and I repeated it without checking.** `setup.cfg` carries a
+> `[mutmut]` section wiring six files with explicit per-file test selection, and
+> mutmut **runs**: it generated **1214 mutants in 2.5s** and began executing them.
+>
+> What is true is narrower: **exactly one of those six files (`execution_ledger.py`)
+> is in G-F's scope.** Seven of the eight scope modules are unmutated, and
+> `bench/savings.py` in that list is a *different file* from `src/chuzom/savings.py`.
+>
+> So Phase 0's task is to **rescope**, not to wire from nothing. Taking a docstring's
+> claim at face value is the same error this audit keeps recording; it is recorded
+> here rather than quietly edited.
 
 This replaces hand-authored samples for *scoring*. Hand-authored mutations cannot
 reach the sample sizes below, and a human choosing them is the selection bias
@@ -90,13 +102,31 @@ not the point estimate.
 That forces a true score near 0.88+ rather than a bare 0.80 — which is the
 correct direction for a floor that exists to be hard.
 
-A universe of ~750 gives 450 train / 150 validation / 150 holdout. If mutmut
-yields more, keep the proportions and cap the holdout at 250.
+**REVISED TWICE (Phase 0, both measured).**
 
-**Runtime is affordable.** Measured here: ~36s per mutation against narrow test
-subsets; mutmut runs a targeted subset per mutant. 150 holdout mutants ≈ **1.5
-hours**; the full 750 ≈ 7.5 hours, i.e. one overnight background run. This is the
-main reason n≥150 is practical at all.
+*First:* the universe is far larger than the ~750 first assumed — mutmut produced
+**1214 mutants from six files** in 2.5s, and G-F's eight modules are bigger.
+
+*Second, and it changes the design:* throughput is **14.13 mutations/second**,
+measured over a complete 1214-mutant run (737 killed / 459 survived / 18
+uncovered, ~86s). My earlier figure of ~36s/mutant came from the hand-rolled
+harness, which runs a pytest subprocess per mutation; mutmut reuses a warm
+process and runs only the covering tests.
+
+**At 14/sec, even a 10,000-mutant universe is ~12 minutes.**
+
+So **there is no sampling step.** Generate the full universe and split *all of it*
+60/20/20. This is strictly better than sampling:
+
+- no sampling bias to argue about, at any stage;
+- the holdout becomes **hundreds to low thousands**, not 150, so the 95% lower
+  bound is tight enough that the point estimate and the bound nearly coincide;
+- the whole thing is reproducible from the universe manifest alone.
+
+The n≥150 floor in the table above therefore stops being a constraint and becomes
+a *minimum* that the design clears by an order of magnitude. Keep the
+lower-bound-≥0.80 rule regardless: it costs nothing when n is large and it is the
+rule that makes a marginal result honest.
 
 ## 4 · Scoring rule — conservative, decided in advance
 

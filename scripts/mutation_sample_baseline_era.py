@@ -174,7 +174,13 @@ BASELINE_ERA_MUTATIONS: list[Mutation] = [
         "B8", "verification", "src/chuzom/budget.py",
         "return _pending_spend_by_key.get(key, 0.0)",
         "return 0.0",
-        ["tests/test_budget.py", "tests/economics/"],
+        # OWNERSHIP CORRECTED (Phase 0). This named tests/test_budget.py +
+        # tests/economics/, and B8 SURVIVED that subset -- which read as absent
+        # coverage. A dedicated full-suite run showed it is CAUGHT, by three
+        # tests in tests/test_t2_m1_budget_key.py. The coverage existed; the
+        # sample pointed at the wrong owner. Misattribution corrupts the
+        # diagnostic even when the score is unaffected.
+        ["tests/test_t2_m1_budget_key.py", "tests/test_budget.py"],
         "In-flight spend always reads as zero, so concurrent calls each believe "
         "the full budget is free. The guard still runs and still passes.",
         probe=(

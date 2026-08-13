@@ -165,3 +165,11 @@ docs-private/
 .chuzom/zero-tolerance-audit/evidence/**/*.db
 .chuzom/zero-tolerance-audit/evidence/**/*.db-shm
 .chuzom/zero-tolerance-audit/evidence/**/*.db-wal
+
+# G-F working run artefacts (scripts/gf_mutmut.py --out). Deliberately IGNORED:
+# G-C's hash manifest covers .chuzom/zero-tolerance-audit/ only, so anything
+# committed here would look like audit evidence while being unsealed. The
+# artefacts that must be tamper-evident — the universe manifest, the seed inputs
+# and the holdout hash — go under .chuzom/zero-tolerance-audit/ in Phase 1,
+# where the seal actually applies.
+.chuzom/gf/
