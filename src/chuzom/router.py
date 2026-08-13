@@ -66,6 +66,7 @@ from chuzom.receipt_store import compute_receipt, store_receipt
 from chuzom.tracing import set_span_attributes, traced_span
 from chuzom.types import BudgetExceededError, Complexity, CostBudgetExceeded, DeadlineExceeded, LLMResponse, RoutingProfile, TaskType, WallClockExceeded
 from chuzom.tool_surface import route_call, route_tool# CHZ-SURF-01
+from chuzom.savings import net_saved
 
 # Foundational routing rule: complexity always determines the profile.
 # This mapping is the single source of truth — every call through route_and_call
@@ -1923,7 +1924,7 @@ async def _finalize_successful_route(
                 mis_route=_mis,
                 actual_cost_usd=_actual,
                 baseline_cost_usd=_base,
-                saved_usd=max(0.0, _base - _actual),
+                saved_usd=net_saved(_base, _actual),
                 failed_attempt_cost_usd=failed_attempt_cost,
                 prompt_tokens=_in_tok,
                 completion_tokens=_out_tok,

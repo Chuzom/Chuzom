@@ -57,6 +57,26 @@ jobs:
         # empty.
         run: uv run python scripts/lint_fail_open.py
 
+      - name: "Savings-sign guard (CHZ-SS-01 — no clamped net in a money module)"
+        # AUD-06: "TOTAL saved is a sum of wins, not a net — losses clamped to
+        # zero before aggregation." WP-04/WP-05 fixed ONE site
+        # (hooks/session-end.py) and pinned it with a test that loads that one
+        # file. ELEVEN other surfaces kept the clamp, including
+        # cost.get_team_savings — which team.py broadcasts to Slack/Discord —
+        # and the dashboard's `net_saved = max(0, gross - overhead)`, AUD-06's
+        # own sentence in code.
+        #
+        # 13_HISTORICAL_DEFECT_PATTERNS.md records the $15/$75 price bug being
+        # fixed locally FOUR times and returning every time, "because no fix was
+        # ever made structural". Eleven point-fixes would have been the fifth.
+        #
+        # Its blind spots are stated in the script: it matches an inline
+        # `max(0, …)` on a savings-named quantity, so a clamp split across two
+        # lines, an `if x < 0: x = 0`, or one inside a helper it never reads all
+        # escape. A pass means "no clamped net is spelled inline in these
+        # modules" — NOT "no surface hides a loss".
+        run: uv run python scripts/lint_savings_sign.py
+
       - name: "G-C: acceptance criteria unchanged (the executor cannot edit its own oracle)"
         # The remediation plan says criteria are hashed before a run and
         # re-verified after, and G-C makes a mismatch a disqualifier. No hash was

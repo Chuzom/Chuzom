@@ -26,6 +26,7 @@ from chuzom.types import (
     LLMResponse, MODEL_COST_PER_1K, MODEL_SPEED_TPS,
     RoutingProfile, TaskType, colorize_model,
 )
+from chuzom.savings import net_saved
 
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS usage (
@@ -2950,7 +2951,7 @@ async def get_savings_by_period() -> dict[str, dict]:
                     saved_total += host_est
                 else:
                     actual += cost
-                    saved_total += max(0.0, host_est - cost)
+                    saved_total += net_saved(host_est, cost)
 
             efficiency = baseline / actual if actual > 0.001 else 0.0
             # RETROSPECTIVE B-7: report two figures, never conflated.
@@ -3133,7 +3134,7 @@ async def get_team_savings(
     # Estimate savings vs Opus baseline using token counts
     total_tokens = sum(r[4] for r in rows)
     host_baseline = total_tokens / 1000 * ((_HOST_INPUT_PER_M + _HOST_OUTPUT_PER_M) / 2 / 1000)
-    saved_usd = max(0.0, host_baseline - actual_usd)
+    saved_usd = net_saved(host_baseline, actual_usd)
     # INV-COST-006 / AC-2: split baseline-equivalent avoided (counterfactual) from
     # real metered dollars avoided. On a flat-rate subscription host the marginal host
     # cost is ~$0, so real dollars avoided is 0 unless the host is genuinely metered —
@@ -3208,7 +3209,7 @@ async def get_routing_savings_vs_sonnet(days: int = 0) -> dict:
 
         total, actual_cost, in_tok, out_tok = row
         baseline = (in_tok * _HOST_INPUT_PER_M + out_tok * _HOST_OUTPUT_PER_M) / 1_000_000
-        saved = max(0.0, baseline - actual_cost)
+        saved = net_saved(baseline, actual_cost)
 
         cursor = await db.execute(
             f"""SELECT final_model, COUNT(*),
@@ -3226,7 +3227,7 @@ async def get_routing_savings_vs_sonnet(days: int = 0) -> dict:
                 "calls": int(cnt),
                 "actual_cost": float(m_cost),
                 "baseline_cost": float(m_baseline),
-                "saved": max(0.0, m_baseline - float(m_cost)),
+                "saved": net_saved(m_baseline, float(m_cost)),
             }
 
         return {

@@ -29,6 +29,7 @@ import argparse
 import asyncio
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from chuzom.savings import net_saved
 
 
 async def route_payload_async(payload: dict) -> dict:
@@ -122,7 +123,7 @@ def _log_route_savings(resp, task_type: str, complexity: str, host: str) -> None
             "session_id": host,
             "task_type": task_type,
             "complexity": complexity,
-            "estimated_saved": max(0.0, baseline - external),
+            "estimated_saved": net_saved(baseline, external),
             "external_cost": external,
             "model": model,
             "input_tokens": in_tok,
