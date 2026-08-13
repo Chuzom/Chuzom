@@ -34,6 +34,17 @@ from chuzom.profile import is_enterprise
 log = get_logger("chuzom.redaction_routing")
 
 
+class RedactionUnavailable(RuntimeError):
+    """Redaction was requested but could not be applied, so the turn was refused.
+
+    A distinct type rather than a bare RuntimeError: a caller that wants to degrade
+    deliberately (retry, drop to a local model, surface a message) needs to tell "the
+    prompt could not be scrubbed" apart from every other failure. Raising something
+    unrecognisable would push callers toward `except Exception`, which is how the
+    fail-open this replaced came to exist.
+    """
+
+
 _REDACTION_ENV = "CHUZOM_REDACTION"
 _AFFIRMATIVE = {"on", "1", "true", "yes", "strict"}
 
@@ -62,28 +73,55 @@ def maybe_redact(prompt: str) -> tuple[str, dict[str, int]]:
       redacted prompt is what the provider sees; the counts dict
       records how many of each pattern type fired.
 
-    Failures of the redaction policy are logged at WARNING and the
-    original prompt is returned unchanged (fail-open) so a broken
-    redactor cannot break the routing path. Operators who need
-    fail-closed guarantees should refuse to start chuzom without a
-    valid redaction policy at boot time, not bolt it onto every turn.
+    FAIL-CLOSED. When redaction is enabled and cannot be applied — no redactor
+    registered, or the redactor raises — this raises `RedactionUnavailable` instead
+    of returning the prompt. The turn fails; the PII does not leave.
+
+    This replaced a fail-open path that logged a warning and returned the ORIGINAL
+    prompt. It was found when a mutation run captured
+    ``{'error': 'redactor died', 'event': 'redaction_failed'}`` followed by
+    "please review code by alice@example.com" arriving at the dispatcher intact.
+
+    Someone sets ``CHUZOM_REDACTION=on`` for exactly one reason: to keep PII out of a
+    third-party model. Fail-open turned that request into a best-effort attempt whose
+    failure was reported only in a log nobody reads. The caller could not tell, so it
+    could not react — the guarantee silently became a hope.
+
+    The old docstring argued that operators wanting fail-closed guarantees "should
+    refuse to start chuzom without a valid redaction policy at boot time, not bolt it
+    onto every turn". That does not hold: boot-time validation cannot catch a redactor
+    that is present and valid at startup and raises on a particular prompt, which is
+    precisely the observed failure.
+
+    THE COST, STATED: a broken redactor now breaks the turn. That is the point — a
+    failed request is recoverable, a leaked secret is not — but it does convert a
+    silent degradation into a loud failure, and callers that previously always got a
+    string must now handle `RedactionUnavailable`.
     """
     if not _redaction_enabled():
         return prompt, {}
 
     redactor = get_redactor()
     if redactor is None:
-        log.warning("redaction_unavailable", reason="no_redactor_registered")
-        return prompt, {}
+        # Enabled but unconfigured. Previously returned the prompt unchanged, so a
+        # missing registration silently disabled the feature it was asked to provide.
+        log.error("redaction_unavailable", reason="no_redactor_registered")
+        raise RedactionUnavailable(
+            "CHUZOM_REDACTION is enabled but no redactor is registered — refusing to "
+            "send the prompt unredacted."
+        )
 
     try:
         result = redactor.redact_prompt(prompt)
-    except Exception as err:  # noqa: BLE001 — fail-open
-        log.warning("redaction_failed", error=str(err))
-        return prompt, {}
+    except Exception as err:
+        log.error("redaction_failed", error=str(err))
+        raise RedactionUnavailable(
+            f"redaction failed ({err}) — refusing to send the prompt unredacted."
+        ) from err
     return result.text, dict(result.counts)
 
 
 __all__ = [
+    "RedactionUnavailable",
     "maybe_redact",
 ]
