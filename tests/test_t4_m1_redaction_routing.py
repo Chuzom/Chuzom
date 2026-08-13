@@ -308,7 +308,7 @@ async def test_redaction_failure_does_not_break_turn(
 ) -> None:
     """A broken redactor must not break the turn — the original
     prompt is sent and the call proceeds."""
-    from chuzom.plugins.redaction import Redactor, RedactionResult, register_redactor
+    from chuzom.plugins.redaction import Redactor, RedactionResult
 
     monkeypatch.setenv("CHUZOM_REDACTION", "on")
 
@@ -317,7 +317,23 @@ async def test_redaction_failure_does_not_break_turn(
             raise RuntimeError("redactor died")
 
     # Register a broken redactor; maybe_redact swallows the exception and returns original.
-    register_redactor(BrokenRedactor())
+    #
+    # RESTORE IT AFTERWARDS. `register_redactor` mutates a module-level dict
+    # (`plugins.redaction._REDACTORS`) and nothing undoes it — `clean_redaction_env`
+    # only clears the env var. Registering directly therefore leaked a BROKEN redactor
+    # into every test that ran later in the same process.
+    #
+    # That is not hypothetical: it broke
+    # `test_dispatcher_receives_redacted_prompt_when_on`, which asserts an email is
+    # scrubbed before dispatch. It passes standalone and in the full suite, and failed
+    # only under mutmut's clean-test stage, which runs a SUBSET whose ordering put this
+    # test first. A leaked global that depends on test order to do damage is invisible
+    # exactly until something reorders the suite.
+    from chuzom.plugins import redaction as _redaction_plugin
+
+    monkeypatch.setitem(
+        _redaction_plugin._REDACTORS, _redaction_plugin._DEFAULT, BrokenRedactor()
+    )
 
     captured: list[str] = []
 
