@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -172,7 +173,28 @@ MUTATIONS: list[Mutation] = [
 
 
 def _run(cmd: list[str], cwd: Path) -> tuple[int, str]:
-    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    """Run a subprocess with BYTECODE CACHING DISABLED.
+
+    This is load-bearing, not hygiene. A mutation that does not change the
+    file's BYTE LENGTH -- `pressure=0.0` -> `pressure=1.0`, or swapping two
+    identifiers -- combined with a write landing in the same integer second as
+    the mtime recorded in an existing `.pyc`, lets Python serve STALE BYTECODE.
+    The probe then reads the wrong version of the module.
+
+    Measured, three rapid apply/restore cycles on B10:
+        caching ON:   clean 0.0 mutated 1.0 | clean 1.0 mutated 1.0 | clean 1.0 mutated 1.0
+        caching OFF:  clean 0.0 mutated 1.0 | clean 0.0 mutated 1.0 | clean 0.0 mutated 1.0
+    With caching on, from the second cycle the CLEAN source reads as MUTATED --
+    so `clean_probe == mutated_probe` and the harness reports EQUIVALENT for a
+    mutation that changes behaviour perfectly well.
+
+    I first tested this hypothesis ONCE, got a favourable answer because that
+    single run straddled a second boundary, and recorded it as REJECTED. It was
+    not. One measurement of a timing-dependent effect measures the timing, not
+    the effect.
+    """
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env)
     return proc.returncode, proc.stdout + proc.stderr
 
 
@@ -271,10 +293,19 @@ def evaluate(root: Path, python: str, only: list[str] | None = None) -> dict:
                         "proves nothing"
                     )
                 elif clean_probe == mutated_probe:
+                    # WORDING MATTERS HERE. This has measured a property of the
+                    # PROBE, not of the mutation: all it knows is that this probe
+                    # could not tell the two apart. The first version of this
+                    # message asserted "the mutation changes no observable
+                    # behaviour", which is a strictly stronger claim than the
+                    # evidence supports -- and it was wrong three times out of
+                    # three on the baseline-era sample, where the probes simply
+                    # did not exercise the mutated line.
                     status, note = "EQUIVALENT", (
-                        f"probe identical before and after ({clean_probe!r}): the "
-                        "mutation changes no observable behaviour, so no test "
-                        "could kill it. NOT a coverage hole."
+                        f"THE PROBE saw no difference ({clean_probe!r} both before "
+                        "and after). Either the mutation is equivalent, or the "
+                        "probe does not exercise the mutated line -- CHECK WHICH "
+                        "before reading this as 'not a coverage hole'."
                     )
                 else:
                     status, note = "SURVIVED", (
@@ -307,7 +338,7 @@ def evaluate(root: Path, python: str, only: list[str] | None = None) -> dict:
     # silently would let the score be improved by writing mutations that cannot
     # change behaviour -- the same gaming the frozen sample exists to prevent.
     if equivalent:
-        print(f"\n  EQUIVALENT (excluded, change no behaviour): {', '.join(equivalent)}")
+        print(f"\n  EQUIVALENT (excluded, PROBE saw no difference): {', '.join(equivalent)}")
     if unverified:
         print(f"  UNVERIFIED (excluded, no usable probe):      {', '.join(unverified)}")
 
