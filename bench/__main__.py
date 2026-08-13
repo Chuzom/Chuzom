@@ -19,6 +19,7 @@ from bench.routers import default_routers
 from bench.runner import (
     RESULTS_DIR,
     load_corpus,
+    load_named_corpus,
     load_full_corpus,
     run_benchmark,
     save_results,
@@ -47,12 +48,19 @@ async def amain(args: argparse.Namespace) -> int:
     elif args.hard_only:
         corpus = load_corpus("hard")
     elif args.corpus:
-        # WP-16 item 3: run ONE named corpus file, so a held-out set can be
-        # measured and reported SEPARATELY from the tuned one. The 33-prompt
-        # easy/moderate/hard set was tuned against by #220 (precision-tier
-        # routing was added specifically to fix mod-07 and mod-12), so its
-        # quality delta cannot also serve as evidence that the fix generalises.
-        corpus = load_corpus(args.corpus)
+        # WP-16 item 3: run ONE named corpus, so a held-out set can be measured
+        # and reported SEPARATELY from the tuned one. The easy/moderate/hard set
+        # was tuned against by #220 (precision-tier routing was added
+        # specifically to fix mod-07 and mod-12), so its quality delta cannot
+        # also serve as evidence that the fix generalises.
+        #
+        # A HELD-OUT SET LIVES OUTSIDE bench/corpus/ ON PURPOSE. That directory
+        # is the ADVERTISED corpus whose size the README states and
+        # test_chz_aud_006 verifies; dropping an evaluation set into it would
+        # have inflated a public claim by 24 prompts that are deliberately not
+        # part of the advertised benchmark. The separation is the point, so it
+        # is expressed in the layout rather than by an exemption in the guard.
+        corpus = load_named_corpus(args.corpus)
     else:
         corpus = load_full_corpus()
 

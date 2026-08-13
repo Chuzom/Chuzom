@@ -108,10 +108,49 @@ audit's signature defect — a failure that renders as data — in the benchmark
 harness itself, and it is the same shape as RED2-02 and AUD-06.
 
 `bench/results/` is gitignored, so the bogus file ships nowhere; the defect is
-that the reporter emits it at all. Not fixed here: the reporter is not in WP-16's
-scope and changing it mid-measurement would violate the rule against altering an
-instrument while reading it. Recorded for the re-audit.
+that the reporter emits it at all. It was **deliberately not fixed while the
+held-out measurement was in flight** — altering an instrument mid-measurement is
+the rule this session had already broken once. It **is** fixed now that the run
+has completed; see the final section.
 
 Note also `always-cheap`: **9/24 success**, yet its quality average (2.42) is
 reported over the successful subset with no marker on the headline figure. Milder
 instance of the same pattern.
+
+---
+
+## #26 fixed — and the fix was wrong twice before it was right
+
+`bench/reporter.py` now refuses to present an average over zero successes:
+
+- the scorecard prints **"no successful runs"** instead of a quality number;
+- a partial run is marked ***(partial)*** — `always-cheap`'s 2.42 covered only
+  9 of 24 prompts and was previously printed like a complete measurement;
+- a zero-success router loses its Pareto frontier tick, because "worth picking
+  from" is an active recommendation and it rests on nothing;
+- the savings section prints **"Not reported — no successful runs"** instead of
+  a champion, a cost saving and a quality delta.
+
+Verified by **replaying the real broken-pipe artefact**, not only by synthetic
+cards. That distinction mattered twice:
+
+**First incompleteness.** After the scorecard and frontier were guarded, all four
+tests passed — and the replay showed section 3 still printing *"Quality delta:
++0.00"* and naming a champion. The single most misleading line in the original
+report survived a fix that looked complete, because the synthetic tests did not
+cover it.
+
+**Then the fix broke something else.** The savings guard used an early `return`,
+which dropped sections 4 and 5 — **including the per-prompt detail whose errors
+the new message explicitly tells the reader to consult.** All five tests still
+passed, because they only inspected section 3's content. A guard that silently
+deletes the evidence it points at is worse than the overclaim it replaced.
+
+Both were caught by listing the rendered sections from the real artefact. Two
+regression tests now pin them: one asserting section 3 carries no savings figure,
+one asserting the per-prompt detail survives.
+
+The general form is the same one this audit keeps meeting: **a fix verified only
+against the cases its author thought of passes, and the case that mattered is the
+one that was not imagined.** Replaying a real failure is cheap and finds what
+synthetic fixtures cannot.

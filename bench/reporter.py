@@ -34,9 +34,20 @@ def render_report(rows: list[RunRow], cards: list[RouterScorecard]) -> str:
     out.append("| Rank | Router | Avg quality (1–5) | Quality preserved (≥4) | Avg cost / prompt | Avg tokens | Avg latency | Success |")
     out.append("|---|---|---|---|---|---|---|---|")
     for i, c in enumerate(sorted_cards, 1):
+        # #26: an average over zero successes is not a measurement. The data was
+        # always here -- prompts_succeeded/prompts_attempted -- the reporter just
+        # did not act on it, so a run in which NOTHING succeeded printed a
+        # quality score and a savings figure. Same shape as RED2-02 (a failed
+        # ledger read rendering "$0.00 saved") and AUD-06 (a loss rendering as
+        # break-even), here in the instrument Gates 15/16 depend on.
+        quality = (
+            "**no successful runs**" if c.prompts_succeeded == 0
+            else f"{c.avg_judge_score:.2f}"
+            + (" *(partial)*" if c.prompts_succeeded < c.prompts_attempted else "")
+        )
         out.append(
             f"| {i} | **{c.router_name}** "
-            f"| {c.avg_judge_score:.2f} "
+            f"| {quality} "
             f"| {_fmt_pct(c.quality_preserved_pct)} "
             f"| {_fmt_cost(c.avg_cost_usd)} "
             f"| {c.avg_total_tokens:.0f} "
@@ -52,7 +63,10 @@ def render_report(rows: list[RunRow], cards: list[RouterScorecard]) -> str:
     out.append("Routers below are the only ones worth picking from — every other router is strictly dominated (cheaper AND better exists).")
     out.append("")
     for c in sorted_cards:
-        marker = "✅" if c.router_name in frontier else "  "
+        # A router that answered nothing is not "worth picking from". Ticking it
+        # is an active recommendation built on no data.
+        on_frontier = c.router_name in frontier and c.prompts_succeeded > 0
+        marker = "✅" if on_frontier else "  "
         out.append(
             f"{marker} `{c.router_name}` — quality {c.avg_judge_score:.2f}, cost {_fmt_cost(c.avg_cost_usd)}"
         )
@@ -73,13 +87,38 @@ def render_report(rows: list[RunRow], cards: list[RouterScorecard]) -> str:
             quality_delta = champion.avg_judge_score - most_expensive.avg_judge_score
             out.append("## 3 · Savings")
             out.append("")
-            out.append(f"**Champion (Pareto frontier, best quality):** `{champion.router_name}`")
-            out.append(f"**Most expensive (baseline):** `{most_expensive.router_name}`")
-            out.append("")
-            out.append(f"- Cost savings vs baseline: **{_fmt_pct(savings_pct)}** ({_fmt_cost(most_expensive.avg_cost_usd)} → {_fmt_cost(champion.avg_cost_usd)} per prompt)")
-            out.append(f"- Quality delta: **{quality_delta:+.2f}** points (1–5 scale)")
-            out.append(f"- Token reduction: **{(most_expensive.avg_total_tokens - champion.avg_total_tokens) / max(1, most_expensive.avg_total_tokens) * 100:+.0f}%** ({most_expensive.avg_total_tokens:.0f} → {champion.avg_total_tokens:.0f} avg)")
-            out.append("")
+            # #26: refuse to compute savings when nothing succeeded. The
+            # scorecard fix alone was NOT enough -- replaying the real
+            # broken-pipe artefact showed the scorecard correctly reading
+            # "no successful runs" while THIS section still printed
+            # "Quality delta: +0.00" and named a champion. A savings figure
+            # derived from zero successful calls is the loudest possible version
+            # of a failure rendering as data.
+            if champion.prompts_succeeded == 0 or most_expensive.prompts_succeeded == 0:
+                out.append(
+                    "**Not reported — no successful runs.** Every call failed, so "
+                    "there is no cost or quality figure to compare. See the "
+                    "per-prompt detail for the errors."
+                )
+                out.append("")
+                # Deliberately NOT an early return. The first version of this
+                # guard returned here and dropped sections 4 and 5 -- including
+                # the per-prompt detail the message above tells the reader to
+                # consult. The tests passed because they only checked section
+                # THREE's content. A guard that silently removes the evidence it
+                # points at is worse than the overclaim it replaced.
+                _skip_savings = True
+            else:
+                _skip_savings = False
+
+            if not _skip_savings:
+                out.append(f"**Champion (Pareto frontier, best quality):** `{champion.router_name}`")
+                out.append(f"**Most expensive (baseline):** `{most_expensive.router_name}`")
+                out.append("")
+                out.append(f"- Cost savings vs baseline: **{_fmt_pct(savings_pct)}** ({_fmt_cost(most_expensive.avg_cost_usd)} → {_fmt_cost(champion.avg_cost_usd)} per prompt)")
+                out.append(f"- Quality delta: **{quality_delta:+.2f}** points (1–5 scale)")
+                out.append(f"- Token reduction: **{(most_expensive.avg_total_tokens - champion.avg_total_tokens) / max(1, most_expensive.avg_total_tokens) * 100:+.0f}%** ({most_expensive.avg_total_tokens:.0f} → {champion.avg_total_tokens:.0f} avg)")
+                out.append("")
 
     # Per-difficulty savings breakdown
     out.append("## 4 · Per-difficulty breakdown")

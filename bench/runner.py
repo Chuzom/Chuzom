@@ -66,6 +66,28 @@ def load_corpus(difficulty: str) -> list[dict]:
 
 DIFFICULTIES = ("easy", "moderate", "hard")
 
+#: Held-out and other evaluation sets live OUTSIDE bench/corpus/ deliberately:
+#: that directory is the ADVERTISED corpus whose size README.md states and
+#: tests/test_chz_aud_006.py verifies. Putting an evaluation set there would
+#: silently inflate a public claim. Searched in order.
+_EXTRA_CORPUS_DIRS = (CORPUS_DIR.parent / "heldout",)
+
+
+def load_named_corpus(name: str) -> list[dict]:
+    """Load one corpus by name from bench/corpus/ or an evaluation directory."""
+    for base in (CORPUS_DIR, *_EXTRA_CORPUS_DIRS):
+        path = base / f"{name}.jsonl"
+        if path.exists():
+            rows = []
+            for line in path.read_text().splitlines():
+                if line.strip():
+                    entry = json.loads(line)
+                    entry["difficulty"] = name
+                    rows.append(entry)
+            return rows
+    searched = ", ".join(str(b) for b in (CORPUS_DIR, *_EXTRA_CORPUS_DIRS))
+    raise FileNotFoundError(f"corpus {name!r} not found; searched: {searched}")
+
 
 def load_full_corpus() -> list[dict]:
     """Load every difficulty tier that exists. 'hard' is included when present
