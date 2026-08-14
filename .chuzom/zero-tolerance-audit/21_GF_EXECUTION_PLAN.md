@@ -4,18 +4,49 @@ Written 2026-08-14, after the suite was made order-independent (`63cbc8c`). This
 working plan; doc 20 remains the pre-registered protocol and outranks it. Where they
 disagree, doc 20 wins and this file is wrong.
 
-## The arithmetic, stated once
+## The arithmetic — CORRECTED 2026-08-14 by measurement
 
-`score ≥ max(baseline + 0.15, 0.80)`. Baseline `c2c2882` = 0.12, HEAD = 0.12, delta 0.00.
-The binding constraint is therefore **the 0.80 floor**, not the +0.15 delta.
+`score ≥ max(baseline + 0.15, 0.80)`. The binding constraint is **the 0.80 floor**.
 
-At 0.12, roughly 88% of mutants survive. Reaching 0.80 across 2436 mutants in eight
-modules (11,254 lines) means killing on the order of **1,650 more mutants**. That is
-test-writing work. Doc 20 §8 already says so: "several days to a couple of weeks", and
-"not a formality that can be closed in a session."
+**Attempt 12 measured the real score. It is 0.5866, not 0.12.**
 
-**Nothing in this plan makes that number smaller.** Any step that appears to is a bug in
-the plan.
+| set | killed | n | score |
+|---|---|---|---|
+| TRAIN | 904 | 1518 | 0.5955 |
+| VALIDATION | 261 | 468 | 0.5577 |
+| **COMBINED** | **1165** | **1986** | **0.5866** (95% LB 0.5649) |
+
+Conservative per §4: 🫥 no-coverage (140), ⏰ timeout (78) and 🤔 suspicious all counted
+as SURVIVORS. All 1986 classified; `mutant_names_count` 1986; `setup.cfg` clean; zero
+failure markers in either stage.
+
+### What this corrects, and why the old number was wrong
+
+The version of this file committed in `531129f` — an hour before the measurement — said
+88% of mutants survive and reaching 0.80 meant killing **~1,650 more**. That was built on
+the 0.12 figure from the baseline-era sample.
+
+**0.12 was measured through a suite that failed 47 tests under reordering.** Those
+failures made mutants look killed for environmental reasons and, more importantly, the
+sample itself was never a trustworthy instrument. With the suite made order-independent
+(`63cbc8c`), the same universe scores 0.5866.
+
+The remaining work is therefore **~425 mutants**, not ~1,650 — a quarter of the estimate,
+and a materially different project. Recorded rather than quietly amended: a plan whose
+central number moves by 4x should say so where the old number stood.
+
+**The floor has not moved and the gap is still real: 0.2134.** Nothing here makes that
+smaller; any step that appears to is a bug in the plan.
+
+### Throughput, now measured
+
+1986 mutants in 2325.0s = **0.85 mutations/sec**. Doc 20 §3's 14.13/sec was out by 16x.
+
+This is a corrected *measurement*, not an amendment: §3 used that figure to argue the full
+universe was affordable and sampling unnecessary, and at 0.85/sec that argument still
+holds — the 450-mutant holdout costs ~9 minutes. **No criterion changes, so no third
+amendment is required.** Had the real rate made the universe unaffordable, the reverse
+would be true and it would be an owner decision, not a quiet reintroduction of sampling.
 
 ---
 

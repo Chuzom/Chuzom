@@ -77,9 +77,14 @@ repository history.
 
 At n=450, the 95% lower bound at p=0.85 is **0.817** — clearing the protocol's
 "lower bound ≥ 0.80" rule with room rather than scraping it. The protocol's
-n≥150 minimum is exceeded threefold, which is a consequence of the measured
-throughput (14.13 mutations/second) making the full universe affordable and
-removing the sampling step entirely.
+n≥150 minimum is exceeded threefold, which is a consequence of throughput making
+the full universe affordable and removing the sampling step entirely.
+
+**Throughput figure corrected below.** This paragraph originally cited 14.13
+mutations/second, taken from protocol §3. The first complete run measured **0.85**
+— out by 16x. The conclusion is unchanged, because 0.85/sec still puts the
+450-mutant holdout at ~9 minutes, but the number it rested on was wrong and is
+superseded by the measurement in the next section.
 
 ## Five failures getting here, all mine
 
@@ -166,3 +171,71 @@ instinct, and mutmut's is right.
 names — unreadable as provenance, which is the opposite of its purpose. It now records
 a sha256 and count of the name list; the names themselves are already committed in
 `train.txt`/`validation.txt`. Changed between runs, never during one.
+
+
+## The baseline score — measured 2026-08-14, attempt 12
+
+Twelve attempts; the first eleven produced no number. Each refusal was a real defect (see
+doc 21 and `63cbc8c`), and mutmut was right to refuse every time.
+
+| set | killed | n | conservative score |
+|---|---|---|---|
+| TRAIN | 904 | 1518 | 0.5955 |
+| VALIDATION | 261 | 468 | 0.5577 |
+| **COMBINED** | **1165** | **1986** | **0.5866** |
+
+95% lower bound 0.5649. Required `>= max(0.12 + 0.15, 0.80)` = **0.80**. **VERDICT: FAIL**,
+gap 0.2134.
+
+Conservative per protocol §4 — every non-🎉 outcome counts as a SURVIVOR:
+
+| outcome | train | validation |
+|---|---|---|
+| 🎉 killed | 904 | 261 |
+| 🙁 survived | 450 | 153 |
+| 🫥 no-coverage | 107 | 33 |
+| ⏰ timeout | 57 | 21 |
+
+### Preconditions verified before believing the number
+
+Each of these has been individually wrong on an earlier attempt, which is why all three
+are checked every time:
+
+* `mutant_names_count` = 1986 — attempt 6 recorded **1**, because zsh does not word-split
+  an unquoted `$VAR` and 1986 names collapsed into one argument.
+* `git diff --quiet setup.cfg` clean — a killed run once stranded the G-F scope in
+  `setup.cfg`, and two later runs faithfully restored the *contaminated* file,
+  sha256-verified.
+* stats and clean-test stages both clean, zero failure markers — mutmut marks a mutant
+  KILLED when the suite fails, so an environmental failure INFLATES the score.
+
+### The 0.12 baseline was measured through a broken instrument
+
+The recorded baseline (`c2c2882` = 0.12, HEAD = 0.12, delta 0.00) came from the
+baseline-era sample. That sample ran against a suite which fails 47 tests under
+reordering. With the suite made order-independent, the same universe scores **0.5866**.
+
+This does not rescue G-F — 0.5866 still fails the 0.80 floor — but it changes the size of
+the remaining work from roughly 1,650 mutants to roughly **425**, and it means the
+"delta 0.00 vs baseline" comparison was between two numbers produced by an unreliable
+measurement.
+
+### Throughput — this closes doc 20's one open item
+
+1986 mutants in 2325.0s = **0.85 mutations/second**. Protocol §3's 14.13/sec was out by
+16x.
+
+Doc 20's Amendment 2 left exactly one thing open: *"The throughput figure in §3 … should
+be treated as not established. §3's no-sampling decision must be re-confirmed against a
+measured rate from the first successful run."* This is that run, and this is the
+re-confirmation.
+
+**§3's no-sampling decision holds at the measured rate.** At 0.85/sec the 450-mutant
+holdout costs ~9 minutes and the full 2436 costs ~48 — well inside affordable. The
+premise was wrong by 16x and the conclusion still survives it, which is the only reason
+no third amendment is needed. Had 0.85/sec made the universe unaffordable, the honest
+output would have been an owner decision, not a quiet reintroduction of sampling.
+
+Doc 20 is not edited here. §7 makes an unrecorded edit to the pre-registered protocol a
+voiding condition, so the resolution of its open item is recorded in evidence and the
+protocol stands exactly as pre-registered.
