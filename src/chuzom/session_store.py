@@ -37,6 +37,7 @@ from typing import Any
 
 from chuzom.compaction import collapse_whitespace, dedup_sections
 from chuzom.file_lock import exclusive_lock
+from chuzom.paths import chuzom_home
 from chuzom.token_budget import truncate_to_budget
 
 _log = logging.getLogger("chuzom.session_store")
@@ -147,8 +148,25 @@ def _scrub_secrets(text: str) -> str:
 # ── Paths ─────────────────────────────────────────────────────────────────
 
 def _state_dir() -> Path:
-    """Resolve ``~/.chuzom`` at call time (so monkeypatched HOME works)."""
-    return Path(os.path.expanduser("~")) / ".chuzom"
+    """The chuzom state directory, resolved at call time.
+
+    Delegates to :func:`chuzom.paths.chuzom_home` so there is ONE answer to "where
+    does state live". This used to be ``os.path.expanduser("~") / ".chuzom"``, which
+    honoured only the ``HOME`` environment variable — and therefore neither of the two
+    sandbox mechanisms actually in use:
+
+    * ``CHUZOM_HOME`` (the canonical one, which :func:`chuzom.paths.is_isolated`
+      reports on) was ignored outright, so ``is_isolated()`` returned True while
+      session events were written to and read from the real home;
+    * replacing the ``pathlib.Path.home`` METHOD — what this repo's conftest does, and
+      88 test files rely on — does not change ``os.path.expanduser``, so that was
+      ignored too.
+
+    The consequence was not theoretical: a full-suite run read the developer's live
+    ``session_context_*.jsonl`` and injected real prompt and model-output text into a
+    test's messages. See ``tests/test_p0_session_store_isolation.py``.
+    """
+    return chuzom_home()
 
 
 def _project_id() -> str:
