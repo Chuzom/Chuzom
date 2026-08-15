@@ -458,12 +458,26 @@ def _aggregate(rows: list[dict]) -> dict[str, dict]:
         if _is_test_model(model):
             continue
         if tool not in tools:
-            tools[tool] = {"count": 0, "in": 0, "out": 0, "cost": 0.0, "models": {}}
+            tools[tool] = {"count": 0, "in": 0, "out": 0, "cost": 0.0,
+                           "models": {}, "model_totals": {}}
         tools[tool]["count"]  += 1
         tools[tool]["in"]     += in_tok
         tools[tool]["out"]    += out_tok
         tools[tool]["cost"]   += cost
         tools[tool]["models"][model] = tools[tool]["models"].get(model, 0) + 1
+        # Per-MODEL totals, accumulated from the row that actually carries them.
+        # `in`/`out`/`cost` above are the TOOL's totals. The MODELS panel used to
+        # reconstruct per-model figures as `tool_total * model_call_count`, which
+        # reports a tool that consumed T tokens as sum(counts) * T — an inflation
+        # equal to the tool's row count. Keeping the real per-model sums here means
+        # no consumer has to reconstruct what was never recoverable.
+        mt = tools[tool]["model_totals"].setdefault(
+            model, {"calls": 0, "in": 0, "out": 0, "cost": 0.0}
+        )
+        mt["calls"] += 1
+        mt["in"]    += in_tok
+        mt["out"]   += out_tok
+        mt["cost"]  += cost
     return tools
 
 
@@ -2023,22 +2037,28 @@ def main() -> None:
 
             # Build session_models from tools_data so the MODELS panel shows "this session".
             # Format: [{"model": str, "calls": int, "tokens": int, "cost": float, "saved": float}]
-            tools_data = report_data.get("tools") or {}
+            # The panel is titled "MODELS this session", so it aggregates EVERY model
+            # invoked this session — paid, subscription and free/local alike. It was
+            # previously built from `report_data["tools"]`, which is `_aggregate(paid_rows)`:
+            # that silently excluded `_FREE_PROVIDERS` (ollama, codex, gemini_cli), so a
+            # session routed mostly to a local model showed a panel that did not contain
+            # it. A "free" cost column already exists precisely to render those rows.
+            all_session_rows = paid_rows + cc_rows + free_rows
             session_models_list: list[dict] = []
-            if tools_data:
+            if all_session_rows:
                 model_agg: dict[str, dict] = {}
-                for data in tools_data.values():
+                for data in _aggregate(all_session_rows).values():
                     if not isinstance(data, dict):
                         continue
-                    in_tok = data.get("in", 0)
-                    out_tok = data.get("out", 0)
-                    cost = data.get("cost", 0.0)
-                    for model, count in data.get("models", {}).items():
-                        if model not in model_agg:
-                            model_agg[model] = {"calls": 0, "tokens": 0, "cost": 0.0}
-                        model_agg[model]["calls"] += count
-                        model_agg[model]["tokens"] += (in_tok + out_tok) * count
-                        model_agg[model]["cost"] += cost * count
+                    for model, totals in data.get("model_totals", {}).items():
+                        agg = model_agg.setdefault(
+                            model, {"calls": 0, "tokens": 0, "cost": 0.0}
+                        )
+                        # Real per-model sums — NOT tool_total * call_count, which
+                        # inflated tokens and cost by the tool's row count.
+                        agg["calls"]  += totals["calls"]
+                        agg["tokens"] += totals["in"] + totals["out"]
+                        agg["cost"]   += totals["cost"]
                 for model, agg in sorted(model_agg.items(), key=lambda x: -x[1]["calls"]):
                     session_models_list.append({
                         "model": model,

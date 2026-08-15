@@ -173,3 +173,62 @@ Recorded so the report is not read as more complete than it is:
 
 **No code has been changed.** The next step is the repository-wide inventory (§5) and the
 Path A re-trace, then the canonical layer.
+
+---
+
+## I. The 38.6% discrepancy — RESOLVED, and it exposed a bigger problem
+
+The working note recorded "hermes3:8b 38.6%" as a 30-day figure. The canonical rule over
+30 days gives 0.6%. The note's WINDOW LABEL was wrong:
+
+| window | top attributed models |
+|---|---|
+| 7 days | gpt-4o 76.2%, opus 23.7%, hermes3 **0.1%** |
+| 30 days | gpt-4o 75.1%, opus 23.4% |
+| **90 days** | **hermes3 38.6%**, gpt-4o 35.6%, gemini-flash 13.9% |
+
+`chuzom.attribution.routing_attribution(..., since_sql="-90 days")` reproduces
+**38.6% / 35.6% / 13.9%** exactly. The canonical implementation agrees with the earlier
+finding; only the label was wrong. **No contradiction remains between the two figures.**
+
+## J. NEW P0 — a second synthetic population is counted as ATTRIBUTED
+
+Charting the transition surfaced something worse than a stale note.
+
+    date         gpt-4o : opus       ratio
+    2026-07-26      208 : 65         3.200
+    2026-07-30      400 : 125        3.200
+    2026-07-31      336 : 105        3.200
+    2026-08-08      224 : 70         3.200
+    2026-08-11      240 : 75         3.200
+    2026-08-12      608 : 190        3.200
+
+Exactly 3.200 on eight of nine days. Real traffic does not hold a fixed ratio to three
+decimal places. Those 2,373 rows carry:
+
+* **0** distinct `session_id`
+* **1** distinct `prompt_hash`
+* **1** distinct `task_type`
+
+and they are all `provenance IS NULL` — i.e. **counted as attributed routing**.
+
+Separately, `classifier_type='gateway'` (6,310 decisions, the largest population before
+August) disappears entirely after Aug 1, replaced by `heuristic` alone.
+
+### What this means
+
+**`provenance IS NULL` does not mean "real traffic".** Finding #30 caught ONE synthetic
+population — the `gpt-4o-mini` rows, correctly marked `unattributed`. This is a **second,
+larger, unmarked one**, and it is inside the attributed set.
+
+Consequences, stated plainly:
+
+1. The dashboard's 75.1% gpt-4o figure is computed over synthetic rows.
+2. **The canonical layer added in this work inherits the same contamination.** A correct
+   rule over contaminated data still yields a wrong answer; the rule is not the defect.
+3. The apparent collapse of local routing (38.6% → 0.1%) may be an artefact of synthetic
+   volume swamping real traffic rather than a routing regression — **or both**. Not yet
+   distinguishable.
+
+**Finding #30 is incomplete, not wrong.** Tracked as task #51. No further attribution work
+should be built on this data until the writer is identified and the marking decided.
