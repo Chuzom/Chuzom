@@ -95,3 +95,55 @@ an audit.
 
 Not attempted here: identifying **which** harness wrote them. The writer function is
 known (`cost.log_routing_decision`); the caller is not.
+
+---
+
+## W2.1 CLOSED — the writer identified
+
+`tests/test_quality_guard.py::_create_routing_decision`. Every constant in the suspect
+rows matches it field for field:
+
+    task_type="code"            profile="balanced"       classifier_type="heuristic"
+    classifier_confidence=0.9   classifier_latency_ms=10.0
+    complexity="moderate"       budget_pct_used=0.5
+    input_tokens=100            output_tokens=50
+    cost_usd=0.01               latency_ms=500.0
+
+That also explains the **3.200:1 gpt-4o:opus ratio** that first looked impossible for real
+traffic: it is a helper invoked a fixed number of times per test, not a workload.
+
+The file has **no database isolation whatsoever** — no `CHUZOM_DB_PATH`, no
+`CHUZOM_HOME`, no `tmp_path`. It called `log_routing_decision` against whatever
+`get_config().chuzom_db_path` resolved to, which is the user's real `~/.chuzom/usage.db`.
+
+## The hole is already closed — verified, not assumed
+
+`_refuse_unisolated_test_write` (added by `0aab32f`, after these rows were written) blocks
+this path. Measured directly:
+
+    rows BEFORE        41144
+    run test_quality_guard.py   18 passed
+    rows AFTER         41144
+    provenance='test'  0
+
+Zero rows written, and zero `provenance='test'` rows — because the guard returns *before*
+the INSERT, so the new writer-side stamp is never reached. Both mechanisms are working,
+in the right order.
+
+The 2,373 rows are therefore **historical damage from a window that is now shut**, not an
+ongoing leak.
+
+## What this leaves for #51
+
+The population is now fully characterised: known writer, known constants, known reason it
+was never marked, and confirmed not to be growing.
+
+Backfilling by fingerprint is therefore low-risk in the technical sense — the fingerprint
+is exact and cannot collide with real traffic (no real call has *all* of
+100/50/0.01/500.0/0.9/10.0/0.5). It remains an **owner decision** because it rewrites
+historical dashboard figures, and this audit does not silently restate a user's history.
+
+**Also worth noting:** `test_quality_guard.py` writing to the production DB was possible
+because nothing in the test declared isolation. Finding #30's fix guards the *writer*;
+nothing yet requires a *test* to declare where its state goes. That is a separate gap
+from #51 and is not addressed here.
