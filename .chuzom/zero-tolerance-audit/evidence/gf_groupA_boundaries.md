@@ -119,3 +119,58 @@ failures are environmental and reproduce without them.
 Suite verification for this change is therefore **incomplete**: the two new files pass in
 isolation and per-mutant verification is complete, but a clean full-suite run needs the
 gateway stopped first.
+
+---
+
+## Group C part 1 — the remaining fail-open sites, 22/22
+
+`tests/test_gf_c1_failopen_remaining.py`, 11 tests:
+
+| function | kills | degraded value |
+|---|---|---|
+| `cost._get_team_identity` | **8/8** | `("", "")` — rows attributed to nobody |
+| `cost._coverage_counts` | **9/9** | zeros — every rate renders Unknown |
+| `execution_ledger._host_opus_rates` | **5/5** | `(0.0, 0.0)` — savings compute as zero |
+
+The three-part assertion (code + exception TYPE + degraded return value) is now proven
+twice: 11/11 in part 1, 22/22 here.
+
+Each of these fails open to something that reads as a real answer. `_host_opus_rates` is
+the most consequential — a zero baseline makes every routed call look like it saved
+nothing, so the ledger reports "a quiet, plausible nothing" rather than an error. The
+fail-open record is the only thing separating *"no savings"* from *"savings could not be
+computed"*, which is the RED2-02 shape.
+
+### A lesson that failed to carry, for the third time
+
+The `ImportError` vs `ModuleNotFoundError` distinction was diagnosed and fixed in part 1
+of this same class, hours earlier. Writing part 2 reproduced it — a `None` entry in
+`sys.modules` raises the SUBCLASS. Recorded in the test itself.
+
+That is the third instance this session of a fix living only in the file where the gap
+was found (after the fail-open exception-type assertion, and the substring-vs-value
+assertion). The pattern is consistent enough to name: **a correction applied to one file
+is not a correction to the class.**
+
+### An exclusion I nearly shipped
+
+The first attempt at suite verification deselected the four gateway-locked files to get a
+green signal. That is precisely the antipattern recorded in finding #28 — *"fixed by
+completing the copy, not by widening the exclusion"*. Killed and re-run in full.
+
+## Full-suite status, stated exactly
+
+    10 FAILED
+    10 occurrences of "database is locked"
+
+One `database is locked` per failure and no other error class, across
+`test_quality_guard` (5), `test_soak` (2), `test_t3_m4_idempotency_keys` (1),
+`test_profiles` (1), `test_profile_invariants` (1). All are the gateway FD leak
+(task #58, PID 31892, 47 open descriptors).
+
+**None of the five new test files appear in the failure list**, and all five pass
+together (92 tests). The failures are environmental and reproduce with the affected tests
+run alone.
+
+This is NOT a clean full-suite pass, and it is not being reported as one. A clean run
+requires the gateway stopped, which is the owner's call.
