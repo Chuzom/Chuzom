@@ -316,6 +316,19 @@ MIGRATE_ROUTING_DECISIONS_ADD_SUBJECT = [
 ]
 """Plan 07 Cat E — enables (policy, subject, model) outcome aggregation for bandit selection."""
 
+MIGRATE_ROUTING_DECISIONS_ADD_PROVENANCE = [
+    "ALTER TABLE routing_decisions ADD COLUMN provenance TEXT",
+]
+"""Where a row came from, written by `_write_provenance()` at insert time.
+
+Deliberately has NO DEFAULT. `is_real` (v7.5) tried to answer the same question with
+`INTEGER DEFAULT 1`, which means a column named "is real" reads 1 on rows that are
+demonstrably synthetic — a default that asserts the very thing it should be recording.
+
+A NULL here means "written before this column existed" and is reported as UNKNOWN by
+`chuzom.attribution`, never promoted into attributed or unattributed. Absence of evidence
+is its own answer; the alternative is a default that manufactures one."""
+
 CREATE_BENCHMARK_RESULTS_TABLE = """
 CREATE TABLE IF NOT EXISTS benchmark_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -658,6 +671,7 @@ async def _get_db() -> aiosqlite.Connection:
         + MIGRATE_ROUTING_DECISIONS_MARK_CONTAMINATED
         + MIGRATE_ADD_QUOTA_SNAPSHOTS_TABLE
         + MIGRATE_ROUTING_DECISIONS_ADD_SUBJECT
+        + MIGRATE_ROUTING_DECISIONS_ADD_PROVENANCE
     )
     for stmt in all_migrations:
         await _safe_migrate(db, stmt)
@@ -1252,6 +1266,34 @@ def _validate_routing_insert(
         )
 
 
+#: Written into `routing_decisions.provenance` on every new row.
+PROVENANCE_RUNTIME = "runtime"      # a real routing decision, made while serving a user
+PROVENANCE_TEST = "test"            # produced under a test harness or with stubs allowed
+PROVENANCE_UNATTRIBUTED = "unattributed"   # retroactively marked; see 0aab32f
+
+
+def _write_provenance() -> str:
+    """Where this row came from, decided by the writer at insert time.
+
+    Until now nothing wrote this column, so EVERY row — genuine or synthetic — was born
+    `NULL`. `0aab32f` then marked one known-bad population `unattributed` after the fact,
+    which made `provenance IS NULL` *look* like "real traffic" when it actually meant
+    "not yet cleaned up". A second synthetic population (2,373 rows, one prompt_hash,
+    a fixed 3.200:1 model split) sat inside that NULL set and was reported as routing.
+
+    Recording origin at the point of writing is the only version of this that cannot
+    drift: a cleanup pass can always be out of date, and a reader cannot recover a fact
+    the writer never stored.
+
+    `CHUZOM_ALLOW_STUBS=1` counts as test provenance. It is the documented escape hatch
+    for writing stub data deliberately, and data written through an escape hatch is not
+    user traffic — the flag says so.
+    """
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CHUZOM_ALLOW_STUBS") == "1":
+        return PROVENANCE_TEST
+    return PROVENANCE_RUNTIME
+
+
 async def log_routing_decision(
     *,
     prompt: str,
@@ -1333,8 +1375,9 @@ async def log_routing_decision(
                 recommended_model, base_model, was_downshifted, budget_pct_used,
                 quality_mode, final_model, final_provider, success,
                 input_tokens, output_tokens, cost_usd, latency_ms, reason_code,
-                correlation_id, requested_complexity, complexity_downgraded, subject)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                correlation_id, requested_complexity, complexity_downgraded, subject,
+                provenance)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 _prompt_hash(prompt),
                 task_type,
@@ -1361,6 +1404,7 @@ async def log_routing_decision(
                 requested_complexity,
                 complexity_downgraded,
                 subject,
+                _write_provenance(),
             ),
         )
         await db.commit()

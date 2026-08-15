@@ -57,15 +57,36 @@ from pathlib import Path
 
 
 class AttributionStatus(str, Enum):
-    """Explicit, per the directive's §8 — never inferred from a missing value."""
+    """Explicit, per the directive's §8 — never inferred from a missing value.
 
-    ATTRIBUTED = "attributed"
-    UNATTRIBUTED = "unattributed"
+    THREE states, not two. The first version of this module had only ATTRIBUTED and
+    UNATTRIBUTED and treated `provenance IS NULL` as attributed. That was wrong, and the
+    reason is worth keeping:
+
+    **Nothing in the codebase ever wrote `provenance`.** The column defaults to NULL, and
+    `log_routing_decision`'s INSERT did not include it. `0aab32f` then marked one known
+    synthetic population `unattributed` retroactively — so NULL never meant "real
+    traffic", it meant "not yet cleaned up". A second synthetic population was sitting
+    inside that NULL set and was being counted as routing.
+
+    Rows written from now on carry their origin (see `cost._write_provenance`). Rows
+    written before that change cannot be classified either way, and saying so is the only
+    honest option: guessing in either direction manufactures a fact the writer never
+    recorded.
+    """
+
+    ATTRIBUTED = "attributed"        # provenance says: real runtime traffic
+    UNATTRIBUTED = "unattributed"    # provenance says: test / synthetic
+    UNKNOWN = "unknown"              # no provenance recorded — predates writer-side marking
 
 
-#: A row is unattributed when its provenance says so. Kept as a set rather than a
-#: string comparison so a future marker ("synthetic", "replay") is added in ONE place.
-UNATTRIBUTED_PROVENANCE: frozenset[str] = frozenset({"unattributed"})
+#: Provenance values that mean "this row is real user traffic".
+ATTRIBUTED_PROVENANCE: frozenset[str] = frozenset({"runtime"})
+
+#: Provenance values that mean "this row is not user traffic". A set rather than a
+#: string comparison so a future marker ("synthetic", "replay", "benchmark") lands in
+#: ONE place instead of being re-decided per consumer.
+UNATTRIBUTED_PROVENANCE: frozenset[str] = frozenset({"unattributed", "test"})
 
 
 @dataclass(frozen=True)
@@ -82,20 +103,34 @@ class AttributionResult:
 
     attributed_decisions: int = 0
     unattributed_decisions: int = 0
+    unknown_decisions: int = 0
     by_model: tuple[ModelShare, ...] = ()
     unattributed_by_model: tuple[ModelShare, ...] = ()
+    unknown_by_model: tuple[ModelShare, ...] = ()
     classifier_breakdown: dict[str, int] = field(default_factory=dict)
     source_table: str = "routing_decisions"
     window_description: str = ""
 
     @property
     def eligible_decisions(self) -> int:
-        return self.attributed_decisions + self.unattributed_decisions
+        return (self.attributed_decisions + self.unattributed_decisions
+                + self.unknown_decisions)
+
+    @property
+    def is_reportable(self) -> bool:
+        """False when unknown-provenance rows could change the answer.
+
+        A share computed over 3,669 attributed rows means nothing if 28,000 rows of
+        unknown origin sit beside it — the true denominator is unknowable. Surfaces
+        should refuse to render a percentage rather than render a confident wrong one.
+        """
+        return self.unknown_decisions == 0
 
     def check_invariants(self) -> None:
         """§14. Raises rather than returning a bool: a violated invariant is a defect
         in this module, not a condition for a caller to branch on."""
-        if self.attributed_decisions < 0 or self.unattributed_decisions < 0:
+        if min(self.attributed_decisions, self.unattributed_decisions,
+               self.unknown_decisions) < 0:
             raise ValueError("negative decision count")
 
         counted = sum(m.decisions for m in self.by_model)
@@ -135,6 +170,7 @@ def attribution_from_rows(rows, *, window_description: str = "") -> AttributionR
     """
     attributed: dict[str, int] = {}
     unattributed: dict[str, int] = {}
+    unknown: dict[str, int] = {}
     classifiers: dict[str, int] = {}
 
     for r in rows:
@@ -143,18 +179,24 @@ def attribution_from_rows(rows, *, window_description: str = "") -> AttributionR
 
         if provenance in UNATTRIBUTED_PROVENANCE:
             unattributed[model] = unattributed.get(model, 0) + 1
-            continue
-
-        attributed[model] = attributed.get(model, 0) + 1
-        # An attributed decision with no recorded classifier is still a decision.
-        ct = (r["classifier_type"] or "").strip() or "unrecorded"
-        classifiers[ct] = classifiers.get(ct, 0) + 1
+        elif provenance in ATTRIBUTED_PROVENANCE:
+            attributed[model] = attributed.get(model, 0) + 1
+            # An attributed decision with no recorded classifier is still a decision.
+            ct = (r["classifier_type"] or "").strip() or "unrecorded"
+            classifiers[ct] = classifiers.get(ct, 0) + 1
+        else:
+            # No provenance, or a value this version does not know. Never silently
+            # promoted into either bucket — an unrecognised marker is a reason to stop,
+            # not to guess.
+            unknown[model] = unknown.get(model, 0) + 1
 
     result = AttributionResult(
         attributed_decisions=sum(attributed.values()),
         unattributed_decisions=sum(unattributed.values()),
+        unknown_decisions=sum(unknown.values()),
         by_model=_shares(attributed),
         unattributed_by_model=_shares(unattributed),
+        unknown_by_model=_shares(unknown),
         classifier_breakdown=classifiers,
         window_description=window_description,
     )
