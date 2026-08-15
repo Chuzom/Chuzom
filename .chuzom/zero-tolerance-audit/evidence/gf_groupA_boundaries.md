@@ -174,3 +174,60 @@ run alone.
 
 This is NOT a clean full-suite pass, and it is not being reported as one. A clean run
 requires the gateway stopped, which is the owner's call.
+
+---
+
+## Group C part 2 — the five small uncovered functions, 21/21
+
+`tests/test_gf_small_uncovered.py`, 20 tests:
+
+| function | kills |
+|---|---|
+| `tool_surface.door_name` | **6/6** |
+| `tool_surface.resolve_name` | **3/3** |
+| `budget.invalidate_cache` | **3/3** |
+| `router._auth_error_hint` | **3/3** |
+| `cost._restore_claim` | **6/6** |
+
+`door_name` earns a test at three mutants because of what its own docstring says: it is
+compared by `_door_for` in enforce-route against the tool the caller actually invoked, so
+a substituted name "turns a correct call into a RECORDED VIOLATION". A mutant there
+produces a false accusation, not a bad hint.
+
+### The `slim` parameter was present in every signature and exercised by nothing
+
+Three mutants survived the first pass — two in `resolve_name`, one in `door_name` — all
+with the same cause: every test called these with the DEFAULT tier, which makes
+`resolve(logical, slim)`, `resolve(logical, None)` and `resolve(logical)` produce
+identical output. The argument could be dropped or nulled with no observable effect.
+
+The tiers genuinely disagree (`llm_query` → `llm` on consolidated, stays `llm_query` on
+core), so one discriminating call each closed all three.
+
+**This is the fourth instance of the same shape today**: `_aggregate` tested only with one
+row; `release_for` tested only with a non-zero entry; `_get_codex_baseline_for_task`
+tested only on the fallback path; `slim` tested only at its default. **A parameter that
+only ever takes its default value is not tested — it is merely present.**
+
+## A control that refuted my own hypothesis
+
+The full suite went from 10 failures to 14 after adding this file. Four were new, two of
+them named budget reservations — and this file plus the C7 file both monkeypatch `budget`
+module state. Pollution was the obvious explanation.
+
+Measured instead:
+
+    the four run ALONE                              3 FAILED
+    the four run AFTER both budget-touching files   ALL PASSED
+
+**The reverse of pollution.** They fail alone and pass after my files. Two further details
+confirm load-sensitivity rather than order-dependence: the specific failing test varies
+between runs (`test_no_key_default_preserves_existing_behaviour` alone vs
+`test_different_keys_do_not_share` in the full suite), and `test_t3_s2` failed in the full
+suite but not alone. A deterministic ordering bug does not move its target between runs.
+
+This is finding #19's class — a guard that fails under load — amplified by the gateway
+holding 47 descriptors on the database (task #58).
+
+Recorded because the instinct was wrong and the control was cheap. Without it, the next
+hour would have gone into hunting a defect in fixtures that do not have one.
