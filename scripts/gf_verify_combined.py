@@ -6,12 +6,26 @@ branches, and neither number alone describes what the suite now catches.
 """
 import collections, json, os, pathlib, shutil, subprocess, sys
 REPO = pathlib.Path.home()/"Projects/Chuzom"; MUT = REPO/"mutants"; PY = str(REPO/".venv/bin/python")
-HERE = pathlib.Path(__file__).parent
+
+#: The survivor inventory produced by `gf_kinds.py`. It is a working artefact, not a
+#: committed one, so its location is configurable rather than assumed next to this file
+#: — the first version resolved it relative to __file__ and broke the moment the script
+#: was moved from the scratchpad into scripts/.
+KINDS = pathlib.Path(
+    os.environ.get("CHUZOM_GF_KINDS")
+    or pathlib.Path(__file__).parent / "gf_kinds.json"
+)
+if not KINDS.exists():
+    sys.exit(
+        f"survivor inventory not found at {KINDS}\n"
+        f"Generate it with `python scripts/gf_kinds.py`, or point CHUZOM_GF_KINDS at it."
+    )
+
 module, function = sys.argv[1], sys.argv[2]
 tests = sys.argv[3:]
 for t in tests:
     shutil.copy2(REPO/t, MUT/t)
-rows = json.loads((HERE/"gf_kinds.json").read_text())
+rows = json.loads(KINDS.read_text())
 targets = [r for r in rows if r["module"] == module and r["function"] == function]
 
 def run(m: str) -> int:
