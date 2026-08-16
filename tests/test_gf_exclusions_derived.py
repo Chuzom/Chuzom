@@ -84,3 +84,88 @@ def test_behavioural_tests_for_the_biggest_module_survive_the_exclusion():
     assert "--deselect=tests/test_tool_surface.py::" in proc.stdout, (
         "expected per-function deselections from test_tool_surface.py"
     )
+
+
+def test_a_gate_script_NAMED_IN_PROSE_does_not_exclude_anything():
+    """Audit #38. Rule B is about INVOKING a gate script, not mentioning one.
+
+    It used to be a bare substring match over the raw file text, so this module docstring
+    in `tests/telemetry/test_failopen.py` —
+
+        "The lint (`scripts/lint_fail_open.py`) pins that call sites exist; this pins
+         that the mechanism they call actually records…"
+
+    — matched at MODULE level and deselected all eight tests in the file. Seven were
+    ordinary behavioural tests of the fail-open store, including
+    `test_unreadable_store_is_unknown_not_zero`, which is the RED2-02 shape this whole
+    campaign exists to protect. An excluded test kills nothing, so the score was being
+    measured over a smaller suite than intended.
+
+    Note a path-based rule would not have helped: the docstring names the full
+    `scripts/lint_fail_open.py` path. The distinction is WHERE the name appears —
+    invocations are code, mentions are documentation — so the rule now matches against
+    the segment with comments and docstrings stripped.
+    """
+    import importlib.util as _ilu
+
+    spec = _ilu.spec_from_file_location("gfx", _SCRIPT)
+    mod = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    derived = mod.derive()
+    failopen = {k for k in derived if "telemetry/test_failopen.py" in k}
+
+    assert "tests/telemetry/test_failopen.py" not in derived, (
+        "the whole file is excluded again — a docstring is being read as an invocation"
+    )
+    assert failopen == {
+        "tests/telemetry/test_failopen.py::test_the_protected_modules_actually_call_it"
+    }, (
+        "exactly one test in this file scans source (it reads cost.py, router.py and "
+        f"execution_ledger.py and counts a substring). Got: {sorted(failopen)}"
+    )
+    assert "A2" in " ".join(derived[next(iter(failopen))]), (
+        "it must be excluded for READING SOURCE (A2), not for naming a gate script (B)"
+    )
+
+
+def test_the_loop_form_of_a_source_scan_is_still_caught():
+    """The false NEGATIVE that fixing rule B exposed.
+
+    Rule A2's original pattern required the quoted module name within 80 characters of
+    `.read_text(`. That misses:
+
+        for name in ("cost.py", "router.py", "execution_ledger.py"):
+            total += (src / name).read_text().count("failopen.record(")
+
+    where the names sit two lines above and the path is built from a loop variable. It
+    scans three MUTATED modules and asserts on their text — precisely what A2 is for.
+
+    It went unnoticed because rule B was excluding the whole file for a docstring: one
+    over-exclusion masked one under-exclusion, and neither was visible while the file was
+    being dropped wholesale. Recorded because that is the general hazard — a wrong rule
+    can hide a second wrong rule, and fixing one is what surfaces the other.
+    """
+    import importlib.util as _ilu
+
+    spec = _ilu.spec_from_file_location("gfx", _SCRIPT)
+    mod = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    loop_scan = (
+        'def test_x():\n'
+        '    for name in ("cost.py", "router.py"):\n'
+        '        total += (src / name).read_text().count("failopen.record(")\n'
+    )
+    assert any("A2" in r for r in mod._reasons_for(loop_scan)), (
+        "the loop form of a source scan is not being caught by rule A2"
+    )
+
+    prose_only = (
+        'def test_y():\n'
+        '    """See scripts/lint_fail_open.py for the companion check."""\n'
+        '    assert compute() == 3\n'
+    )
+    assert mod._reasons_for(prose_only) == [], (
+        "a docstring mentioning a gate script must not exclude a behavioural test"
+    )

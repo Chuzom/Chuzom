@@ -3820,6 +3820,30 @@ def main() -> None:
     # reported savings. This hook injects `additionalContext` into Claude's context on
     # every routed turn regardless of whether offload actually happens; that cost was
     # previously unmeasured. Estimated at chars/4; fail-open (a hook must never raise).
+    # CHZ-HOOK-ORDER: EMIT BEFORE ACCOUNTING.
+    #
+    # The routing directive is fully computed by this point, so nothing below can
+    # change it -- but everything below can DELAY it. This hook was measured taking
+    # 36.9s, of which 36.26s was 8 sqlite executes (31.19s inside record_event), and
+    # Claude Code's 30s budget then DISCARDED the output. A slow ledger write did not
+    # merely make routing late; it threw the routing decision away, and chuzom
+    # silently stopped doing its job on exactly the turns something else held the
+    # database.
+    #
+    # Writing stdout first bounds that blast radius to "the accounting row may be
+    # late or lost", which is recoverable, instead of "the routing decision is lost",
+    # which is not. The cause of that particular slow window was never established
+    # (nine hypotheses refuted -- see the audit finding); this ordering is justified
+    # by the profile alone and does not depend on knowing it.
+    print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool_disp} (via {method})", file=sys.stderr)
+    json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
+    try:
+        sys.stdout.flush()   # the point of the reordering; buffered output is not emitted
+    except Exception:  # noqa: BLE001 — a flush failure must not break the turn
+        pass
+    _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUT COMPLETE")
+
+    # INV-COST-005 accounting, now strictly AFTER the directive has been delivered.
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
         # RED5-02: the boolean is BOUND, never discarded. record_event()
@@ -3838,10 +3862,6 @@ def main() -> None:
         ))
     except Exception:
         pass
-    # Visible UI signal — Claude Code surfaces stderr per-prompt so the routing decision is observable.
-    print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool_disp} (via {method})", file=sys.stderr)
-    json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
-    _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUT COMPLETE")
 
 
 if __name__ == "__main__":

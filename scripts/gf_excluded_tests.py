@@ -68,9 +68,11 @@ from __future__ import annotations
 import argparse
 import ast
 import configparser
+import io
 import json
 import re
 import sys
+import tokenize
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -162,13 +164,88 @@ _GATE_SCRIPTS = (
 _READS_MUTATED = _reads_mutated_source()
 
 
+def _code_only(segment: str) -> str:
+    """`segment` with comments and docstrings blanked out.
+
+    Rule B is meant to catch a test that INVOKES a gate script as a subprocess. It was a
+    bare substring match over the raw text, so a test that merely NAMED one in prose was
+    excluded too — and an excluded test kills nothing, so the score was measured over a
+    smaller suite than intended.
+
+    Measured cost of that: 8 test node ids, of which 7 were wrong. `test_failopen.py`'s
+    MODULE DOCSTRING says "The lint (`scripts/lint_fail_open.py`) pins that call sites
+    exist; this pins that the mechanism they call actually records…" — prose explaining a
+    division of labour — and that one sentence deselected all eight tests in the file,
+    including `test_unreadable_store_is_unknown_not_zero`, which is the exact RED2-02
+    shape this campaign exists to protect.
+
+    Note a path-based rule would NOT have fixed it: that docstring names the full
+    `scripts/lint_fail_open.py` path. The real distinction is not how the name is spelled
+    but WHERE it appears — invocations live in executable code, mentions live in
+    documentation. So strip documentation and match what is left.
+
+    Returns the segment with the same line count, so any line numbers derived from it
+    stay valid.
+    """
+    try:
+        toks = list(tokenize.generate_tokens(io.StringIO(segment).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        # A fragment that will not tokenise on its own (e.g. an indented method body
+        # sliced out of a class). Fall back to the raw text: over-excluding is the
+        # conservative direction for a fragment we cannot read properly.
+        return segment
+
+    lines = segment.splitlines(keepends=True)
+    out = list(lines)
+    prev_toktype = tokenize.INDENT
+    for tok in toks:
+        if tok.type == tokenize.COMMENT or (
+            tok.type == tokenize.STRING
+            and prev_toktype in (tokenize.INDENT, tokenize.NEWLINE, tokenize.NL)
+        ):
+            # A STRING whose previous significant token ended a statement is a bare
+            # expression-statement string: a docstring, or prose pinned in place.
+            for ln in range(tok.start[0], tok.end[0] + 1):
+                if 1 <= ln <= len(out):
+                    out[ln - 1] = "\n" if out[ln - 1].endswith("\n") else ""
+        if tok.type not in (tokenize.NL, tokenize.COMMENT):
+            prev_toktype = tok.type
+    return "".join(out)
+
+
+#: Rule A2, second shape. `_READS_MUTATED` requires the quoted module name within 80
+#: characters of `.read_text(`, which misses the loop form:
+#:
+#:      for name in ("cost.py", "router.py", "execution_ledger.py"):
+#:          total += (src / name).read_text().count("failopen.record(")
+#:
+#: The names are two lines above the read and the path is built from a loop variable, so
+#: adjacency never matches — yet this scans three MUTATED modules and asserts on their
+#: text, which is exactly what rule A2 exists to catch. Found when fixing rule B removed
+#: the file-level exclusion that had been hiding it: one over-exclusion was masking one
+#: under-exclusion, and neither was visible while the whole file was being dropped.
+_NAMES_A_MUTATED_MODULE = re.compile(
+    "|".join(rf"""["']{re.escape(n)}["']""" for n in _mutated_module_names())
+)
+_ANY_READ_TEXT = re.compile(r"\.read_text\(")
+
+
 def _reasons_for(segment: str) -> list[str]:
+    """Reasons this segment must be deselected, judged on CODE ONLY.
+
+    Every rule reads `_code_only(segment)`. Prose is documentation, and documentation
+    that describes a scan is not a scan — the whole point of #38.
+    """
+    code = _code_only(segment)
     reasons: list[str] = []
-    if _PY_TRAVERSAL.search(segment):
+    if _PY_TRAVERSAL.search(code):
         reasons.append("A: walks Python source files")
-    if _READS_MUTATED.search(segment) and _ASSERTS_ON_TEXT.search(segment):
+    if _ASSERTS_ON_TEXT.search(code) and (
+        _READS_MUTATED.search(code)
+        or (_NAMES_A_MUTATED_MODULE.search(code) and _ANY_READ_TEXT.search(code))
+    ):
         reasons.append("A2: reads a source file and asserts on its text")
-    hit = sorted({g for g in _GATE_SCRIPTS if g in segment})
+    hit = sorted({g for g in _GATE_SCRIPTS if g in code})
     if hit:
         reasons.append(f"B: invokes gate script(s) {', '.join(hit)}")
     return reasons
