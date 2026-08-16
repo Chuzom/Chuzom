@@ -117,28 +117,27 @@ class TestEventClassification:
         snap = coverage.snapshot()
         assert snap.readable is False, "two unknown kinds and nothing else is unreadable"
 
-    @pytest.mark.xfail(
-        raises=AttributeError,
-        strict=True,
-        reason=(
-            "DEFECT found by this test. `json.loads` succeeds on a JSON array or "
-            "string, but the try/except wraps ONLY the parse — so `event.get(\"k\")` "
-            "raises AttributeError on a non-dict and escapes the loop entirely. "
-            "One such line therefore discards the WHOLE store rather than counting "
-            "itself as malformed, which contradicts this module's own comment: "
-            "'Partial corruption still reports, because a partial count beats no "
-            "count as long as the total is not silently understated.' "
-            "Caller impact is a silent degrade, not a crash: cost._coverage_counts "
-            "catches it and records CHZ-FO-COST-COVERAGE-COUNTS, so coverage reports "
-            "zeros and every rate downstream renders Unknown. "
-            "NOT fixed here — a production change to move a mutation score is the "
-            "wrong motivation. strict=True means this test FAILS once the guard is "
-            "added, which is the prompt to assert the real behaviour."
-        ),
-    )
     def test_valid_json_that_is_not_an_object_is_malformed(self, store):
+        """Was xfail(strict=True) while the defect stood; the guard is now in place.
+
+        `json.loads` succeeds on a JSON array or string. The parse is hoisted out of the
+        try because `event` is read twice, so before the fix `event.get("k")` raised
+        AttributeError on a non-dict and escaped the loop entirely.
+        """
         _write(store, "[1,2,3]", '"a string"')
         assert coverage.snapshot().readable is False
+
+    def test_a_non_dict_line_does_not_discard_the_lines_around_it(self, store):
+        """The regression that actually mattered, which the xfail could not reach.
+
+        Before the fix the bad line aborted the loop and BOTH good lines were lost —
+        understating the total, which this module's own comment forbids.
+        """
+        _write(store, '{"k":"o"}', "[1,2,3]", '{"k":"o"}')
+        snap = coverage.snapshot()
+        assert snap.readable is True
+        assert snap.observed_n == 2, "the good lines on BOTH sides must survive"
+        assert snap.malformed_n == 1
 
 
 class TestUnobservedReasons:

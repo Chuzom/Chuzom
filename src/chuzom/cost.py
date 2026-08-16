@@ -1239,7 +1239,7 @@ def _validate_routing_insert(
         'ollama', 'openai', 'gemini', 'codex',
         'claude_subscription', 'subscription', 'anthropic',
         'perplexity', 'groq', 'deepseek', 'cc',
-        'anthropic', 'claude'  # variations
+        'claude'  # variations
     })
 
     # Check provider is valid

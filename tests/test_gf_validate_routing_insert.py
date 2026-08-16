@@ -65,36 +65,36 @@ class TestEveryAllowlistedProviderIsAccepted:
         assert "openai" in str(exc.value)
         assert "ollama" in str(exc.value)
 
-    def test_anthropic_is_listed_TWICE_in_the_source_set(self):
-        """A duplicate entry that makes two mutants unkillable — and is itself a defect.
+    def test_the_allowlist_has_no_duplicate_entries(self):
+        """`'anthropic'` used to appear twice in the literal, on the second and fourth
+        lines. In a frozenset the second occurrence is a no-op, so mutating EITHER copy
+        left the other and the set was unchanged — three mutants unkillable by
+        construction, and no behavioural test could reach them.
 
-        The literal reads:
+        The owner approved removing it. This replaces the test that asserted the
+        duplicate AS THE CONTRACT, which is the "a test can encode a defect as the
+        contract" shape. A duplicate also hides a typo'd entry: two lines that look
+        different but collapse to one member.
 
-            'claude_subscription', 'subscription', 'anthropic',
-            'perplexity', 'groq', 'deepseek', 'cc',
-            'anthropic', 'claude'  # variations
-
-        `'anthropic'` appears on both the second and fourth lines. In a frozenset the
-        second occurrence is a no-op, so mutating EITHER copy leaves the other and the
-        set is unchanged. Three mutants survive for that reason alone; no behavioural
-        test can kill them while the duplicate stands.
-
-        Recorded rather than worked around. Removing the duplicate is a one-word source
-        change that would make those mutants killable, but it is a change to production
-        code made to move a mutation score — exactly the motivation this campaign treats
-        as the wrong reason. Flagged for the owner instead.
+        Source-inspecting by necessity — set membership cannot observe a duplicate
+        behaviourally. Amendment 1 may deselect it from the mutation run, which is
+        correct: it is a hygiene assertion, not a mutant-killer, and must not be
+        counted toward the score. The behavioural coverage of every entry lives in
+        `test_a_real_provider_is_accepted` above.
         """
         import inspect
 
         from chuzom import cost
 
         src = inspect.getsource(cost._validate_routing_insert)
-        allowlist = src.split("VALID_PROVIDERS = frozenset({")[1].split("})")[0]
-        assert allowlist.count("'anthropic'") == 2, (
-            "the duplicate is expected here; if it has been removed, three previously "
-            "unkillable mutants became killable and this test should be replaced with "
-            "real coverage of them"
-        )
+        literal = src.split("VALID_PROVIDERS = frozenset({")[1].split("})")[0]
+        names = [
+            n.split("#")[0].strip().strip("'\"")
+            for n in literal.split(",")
+            if n.split("#")[0].strip()
+        ]
+        dupes = {n for n in names if names.count(n) > 1}
+        assert not dupes, f"duplicate provider(s) in the allowlist: {sorted(dupes)}"
 
     def test_provider_matching_is_case_sensitive(self):
         """Pins the current contract rather than assuming leniency. `OpenAI` is NOT in

@@ -92,6 +92,10 @@ class Coverage:
     unobserved_n: int = 0
     by_reason: dict[str, int] = field(default_factory=dict)
     readable: bool = True
+    #: Lines that parsed but could not be classified, or did not parse at all.
+    #: Counted so an operator sees "3 malformed lines" rather than inferring a
+    #: boolean from ``readable``. A store can be READABLE and still have some.
+    malformed_n: int = 0
 
     @property
     def total_n(self) -> int:
@@ -220,6 +224,16 @@ def snapshot() -> Coverage:
         except Exception:  # noqa: BLE001
             malformed += 1
             continue
+        if not isinstance(event, dict):
+            # Valid JSON of the wrong shape -- a bare array or string has no .get.
+            # `event` is hoisted out of the try because it is read twice below, so
+            # without this guard the AttributeError would ESCAPE THE LOOP and
+            # discard every line counted so far, understating the total in exactly
+            # the way the comment below forbids. `failopen._snapshot` keeps its
+            # .get inside the try and is already correct; this is the one place
+            # that could not.
+            malformed += 1
+            continue
         if event.get("k") == "o":
             observed += 1
         elif event.get("k") == "u":
@@ -234,10 +248,13 @@ def snapshot() -> Coverage:
     # as long as the total is not silently understated -- which is why malformed
     # lines are not simply skipped when they are all we have.
     if malformed and observed == 0 and unobserved == 0:
-        _cached_snapshot = Coverage(readable=False)
+        _cached_snapshot = Coverage(readable=False, malformed_n=malformed)
         return _cached_snapshot
 
     _cached_snapshot = Coverage(
-        observed_n=observed, unobserved_n=unobserved, by_reason=by_reason
+        observed_n=observed,
+        unobserved_n=unobserved,
+        by_reason=by_reason,
+        malformed_n=malformed,
     )
     return _cached_snapshot
