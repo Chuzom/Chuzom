@@ -1645,6 +1645,14 @@ async def _cli_prompt_with_context(
             target_provider=provider,
         )
     except Exception as e:
+        # CHZ-FO-02: this returns the bare prompt, which is what the SUCCESS path returns
+        # plus a context block. A caller cannot distinguish "there was no context to
+        # inject" from "context injection crashed", and at debug level neither can an
+        # operator. Recording it makes the degradation countable instead of invisible —
+        # the difference between "we could reconstruct this from logs if we suspected it"
+        # and "the dashboard says it happened 412 times".
+        from chuzom import failopen
+        failopen.record("CHZ-FO-ROUTER-CLI-CONTEXT", e)
         log.debug("CLI context injection unavailable for %s (non-fatal): %s", provider, e)
         return prompt
     if not context_msgs:

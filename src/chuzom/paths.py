@@ -43,9 +43,31 @@ def state_path(*parts: str) -> Path:
 
 
 def is_isolated() -> bool:
-    """True when CHUZOM_HOME is redirecting state away from the real home.
+    """True when ``CHUZOM_HOME`` is set and this module will honour it.
 
-    Exposed so a destructive test can *assert* its sandbox took effect instead
-    of assuming it did — the assumption is what caused the incident.
+    SCOPE — READ THIS BEFORE TRUSTING IT (audit #37).
+
+    This asserts one thing only: that ``chuzom_home()`` and ``state_path()`` will
+    resolve under ``CHUZOM_HOME``. It does **not** certify that the process as a
+    whole is sandboxed, because most of the codebase does not ask this module
+    where state lives.
+
+    Surveyed 2026-08-15: **120 sites in ``src/chuzom/`` compose ``~/.chuzom``
+    directly**, plus 55 more in ``src/chuzom/hooks/`` which run as separate
+    processes. ``usage.db`` alone is resolved ~23 different ways. Four modules
+    honour an override, and each honours a *different* variable
+    (``CHUZOM_STATE_DIR``, ``CHUZOM_EXECUTION_LEDGER_DB``, ``CHUZOM_CP_AUDIT_PATH``,
+    ``CHUZOM_DB_PATH``); none honours ``CHUZOM_HOME``.
+
+    So a test that asserts ``is_isolated()`` and then exercises a module which
+    resolves its own path is **not** protected. That is not hypothetical: it is
+    exactly how ``session_store.py`` read the operator's real session content while
+    a test believed it was sandboxed, and how the incident in
+    ``evidence/AUDITOR_INCIDENT.md`` destroyed live data.
+
+    Assert it to check YOUR OWN writes go through ``state_path()``. Do not read it
+    as "nothing can escape". The honest name for what this returns is "the
+    canonical resolver is redirected", and narrowing the claim is the point of this
+    docstring — a guard that over-claims is how a local bug becomes a silent one.
     """
     return bool(os.environ.get(ENV_VAR, "").strip())

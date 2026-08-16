@@ -38,7 +38,6 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK_PATH = ROOT / "src" / "chuzom" / "hooks" / "auto-route.py"

@@ -97,6 +97,84 @@ def _leaves_a_trace(handler: ast.ExceptHandler) -> bool:
     return False
 
 
+#: CHZ-FO-02 asks a DIFFERENT question from CHZ-FO-01, and that difference is audit #32.
+#:
+#: CHZ-FO-01 asks "is this failure logged?". The redaction fail-open that shipped
+#: unredacted prompts logged impeccably:
+#:
+#:     except Exception as err:
+#:         log.warning("redaction_failed", error=str(err))
+#:         return prompt, {}          # <-- the leak
+#:
+#: Measured at the time: 0 violations with the fail-open code, 0 with the fail-closed
+#: code. CHZ-FO-01 could not tell them apart, so #32 correctly refused to widen PROTECTED
+#: — that would only have added a green check that meant nothing.
+#:
+#: CHZ-FO-02 asks "is this failure SURVIVABLE AND INVISIBLE?" — does the handler hand the
+#: caller something it cannot distinguish from success?
+def _returns_live_data(handler: ast.ExceptHandler) -> list[int]:
+    """Lines where this handler returns a value the caller will USE, not a sentinel.
+
+    A bare constant return (`return False`, `return None`, `return 0`) is a SIGNAL: the
+    caller can test it and decide. `execution_ledger.record_event` returns False on loss,
+    and RED5-02 made all seven call sites bind it — that is a failure being reported, not
+    hidden, and flagging it would be noise that trains people to ignore the gate.
+
+    A return whose expression contains a Name, Call or Attribute is LIVE DATA: the caller
+    receives a plausible result with no way to know it came from the failure path.
+
+    Returns line numbers rather than a bool, because the `return` is usually several lines
+    below the `except` and pointing at the wrong one wastes the reader's time.
+    """
+    out: list[int] = []
+    for node in ast.walk(handler):
+        if not isinstance(node, ast.Return) or node.value is None:
+            continue
+        if any(
+            isinstance(sub, (ast.Name, ast.Call, ast.Attribute))
+            for sub in ast.walk(node.value)
+        ):
+            out.append(node.lineno)
+    return out
+
+
+def _records_a_failopen(handler: ast.ExceptHandler) -> bool:
+    """True if the handler calls `<something>.record(...)`.
+
+    Deliberately NARROWER than `_leaves_a_trace`. A log line proves someone could grep for
+    it afterwards; `failopen.record` puts the degradation in a counted store under an event
+    code. When a handler returns live data, a count is the minimum bar.
+    """
+    return any(
+        isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "record"
+        for n in ast.walk(handler)
+    )
+
+
+def scan_returns(paths: tuple[str, ...] = PROTECTED) -> list[str]:
+    """CHZ-FO-02 — broad handlers that return live data without recording it."""
+    findings: list[str] = []
+    for rel in paths:
+        p = REPO / rel
+        if not p.exists():
+            findings.append(f"{rel}: MISSING (protected module cannot be checked)")
+            continue
+        src = p.read_text()
+        lines = src.splitlines()
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, ast.ExceptHandler) or not _is_broad(node):
+                continue
+            rets = _returns_live_data(node)
+            if not rets or _records_a_failopen(node):
+                continue
+            snippet = lines[rets[0] - 1].strip() if rets[0] <= len(lines) else ""
+            findings.append(
+                f"{rel}:{node.lineno}: returns live data at line {rets[0]} "
+                f"without failopen.record — {snippet}"
+            )
+    return findings
+
+
 def scan(paths: tuple[str, ...] = PROTECTED) -> list[str]:
     findings: list[str] = []
     for rel in paths:
@@ -118,18 +196,32 @@ def scan(paths: tuple[str, ...] = PROTECTED) -> list[str]:
 
 def main() -> int:
     findings = scan()
-    if not findings:
-        print(f"CHZ-FO-01: clean ({len(PROTECTED)} protected modules checked)")
-        return 0
-    print(f"CHZ-FO-01: {len(findings)} silent broad catch(es) in protected modules\n")
-    for f in findings:
-        print(f"  {f}")
-    print(
-        "\nA broad catch here is fine; a SILENT one is not. Call "
-        "chuzom.failopen.record('CHZ-FO-<AREA>-<SITE>', exc) so the degradation "
-        "is counted instead of invisible."
-    )
-    return 1
+    returns = scan_returns()
+
+    if findings:
+        print(f"CHZ-FO-01: {len(findings)} silent broad catch(es) in protected modules\n")
+        for f in findings:
+            print(f"  {f}")
+        print(
+            "\nA broad catch here is fine; a SILENT one is not. Call "
+            "chuzom.failopen.record('CHZ-FO-<AREA>-<SITE>', exc) so the degradation "
+            "is counted instead of invisible."
+        )
+    if returns:
+        print(f"\nCHZ-FO-02: {len(returns)} broad catch(es) returning live data\n")
+        for f in returns:
+            print(f"  {f}")
+        print(
+            "\nThis handler hands the caller a value it cannot distinguish from success. "
+            "A log line is not enough — the caller does not read logs. Either record it "
+            "with chuzom.failopen.record('CHZ-FO-<AREA>-<SITE>', exc) so the degradation "
+            "is COUNTED, or return a sentinel the caller can test."
+        )
+    if findings or returns:
+        return 1
+
+    print(f"CHZ-FO-01 + CHZ-FO-02: clean ({len(PROTECTED)} protected modules checked)")
+    return 0
 
 
 if __name__ == "__main__":
