@@ -30,6 +30,7 @@ And one correction this document made about *itself*, added after the work in §
 | §6: "this is a regression from these 81 commits", "users being broken" | A quoting bug in `smoke-test.yml`; the product was never executed. **No user was affected.** See §6, §9 |
 | §6: three named candidates, "test them one at a time" | All three wrong. One line of the CI log gave the cause |
 | §7: "a genuine finding in new code, or a workflow/permissions issue" | Neither — 14 pre-existing alerts on `main` plus 5 in a frozen evidence tree |
+| §5: "probably the same as #1" | Wrong. G-D never had the suite's env; `test` went green and G-D stayed red. **The one guess this document refused to act on is the one that was wrong** — see §5 |
 
 ---
 
@@ -37,11 +38,11 @@ And one correction this document made about *itself*, added after the work in §
 
 | # | check | state | root cause |
 |---|---|---|---|
-| 1 | `test (3.11)` `(3.12)` `(3.13)` `(3.14)` | **FIXED, verified** | §4 |
-| 2 | `G-D · wheel suite · py3.11` `py3.13` | likely same as #1 — **unverified** | §5 |
-| 3 | `lint` → G-C step | **FIXED, verified in a clean clone** | §3 |
-| 4 | `windows-latest · py3.11/3.12/3.13 · pip` | **FIXED** — cause was not any of the three candidates below | §6 |
-| 5 | `CodeQL` | **RESOLVED — not a new finding** | §7 |
+| 1 | `test (3.11)` `(3.12)` `(3.13)` `(3.14)` | ✅ **green in CI** | §4 |
+| 2 | `G-D · wheel suite · py3.11` `py3.13` | **FIXED** — *not* the same as #1; the guess was wrong | §5 |
+| 3 | `lint` → G-C step | ✅ **green in CI**, first time ever | §3 |
+| 4 | `windows-latest · py3.11/3.12/3.13 · pip` | ✅ **all three green in CI** — cause was none of the three candidates | §6 |
+| 5 | `CodeQL` | **red, and correctly so** — 14 alerts, all pre-existing on `main`, zero new | §7 |
 
 Passing throughout: ubuntu and macos on 3.11/3.12/3.13 (pip and uv), docker-build,
 pip-audit.
@@ -199,6 +200,56 @@ breaks when packaged.
 A suite that passes against the source tree is the *same class of evidence* this document
 opened by rejecting. So the label does not change: **hypothesis until the wheel job says
 otherwise.** If it fails, read its log first — that is what worked for §6 and §7.
+
+### The hypothesis was wrong — FIXED, and the caution was worth it
+
+CI said otherwise. §4's fix landed, `test` went green on all four versions, and **G-D stayed
+red** — on something with no connection to §4:
+
+```
+ValueError: No providers available for query/budget. Configured providers: none
+```
+
+41 failures across `test_t3_m1`, `test_t3_m2`, `test_t3_m4`, `test_t3_s2`, `test_t4_m1`,
+`test_t4_m2`. Nothing about wheels, packaging, or anything G-D exists to detect.
+
+`ci.yml`'s `test` job sets a dummy `OPENAI_API_KEY`, with a comment explaining that a
+routing-audit fix to `_build_and_filter_chain` made these modules require a non-empty provider
+list — they patch the dispatch layer and never make a network call, but they need *some*
+candidate in the chain, and a bare runner has no keys and no Ollama. `smoke-test.yml`'s
+wheel-suite job never got it. **Two jobs running the same suite; one of them configured.**
+
+Confirmed rather than assumed: the failing *file set* is byte-identical to the one produced
+locally by running the suite without that key — 41 on CI against 38 locally, the difference
+being `providers: none` there versus one leaked key here.
+
+**This is the entry that justifies the whole document.** §5 refused to call G-D fixed on the
+strength of a plausible inference, and the inference was wrong. Had it been reported as
+"likely fixed", the actual defect — a gate that has never run in a valid environment — would
+have shipped behind a green-looking summary.
+
+#### And an uncomfortable note
+
+Those 38 local failures appeared earlier in this work and were written off as an artefact of a
+botched "clean HOME" probe (§8). That dismissal was **right about the probe and wrong about
+the signal.** The same misconfiguration was sitting in G-D the entire time, and an accidental
+exact reproduction of a real defect was filed as noise.
+
+So §8's pattern has a mirror image worth naming: *a measurement known to be flawed can still
+be measuring something real.* "My probe was wrong" answers where the number came from — it
+does not answer whether the number is also true somewhere else.
+
+#### Guard
+
+`scripts/lint_suite_env_parity.py` — every step running the whole suite must set the shared
+environment, by value, not merely by presence.
+
+It took three passes to get right, which is the point. The first two flagged `routing-hermetic`
+(which runs with **no** keys deliberately, selected by marker, and would have been broken by
+"fixing" it) and G-D's `uv pip install … \` continuation, where the bare word `pytest` lands on
+a line carrying no install marker. A lint with false positives gets its baseline padded until
+it detects nothing — the exact failure it was written to prevent. Verified by control: exit 1
+against the pre-fix tree naming exactly the one real step, exit 0 after.
 
 ---
 
@@ -409,6 +460,37 @@ distinguishes the fix from a coincidence. What remains before merge is not analy
 **CI confirming it on a clean checkout** — including §5 (G-D), which is still a hypothesis and
 should stay labelled one until the wheel job says otherwise. The honest summary is not "ready
 to merge"; it is *"nothing further is diagnosable from here — push and read CI."*
+
+### Position after CI · 31 of 34 green
+
+CI confirmed four and refuted one, which is the correct return on refusing to over-claim:
+
+| | |
+|---|---|
+| `test` × 4 | ✅ green — §4 fixed |
+| `windows` × 3 | ✅ green — §6 was never a product defect |
+| `lint` (G-C) | ✅ green — **the first time this gate has ever passed** |
+| ubuntu/macos × 12, +12 others | ✅ green |
+| `G-D` × 2 | ❌ → **fixed after CI refuted §5's guess** — awaiting re-run |
+| `CodeQL` | ❌ **red on 14 alerts, all verified pre-existing on `main`, zero new** |
+
+**Merge position: unblocked on the merits, with one red check that is a judgement call and
+not a defect.**
+
+Every failure that described something broken is fixed. The single remaining red is `CodeQL`,
+and its redness has been measured rather than argued: all 14 alerts match `main` at
+`(path, rule, line)`, none are new, and CodeQL states in its own summary that it cannot
+diff-scope across a branch this size. Merging means accepting that. Declining to merge on a
+red check is also defensible — the answer to it is triaging `main`'s 40 alerts, which is its
+own work and not this PR's.
+
+The `v1.2.0` hold in the original §9 rested on two arguments. The Windows one was false. The
+G-C one was true, and is now fixed and verified against a real clean clone rather than this
+disk — which is the first time that gate's result has been a statement about the repository.
+
+What earned its keep here was not the fixing. It was §5 declining to call G-D fixed on a
+plausible inference. That inference was wrong, and had it been reported as "likely fixed", a
+gate that has never once run in a valid environment would have shipped behind a green summary.
 
 Two things deliberately **not** fixed, recorded so they are decisions rather than omissions:
 
