@@ -1983,7 +1983,24 @@ def main() -> None:
             # Gather 14-day model breakdown directly from routing_decisions.final_model.
             # This is the authoritative source — previous code fell through to routing
             # method names (heuristic, build-fast-path) because it never queried here.
+            # COVERAGE, NOT JUST NUMBERS (audit doc 27).
+            #
+            # `routing_decisions` is written ONLY by llm_route and llm_auto. The whole
+            # llm(task=…) family calls route_and_call() without `classification_data`,
+            # and router.py guards the write with `if classification_data:` — so the
+            # dominant traffic never appears here and nothing records the omission.
+            #
+            # This panel therefore describes ONE TOOL's routing, and was rendered as
+            # "MODELS 14-day mix" as though it described everything. Worse, when no
+            # llm_route call has happened inside the window the newest row can be weeks
+            # old and the percentages still render as current — which is exactly what was
+            # observed: 643 rows into `usage` in 24h against 0 into routing_decisions.
+            #
+            # So the panel now carries what it covers and how fresh it is. The fix is to
+            # NAME the difference, not to widen the query — adding the missing traffic
+            # would move every historical percentage silently.
             model_breakdown: dict[str, float] = {}
+            model_breakdown_note = ""
             try:
                 if os.path.exists(DB_PATH):
                     _mb_conn = sqlite3.connect(DB_PATH)
@@ -1996,11 +2013,19 @@ def main() -> None:
                         "ORDER BY cnt DESC "
                         "LIMIT 8"
                     ).fetchall()
+                    _mb_newest = _mb_conn.execute(
+                        "SELECT MAX(timestamp) FROM routing_decisions"
+                    ).fetchone()[0]
                     _mb_conn.close()
                     _mb_total = sum(r[1] for r in _mb_rows)
                     if _mb_total > 0:
                         for _model, _cnt in _mb_rows:
                             model_breakdown[_model] = (_cnt / _mb_total) * 100
+                        model_breakdown_note = "classified routes only"
+                    elif _mb_newest:
+                        # Rows exist but NONE inside the window. Say so rather than
+                        # rendering nothing, which reads as "no routing happened".
+                        model_breakdown_note = f"no classified routes since {_mb_newest[:10]}"
             except Exception:
                 pass
 
@@ -2075,6 +2100,7 @@ def main() -> None:
                 daily_costs=daily_costs if daily_costs else None,
                 total_saved=total_saved,
                 model_breakdown=model_breakdown if model_breakdown else None,
+                model_breakdown_note=model_breakdown_note or None,
                 session_models=session_models_list if session_models_list else None,
                 claude_quota_pct=claude_quota_pct,
                 claude_session_pct=claude_session_pct,
