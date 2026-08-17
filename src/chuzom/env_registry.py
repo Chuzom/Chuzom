@@ -110,6 +110,7 @@ ENV_REGISTRY: dict[str, tuple[str, str, int]] = {
     "CHUZOM_GEMINI_TIMEOUT": ("chuzom", "gemini_cli_agent.py", 1),
     "CHUZOM_HEALTH_SNAPSHOT": ("chuzom", "health.py", 1),
     "CHUZOM_HISTORY_RELAY": ("chuzom", "hooks/auto-route.py", 1),
+    "CHUZOM_HOOK_SLOW_SECONDS": ("chuzom", "hooks/auto-route.py", 1),
     "CHUZOM_HTTP_TIMEOUT": ("chuzom", "hooks/session-end.py", 2),
     "CHUZOM_IDEMPOTENCY_PATH": ("chuzom", "idempotency.py", 1),
     "CHUZOM_IDENTITY_PATH": ("chuzom", "enterprise/identity.py", 1),

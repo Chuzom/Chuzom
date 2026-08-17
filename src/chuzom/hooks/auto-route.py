@@ -2782,11 +2782,71 @@ def _normalize_output_for_platform(output: dict, hook_input: dict) -> dict:
     return output
 
 
+#: CHZ-FO-HOOK-SLOW — the hook's self-timing threshold, in seconds.
+#:
+#: Claude Code discards this hook's output at 30s. A ~36s window was measured once and
+#: could not be reproduced: nine hypotheses were refuted by measurement (gateway lock,
+#: gateway existence, WAL size, checkpoint starvation, pytest load, Ollama model, Ollama
+#: generally, import cost, external classifier) and a 2x2 controlled reproduction found
+#: nothing. By the time anyone looks, the conditions have passed.
+#:
+#: So the hook records its own evidence instead. 5s is far above any healthy run — the
+#: measured fast path is 0.2s — and far below the host's budget, so a breach is captured
+#: while the hook is still alive to describe it.
+_SLOW_HOOK_SECONDS = float(os.environ.get("CHUZOM_HOOK_SLOW_SECONDS", "5"))
+
+#: (label, monotonic) pairs. Appended on the fast path, READ only when slow, so the cost
+#: of instrumentation on a healthy run is a list append per phase.
+_MARKS: list[tuple[str, float]] = []
+
+
+def _mark(label: str) -> None:
+    """Record a phase boundary. Deliberately trivial — see _SLOW_HOOK_SECONDS."""
+    try:
+        _MARKS.append((label, time.monotonic()))
+    except Exception:  # noqa: BLE001 — instrumentation must never break the turn
+        pass
+
+
+def _report_if_slow() -> None:
+    """If this invocation breached the threshold, record WHERE the time went.
+
+    Records under a single fail-open code with the phase breakdown in the detail, so the
+    next occurrence answers "which phase" without anyone having to be watching. Silent and
+    nearly free when the hook is healthy, which is the normal case.
+    """
+    try:
+        if len(_MARKS) < 2:
+            return
+        total = _MARKS[-1][1] - _MARKS[0][1]
+        if total < _SLOW_HOOK_SECONDS:
+            return
+        spans = [
+            f"{_MARKS[i + 1][0]}={_MARKS[i + 1][1] - _MARKS[i][1]:.2f}s"
+            for i in range(len(_MARKS) - 1)
+        ]
+        from chuzom import failopen
+        # The breakdown goes in `detail`, NOT in an exception message: record() stores
+        # only type(exc).__name__, so an exception carrying the timings would arrive as
+        # the bare string "RuntimeError" — a record that says the hook was slow and
+        # nothing about where the time went, which is the position this instrumentation
+        # exists to escape. `detail` is truncated at 200 chars, so the phases are ordered
+        # slowest-first and the total leads.
+        spans.sort(key=lambda s: -float(s.rsplit("=", 1)[1].rstrip("s")))
+        failopen.record(
+            "CHZ-FO-HOOK-SLOW",
+            detail=f"total={total:.2f}s budget=30s " + " ".join(spans),
+        )
+    except Exception:  # noqa: BLE001 — a diagnostic must never break the turn
+        pass
+
+
 def main() -> None:
     # Must run before ANY logging call so structlog never falls back to its
     # stdout PrintLogger and corrupt the JSON payload (audit §2.1).
     _init_hook_logging()
 
+    _mark("start")
     invocation_id = time.time()
     _debug_log(f"[INVOCATION START] ID={invocation_id:.3f}")
 
@@ -3835,12 +3895,14 @@ def main() -> None:
     # which is not. The cause of that particular slow window was never established
     # (nine hypotheses refuted -- see the audit finding); this ordering is justified
     # by the profile alone and does not depend on knowing it.
+    _mark("classify_and_build_directive")
     print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool_disp} (via {method})", file=sys.stderr)
     json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
     try:
         sys.stdout.flush()   # the point of the reordering; buffered output is not emitted
     except Exception:  # noqa: BLE001 — a flush failure must not break the turn
         pass
+    _mark("emit_stdout")
     _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUT COMPLETE")
 
     # INV-COST-005 accounting, now strictly AFTER the directive has been delivered.
@@ -3862,6 +3924,11 @@ def main() -> None:
         ))
     except Exception:
         pass
+    _mark("ledger_write")
+
+    # Timing is judged only after everything is done, so the breakdown covers the whole
+    # invocation including the accounting write that once consumed 31 of 36 seconds.
+    _report_if_slow()
 
 
 if __name__ == "__main__":
