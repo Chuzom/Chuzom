@@ -30,7 +30,8 @@ And one correction this document made about *itself*, added after the work in §
 | §6: "this is a regression from these 81 commits", "users being broken" | A quoting bug in `smoke-test.yml`; the product was never executed. **No user was affected.** See §6, §9 |
 | §6: three named candidates, "test them one at a time" | All three wrong. One line of the CI log gave the cause |
 | §7: "a genuine finding in new code, or a workflow/permissions issue" | Neither — 14 pre-existing alerts on `main` plus 5 in a frozen evidence tree |
-| §5: "probably the same as #1" | Wrong. G-D never had the suite's env; `test` went green and G-D stayed red. **The one guess this document refused to act on is the one that was wrong** — see §5 |
+| §5: "probably the same as #1" | Wrong, twice over. G-D held **two** unrelated defects — a missing provider env, and a test that could not survive a wheel. **The one guess this document refused to act on is the one that was wrong** — see §5 |
+| §6: "I have no Windows machine… a push-and-read-CI loop" — generalised in practice to G-D | G-D was reproducible here all along: `uv build` + a clean venv. Never attempted until the third push |
 
 ---
 
@@ -39,7 +40,7 @@ And one correction this document made about *itself*, added after the work in §
 | # | check | state | root cause |
 |---|---|---|---|
 | 1 | `test (3.11)` `(3.12)` `(3.13)` `(3.14)` | ✅ **green in CI** | §4 |
-| 2 | `G-D · wheel suite · py3.11` `py3.13` | **FIXED** — *not* the same as #1; the guess was wrong | §5 |
+| 2 | `G-D · wheel suite · py3.11` `py3.13` | **FIXED** — *two* unrelated defects, neither of them #1 | §5 |
 | 3 | `lint` → G-C step | ✅ **green in CI**, first time ever | §3 |
 | 4 | `windows-latest · py3.11/3.12/3.13 · pip` | ✅ **all three green in CI** — cause was none of the three candidates | §6 |
 | 5 | `CodeQL` | **red, and correctly so** — 14 alerts, all pre-existing on `main`, zero new | §7 |
@@ -239,10 +240,58 @@ So §8's pattern has a mirror image worth naming: *a measurement known to be fla
 be measuring something real.* "My probe was wrong" answers where the number came from — it
 does not answer whether the number is also true somewhere else.
 
+#### Then a second, unrelated defect — and this one G-D was built for
+
+The env fix took G-D from 41 failures to **3**, which were something else entirely:
+
+```
+FileNotFoundError: .wheelvenv/lib/python3.11/src/chuzom/gateway.py
+```
+
+`test_every_serving_component_consults_the_gate` asserts on the **repository's** source text —
+it greps three serving modules for a `refuse_public_bind_or_exit` call — but located the
+repository by walking up from `chuzom.__file__`. In the ordinary run that is
+`<repo>/src/chuzom/__init__.py`, so three parents up is the repo root and it worked. Against
+the wheel it is `site-packages/chuzom/__init__.py`, so the same walk lands in
+`lib/python3.11/`.
+
+A test that reads the source tree must find the source tree, and the import path stops being a
+route to it the moment the package is installed. Anchored to `__file__` instead — the test file
+is in the repository under either invocation. Checked for siblings: only `conftest.py`'s
+wheel-resolution assertion (which uses `chuzom.__file__` correctly, to prove resolution) and
+`test_dev_refresh` (which patches it deliberately).
+
+Worth recording that **the first defect G-D ever caught was not in packaging but in a test's
+assumption about packaging** — and that it took two pushes to see it, because the env failure
+was masking it.
+
+#### G-D is no longer unreproducible locally
+
+This is the durable outcome. `uv build --wheel` + a clean venv + CI's test-dep list +
+`-o pythonpath=` with `CHUZOM_REQUIRE_WHEEL=1` reproduces G-D exactly on this machine:
+
+```
+without the fix : the exact CI FileNotFoundError on all three parameters
+with the fix    : 7368 passed, 173 skipped, 0 failed   (exit 0, against the wheel)
+```
+
+§6 established that "unreproducible locally" and "undiagnosable locally" are different
+problems. G-D turns out to have been neither — it was simply never attempted, and the
+push-and-read-CI loop was a choice rather than a constraint. Two of the wasted cycles here
+would have been avoided by building the wheel once.
+
+One caveat kept on the record rather than glossed: the local reproduction sets `HOME` to an
+empty directory, which CI does not do — CI gets a fresh runner HOME instead. That is closer to
+CI than this machine's real HOME, and not identical to it. Per §8, an approximation of CI is
+still an approximation.
+
 #### Guard
 
 `scripts/lint_suite_env_parity.py` — every step running the whole suite must set the shared
 environment, by value, not merely by presence.
+
+No second guard for the wheel-path defect: **G-D is the guard for that class**, and it fired
+correctly. Adding a lint would duplicate a gate that already works.
 
 It took three passes to get right, which is the point. The first two flagged `routing-hermetic`
 (which runs with **no** keys deliberately, selected by marker, and would have been broken by
