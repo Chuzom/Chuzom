@@ -296,6 +296,31 @@ happens. It is deliberately **kept** — `main` carries ~40 open alerts, and rem
 would make CodeQL block on that backlog rather than on new findings. Triaging that backlog and
 then removing the flag is a real piece of follow-up work, not a side effect of this PR.
 
+### Confirmed by CI, and the "pre-existing" claim tightened
+
+The exclusion worked: **19 alerts → 14**, all five evidence-tree alerts gone, no `src/` alert
+suppressed. The `codeql` job passes. The `CodeQL` results check **still fails**, on the 14.
+
+The claim that those 14 are pre-existing was originally made on *path-level* matching —
+"these files already have open alerts on `main`" — which is weaker than the claim needed to be,
+because a file can carry an old alert and a new one at once. Re-checked at full
+`(path, rule_id, line)` precision against the 40 alerts open on `main`:
+
+```
+exact (path, rule, line) match on main : 14
+same path+rule, different line         :  0
+not on main at all                     :  0
+```
+
+**This branch introduces zero new CodeQL findings.** The check is red because CodeQL's
+diff-scoping cannot attribute alerts across an 81-commit branch and says so in its own summary.
+
+That makes `CodeQL` red for the same reason G-C was red before §3: **the check is reporting on
+something other than the change it is gating.** The difference is that G-C's version was a bug
+in our oracle and fixable; this one is a real scanner correctly reporting a real backlog, mis-scoped.
+So the resolution is different — not a fix, but a decision recorded in §9 with the evidence
+above attached, and the backlog itself triaged as its own work.
+
 ---
 
 ## 8 · The general lesson, which outlives these eleven failures
@@ -387,9 +412,15 @@ to merge"; it is *"nothing further is diagnosable from here — push and read CI
 
 Two things deliberately **not** fixed, recorded so they are decisions rather than omissions:
 
-- ~40 pre-existing CodeQL alerts on `main`. Real, still open, out of scope for a PR about CI
-  failures — but they are the reason the CodeQL job keeps `continue-on-error`, so triaging
-  them is what unblocks making CodeQL a required check.
+- ~40 pre-existing CodeQL alerts on `main`, 14 of which this PR's check reports. Verified at
+  `(path, rule, line)` precision: **all 14 are exact matches on `main`, none new.** Real, still
+  open, out of scope for a PR about CI failures — but they are the reason the CodeQL job keeps
+  `continue-on-error`, so triaging them is what unblocks making CodeQL a required check.
+
+  **`CodeQL` will therefore still be red at merge time**, and that is a judgement call, not a
+  fix: merging means accepting a red check whose redness has been shown to be about `main`'s
+  backlog rather than this branch. Anyone who prefers not to merge on a red check has a fair
+  objection — the answer to it is triaging the 40, not anything further in this PR.
 - The four gitignored `.db` captures remain unverifiable by anyone who does not hold them.
   Recording their hashes is the most that can be done without putting 127MB of a user's real
   usage data in a public repo.
