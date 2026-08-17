@@ -178,6 +178,28 @@ clear too. **Not verified.** Every diagnosis-by-reading this session has been wr
 refuted hypotheses on the hook stall alone — so this stays a hypothesis until CI says
 otherwise.
 
+### Still a hypothesis — and the evidence gathered does not upgrade it
+
+The full suite now passes under an environment reconstructed from `ci.yml` rather than
+invented: clean `HOME`, leaked `*_API_KEY` variables unset, the dummy `OPENAI_API_KEY` that
+workflow sets, and the same `--ignore` / `--timeout` flags.
+
+```
+7368 passed, 173 skipped, 0 failed    (pytest exit 0)
+```
+
+That is real evidence that §4 was the only suite failure, and it is **not** evidence that G-D
+passes. G-D deliberately runs a different invocation — `-o pythonpath=` with
+`CHUZOM_REQUIRE_WHEEL=1`, so `chuzom` must resolve from site-packages — precisely because the
+ordinary run cannot see packaging defects: missing `package_data`, modules absent from the
+wheel, entry points that do not resolve, hook scripts not shipped. `src/chuzom/hooks/*.py` are
+executed as standalone scripts by path, which is exactly the shape that works in-tree and
+breaks when packaged.
+
+A suite that passes against the source tree is the *same class of evidence* this document
+opened by rejecting. So the label does not change: **hypothesis until the wheel job says
+otherwise.** If it fails, read its log first — that is what worked for §6 and §7.
+
 ---
 
 ## 6 · Windows — undiagnosed, and unreproducible here *(diagnosed; see below)*
