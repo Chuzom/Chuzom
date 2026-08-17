@@ -1,4 +1,4 @@
-# Handoff — 2026-08-16
+# Handoff — 2026-08-16, updated 2026-08-17
 
 Written because the working task list is ephemeral and the durable record is this
 directory. Everything below is either done and committed, or a decision waiting on the
@@ -6,7 +6,33 @@ owner. Nothing is "in progress".
 
 ---
 
-## 1 · The four decisions blocking everything else
+## 0 · Decisions taken 2026-08-17 — §1 below is kept for its reasoning
+
+| decision | outcome | landed |
+|---|---|---|
+| **D1** the 0.80 floor | **ship stating G-F NOT QUALIFIED** — not waived, not amended | doc 29, `c55316f` |
+| **D2** what the dashboard is for | **two named panels**: "all routed traffic" from `usage`, "classified routing" from `routing_decisions` | `ea3c436` |
+| **D3** the `usage.db` accessor | **not now** — the CHZ-SR-01 ratchet holds at 182 | still open, by choice |
+| **D4** the gateway | no action — the 2×2 reproduction cleared it | recorded |
+
+Plus, unblocked by D1/D2 and now done: **#58's actionable half** (the hook records its own
+phase breakdown under `CHZ-FO-HOOK-SLOW` when it breaches 5s, so the next occurrence
+diagnoses itself), and **W4** (the panel states its coverage and distinguishes *no data*
+from *no activity*).
+
+**Still open, both deliberately:** #58's root cause (unreproducible; nine hypotheses
+refuted; now self-diagnosing) and #62 (the ~38-site accessor migration, D3).
+
+One deployment fact worth knowing: `~/.claude/hooks/chuzom-auto-route.py` and
+`src/chuzom/hooks/auto-route.py` are **separate files kept in sync** by
+`check_and_update_hooks()`, which fires when the MCP server starts. Both of today's hook
+fixes are therefore live. The source comment notes this does **not** fire on
+Cursor/Windsurf/Codex, which never start the MCP server — on those hosts the version stamp
+is the only staleness signal and a reinstall is required.
+
+---
+
+## 1 · The four decisions (as originally posed — kept for the reasoning)
 
 ### D1 — the G-F 0.80 floor  *(blocks release)*
 
