@@ -40,7 +40,7 @@ And one correction this document made about *itself*, added after the work in §
 | # | check | state | root cause |
 |---|---|---|---|
 | 1 | `test (3.11)` `(3.12)` `(3.13)` `(3.14)` | ✅ **green in CI** | §4 |
-| 2 | `G-D · wheel suite · py3.11` `py3.13` | **FIXED** — *two* unrelated defects, neither of them #1 | §5 |
+| 2 | `G-D · wheel suite · py3.11` `py3.13` | ✅ **green in CI** — held *two* unrelated defects, neither of them #1 | §5 |
 | 3 | `lint` → G-C step | ✅ **green in CI**, first time ever | §3 |
 | 4 | `windows-latest · py3.11/3.12/3.13 · pip` | ✅ **all three green in CI** — cause was none of the three candidates | §6 |
 | 5 | `CodeQL` | **red, and correctly so** — 14 alerts, all pre-existing on `main`, zero new | §7 |
@@ -510,7 +510,45 @@ distinguishes the fix from a coincidence. What remains before merge is not analy
 should stay labelled one until the wheel job says otherwise. The honest summary is not "ready
 to merge"; it is *"nothing further is diagnosable from here — push and read CI."*
 
-### Position after CI · 31 of 34 green
+### Final · 33 of 34 green, three pushes later
+
+**All eleven original failures are resolved.** The one remaining red is `CodeQL`, for the
+measured reason in §7.
+
+| | |
+|---|---|
+| `test` × 4 · `windows` × 3 · `lint` (G-C) · `G-D` × 2 | ✅ green |
+| everything else (23 checks) | ✅ green |
+| `CodeQL` | ❌ 14 alerts, all pre-existing on `main` at `(path, rule, line)`, **zero new** |
+
+It took three pushes, and the second and third were both avoidable:
+
+1. §3, §4, §6, §7 fixed → `test`, `windows`, `lint` green; **G-D red on a missing provider env**
+2. env fixed → G-D red on a **second, unrelated** defect (the wheel-path test)
+3. wheel-path fixed → green, *after* being reproduced locally first
+
+Cycle 3 was the only one that verified against the real artefact before pushing. Cycles 1 and 2
+were push-and-read, and both could have been collapsed into one had the wheel been built once
+at the start — see §5.
+
+#### One flake, correctly self-diagnosed
+
+`test (3.11)` failed once on the third push with **zero failing tests**: the job hit its own
+540s watchdog at 82% while still actively advancing. The workflow classifies this in advance —
+*"pytest still running after 540s with no junit — slow runner, not a hang. Re-run."* — and
+3.12/3.13/3.14 passed the identical commit. Re-run, green.
+
+Recorded because "call it a flake" is normally the least trustworthy move available, and the
+thing that makes it trustworthy here is that the judgement was **pre-registered by the workflow
+rather than improvised after the fact**, and the evidence was positive (zero failures,
+timestamps still advancing, three siblings green on the same SHA) rather than merely absent.
+That is the distinction between this and §5, where an inference with no such backing was
+correctly refused.
+
+Not fixed, and worth knowing: the 540s watchdog is marginal against the slowest runner and this
+will recur. Raising it, or making the re-run automatic, is its own small piece of work.
+
+### Position after CI · 31 of 34 green *(superseded by the section above)*
 
 CI confirmed four and refuted one, which is the correct return on refusing to over-claim:
 
