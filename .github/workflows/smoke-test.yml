@@ -257,4 +257,22 @@ jobs:
       - name: Run the full suite against the wheel
         env:
           CHUZOM_REQUIRE_WHEEL: "1"
+          # MUST MATCH ci.yml's `test` job. Both jobs run the SAME suite; they
+          # differ only in what they run it against (source tree vs wheel). Any
+          # env the suite needs is therefore needed by both, and this one was
+          # set in exactly one of them.
+          #
+          # Without it: 41 failures across test_t3_m1/m2/m4, test_t3_s2,
+          # test_t4_m1/m2 -- all `ValueError: No providers available for
+          # query/budget. Configured providers: none`. Those tests patch the
+          # dispatch layer and never make a network call; they just need
+          # available_providers to be non-empty, which a bare runner with no
+          # keys and no Ollama cannot supply. ci.yml carries the full
+          # explanation and has had this since the routing-audit fix to
+          # _build_and_filter_chain.
+          #
+          # 30_CI_GAP_PLAN §5 guessed G-D was failing for the same reason as the
+          # `test` job. It was not: the suite fix landed, `test` went green on
+          # all four versions, and G-D stayed red on this instead.
+          OPENAI_API_KEY: sk-test-dummy-key-for-ci-only-no-real-calls-made
         run: .wheelvenv/bin/python -m pytest -o pythonpath= -q

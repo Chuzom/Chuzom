@@ -145,6 +145,16 @@ jobs:
         # that broke CI.
         run: uv run python scripts/lint_workflow_shell_portability.py
 
+      - name: Suite env parity (both suite runs get the same environment)
+        # The suite runs twice on purpose — source tree here, built wheel in
+        # G-D — so they differ in what they test and must not differ in what
+        # the suite needs to run at all. They did: this job set a dummy
+        # OPENAI_API_KEY and G-D never got it, so G-D failed with 41
+        # `No providers available` errors that had nothing to do with
+        # packaging. A gate red for a reason unrelated to what it gates is a
+        # gate people learn to skip.
+        run: uv run python scripts/lint_suite_env_parity.py
+
   quality-gates:
     # v1.0.1 mitigation gates (G4/G5/G6). These target the audit's recurrence
     # patterns directly: new can't-fail tests (G4), regressions of the six fixed
