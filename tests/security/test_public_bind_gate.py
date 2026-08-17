@@ -127,9 +127,22 @@ def test_every_serving_component_consults_the_gate(module_path):
     """
     from pathlib import Path
 
-    import chuzom
-
-    root = Path(chuzom.__file__).resolve().parent.parent.parent
+    # Anchored to THIS FILE, not to `chuzom.__file__`.
+    #
+    # This assertion is about the REPOSITORY's source text, so it must find the
+    # repository -- and the installed package is not a reliable route to it. In
+    # the ordinary run `chuzom.__file__` is `<repo>/src/chuzom/__init__.py`, so
+    # three parents up landed on the repo root and this worked. Under G-D the
+    # wheel is installed, `chuzom.__file__` is
+    # `.wheelvenv/lib/python3.11/site-packages/chuzom/__init__.py`, and the same
+    # three parents give `.wheelvenv/lib/python3.11/` -> FileNotFoundError on
+    # `src/chuzom/gateway.py`.
+    #
+    # G-D caught this, which is precisely what it exists for: a test that reads
+    # the source tree while deriving its location from the import path passes
+    # in-tree and cannot work against a wheel. The test file itself is always in
+    # the repo under either invocation, so it is the stable anchor.
+    root = Path(__file__).resolve().parents[2]
     src = (root / module_path).read_text()
     assert "refuse_public_bind_or_exit" in src, (
         f"{module_path} binds a host without consulting the shared gate"
