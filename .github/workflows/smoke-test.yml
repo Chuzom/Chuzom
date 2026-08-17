@@ -129,6 +129,16 @@ jobs:
         # when there is no user config to clobber. The realistic case -- a
         # settings.json that already has a foreign statusLine and unrelated keys
         # the user cares about -- is the only one that can fail.
+        #
+        # NO BACKSLASH-ESCAPED QUOTES IN THIS SCRIPT. `run:` uses bash on
+        # ubuntu/macos and pwsh on windows. bash turns `\"` inside a
+        # double-quoted string into `"`; pwsh does not treat backslash as an
+        # escape character at all, so `\"` reaches Python verbatim and the
+        # interpreter dies with `SyntaxError: unterminated string literal`
+        # before running a single assertion. That is the entire reason all
+        # three windows legs were red on PR #253 -- a quoting bug in this file,
+        # not a defect in install_hooks. Hoist values into locals instead of
+        # putting `after.get("x")` inside an f-string.
         run: |
           python -c "
           import json, os, tempfile
@@ -154,9 +164,11 @@ jobs:
               with open(settings_path) as fh:
                   after = json.load(fh)
               # Keys chuzom has no business touching must survive verbatim.
-              assert after.get('model') == 'opus', f'install() clobbered model: {after.get(\"model\")}'
-              assert after.get('env', {}).get('MY_OWN_VAR') == 'do-not-touch', \
-                  f'install() clobbered env: {after.get(\"env\")}'
+              model_after = after.get('model')
+              env_after = after.get('env', {})
+              assert model_after == 'opus', f'install() clobbered model: {model_after}'
+              assert env_after.get('MY_OWN_VAR') == 'do-not-touch', \
+                  f'install() clobbered env: {env_after}'
               # The foreign statusLine may be replaced -- that is chuzom's job --
               # but it must be RECOVERABLE, not silently destroyed.
               sl = after.get('statusLine')

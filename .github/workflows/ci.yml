@@ -131,6 +131,20 @@ jobs:
         # build instead of a quietly wrong routing decision.
         run: uv run python scripts/check_model_registry_freshness.py
 
+      - name: Workflow shell portability (a `run:` block must mean one thing)
+        # All three windows legs of PR #253 were red on a quoting bug in
+        # smoke-test.yml, not on a product defect. `run:` is bash on
+        # ubuntu/macos and pwsh on windows; bash collapses \" to " and pwsh
+        # does not, so the same inline Python was valid on every platform the
+        # developer could reach and a SyntaxError on the one they could not.
+        #
+        # 30_CI_GAP_PLAN §6 named three suspects for those failures and all
+        # three were wrong -- an unreproducible failure invites speculative
+        # fixes, and this lint is the alternative to guessing. Verified by
+        # control against the pre-fix tree: it reports exactly the two lines
+        # that broke CI.
+        run: uv run python scripts/lint_workflow_shell_portability.py
+
   quality-gates:
     # v1.0.1 mitigation gates (G4/G5/G6). These target the audit's recurrence
     # patterns directly: new can't-fail tests (G4), regressions of the six fixed
