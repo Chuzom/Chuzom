@@ -184,6 +184,40 @@ jobs:
               print('pre-existing host config survived install ✓')
           "
 
+  # ── Doc 34 Step 1 · B3: the documented commands, on every platform ─────────
+  #
+  # The in-tree check in ci.yml runs on ubuntu only. That is the shape that let
+  # the Windows failure through earlier in this audit: `\"` means one thing in
+  # bash and another in pwsh, it was invisible on every platform reachable
+  # locally, and it lived in a shell-quoted command of exactly the kind this
+  # check executes.
+  #
+  # So the README's promises are executed on all three platforms and at BOTH
+  # ends of the supported Python range — a documented command that only works
+  # where the maintainer happens to develop is a broken promise to everyone else.
+  docs-commands-matrix:
+    name: Doc commands · ${{ matrix.os }} · py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false          # one platform failing must not hide the others
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+        continue-on-error: true
+      - name: Run every documented command
+        shell: bash            # pinned: this step must mean the same thing everywhere
+        run: uv run python scripts/check_docs_commands.py --run
+
   # ── G-D: the suite must be green on the BUILT WHEEL ────────────────────────
   #
   # This gate was previously unsatisfiable, and not merely unimplemented.

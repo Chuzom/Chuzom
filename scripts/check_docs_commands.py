@@ -123,6 +123,10 @@ def extract(doc: Path) -> list[Cmd]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", action="store_true", help="execute RUNNABLE commands")
+    ap.add_argument("--time-budget", type=float, default=None,
+                    help="fail if the total runtime of RUNNABLE commands exceeds this many "
+                         "seconds — for checking a documented time claim rather than "
+                         "asserting one")
     args = ap.parse_args()
 
     cmds: list[Cmd] = []
@@ -161,6 +165,8 @@ def main() -> int:
         return 0
 
     failures = []
+    import time as _time
+    _t0 = _time.perf_counter()
     for c in runnable:
         proc = subprocess.run(  # noqa: S602 — commands come from our own README
             c.text, shell=True, capture_output=True, text=True, timeout=300,
@@ -191,7 +197,22 @@ def main() -> int:
         print("Fix the doc where it is wrong, or the code where the doc is right.")
         return 1
 
-    print(f"\ndocs-commands OK: {len(runnable)} documented commands all exit 0")
+    elapsed = _time.perf_counter() - _t0
+    print(f"\ndocs-commands OK: {len(runnable)} documented commands all exit 0 "
+          f"({elapsed:.1f}s total)")
+
+    if args.time_budget is not None and elapsed > args.time_budget:
+        # The README says "Get Started (60 seconds)". An unmeasured time claim is
+        # the same defect as an unexecuted command — it reads as verified and is
+        # not. Either it holds, or the README states the real number.
+        print(
+            f"\nFAIL: documented commands took {elapsed:.1f}s, over the "
+            f"{args.time_budget:.0f}s the docs claim.\n"
+            f"Either speed it up, or change the README to the measured number — "
+            f"a slower honest claim passes, an unmeasured one does not.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
