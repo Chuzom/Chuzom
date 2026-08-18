@@ -1934,31 +1934,44 @@ def _stop_hook_mode() -> str:
 def _condense(summary: str) -> str:
     """Reduce the boxed summary to one line, or "" if nothing happened.
 
-    Reports BOTH scopes — today and lifetime — because a single figure is
-    ambiguous and the first version of this function was exactly that: it took
-    the first `$x.xx` it could find, with no idea which period it belonged to.
-    A per-turn line reading "saved $412.88" that silently meant *lifetime* would
-    be read as *this session* by anyone glancing at it, which is worse than
-    printing nothing.
+    Reports today's savings, lifetime savings, and remaining quota — the three
+    numbers worth seeing every turn.
 
-    Figures are EXTRACTED from the rendered summary, matched by their own labels
-    (`$… lifetime`, `$… today`), never recomputed. Recomputing would let the
-    condensed and full views disagree about the same session — a reporting bug
-    that is hard to notice and impossible to trust once suspected.
+    MATCHED AGAINST THE REAL RENDER, NOT A GUESS. The first version searched for
+    `$<amount>` FOLLOWED BY a label, because that is how the fixture in
+    tests/test_stop_hook_verbosity.py was written — by hand, from memory. The
+    actual box puts the label first (`lifetime $2299.39`), so the regex matched
+    nothing and the line printed `682 routed` and no money at all, every turn,
+    while its tests passed.
+
+    That is the exact failure the old docstring warned about — "green against
+    synthetic fixtures while doing nothing in production" — and writing the
+    warning did not prevent it, because the fixture was still invented. The
+    fixture is now a captured excerpt of real output.
+
+    Figures are EXTRACTED, never recomputed, so condensed and full cannot
+    disagree about the same session.
     """
-    plain = _ANSI_RE.sub("", summary) if _ANSI_RE else summary
+    plain = _ANSI_RE.sub("", summary)
 
-    def _labelled(label: str) -> str | None:
-        # The renderer emits "<money>  <label>" — money first, label after.
-        m = re.search(r"(\$[0-9][0-9,]*\.[0-9]+)\s+" + label + r"\b", plain)
+    def _money(label: str) -> str | None:
+        # Real render: "lifetime $2299.39" / "today    $159.74" — label, then money.
+        m = re.search(label + r"\s+(\$[0-9][0-9,]*\.[0-9]{2})", plain, re.I)
         return m.group(1) if m else None
 
-    lifetime = _labelled("lifetime")
-    today = _labelled("today")
-    routes = re.search(r"(\d+)\s+(?:routes?|calls?|tasks?)\b", plain, re.I)
+    def _pct(label: str) -> int | None:
+        # Real render: "5h ━━────────  16%" — a progress bar, then percent USED.
+        m = re.search(label + r"[^\n%]*?(\d{1,3})%", plain, re.I)
+        return int(m.group(1)) if m else None
 
-    if not lifetime and not today and not routes:
-        return ""  # nothing to report — say nothing, every turn
+    today = _money("today")
+    lifetime = _money("lifetime")
+    routes = re.search(r"(\d[\d,]*)\s+decisions?\b", plain, re.I) or \
+             re.search(r"(\d[\d,]*)\s+(?:routes?|calls?)\b", plain, re.I)
+
+    # The bars report quota CONSUMED; the user asked what is LEFT, so invert and
+    # say so in the label rather than leaving the reader to guess the direction.
+    used_5h, used_wk = _pct("5h"), _pct("weekly")
 
     bits: list[str] = []
     if routes:
@@ -1966,8 +1979,17 @@ def _condense(summary: str) -> str:
     if today:
         bits.append(f"today {today}")
     if lifetime:
-        # Labelled even when today is absent, so the number is never bare.
         bits.append(f"lifetime {lifetime}")
+    if used_5h is not None or used_wk is not None:
+        left = []
+        if used_5h is not None:
+            left.append(f"5h {100 - used_5h}%")
+        if used_wk is not None:
+            left.append(f"wk {100 - used_wk}%")
+        bits.append("quota left " + "/".join(left))
+
+    if not bits:
+        return ""
     return "⚡ chuzom · " + " · ".join(bits) + "  ·  `chuzom summary` for detail"
 
 
