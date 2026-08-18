@@ -186,6 +186,31 @@ public-ring release) is the first version with a formal LTS commitment.
   2. `chuzom.org_policy._scan_for_plaintext_secrets` at policy-load time
   3. `chuzom.enterprise.redaction.redact_prompt` at lineage-write time
 
+## Enforcement hooks CAN block your tools — and what stops a lockout
+
+Stated because this document previously said nothing about it, while the behaviour is
+routine and visible to every user in `smart` and `hard` enforcement modes.
+
+`PreToolUse` enforcement **blocks core tools** — `Bash`, `Read`, `Edit`, `Write` —
+until a routing tool is called. This is the mechanism those modes are built on, not an
+edge case, and v13 removed an earlier "coding session" exemption specifically to make
+it stricter.
+
+What is guaranteed is **no permanent lockout**, by three independent releases:
+
+- calling any `llm_*` tool clears the lock for the turn;
+- two blocks of the same tool in one turn auto-pivot;
+- the same tool blocked 3+ times in two minutes auto-pivots.
+
+`chuzom set-enforce off` disables enforcement entirely.
+
+**The distinction matters.** "Hooks cannot block core tools" and "hooks cannot lock you
+out" sound alike and are not: the first is false, the second is true. A user who reads
+the first forms a safety expectation the software does not meet. The downstream
+llm-router copy of this document asserted the false version with a ✅; this one asserted
+neither, which is better but still left the reader to discover the behaviour by hitting
+it.
+
 ## CHUZOM_DIRECT_EXECUTION — what it actually grants
 
 **Default: on.** With it enabled, `hooks/auto-route.py` attempts to answer a prompt
