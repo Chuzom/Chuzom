@@ -186,6 +186,58 @@ prospective user looks.
 
 ---
 
+## DECISIONS RECORDED — 2026-08-18
+
+Taken by the maintainer. Doc 34's criteria required a recorded decision with reasoning; these
+are those decisions, and they now bind the criteria above.
+
+### Step 2b · `CHUZOM_DIRECT_EXECUTION` → **stays ON, with prominent disclosure**
+
+**This goes against the recommendation above**, which argued for default-off. Recorded as the
+maintainer's call, not as agreement, so nobody later reads the recommendation and assumes it
+was followed.
+
+The consequence is that **the disclosure criterion stops being optional and becomes the thing
+that makes this choice defensible.** If it ships on and the README does not say so plainly, the
+result is not "a bolder default" — it is an undisclosed grant of shell access. So:
+
+- [ ] README **install section** states, in the language of what it grants: *a local model can
+      run shell commands in your project before Claude sees your prompt*. Not the flag's name;
+      what it does.
+- [ ] The 3/12 coverage figure appears where a user evaluating the risk will see it, not only
+      in `SECURITY.md`.
+- [ ] `agent_loop.py`'s false *"All file operations are sandboxed"* docstring is corrected —
+      **this one is now load-bearing**, because it is the sentence that would reassure a user
+      about the exact thing the default exposes them to.
+
+### Step 2a · Enforcement default → **`smart` (unchanged)**
+
+Keeps the routing savings that are the product's reason to exist. The cost is the
+first-impression risk named above, which is real but is a UX problem rather than a safety one
+— and unlike 2b, a blocked user is inconvenienced rather than exposed.
+
+The block-message criterion remains and is worth more under this choice than under `advise`:
+if enforcement ships on, being blocked must be self-explanatory in the moment.
+
+### Step 3 · mcp 2.0 → **finish the port before launch**
+
+Not deferred. So launch is gated on:
+
+- [ ] the snake_case field-rename pass (`inputSchema` → `input_schema`, `serverInfo` →
+      `server_info`, `protocolVersion` → `protocol_version`) across the 17 failing tests and
+      any code reading those attributes;
+- [ ] full suite green against a real `mcp>=2.0.0,<3.0.0` install — 7435, not 7429/17-failing;
+- [ ] llm-router's port **re-verified** against the same fields, since its green suite could
+      not have detected them.
+
+Work is stashed on `port/mcp-2.0`, incomplete and labelled as such.
+
+### Step 4 · CodeQL — **still open**
+
+The only one of the four without a decision.
+
+---
+
 ## Order, and why
 
 1. **Step 1** — converts unknown unknowns into facts, and is cheap. Everything else is a known
