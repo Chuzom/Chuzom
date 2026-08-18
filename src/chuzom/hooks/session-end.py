@@ -1893,6 +1893,63 @@ def _build_and_save_learned_profile() -> None:
         pass  # Graceful failure — never break session-end
 
 
+# ── CHZ-STOP-01: output verbosity for the Stop hook ───────────────────────────
+# THIS IS A `Stop` HOOK, AND `Stop` FIRES AFTER EVERY AGENT RESPONSE — not once
+# when a session ends, which is what the filename suggests and what the full
+# boxed summary was designed for. So the heaviest output this project produces
+# was printing after every single turn, with no way to turn it down short of
+# unregistering the hook, which loses the information entirely.
+#
+# Modes:
+#   full       the boxed summary, unchanged — for anyone who wants it every turn
+#   condensed  one line, only when something actually happened   (DEFAULT)
+#   disabled   nothing; read it on demand via `chuzom summary`
+#
+# WHY `condensed` IS THE DEFAULT, deliberately and not because it was suggested:
+# a default should match the frequency of the event that triggers it. At
+# session-end cadence the full block is proportionate; at per-turn cadence it is
+# not, and the mismatch is the defect rather than the block's size. Condensed
+# keeps the signal (spend, savings, routes) at a volume per-turn output can carry.
+# `full` remains one env var away and is unchanged for anyone who preferred it.
+_STOP_HOOK_ENV = "CHUZOM_STOP_HOOK"
+_STOP_MODES = ("full", "condensed", "disabled")
+
+
+def _stop_hook_mode() -> str:
+    """Resolve the output mode. Unknown values fall back to the default.
+
+    Deliberately does NOT error on a typo: this runs after every turn, and a
+    hook that fails closed on a misspelled env var would break the session it is
+    only meant to summarise.
+    """
+    raw = os.environ.get(_STOP_HOOK_ENV, "").strip().lower()
+    return raw if raw in _STOP_MODES else "condensed"
+
+
+def _condense(summary: str) -> str:
+    """Reduce the boxed summary to a single line, or "" if nothing happened.
+
+    Pulls the figures out of the rendered block rather than recomputing them, so
+    condensed can never disagree with full about the same session.
+    """
+    import re as _re
+
+    money = _re.findall(r"\$[0-9]+\.[0-9]{2}", summary)
+    routes = _re.search(r"(\d+)\s+(?:routes?|calls?|tasks?)\b", summary, _re.I)
+    saved = money[0] if money else None
+    n = routes.group(1) if routes else None
+
+    if not saved and not n:
+        return ""  # nothing to report — say nothing, every turn
+
+    bits = []
+    if n:
+        bits.append(f"{n} routed")
+    if saved:
+        bits.append(f"saved {saved}")
+    return "⚡ chuzom · " + " · ".join(bits) + "  ·  `chuzom summary` for detail"
+
+
 def main() -> None:
     try:
         _hook_input = json.load(sys.stdin)
@@ -2285,7 +2342,16 @@ def main() -> None:
     except Exception:
         pass  # Graceful failure — never break session-end
 
-    print(json.dumps({"systemMessage": final_summary_output}))
+    # CHZ-STOP-01: honour the verbosity mode before emitting.
+    _mode = _stop_hook_mode()
+    if _mode == "disabled":
+        pass  # no output at all; `chuzom summary` on demand
+    elif _mode == "condensed":
+        _line = _condense(final_summary_output)
+        if _line:
+            print(json.dumps({"systemMessage": _line}))
+    else:
+        print(json.dumps({"systemMessage": final_summary_output}))
 
     # Update the session-start snapshot AFTER the delta has been reported,
     # so the NEXT session starts from today's end-of-session baseline.
