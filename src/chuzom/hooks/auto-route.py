@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 33
+# chuzom-hook-version: 34
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -159,7 +159,7 @@ def route_call(logical: str, *args: str) -> str:
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 33"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 34"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -2002,6 +2002,17 @@ def _scrub_secrets_text(text: str) -> str:
         return text
 
 
+def _private_opener(path: str, flags: int) -> int:
+    """Create files at 0600 rather than the umask default.
+
+    Defined locally rather than imported from chuzom.paths: this file is executed
+    as a standalone script by path, so every package import here is wrapped in a
+    try/except fallback. A one-line helper is not worth that fragility, and a
+    failed import in a hook is a routing outage.
+    """
+    return os.open(path, flags, 0o600)
+
+
 def _append_transcript_shard(session_id: str, prompt: str, draft: str) -> None:
     """Audit §2.5/P2: chuzom-answered turns never enter Claude Code's transcript
     (the prompt was blocked), so later routed turns cannot see them. Keep a
@@ -2017,7 +2028,14 @@ def _append_transcript_shard(session_id: str, prompt: str, draft: str) -> None:
         user_content = _scrub_secrets_text(prompt.strip())
         asst_content = _scrub_secrets_text(draft.strip())
         path = _transcript_shard_path(session_id)
-        with open(path, "a", encoding="utf-8") as fh:
+        # 0600 AT CREATION, not created-then-tightened. The chmod below is
+        # correct at rest and leaves a window: `open` uses the umask default
+        # (0644 typically), so on first creation the shard held scrubbed prompt
+        # and draft text while world-readable, and only narrowed afterwards.
+        # Permissions are checked at open time, so a handle acquired in that
+        # window survives the chmod. The chmod stays — an opener only applies on
+        # creation, so it cannot repair shards written by older versions.
+        with open(path, "a", encoding="utf-8", opener=_private_opener) as fh:
             fh.write(json.dumps({"role": "user", "content": user_content}) + "\n")
             fh.write(json.dumps({"role": "assistant", "content": asst_content}) + "\n")
         try:

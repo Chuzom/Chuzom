@@ -71,3 +71,42 @@ def is_isolated() -> bool:
     docstring — a guard that over-claims is how a local bug becomes a silent one.
     """
     return bool(os.environ.get(ENV_VAR, "").strip())
+
+
+def private_opener(path: str, flags: int) -> int:
+    """``open()`` opener that creates files at 0600 instead of the umask default.
+
+    WHY THIS EXISTS
+    ---------------
+    The codebase's established idiom for a private state file is::
+
+        with open(path, "a") as fh:
+            fh.write(secret)
+        os.chmod(path, 0o600)
+
+    which is correct at rest and wrong in between. ``open`` creates the file
+    with ``0666 & ~umask`` — 0644 on a default umask — so on FIRST creation the
+    file is world-readable for the whole write, and only tightened afterwards.
+    Anything that opens it inside that window keeps a readable handle even after
+    the chmod, because permissions are checked at open time and not on each read.
+
+    Measured, not assumed::
+
+        open(path, "a") then chmod : mode while writing = 0o644
+        open(..., opener=...)      : mode while writing = 0o600
+
+    The window is short and needs local access, so this is a hardening fix rather
+    than an urgent one — but it costs a keyword argument, and the files in
+    question hold a dashboard auth token and scrubbed prompt transcripts.
+
+    Usage::
+
+        with open(path, "a", encoding="utf-8", opener=private_opener) as fh:
+            ...
+
+    NOTE: an opener sets the mode only when it CREATES the file. An existing file
+    keeps its current mode, so this hardens first creation and is not a repair
+    for a file already written at 0644 — keep the ``os.chmod`` alongside it where
+    one is already present, which also fixes files created by older versions.
+    """
+    return os.open(path, flags, 0o600)

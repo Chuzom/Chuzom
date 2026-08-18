@@ -488,3 +488,53 @@ def test_session_store_safe_failure_never_persists_raw_on_redaction_error(monkey
     path = ss._session_path("s1")
     raw = path.read_bytes()
     assert SECRET_AWS.encode() not in raw
+
+
+class TestPrivateFilesAreCreatedRestricted:
+    """Files holding secrets must be 0600 AT CREATION, not created-then-tightened.
+
+    The established idiom here was::
+
+        with open(path, "a") as fh:
+            fh.write(secret)
+        os.chmod(path, 0o600)
+
+    correct at rest, wrong in between. `open` uses the umask default (0644
+    typically), so on first creation the file held its contents world-readable
+    for the duration of the write. Permissions are checked at open time, so a
+    handle obtained inside that window keeps working after the chmod.
+
+    Narrow — it needs local access and only affects first creation — but it
+    applied to the dashboard AUTH TOKEN and to prompt-transcript shards, and the
+    fix is a keyword argument.
+
+    The chmod is deliberately kept alongside the opener: an opener only sets the
+    mode when it CREATES the file, so it cannot repair files written by earlier
+    versions.
+    """
+
+    def test_private_opener_creates_at_0600(self, tmp_path):
+        from chuzom.paths import private_opener
+
+        target = tmp_path / "secret.txt"
+        with open(target, "w", encoding="utf-8", opener=private_opener) as fh:
+            during = stat.S_IMODE(os.stat(target).st_mode)
+            fh.write("sk-live-secret")
+        assert during == 0o600, f"world-readable while writing: {oct(during)}"
+        assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
+
+    def test_plain_open_is_the_thing_being_avoided(self, tmp_path):
+        """Control: without the opener the file really is 0644 mid-write.
+
+        If this ever stops holding, the test above proves nothing and the
+        umask assumption behind this whole class needs revisiting.
+        """
+        prev = os.umask(0o022)
+        try:
+            target = tmp_path / "plain.txt"
+            with open(target, "w", encoding="utf-8") as fh:
+                during = stat.S_IMODE(os.stat(target).st_mode)
+                fh.write("x")
+            assert during == 0o644
+        finally:
+            os.umask(prev)
