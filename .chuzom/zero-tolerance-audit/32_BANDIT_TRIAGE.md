@@ -14,13 +14,20 @@ question a rule cannot answer is *what reaches this code in this program*.
 
 ## 1 · Result
 
+> ⚠️ **This section was wrong and is superseded by §7.** It is left as written because the
+> way it was wrong is the most useful thing in this document. The corrected result is
+> **7 unvalidated readers, not 2**, and three of the alerts dismissed in §4 were defects.
+
 | verdict | count | |
 |---|---|---|
-| **Genuine — fixed** | 1 | B310: CHZ-SEC-06 bypassed by two duplicate URL readers |
-| **False positive** | 17 | B608 × 7, B310 × 8, B104, B108 |
+| ~~**Genuine — fixed**~~ | ~~1~~ → see §7 | B310: CHZ-SEC-06 bypassed by ~~two~~ **seven** duplicate URL readers |
+| ~~**False positive**~~ | ~~17~~ → see §7 | B608 × 7, ~~B310 × 8~~ **B310 × 5**, B104, B108 |
 
 One defect in eighteen alerts. It is the same defect **shape** as doc 31's most serious
 finding, which is the reason this document is worth more than its hit rate suggests.
+
+*(That last sentence turned out to be right for a reason the section did not anticipate: the
+shape recurred five more times than this triage counted.)*
 
 ---
 
@@ -107,9 +114,13 @@ caller has been told.
 
 ## 4 · B310 × 8 remaining, B104, B108 — false
 
-- **B310 elsewhere** (`alerts.py`, `semantic_classify.py`, `config.py:probe_pxpipe`,
+- ~~**B310 elsewhere** (`alerts.py`, `semantic_classify.py`, `config.py:probe_pxpipe`,
   `doctor.py`, `library/sealer.py`, `hooks/session-start.py`, `agentic/react.py`) — these
-  reach either a validated URL or a localhost probe. The rule fires on `urlopen` itself.
+  reach either a validated URL or a localhost probe. The rule fires on `urlopen` itself.~~
+
+  **WRONG. See §7.** Three of those files read the env var unvalidated and hand it to
+  `urlopen`. This sentence was written after spot-checking a few sites and generalising to the
+  batch, which is the error it describes.
 - **B104** (`config.py`) — `"0.0.0.0"` appears inside `_BLOCKED_HOSTS`, a **denylist** used to
   reject SSRF targets. Bandit reads the literal as "binds all interfaces"; it is the exact
   opposite. Flagging it flags the mitigation — the same shape as the `chmod 0o644` tests in
@@ -128,7 +139,7 @@ shape**, and it is not a shape either scanner names:
 | | hardened | left behind |
 |---|---|---|
 | path confinement | `capabilities.is_safe_path` | `code_context` collected prompt paths unchecked |
-| URL validation | `config.validate_ollama_url` | two hook modules read the env directly |
+| URL validation | `config.validate_ollama_url` | ~~two hook modules~~ **seven readers** took the env directly (§7) |
 | file permissions | *(nothing)* | 13 sites created secret files at 0644, then chmod'd |
 
 A security fix is applied where the bug was reported and not to the parallel path that does
@@ -149,8 +160,80 @@ third did.
 
 ## 6 · What is not done
 
-- **`nosec`/`noqa` justification sweep** (§2.1). One was checked and was false. The others are
-  unexamined, and a false justification is a defect that hides a defect.
+- ~~**`nosec`/`noqa` justification sweep** (§2.1). One was checked and was false. The others are
+  unexamined, and a false justification is a defect that hides a defect.~~ **DONE — §7.** It
+  found a fourth defect and then refuted §4. It was the highest-yield item on this list, which
+  is an argument for doing the "not done" section rather than filing it.
 - **`_load_rows`'s signature** (§3).
 - **Nothing dismissed through the API**, same position as doc 31 §6. Bandit alerts remain
   open with this document as the reasoning.
+
+---
+
+## 7 · Correction — the sweep in §6 found that §1 and §4 were wrong
+
+§6 listed a `nosec` justification sweep as owed, on the grounds that one had been checked and
+was false. It was done. It found a fourth defect, and then a guard written during it found
+three more sites this document had already cleared.
+
+### 7.1 · The sweep · 12 suppressions, 3 false claims
+
+| justification | verdict |
+|---|---|
+| `usage-refresh` "HTTPS Anthropic API" | ✅ hardcoded `https://api.anthropic.com/...` |
+| `direct_executor` ×2 "HTTPS only" | ✅ hardcoded OpenAI / Gemini URLs |
+| `savings_report` "cond is a hardcoded literal" | ✅ both branches literal, `paid` is a bool |
+| `dashboard_data` ×3 "module constants & validated enum" | ✅ table is a constant, columns come from the DB schema |
+| **`auto-route` "localhost Ollama only"** | ❌ a **third** unvalidated reader, inline |
+| **`direct_executor` ×2 "localhost only"** | ❌ env-derived; still wrong even once validated, since a remote Ollama is supported |
+
+The `auto-route` one is a real defect and not merely a wrong comment: the same CHZ-SEC-06
+bypass as §2, in a file §2's fix did not touch. **It was invisible to alert triage because the
+justification made the alert invisible** — which is precisely the argument §2.1 made in the
+abstract, arriving as a concrete third instance one document later.
+
+### 7.2 · Then the guard found four more, and refuted §4
+
+`scripts/lint_ollama_url_readers.py` asserts that every reader of `CHUZOM_OLLAMA_URL` /
+`OLLAMA_BASE_URL` reaches the validator. It failed immediately on four files:
+
+```
+src/chuzom/agentic/react.py:279
+src/chuzom/commands/verify.py:118
+src/chuzom/hooks/session-start.py:985
+src/chuzom/library/sealer.py:28
+```
+
+Three of those four are named in §4 above as false positives that "reach either a validated
+URL or a localhost probe". **They do not.** Each reads the environment variable and hands the
+result to `urlopen`.
+
+**Seven unvalidated readers, not three**, discovered in three separate passes:
+
+| pass | found |
+|---|---|
+| triaging B310 alerts | 2 |
+| auditing a `nosec` justification | 1 |
+| writing the guard | 4 |
+
+### 7.3 · Why §4 was wrong, which is the useful part
+
+The sentence was written after checking a few of the eight B310 sites and generalising to the
+batch. That is the same move that produced the 38-failure misdiagnosis in 30_CI_GAP_PLAN §8 —
+a spot-check standing in for a sweep — and it happened here **on the exact rule where a real
+defect had already been found**, which should have been the signal to check all of them
+individually rather than the reason to feel finished.
+
+The guard found more than the investigation did. That is now true of three checks written this
+week: `lint_suite_env_parity` found the G-D gap, `lint_workflow_shell_portability` reproduced
+the Windows failure exactly, and this one refuted a claim in the document it was written to
+support. **Writing the check is a better search strategy than reading the code**, because the
+check has to be right about every instance and a reader only has to feel right about the ones
+they looked at.
+
+All seven now route through the canonical validator, imported rather than reimplemented, and
+fail closed to localhost. The lint checks textual co-presence rather than dataflow — it cannot
+prove validation on every path, and is not trying to. It makes a NEW unvalidated reader fail
+the build on the day it is written, which is the failure that actually happened seven times.
+
+---
