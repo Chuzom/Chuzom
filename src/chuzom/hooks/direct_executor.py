@@ -107,11 +107,21 @@ def _agent_system_prompt(context: str | None) -> str | None:
 # ── Provider HTTP calls ──────────────────────────────────────────────────────
 
 def _get_ollama_url() -> str:
-    """Get Ollama base URL, reading env at call time (after dotenv is loaded)."""
-    url = os.environ.get("CHUZOM_OLLAMA_URL") or \
+    """Get Ollama base URL, reading env at call time (after dotenv is loaded).
+
+    Validated via agent_loop's shared wrapper — see `_validated_ollama_url`
+    there for why, and for the measured gap this closes. This module had the
+    SECOND unvalidated copy of the same reader; config.py's CHZ-SEC-06 fix
+    covered neither.
+    """
+    raw = os.environ.get("CHUZOM_OLLAMA_URL") or \
           os.environ.get("OLLAMA_BASE_URL") or \
           "http://localhost:11434"
-    return url
+    try:
+        from chuzom.hooks.agent_loop import _validated_ollama_url
+    except Exception:
+        return raw if raw == "http://localhost:11434" else "http://localhost:11434"
+    return _validated_ollama_url(raw)
 
 
 def ollama_is_alive(timeout: float = 0.5) -> bool:
@@ -124,7 +134,12 @@ def ollama_is_alive(timeout: float = 0.5) -> bool:
     try:
         ollama_url = _get_ollama_url()
         req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
-        with urllib.request.urlopen(req, timeout=timeout):  # nosec B310 — localhost only
+        # nosec B310 — URL is validated by _get_ollama_url (scheme + host).
+        # The previous justification here read "localhost only", which was not
+        # true: the URL comes from CHUZOM_OLLAMA_URL/OLLAMA_BASE_URL, which a
+        # cloned repo's .env can set. A suppression resting on a false premise
+        # is worse than no suppression, because it stops anyone re-checking.
+        with urllib.request.urlopen(req, timeout=timeout):  # nosec B310
             return True
     except Exception:
         return False

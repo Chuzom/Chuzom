@@ -274,10 +274,49 @@ def execute_tool(name: str, args: dict, project_root: Path) -> str:
 _MAX_ITERATIONS = 15  # Safety cap — prevent infinite loops
 
 
+_OLLAMA_URL_DEFAULT = "http://localhost:11434"
+
+
+def _validated_ollama_url(raw: str) -> str:
+    """Apply CHZ-SEC-06's scheme/host validation, failing CLOSED to localhost.
+
+    config.py validates this exact env input -- its docstring records that
+    CHUZOM_OLLAMA_URL/OLLAMA_URL "reached urlopen with no scheme or host
+    validation, so file:// was accepted (local file read) and cloud-metadata
+    addresses were attempted -- a classic SSRF sink". That fix landed in
+    config.py only, and these hook modules kept their own unvalidated readers,
+    so the protection was bypassed by whichever path ran first:
+
+        input                                validator   hook reader
+        file:///etc/passwd                   BLOCKED     allowed
+        http://169.254.169.254/latest/...    BLOCKED     allowed
+        http://some-external-host            allowed     allowed   (by design)
+
+    Reachable without any local access: `_load_dotenv` in auto-route.py reads
+    `Path.cwd()/".env"`, so a cloned repository can set this variable.
+
+    Imported rather than reimplemented -- a second copy of the rules is what
+    produced this gap. The import is guarded because hook modules must not die
+    on a package-resolution problem, and an unavailable validator falls back to
+    the localhost default rather than to an unchecked URL: refusing to reach a
+    configured Ollama is a degraded feature, while honouring an unvalidated one
+    is the defect.
+    """
+    if not raw:
+        return _OLLAMA_URL_DEFAULT
+    try:
+        from chuzom.config import validate_ollama_url
+    except Exception:
+        return raw if raw == _OLLAMA_URL_DEFAULT else _OLLAMA_URL_DEFAULT
+    return validate_ollama_url(raw) or _OLLAMA_URL_DEFAULT
+
+
 def _get_ollama_url() -> str:
-    return os.environ.get("CHUZOM_OLLAMA_URL") or \
-           os.environ.get("OLLAMA_BASE_URL") or \
-           "http://localhost:11434"
+    return _validated_ollama_url(
+        os.environ.get("CHUZOM_OLLAMA_URL")
+        or os.environ.get("OLLAMA_BASE_URL")
+        or _OLLAMA_URL_DEFAULT
+    )
 
 
 # Tool names the model may call — used to spot a tool call the model dumped
