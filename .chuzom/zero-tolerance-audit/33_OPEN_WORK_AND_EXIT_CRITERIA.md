@@ -81,7 +81,7 @@ once C2 is decided.
 
 ## 4 · llm-router · five reports
 
-### L1 · `mcp` unbounded → total install breakage · **VERIFIED**
+### L1 · `mcp` unbounded → total install breakage · ~~VERIFIED~~ **PROVISIONAL**
 
 `mcp>=1.0.0` with no ceiling; `mcp 2.0.0` — the current latest — removed
 `mcp.server.fastmcp`, so **every fresh install** died at import. Client reports
@@ -96,8 +96,14 @@ Two commits, deliberately a sequence rather than alternatives:
 removed package. Verified against a real 2.0.0 install: server imports, registers 17 tools,
 **2726 passed / 0 failed**.
 
-⚠️ **On branch `port/mcp-2.0`, unpushed.** Users are broken *right now*, so this is the most
-time-sensitive item in this document.
+⚠️ **Downgraded from VERIFIED on 2026-08-18.** The 2726-passing suite did not demonstrate the
+port was complete — it demonstrated that llm-router has **zero tests referencing `serverInfo`
+or `inputSchema`**, the fields mcp 2.0.0 renamed to snake_case. Porting Chuzom later hit
+exactly those renames and failed 17 tests. That suite measured coverage, not correctness.
+
+Re-verifying it against the renamed fields is a launch criterion (doc 34 Step 3). Until then
+this reads as provisional, which is the honest label — a green suite is evidence only about
+what the suite exercises.
 
 ### L2 · SECURITY.md claims hooks cannot block core tools · **REPORTED, informally confirmed**
 
