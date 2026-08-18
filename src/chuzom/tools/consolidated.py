@@ -9,7 +9,7 @@ unblocked path (no wrong-tool dead-end).
 """
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from chuzom.tools.admin import (
     llm_budget,

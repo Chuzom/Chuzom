@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from chuzom.cost import _get_db
 from chuzom.savings import net_saved
@@ -414,7 +414,7 @@ async def llm_savings_dashboard(
 
 
 def register(mcp, should_register=None) -> None:
-    """Register dashboard tools with the FastMCP instance."""
+    """Register dashboard tools with the MCPServer instance."""
     gate = should_register or (lambda _: True)
     if gate("llm_savings_dashboard"):
         mcp.tool()(llm_savings_dashboard)

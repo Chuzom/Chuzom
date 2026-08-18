@@ -300,7 +300,7 @@ async def chuzom_agent_lineage(session_id: str, limit: int = 200) -> dict:
 def register(mcp, should_register=None) -> None:
     """Register the agent tools with the MCP server, honouring the slim gate.
 
-    mcp is the FastMCP instance from chuzom.server. Each tool is exposed
+    mcp is the MCPServer instance from chuzom.server. Each tool is exposed
     under the canonical name; descriptions are pulled from the docstrings.
     Under the consolidated default only the rich session tools
     (chuzom_agent_start_session / chuzom_agent_route) register — the simple

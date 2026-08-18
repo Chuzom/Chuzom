@@ -123,6 +123,10 @@ def extract(doc: Path) -> list[Cmd]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", action="store_true", help="execute RUNNABLE commands")
+    ap.add_argument("--time-budget", type=float, default=None,
+                    help="fail if the total runtime of RUNNABLE commands exceeds this many "
+                         "seconds — for checking a documented time claim rather than "
+                         "asserting one")
     args = ap.parse_args()
 
     cmds: list[Cmd] = []
@@ -161,9 +165,26 @@ def main() -> int:
         return 0
 
     failures = []
+    import time as _time
+    _t0 = _time.perf_counter()
     for c in runnable:
         proc = subprocess.run(  # noqa: S602 — commands come from our own README
-            c.text, shell=True, capture_output=True, text=True, timeout=300,
+            c.text,
+            shell=True,
+            capture_output=True,
+            # text=True alone decodes with the LOCALE encoding, which on windows
+            # is cp1252. The commands under test print ✓ / ✗ / ⚡ / 💰, so the
+            # reader thread died with UnicodeDecodeError on the child's own
+            # output — and because the read failed, the expected-non-zero check
+            # never saw the remediation text either, turning a healthy `chuzom
+            # doctor` into a reported failure.
+            #
+            # This is the MIRROR of CHZ-WIN-01: that fix made the child WRITE
+            # utf-8; this one makes the parent READ it. Fixing one side and not
+            # the other just moves the crash across the pipe.
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
         )
         expect = next((v for k, v in _EXPECTED_NONZERO.items() if k in c.text), None)
         out = (proc.stdout or "") + (proc.stderr or "")
@@ -184,14 +205,41 @@ def main() -> int:
         print(f"\nFAIL: {len(failures)} documented command(s) do not work:\n")
         for c, proc in failures:
             print(f"  {c.doc}:{c.line}  {c.text}")
+            # PRINT THE WHOLE DIAGNOSTIC, not the first few lines. The first
+            # version capped this at 4, and the first real failure it caught —
+            # `chuzom doctor` crashing on windows — was truncated mid-traceback
+            # at the frame BEFORE the exception. A checker that detects a
+            # failure and hides its cause turns one CI round-trip into two.
+            #
+            # Bounded generously rather than absolutely: a runaway command
+            # should not bury the summary, but 60 lines carries any traceback
+            # worth reading.
             err = (proc.stderr or proc.stdout or "").strip().splitlines()
-            for line in err[:4]:
+            shown = err[-60:] if len(err) > 60 else err
+            if len(err) > 60:
+                print(f"      … {len(err) - 60} earlier line(s) omitted …")
+            for line in shown:
                 print(f"      {line}")
             print()
         print("Fix the doc where it is wrong, or the code where the doc is right.")
         return 1
 
-    print(f"\ndocs-commands OK: {len(runnable)} documented commands all exit 0")
+    elapsed = _time.perf_counter() - _t0
+    print(f"\ndocs-commands OK: {len(runnable)} documented commands all exit 0 "
+          f"({elapsed:.1f}s total)")
+
+    if args.time_budget is not None and elapsed > args.time_budget:
+        # The README says "Get Started (60 seconds)". An unmeasured time claim is
+        # the same defect as an unexecuted command — it reads as verified and is
+        # not. Either it holds, or the README states the real number.
+        print(
+            f"\nFAIL: documented commands took {elapsed:.1f}s, over the "
+            f"{args.time_budget:.0f}s the docs claim.\n"
+            f"Either speed it up, or change the README to the measured number — "
+            f"a slower honest claim passes, an unmeasured one does not.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

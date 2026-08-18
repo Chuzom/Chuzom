@@ -89,8 +89,8 @@ def test_mcp_initialize_succeeds():
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 result = await session.initialize()
-                assert result.serverInfo.name == "chuzom", (
-                    f"Expected serverInfo.name='chuzom', got {result.serverInfo.name!r}"
+                assert result.server_info.name == "chuzom", (
+                    f"Expected server_info.name='chuzom', got {result.server_info.name!r}"
                 )
 
     asyncio.run(asyncio.wait_for(run(), timeout=30))
@@ -170,7 +170,7 @@ def test_mcp_tools_have_descriptions():
 
 @requires_mcp_client
 def test_mcp_tools_have_input_schemas():
-    """Every tool's inputSchema must be a valid JSONSchema dict."""
+    """Every tool's input_schema must be a valid JSONSchema dict."""
     async def run():
         from mcp import ClientSession
         from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -183,13 +183,13 @@ def test_mcp_tools_have_input_schemas():
                 result = await session.list_tools()
                 no_schema = [
                     t.name for t in result.tools
-                    if not isinstance(t.inputSchema, dict)
+                    if not isinstance(t.input_schema, dict)
                 ]
                 return no_schema
 
     no_schema = asyncio.run(asyncio.wait_for(run(), timeout=30))
     assert not no_schema, (
-        f"Tools without inputSchema: {no_schema[:5]}... "
+        f"Tools without input_schema: {no_schema[:5]}... "
         f"MCP clients can't render parameter forms without these"
     )
 
@@ -206,7 +206,7 @@ def test_mcp_initialize_negotiates_protocol_version():
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 result = await session.initialize()
-                return result.protocolVersion
+                return result.protocol_version
 
     version = asyncio.run(asyncio.wait_for(run(), timeout=30))
     assert version, "Server returned no protocol version"

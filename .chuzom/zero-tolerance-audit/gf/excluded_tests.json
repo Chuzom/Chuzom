@@ -4,9 +4,6 @@
     "tests/agentic/test_verification_soundness.py::test_the_real_gate_is_actually_constructed_somewhere": [
       "A: walks Python source files"
     ],
-    "tests/economics/test_calibration_provenance.py::test_calibration_coverage_is_reportable": [
-      "B: invokes gate script(s) lint_tool_surface"
-    ],
     "tests/economics/test_pricing_no_second_source.py::test_no_module_outside_pricing_defines_a_rate_table": [
       "A: walks Python source files"
     ],
@@ -20,7 +17,8 @@
       "A: walks Python source files"
     ],
     "tests/reliability/test_ledger_concurrency.py::test_no_record_event_call_site_discards_the_boolean": [
-      "A: walks Python source files"
+      "A: walks Python source files",
+      "A2: reads a source file and asserts on its text"
     ],
     "tests/routing/test_rules_tool_resolution.py::test_only_one_append_routing_rules_implementation_exists": [
       "A: walks Python source files"
@@ -37,11 +35,14 @@
     "tests/routing/test_tool_surface_ground_truth.py": [
       "file: helper _implemented_tool_names() scans source \u2014 A: walks Python source files"
     ],
-    "tests/telemetry/test_failopen.py": [
-      "file: module-level scan \u2014 B: invokes gate script(s) lint_fail_open"
+    "tests/telemetry/test_failopen.py::test_the_protected_modules_actually_call_it": [
+      "A2: reads a source file and asserts on its text"
     ],
     "tests/test_b05_shared_finalization.py::test_every_success_path_calls_shared_finalizer": [
       "A2: reads a source file and asserts on its text"
+    ],
+    "tests/test_chz_fo_02_returns_live_data.py": [
+      "file: helper _gate() scans source \u2014 B: invokes gate script(s) lint_fail_open"
     ],
     "tests/test_claim_evidence.py": [
       "file: helper _load_validator() scans source \u2014 B: invokes gate script(s) validate_claim_evidence"
@@ -49,8 +50,15 @@
     "tests/test_env_registry.py": [
       "file: helper _env_reads_in_source() scans source \u2014 A: walks Python source files"
     ],
+    "tests/test_gf_exclusions_derived.py::test_the_loop_form_of_a_source_scan_is_still_caught": [
+      "A2: reads a source file and asserts on its text",
+      "B: invokes gate script(s) lint_fail_open"
+    ],
     "tests/test_iter3_tier_a.py::test_load_rows_has_deterministic_order": [
       "A2: reads a source file and asserts on its text"
+    ],
+    "tests/test_mcp_dependency_pin.py": [
+      "file: helper _mcp_import_sites() scans source \u2014 A: walks Python source files"
     ],
     "tests/test_red2_2_02_downgrade_rendered.py::test_cap_messages_are_local_not_utc": [
       "A2: reads a source file and asserts on its text"

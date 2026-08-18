@@ -15,7 +15,7 @@ import glob as _glob
 import os as _os
 from pathlib import Path as _Path
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from chuzom.edit import build_edit_prompt, format_edit_result, parse_edit_response, read_file_for_edit
 from chuzom.router import route_and_call
@@ -380,7 +380,7 @@ Return ONLY the JSON object."""
 
 
 def register(mcp, should_register=None) -> None:
-    """Register filesystem tools with the FastMCP instance.
+    """Register filesystem tools with the MCPServer instance.
 
     SEC-002: tools are OFF by default. Set ``CHUZOM_FS_TOOLS=on`` in the
     environment to register them. Without the opt-in, ``mcp.list_tools()``

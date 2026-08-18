@@ -81,7 +81,7 @@ once C2 is decided.
 
 ## 4 · llm-router · five reports
 
-### L1 · `mcp` unbounded → total install breakage · ~~VERIFIED~~ **PROVISIONAL**
+### L1 · `mcp` unbounded → total install breakage · **VERIFIED** *(upgraded 2026-08-18)*
 
 `mcp>=1.0.0` with no ceiling; `mcp 2.0.0` — the current latest — removed
 `mcp.server.fastmcp`, so **every fresh install** died at import. Client reports
@@ -101,9 +101,12 @@ port was complete — it demonstrated that llm-router has **zero tests referenci
 or `inputSchema`**, the fields mcp 2.0.0 renamed to snake_case. Porting Chuzom later hit
 exactly those renames and failed 17 tests. That suite measured coverage, not correctness.
 
-Re-verifying it against the renamed fields is a launch criterion (doc 34 Step 3). Until then
-this reads as provisional, which is the honest label — a green suite is evidence only about
-what the suite exercises.
+**Upgraded to VERIFIED**, on evidence rather than on a re-run. `tests/test_mcp2_field_names.py`
+(llm-router, `6396b30`) asserts the renamed fields in both directions and **fails all 7 cases
+against `mcp>=1.0.0,<2`** — so it discriminates, which is exactly the property the original
+2726 passing tests lacked. Upstream is green on real 2.0.0 at 7447 passed / 0 failed.
+
+The label moved because the evidence changed, not because the work was re-declared done.
 
 ### L2 · SECURITY.md claims hooks cannot block core tools · **REPORTED, informally confirmed**
 

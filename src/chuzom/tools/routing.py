@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 
 from chuzom.config import get_config
 from chuzom.ensemble import classify_for_routing
@@ -916,7 +916,7 @@ async def llm_reroute(
 
 
 def register(mcp, should_register=None) -> None:
-    """Register smart router tools with the FastMCP instance.
+    """Register smart router tools with the MCPServer instance.
 
     Args:
         should_register: Optional callable(tool_name) -> bool for slim mode filtering.

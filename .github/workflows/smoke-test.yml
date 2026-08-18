@@ -184,6 +184,106 @@ jobs:
               print('pre-existing host config survived install ✓')
           "
 
+  # ── Doc 34 Step 1 · B1: the documented commands against the BUILT WHEEL ────
+  #
+  # Every other install check here uses `pip install -e ".[dev]"` — an EDITABLE
+  # install from the source tree. G-D's own header says why that proves nothing
+  # about packaging: "editable installs cannot catch packaging defects at all —
+  # missing package_data, modules absent from the wheel, entry points that do not
+  # resolve, hook scripts not shipped."
+  #
+  # A user does not get an editable install. They get a wheel. So the README's
+  # promises are executed against one, in a venv with NO source tree on the path,
+  # which is the closest thing to a real `pip install chuzom-router` that can run
+  # before the package is published.
+  #
+  # This is the stage doc 35 §5 calls the weakest, and the reason is honest: a
+  # GitHub runner is clean in ways a local container is not (no credentials, no
+  # ~/.chuzom, no cache), but it still is not a user's machine. It proves the
+  # wheel is self-sufficient, not that every environment will work.
+  docs-commands-wheel:
+    name: Doc commands · built wheel · py${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+        continue-on-error: true
+
+      - name: Build the wheel
+        run: uv build --wheel --out-dir dist
+
+      - name: Install the wheel into a venv with no source tree
+        run: |
+          uv venv .wheelenv --python ${{ matrix.python }}
+          uv pip install --python .wheelenv/bin/python dist/*.whl
+
+      - name: Confirm chuzom resolves from site-packages, not src/
+        # Without this the step below would silently degrade into a source-tree
+        # run the moment anything put src/ back on the path — the exact false
+        # green G-D was created to close.
+        run: |
+          .wheelenv/bin/python - <<'PY'
+          import pathlib, sys, chuzom
+          p = pathlib.Path(chuzom.__file__).resolve()
+          print("chuzom resolved from:", p)
+          if "site-packages" not in p.parts:
+              sys.exit(f"FAIL: resolved from the source tree, not the wheel: {p}")
+          PY
+
+      - name: Run every documented command against the wheel
+        shell: bash
+        env:
+          # The installed console script must be what runs, not a source copy.
+          PATH: ${{ github.workspace }}/.wheelenv/bin:${{ env.PATH }}
+        run: |
+          python -m pip install --quiet --upgrade pip >/dev/null 2>&1 || true
+          .wheelenv/bin/python scripts/check_docs_commands.py --run --time-budget 60
+
+  # ── Doc 34 Step 1 · B3: the documented commands, on every platform ─────────
+  #
+  # The in-tree check in ci.yml runs on ubuntu only. That is the shape that let
+  # the Windows failure through earlier in this audit: `\"` means one thing in
+  # bash and another in pwsh, it was invisible on every platform reachable
+  # locally, and it lived in a shell-quoted command of exactly the kind this
+  # check executes.
+  #
+  # So the README's promises are executed on all three platforms and at BOTH
+  # ends of the supported Python range — a documented command that only works
+  # where the maintainer happens to develop is a broken promise to everyone else.
+  docs-commands-matrix:
+    name: Doc commands · ${{ matrix.os }} · py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false          # one platform failing must not hide the others
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+        continue-on-error: true
+      - name: Run every documented command
+        shell: bash            # pinned: this step must mean the same thing everywhere
+        run: uv run python scripts/check_docs_commands.py --run
+
   # ── G-D: the suite must be green on the BUILT WHEEL ────────────────────────
   #
   # This gate was previously unsatisfiable, and not merely unimplemented.
