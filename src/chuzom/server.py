@@ -1,4 +1,4 @@
-"""FastMCP server — MCP entry point for chuzom.
+"""MCPServer server — MCP entry point for chuzom.
 
 All 60 tools are registered by modules in chuzom/tools/:
 - routing.py  — llm_classify, llm_track_usage, llm_route, llm_auto, llm_stream,
@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from chuzom.config import get_config
 from chuzom.health import get_tracker
@@ -63,7 +63,7 @@ async def _lifespan(_server):
             pass  # best-effort flush; never block shutdown
 
 
-mcp = FastMCP("chuzom", lifespan=_lifespan)
+mcp = MCPServer("chuzom", lifespan=_lifespan)
 
 # Auto-update routing rules and hooks on startup if a newer version was installed via pip
 try:

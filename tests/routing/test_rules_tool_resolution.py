@@ -34,12 +34,12 @@ def _live_registered_tools(slim: str | None = None) -> frozenset[str]:
     Not `KNOWN_TOOLS`, not `EMITTABLE_TOOLS`, not any table that a rules file
     could be wrong in the same direction as.
     """
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from chuzom.tool_tiers import make_should_register
     from chuzom.tools import admin, agentic, media, pipeline, routing, text
 
-    mcp = FastMCP("surface-probe")
+    mcp = MCPServer("surface-probe")
     gate = make_should_register(slim)
     for module in (routing, text, media, pipeline, admin, agentic):
         try:
@@ -48,8 +48,8 @@ def _live_registered_tools(slim: str | None = None) -> frozenset[str]:
             pytest.skip(f"could not register {module.__name__}: {exc}")
 
     manager = getattr(mcp, "_tool_manager", None)
-    if manager is None:  # pragma: no cover — FastMCP internals moved
-        pytest.skip("cannot enumerate FastMCP tools on this version")
+    if manager is None:  # pragma: no cover — MCPServer internals moved
+        pytest.skip("cannot enumerate MCPServer tools on this version")
     return frozenset(manager._tools)
 
 
