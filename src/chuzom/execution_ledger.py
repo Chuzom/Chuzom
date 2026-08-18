@@ -262,6 +262,12 @@ def _secure_perms(path: Path) -> None:
         pass
 
 
+#: SQLite busy-timeout, seconds. MUST stay strictly below pytest-timeout's
+#: `timeout` in pyproject.toml — see _connect() and
+#: tests/test_sqlite_timeout_below_test_timeout.py for why equality is a defect.
+_BUSY_TIMEOUT_S = 20.0
+
+
 def _connect(path: Path | None = None) -> sqlite3.Connection:
     p = path or _db_path()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -272,10 +278,28 @@ def _connect(path: Path | None = None) -> sqlite3.Connection:
             pass
     else:
         _secure_perms(p)
-    # 30s busy-timeout (was 5s): under pathological CI-runner load, rapid open/write/
-    # close cycles can transiently hold the WAL lock long enough that a 5s wait errored
-    # with `database is locked`. A longer wait lets the writer drain instead of failing.
-    conn = sqlite3.connect(str(p), timeout=30.0)
+    # Busy-timeout: raised from 5s because under pathological CI-runner load,
+    # rapid open/write/close cycles held the WAL lock longer than 5s and the wait
+    # errored with `database is locked`. A longer wait lets the writer drain.
+    #
+    # IT MUST STAY STRICTLY BELOW THE TEST TIMEOUT, and that is why it is 20 and
+    # not 30. It was raised to exactly 30.0 while pyproject.toml sets
+    # `timeout = 30` for pytest-timeout — the same number. Equal values mean a
+    # test that enters the busy-wait is killed at the precise instant SQLite
+    # would still be waiting, so the wait can never complete and the test can
+    # never recover. It does not fail with a useful error; it dies mid-wait:
+    #
+    #     execution_ledger.py record_event -> conn.commit()
+    #     Failed: Timeout (>30.0s) from pytest-timeout
+    #
+    # Ten soak tests died that way, identically, at setup. Two settings each
+    # sensible in isolation, never checked against each other.
+    #
+    # 20s keeps 4x the original 5s headroom the CI-load fix was for, and leaves a
+    # 10s margin for the test to proceed after the lock clears. The relationship
+    # is enforced by tests/test_sqlite_timeout_below_test_timeout.py — change one
+    # of these numbers and that test tells you about the other.
+    conn = sqlite3.connect(str(p), timeout=_BUSY_TIMEOUT_S)
     # RED5-01 (P0): guarded. Second of three copies of the same cold-start bug —
     # see chuzom/sqlite_wal.py for why the bare form fails both by raising AND,
     # more dangerously, by returning a mode nobody checks.
