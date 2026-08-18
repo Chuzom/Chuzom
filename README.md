@@ -129,7 +129,7 @@ and a mutation-testing bar. Full evidence: [Release Gates][gates] · [Benchmark 
 
 > **On the "3×" / "80%" headline numbers.** Those are *illustrative estimates* for a heavy-Opus
 > workload — real savings depend entirely on your prompt mix. The **measured** figures above are
-> the honest, reproducible ones. Reproduce them yourself with `python -m chuzom benchmark`.
+> the honest, reproducible ones. Reproduce them yourself with `chuzom benchmark`.
 
 ### Estimated savings by workload
 
@@ -157,7 +157,7 @@ sub-steps, and Chuzom routes **subagent spawns** too — most of that never touc
 | Claude quota consumed | 100% | ~24% |
 | Sessions before "usage limit" | 1–2 / day | 6–8 / day |
 
-Directional estimate — not statistically significant. Reproduce the audited figures with `python -m chuzom benchmark`.
+Directional estimate — not statistically significant. Reproduce the audited figures with `chuzom benchmark`.
 
 ---
 
@@ -377,7 +377,7 @@ the audited release benchmark uses the moderate + hard baseline (33 prompts). A 
 corpus has not been published yet.
 
 ```bash
-python -m chuzom benchmark   # run your own
+chuzom benchmark   # run your own
 ```
 
 ---

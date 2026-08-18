@@ -155,6 +155,16 @@ jobs:
         # gate people learn to skip.
         run: uv run python scripts/lint_suite_env_parity.py
 
+      - name: Documented commands actually run (doc 34 Step 1)
+        # README.md promises `chuzom doctor`, `chuzom benchmark` and a
+        # 60-second install. Those are testable claims and nothing tested them.
+        # First run found a documented command that could never work —
+        # `python -m chuzom benchmark`, with no __main__.py in the package.
+        # Commands are PARSED from the README, so one added later is covered
+        # without editing the checker, and extracting zero FAILS: a doc-checker
+        # that finds nothing passes while checking nothing.
+        run: uv run python scripts/check_docs_commands.py --run
+
       - name: Ollama URL readers reach the validator (CHZ-SEC-06)
         # config.validate_ollama_url was written because these env vars were an
         # SSRF sink, and was then bypassed by SEVEN copies of the reader across
