@@ -104,11 +104,20 @@ composed from **literals only**, with user values passed as `?` parameters.
 - **`execution_ledger._load_rows(where, params)`** — takes the clause as an argument, so
   safety is a property of callers rather than of the function. All four pass string literals.
 
-**The one thing worth flagging**: `_load_rows` is the fragile spot. It is safe today and its
+~~**The one thing worth flagging**: `_load_rows` is the fragile spot. It is safe today and its
 signature invites an f-string. Not changed — a runtime check cannot distinguish a literal from
 an interpolation, so the honest options are a docstring contract or a lint, and neither was
 worth adding without a second caller to justify it. Recorded here so the next person adding a
-caller has been told.
+caller has been told.~~
+
+**FIXED — the reasoning above was wrong.** It framed the choice as "docstring contract or
+lint", missing the third option: change the signature so the unsafe call cannot be written.
+`_load_rows` now takes `(column, operator, value)` filters validated against `_COLUMNS` and a
+fixed operator set, so callers supply data and the function is the only place that writes SQL.
+
+"Safe today" is not a resolution — §7 of this document had to correct a different claim resting
+on exactly that reasoning. A hazard that is documented rather than removed is still a hazard,
+and the note describing it is what makes it feel handled.
 
 ---
 
@@ -164,7 +173,7 @@ third did.
   unexamined, and a false justification is a defect that hides a defect.~~ **DONE — §7.** It
   found a fourth defect and then refuted §4. It was the highest-yield item on this list, which
   is an argument for doing the "not done" section rather than filing it.
-- **`_load_rows`'s signature** (§3).
+- ~~**`_load_rows`'s signature** (§3).~~ **DONE.** Both items on this list turned out to be worth doing, and the first one refuted the document. A "not done" list is a work queue, not a disclaimer.
 - **Nothing dismissed through the API**, same position as doc 31 §6. Bandit alerts remain
   open with this document as the reasoning.
 
