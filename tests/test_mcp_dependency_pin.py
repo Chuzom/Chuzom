@@ -97,8 +97,16 @@ def _mcp_import_sites() -> list[tuple[Path, str, tuple[str, ...]]]:
     for path in sorted(_SRC.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
-            continue
+        except (OSError, SyntaxError) as exc:
+            # Do NOT skip. A source file this cannot parse is a file whose mcp
+            # imports go unchecked, and `continue` reports that as coverage.
+            # G4's ratchet flagged it and was right — it is the same shape as the
+            # skip removed from test_savings_surfaces_delegate.py: a guard that
+            # silently narrows is worse than one that fails, because it keeps
+            # reporting success over the part it stopped looking at.
+            #
+            # An unparseable file under src/ is also independently a problem.
+            pytest.fail(f"cannot parse {path}: {exc}")
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
                 if node.module == "mcp" or node.module.startswith("mcp."):

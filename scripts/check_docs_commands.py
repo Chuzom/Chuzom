@@ -169,7 +169,22 @@ def main() -> int:
     _t0 = _time.perf_counter()
     for c in runnable:
         proc = subprocess.run(  # noqa: S602 — commands come from our own README
-            c.text, shell=True, capture_output=True, text=True, timeout=300,
+            c.text,
+            shell=True,
+            capture_output=True,
+            # text=True alone decodes with the LOCALE encoding, which on windows
+            # is cp1252. The commands under test print ✓ / ✗ / ⚡ / 💰, so the
+            # reader thread died with UnicodeDecodeError on the child's own
+            # output — and because the read failed, the expected-non-zero check
+            # never saw the remediation text either, turning a healthy `chuzom
+            # doctor` into a reported failure.
+            #
+            # This is the MIRROR of CHZ-WIN-01: that fix made the child WRITE
+            # utf-8; this one makes the parent READ it. Fixing one side and not
+            # the other just moves the crash across the pipe.
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
         )
         expect = next((v for k, v in _EXPECTED_NONZERO.items() if k in c.text), None)
         out = (proc.stdout or "") + (proc.stderr or "")

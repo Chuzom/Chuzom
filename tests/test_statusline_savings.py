@@ -52,7 +52,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import pathlib
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -139,11 +141,26 @@ def _run_statusline(home: Path, stdin_json: dict | None = None) -> str:
     NO_COLOR=1 is set so tests can assert on plain text without ANSI
     escape codes leaking into the assertion strings.
     """
+    # The running interpreter's directory goes FIRST on PATH.
+    #
+    # The statusline resolves a python that can `import chuzom` by probing
+    # candidates on PATH. This harness simulates a machine where chuzom IS
+    # installed, so a chuzom-capable interpreter must be discoverable — otherwise
+    # the test asserts against an environment no real user has.
+    #
+    # Without this, G-D failed: it runs `.wheelvenv/bin/python -m pytest` by
+    # absolute path, so the wheel venv is never on PATH, the script found only
+    # the system python3 (which cannot import chuzom), and the savings segment
+    # was correctly omitted — a real behaviour, tested under conditions that made
+    # it look like a bug.
     env = {
         **os.environ,
         "HOME": str(home),
         "CHUZOM_ENFORCE": "soft",
         "NO_COLOR": "1",
+        "PATH": os.pathsep.join(
+            [str(pathlib.Path(sys.executable).parent), os.environ.get("PATH", "")]
+        ),
     }
     payload = json.dumps(stdin_json) if stdin_json is not None else "{}"
     result = subprocess.run(
