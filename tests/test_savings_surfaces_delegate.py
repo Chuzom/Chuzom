@@ -79,10 +79,19 @@ def test_there_are_surfaces_to_check():
     "surface", _surfaces(), ids=lambda p: f"{p.parent.name}/{p.name}"
 )
 def test_surface_does_not_sum_savings_itself(surface: Path):
+    # FAIL on unreadable, do not skip. G4's ratchet flagged the skip version and
+    # was right: a surface this guard cannot read is a surface it is not
+    # guarding, and a skip reports that as success. If a file under
+    # src/chuzom/hooks/ stops being readable, that is itself the finding.
     try:
         text = surface.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        pytest.skip(f"unreadable: {surface}")
+    except (OSError, UnicodeDecodeError) as exc:
+        pytest.fail(
+            f"cannot read {surface.relative_to(_ROOT)}: {exc}. This guard "
+            f"checks that surfaces do not compute savings themselves; a file it "
+            f"cannot read is unchecked, and reporting that as a skip would make "
+            f"the guard quietly partial."
+        )
 
     # A GROUP BY query is a BREAKDOWN, not a total, and the invariant is about
     # totals. session-end.py legitimately does `SELECT model, ..., SUM(saved)

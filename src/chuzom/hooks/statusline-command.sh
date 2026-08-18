@@ -276,12 +276,22 @@ if [ -f "$USAGE_DB" ]; then
     # `python3` the shell finds, which on a normal install is NOT the venv the
     # package lives in — the first version of this silently produced nothing for
     # exactly that reason, and the "never break the statusline" fallback hid it.
-    # Resolution order: the interpreter behind the installed CLI, then pipx's
-    # venv, then a dev checkout. If none can import chuzom the figure is omitted
-    # rather than guessed.
+    # Resolution order: the interpreter behind the installed CLI, then the
+    # AMBIENT python3/python, then pipx's venv, then a dev checkout. Each
+    # candidate is probed with `import chuzom` — presence on PATH is not
+    # evidence it can import the package.
+    #
+    # The ambient entries were added after G-D failed: inside a wheel venv the
+    # package IS importable but `chuzom` is not on PATH, so a resolver that only
+    # looked for the CLI found nothing and silently dropped the figure. The
+    # narrow version passed locally, where a dev checkout always matched.
+    #
+    # If none can import chuzom the figure is omitted rather than guessed.
     _chz_py=""
     for _cand in \
         "$(command -v chuzom 2>/dev/null | xargs -I{} head -1 {} 2>/dev/null | sed 's|^#!||' | awk '{print $1}')" \
+        "$(command -v python3 2>/dev/null)" \
+        "$(command -v python 2>/dev/null)" \
         "$HOME/.local/pipx/venvs/chuzom-router/bin/python" \
         "$HOME/.local/bin/python3" \
         "$(dirname "$0")/../../../.venv/bin/python3"; do

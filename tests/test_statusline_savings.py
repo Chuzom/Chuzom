@@ -426,8 +426,8 @@ def test_the_savings_figure_is_labelled():
     # 💰 and tripped the first version of this test. Third time today a textual
     # check confused a mention for a use; the fix is always to anchor on the
     # construct that does the work, here `parts+=(`.
-    render = [l for l in script.splitlines()
-              if "parts+=(" in l and "💰" in l]
+    render = [line for line in script.splitlines()
+              if "parts+=(" in line and "💰" in line]
     assert render, "no 💰 render line found in the statusline script"
     assert "today" in render[0], (
         f"the 💰 segment carries no period label: {render[0].strip()}"

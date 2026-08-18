@@ -190,8 +190,20 @@ def main() -> int:
         print(f"\nFAIL: {len(failures)} documented command(s) do not work:\n")
         for c, proc in failures:
             print(f"  {c.doc}:{c.line}  {c.text}")
+            # PRINT THE WHOLE DIAGNOSTIC, not the first few lines. The first
+            # version capped this at 4, and the first real failure it caught —
+            # `chuzom doctor` crashing on windows — was truncated mid-traceback
+            # at the frame BEFORE the exception. A checker that detects a
+            # failure and hides its cause turns one CI round-trip into two.
+            #
+            # Bounded generously rather than absolutely: a runaway command
+            # should not bury the summary, but 60 lines carries any traceback
+            # worth reading.
             err = (proc.stderr or proc.stdout or "").strip().splitlines()
-            for line in err[:4]:
+            shown = err[-60:] if len(err) > 60 else err
+            if len(err) > 60:
+                print(f"      … {len(err) - 60} earlier line(s) omitted …")
+            for line in shown:
                 print(f"      {line}")
             print()
         print("Fix the doc where it is wrong, or the code where the doc is right.")
