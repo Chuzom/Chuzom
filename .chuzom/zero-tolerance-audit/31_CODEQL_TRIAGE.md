@@ -23,6 +23,7 @@ finding.
 | verdict | count | |
 |---|---|---|
 | **Genuine — fixed** | 3 | path traversal → exfiltration; one ReDoS; file-permission window |
+| ⚠️ *of those, alerts actually cleared* | 1 | see §5a — the path fix is real but CodeQL cannot see it |
 | **Genuine — not exploitable in practice, measured** | 8 | the remaining ReDoS alerts |
 | **False positive by construction** | 6 | tests that create the bad condition deliberately |
 | **False positive — rule assumes a different threat model** | 2 | hashing |
@@ -168,7 +169,39 @@ Neither has a fix that would improve anything.
 
 ---
 
-## 6 · What this does not resolve
+## 5a · Correction, after CI re-scanned the fixes
+
+Two claims made above and in the commits needed revising once CodeQL ran on the pushed
+branch. Recording them here rather than editing them away, because the pattern is the point.
+
+**The alert count went 19 → 18, not 19 → 17.**
+
+| fix | alert outcome |
+|---|---|
+| §2.2 ReDoS bound | ✅ `code_context.py:147` **cleared** |
+| §2.1 path confinement | ❌ alert **persists** (moved to `:281`) **and spawned a second** at `capabilities.py:247` |
+
+**The defect is fixed; the alert is not.** The traversal is genuinely blocked — §2.1's control
+demonstrates it directly, `sk-live-...` is absent from the returned context with the
+confinement in and present with it out. What CodeQL does not do is recognise
+`Path.is_relative_to` as a sanitiser, so the taint from prompt → path survives its analysis
+straight through `is_safe_path`, and it now flags both the call site and the helper.
+
+**So hardening the code raised the alert count.** Routing prompt-derived paths through a
+shared checker gave CodeQL a new place to find the same unmodelled sanitiser. That is worth
+sitting with: on this rule, alert count moves in the opposite direction to security, and
+anyone driving the number to zero would be led to revert the fix.
+
+**And a claim from 30_CI_GAP_PLAN §7 no longer holds at the current head.** "This branch
+introduces zero new CodeQL findings" was true when measured — verified at
+`(path, rule, line)` against `main` — and is now false: `capabilities.py:247` is new, and
+`main` has no open alert in that file. It is a false positive introduced by a real fix, which
+is a different thing from a regression, but "zero new" is no longer the accurate sentence and
+should not be repeated from the earlier document.
+
+The honest summary is therefore narrower than §1 implies: **two defects fixed with the alert
+cleared, one defect fixed with the alert remaining and multiplying.** §1's counts describe
+defects, not alerts, and the two do not correspond.
 
 **The `CodeQL` check stays red**, and this document does not change that. It explains it.
 
@@ -201,3 +234,11 @@ What worked:
 4. **Check that the regression test can fail.** The traversal test passed with the fix removed
    — twice, for two different reasons — before it was made honest. Both reasons are recorded
    in its docstring, because that is the part a future editor will otherwise re-discover.
+5. **Re-scan after fixing, and believe the result over your own summary.** Two of the three
+   fixes did not do what the commit messages said they would do to the alert list, and §5a
+   exists because the scanner was checked rather than assumed. The count moved 19 → 18 where
+   the write-up implied 17, and one fix *added* an alert.
+
+And the finding that outranks the individual fixes: **alert count is not a security metric on
+this rule set.** Fixing the traversal raised it. Six alerts are tests proving the hardening
+works. Anyone optimising the number would revert the first and delete the second.
