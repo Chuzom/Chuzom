@@ -65,7 +65,32 @@ def test_today_filters_no_bare_utc_start_of_day():
 
 
 def test_statusline_today_savings_use_localtime():
+    """"Today" must mean the user's local day, not UTC.
+
+    The statusline no longer carries its own date filter — it delegates to
+    dashboard_data.query_window, which under-reported nothing and owns the
+    boundary at dashboard_data.py:91:
+
+        "today": "date(timestamp,'localtime')=date('now','localtime')"
+
+    So this asserts the concern MOVED rather than vanished: the script must not
+    reintroduce a UTC boundary, and the module it delegates to must still use
+    localtime. Asserting the old inline query here would now fail on correct
+    code and push someone to re-add the hand-rolled SQL that under-reported by
+    2.7x — the defect this replaced.
+    """
     sl = _read("hooks/statusline-command.sh")
-    assert "date -u +" not in sl                                   # no forced-UTC boundary
-    assert "datetime.datetime.utcnow()" not in sl                  # no UTC log filter
-    assert "date(timestamp,'localtime')=date('now','localtime')" in sl
+    assert "date -u +" not in sl, "forced-UTC day boundary reintroduced"
+    assert "datetime.datetime.utcnow()" not in sl, "UTC log filter reintroduced"
+    assert "query_window" in sl, (
+        "statusline no longer delegates — whoever re-added its own savings query "
+        "also re-took ownership of the timezone boundary"
+    )
+
+    from pathlib import Path as _P
+    agg = (_P(__file__).resolve().parents[1]
+           / "src" / "chuzom" / "dashboard_data.py").read_text()
+    assert "date(timestamp,'localtime')=date('now','localtime')" in agg, (
+        "the canonical aggregation stopped using localtime for 'today' — every "
+        "surface that delegates now shows a UTC day"
+    )

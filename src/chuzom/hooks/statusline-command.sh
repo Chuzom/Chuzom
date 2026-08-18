@@ -240,88 +240,84 @@ else:              print(str(n))
     fi
 fi
 
-# ── 💰 Today's gross savings ─────────────────────────────────────────────────
-today_saved=0
+# (The hand-rolled `today_saved` computation that lived here — ~80 lines of
+#  SQL over `usage` plus a JSONL fallback — was removed, not just unhooked.
+#  Leaving it would have left a second savings computation in the file that
+#  nothing rendered: dead code that still looks authoritative to the next
+#  reader, and that the INV-COST-004 guard would keep failing on.)
+
+# ── 💰 Today's savings, via the CANONICAL aggregation ────────────────────────
+#
+# INV-COST-004: "the aggregation functions are the ONLY cost totals; surfaces
+# delegate." This surface did not delegate — it ran its own SQL over the legacy
+# `usage` table and reported the result as the day's total.
+#
+# That under-reports, and dashboard_data.py says why in its own docstring:
+# "Every consumer that wants to show today's calls / tokens / savings must UNION
+# across all sources or under-report." It unions five tables — claude_usage,
+# codex_usage, gemini_usage, legacy usage, and savings_stats.
+#
+# Measured on one day:
+#     usage alone            840 rows    $78.68
+#     savings_stats alone  1,109 rows   $102.88
+#     query_window (union) 2,215 rows   $205.19   <- the total
+#
+# The surfaces were not disagreeing about arithmetic. Each queried a SUBSET and
+# presented it as the whole, which is why three renderers showed three numbers
+# and no reader could tell which was right.
+#
+# LABELLED "today", because the previous bare `$102.31` sat beside a quota
+# percentage and read as SPEND — the opposite of its meaning.
+#
+# 57ms measured, which is why it is acceptable to call from a statusline at all;
+# if that regresses, drop the figure rather than caching a stale one.
 if [ -f "$USAGE_DB" ]; then
-    # "Today" in the user's LOCAL timezone (timestamp is stored UTC). Matches the
-    # per-platform loop below; a UTC start-of-day boundary dropped the last N hours
-    # of local-today savings for non-UTC users near midnight.
-    legacy=$(sqlite3 "$USAGE_DB" "
-        SELECT COALESCE(SUM(
-            CASE
-                WHEN COALESCE(saved_usd, 0) > 0 THEN saved_usd
-                WHEN provider IN ('ollama','codex','gemini_cli')
-                    THEN (COALESCE(input_tokens,0)*15.0 + COALESCE(output_tokens,0)*75.0)/1000000.0
-                ELSE 0
-            END
-        ), 0)
-        FROM usage
-        WHERE date(timestamp,'localtime')=date('now','localtime') AND success=1;
-    " 2>/dev/null)
-    platform_sum=0
-    for table in claude_usage codex_usage gemini_usage; do
-        val=$(sqlite3 "$USAGE_DB" "
-            SELECT COALESCE(SUM(cost_saved_usd), 0)
-            FROM $table
-            WHERE date(timestamp,'localtime')=date('now','localtime');
-        " 2>/dev/null)
-        if [ -n "$val" ]; then
-            platform_sum=$(CHZ_A="$platform_sum" CHZ_B="$val" python3 -c 'import os
-def f(x):
-    try: return float(x)
-    except (TypeError, ValueError): return 0.0
-print(f(os.environ.get("CHZ_A")) + f(os.environ.get("CHZ_B")))' 2>/dev/null)
+    # A python that can import chuzom. The statusline runs under whatever
+    # `python3` the shell finds, which on a normal install is NOT the venv the
+    # package lives in — the first version of this silently produced nothing for
+    # exactly that reason, and the "never break the statusline" fallback hid it.
+    # Resolution order: the interpreter behind the installed CLI, then pipx's
+    # venv, then a dev checkout. If none can import chuzom the figure is omitted
+    # rather than guessed.
+    _chz_py=""
+    for _cand in \
+        "$(command -v chuzom 2>/dev/null | xargs -I{} head -1 {} 2>/dev/null | sed 's|^#!||' | awk '{print $1}')" \
+        "$HOME/.local/pipx/venvs/chuzom-router/bin/python" \
+        "$HOME/.local/bin/python3" \
+        "$(dirname "$0")/../../../.venv/bin/python3"; do
+        if [ -n "$_cand" ] && [ -x "$_cand" ] && "$_cand" -c "import chuzom" 2>/dev/null; then
+            _chz_py="$_cand"; break
         fi
     done
-    today_saved=$(CHZ_A="${legacy:-0}" CHZ_B="${platform_sum:-0}" python3 -c 'import os
-def f(x):
-    try: return float(x)
-    except (TypeError, ValueError): return 0.0
-print(f(os.environ.get("CHZ_A")) + f(os.environ.get("CHZ_B")))' 2>/dev/null)
-fi
 
-SAVINGS_LOG="$STATE_DIR/savings_log.jsonl"
-if [ -f "$SAVINGS_LOG" ]; then
-    pending=$(CHZ_SAVINGS_LOG="$SAVINGS_LOG" python3 -c '
-import json, datetime, os
-# savings_log timestamps are UTC ISO (…+00:00); compare in LOCAL time so "today"
-# matches the user wall clock, not UTC (which dropped the last N hours near
-# local midnight for non-UTC users).
-today = datetime.datetime.now().astimezone().date()
-total = 0.0
+    _saved=""
+    [ -n "$_chz_py" ] && _saved=$(CHZ_DB="$USAGE_DB" "$_chz_py" -c '
+import os, pathlib
 try:
-    with open(os.environ["CHZ_SAVINGS_LOG"]) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-                ts = rec.get("timestamp", "")
-                dt = datetime.datetime.fromisoformat(ts)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=datetime.timezone.utc)
-                if dt.astimezone().date() == today:
-                    total += float(rec.get("estimated_saved", 0))
-            except Exception:
-                pass
-except OSError:
-    pass
-print("%.6f" % total)
+    from chuzom.dashboard_data import query_window
+    t = query_window("today", db_path=pathlib.Path(os.environ["CHZ_DB"]))
+    print(f"{t.saved_usd:.2f}")
+except Exception:
+    print("")            # never break the statusline over a reporting figure
 ' 2>/dev/null)
-    if [ -n "$pending" ]; then
-        today_saved=$(CHZ_A="$today_saved" CHZ_B="$pending" python3 -c 'import os
-def f(x):
-    try: return float(x)
-    except (TypeError, ValueError): return 0.0
-print(f(os.environ.get("CHZ_A")) + f(os.environ.get("CHZ_B")))' 2>/dev/null)
+    if [ -n "$_saved" ] && [ "$_saved" != "0.00" ]; then
+        parts+=("💰 ${_GREEN}\$${_saved}${_RESET}${_DIM} today${_RESET}")
     fi
-fi
 
-if [ -n "$today_saved" ] && [ "$today_saved" != "0" ] && [ "$today_saved" != "0.0" ]; then
-    formatted=$(printf '%.2f' "$today_saved" 2>/dev/null)
-    if [ "$formatted" != "0.00" ]; then
-        parts+=("💰 ${_GREEN}\$${formatted}${_RESET}")
+    # ⚖ route mix — local vs paid over the last 6h. Answers "is routing working
+    # right now", which quota does not: quota says what is left, this says
+    # whether it is being earned. Green only when local carries the majority.
+    _mix=$(sqlite3 "$USAGE_DB" "
+        SELECT
+          SUM(CASE WHEN model LIKE 'ollama/%' THEN 1 ELSE 0 END),
+          SUM(CASE WHEN model NOT LIKE 'ollama/%' THEN 1 ELSE 0 END)
+        FROM usage
+        WHERE timestamp >= datetime('now', '-6 hours');" 2>/dev/null)
+    _local=$(echo "$_mix" | cut -d'|' -f1)
+    _paid=$(echo "$_mix" | cut -d'|' -f2)
+    if [ -n "$_local" ] && [ $(( ${_local:-0} + ${_paid:-0} )) -gt 0 ]; then
+        if [ "${_local:-0}" -ge "${_paid:-0}" ]; then _mixc="$_GREEN"; else _mixc="$_YELLOW"; fi
+        parts+=("⚖ ${_mixc}${_local:-0}L/${_paid:-0}P${_RESET}")
     fi
 fi
 
@@ -361,10 +357,13 @@ except OSError:
     stale = True
 print("down" if not providers else ("degraded" if stale else "ok"))
 ' 2>/dev/null)
+# A glyph with no noun is not actionable. `✗` meant "no provider keys in env AND
+# no Ollama call in 30 minutes" — a real fault the reader had no way to name, and
+# the same defect as the unlabelled money figure it sits beside.
 case "$health" in
     ok)       parts+=("${_GREEN}✓${_RESET}") ;;
-    degraded) parts+=("${_YELLOW}⚠${_RESET}") ;;
-    down)     parts+=("${_RED}✗${_RESET}") ;;
+    degraded) parts+=("${_YELLOW}⚠ stale${_RESET}") ;;
+    down)     parts+=("${_RED}✗ no provider${_RESET}") ;;
 esac
 
 # ── 🔀 Last route (always shown) ─────────────────────────────────────────────
