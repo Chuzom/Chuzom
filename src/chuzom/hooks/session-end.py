@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -1911,6 +1912,10 @@ def _build_and_save_learned_profile() -> None:
 # not, and the mismatch is the defect rather than the block's size. Condensed
 # keeps the signal (spend, savings, routes) at a volume per-turn output can carry.
 # `full` remains one env var away and is unchanged for anyone who preferred it.
+# The rendered box is ANSI-coloured; strip it before matching labels, or
+# every regex here silently fails against escape codes.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
 _STOP_HOOK_ENV = "CHUZOM_STOP_HOOK"
 _STOP_MODES = ("full", "condensed", "disabled")
 
@@ -1927,26 +1932,42 @@ def _stop_hook_mode() -> str:
 
 
 def _condense(summary: str) -> str:
-    """Reduce the boxed summary to a single line, or "" if nothing happened.
+    """Reduce the boxed summary to one line, or "" if nothing happened.
 
-    Pulls the figures out of the rendered block rather than recomputing them, so
-    condensed can never disagree with full about the same session.
+    Reports BOTH scopes — today and lifetime — because a single figure is
+    ambiguous and the first version of this function was exactly that: it took
+    the first `$x.xx` it could find, with no idea which period it belonged to.
+    A per-turn line reading "saved $412.88" that silently meant *lifetime* would
+    be read as *this session* by anyone glancing at it, which is worse than
+    printing nothing.
+
+    Figures are EXTRACTED from the rendered summary, matched by their own labels
+    (`$… lifetime`, `$… today`), never recomputed. Recomputing would let the
+    condensed and full views disagree about the same session — a reporting bug
+    that is hard to notice and impossible to trust once suspected.
     """
-    import re as _re
+    plain = _ANSI_RE.sub("", summary) if _ANSI_RE else summary
 
-    money = _re.findall(r"\$[0-9]+\.[0-9]{2}", summary)
-    routes = _re.search(r"(\d+)\s+(?:routes?|calls?|tasks?)\b", summary, _re.I)
-    saved = money[0] if money else None
-    n = routes.group(1) if routes else None
+    def _labelled(label: str) -> str | None:
+        # The renderer emits "<money>  <label>" — money first, label after.
+        m = re.search(r"(\$[0-9][0-9,]*\.[0-9]+)\s+" + label + r"\b", plain)
+        return m.group(1) if m else None
 
-    if not saved and not n:
+    lifetime = _labelled("lifetime")
+    today = _labelled("today")
+    routes = re.search(r"(\d+)\s+(?:routes?|calls?|tasks?)\b", plain, re.I)
+
+    if not lifetime and not today and not routes:
         return ""  # nothing to report — say nothing, every turn
 
-    bits = []
-    if n:
-        bits.append(f"{n} routed")
-    if saved:
-        bits.append(f"saved {saved}")
+    bits: list[str] = []
+    if routes:
+        bits.append(f"{routes.group(1)} routed")
+    if today:
+        bits.append(f"today {today}")
+    if lifetime:
+        # Labelled even when today is absent, so the number is never bare.
+        bits.append(f"lifetime {lifetime}")
     return "⚡ chuzom · " + " · ".join(bits) + "  ·  `chuzom summary` for detail"
 
 

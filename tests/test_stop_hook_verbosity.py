@@ -43,7 +43,8 @@ _HOOK = Path(__file__).resolve().parents[1] / "src" / "chuzom" / "hooks" / "sess
 _BOXED = (
     "  " + "═" * 40 + "\n"
     "  ⚡ Chuzom session summary\n"
-    "  12 routes  ·  saved $1.23  ·  cost $0.04\n"
+    "  12 routes\n"
+    "    \x1b[32m\x1b[1m$412.88\x1b[0m  lifetime    \x1b[37m$3.41\x1b[0m  today\n"
     "  " + "═" * 40
 )
 _EMPTY = "  " + "═" * 40 + "\n  No session activity detected\n  " + "═" * 40
@@ -83,10 +84,34 @@ def test_unknown_values_fall_back_instead_of_raising(hook, monkeypatch, value: s
     assert hook._stop_hook_mode() == "condensed"
 
 
-def test_condensed_keeps_the_figures(hook):
+def test_condensed_reports_both_scopes(hook):
+    """Today AND lifetime, each labelled.
+
+    A single unlabelled figure is the bug this replaced: the first version took
+    whichever `$x.xx` appeared first, so a per-turn line reading "saved $412.88"
+    silently meant LIFETIME and would be read as this session by anyone glancing
+    at it. Worse than printing nothing.
+    """
     line = hook._condense(_BOXED)
-    assert "12 routed" in line and "$1.23" in line
+    assert "12 routed" in line
+    assert "today $3.41" in line, "today's figure missing or unlabelled"
+    assert "lifetime $412.88" in line, "lifetime figure missing or unlabelled"
     assert "\n" not in line, "condensed must be ONE line — it prints every turn"
+
+
+def test_it_survives_the_ansi_codes_the_renderer_emits(hook):
+    """The real box is coloured. A regex that only matches plain text would
+    silently find nothing and report an empty line every turn — passing tests
+    against synthetic input while doing nothing in production."""
+    assert "\x1b[" in _BOXED, "fixture must contain ANSI, or this proves nothing"
+    assert "$3.41" in hook._condense(_BOXED)
+
+
+def test_a_lone_figure_is_still_labelled(hook):
+    """Never emit a bare number. If only one scope is available the reader must
+    still know which one it is."""
+    only_life = hook._condense("    $99.00  lifetime")
+    assert "lifetime $99.00" in only_life
 
 
 def test_condensed_says_nothing_when_there_is_nothing(hook):
@@ -101,7 +126,7 @@ def test_condensed_is_derived_from_the_rendered_summary(hook):
     different number than `full` for the same session — a reporting bug that
     would be very hard to notice and impossible to trust.
     """
-    altered = _BOXED.replace("$1.23", "$9.99").replace("12 routes", "7 routes")
+    altered = _BOXED.replace("$3.41", "$9.99").replace("12 routes", "7 routes")
     line = hook._condense(altered)
-    assert "$9.99" in line and "7 routed" in line
-    assert "1.23" not in line and "12" not in line
+    assert "today $9.99" in line and "7 routed" in line
+    assert "3.41" not in line
