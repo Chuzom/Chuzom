@@ -24,8 +24,25 @@ from typing import Any
 
 from chuzom.library.store import LibraryStore, now_utc, scrub_secrets
 
+def _validated_ollama_env_url(raw: str) -> str:
+    """CHZ-SEC-06: never hand an unvalidated env URL to urlopen.
+
+    Imported, not reimplemented — three earlier copies of this reader diverged
+    and bypassed the fix. Fails CLOSED: an unavailable validator falls back to
+    localhost rather than honouring an unchecked URL.
+    """
+    default = "http://localhost:11434"
+    try:
+        from chuzom.config import validate_ollama_url
+    except Exception:
+        return raw if raw == default else default
+    return validate_ollama_url(raw) or default
+
+
 LIBRARIAN_MODEL = os.environ.get("CHUZOM_LIBRARIAN_MODEL", "qwen2.5-coder:7b")
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_BASE_URL = _validated_ollama_env_url(
+    os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+)
 
 _GIT_SEAL_RE = re.compile(
     r"\bgit\b.*\b(commit|push|tag)\b|\bgh\s+release\b", re.IGNORECASE)

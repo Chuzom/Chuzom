@@ -270,13 +270,30 @@ class ReActAgent:
         return AgentRunResult(artifacts, cost_usd=self.cost_per_call_usd, confidence=confidence)
 
 
+
+def _validated_ollama_env_url(raw: str) -> str:
+    """CHZ-SEC-06: never hand an unvalidated env URL to urlopen.
+
+    Imported, not reimplemented — three earlier copies of this reader diverged
+    and bypassed the fix. Fails CLOSED: an unavailable validator falls back to
+    localhost rather than honouring an unchecked URL.
+    """
+    default = "http://localhost:11434"
+    try:
+        from chuzom.config import validate_ollama_url
+    except Exception:
+        return raw if raw == default else default
+    return validate_ollama_url(raw) or default
+
 def _default_ollama_client(model: str, base_url: str | None = None) -> OllamaClient:
     """Real client hitting Ollama's /api/chat with tools. Lazy/deferred; unit
     tests inject a fake and never reach this."""
     import os
     import urllib.request
 
-    url = (base_url or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip("/")
+    url = _validated_ollama_env_url(
+        base_url or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434"
+    ).rstrip("/")
 
     def client(messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ChatTurn:
         body = json.dumps({"model": model, "messages": messages, "tools": tools,

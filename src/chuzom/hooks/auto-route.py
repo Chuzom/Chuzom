@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 34
+# chuzom-hook-version: 35
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -159,7 +159,7 @@ def route_call(logical: str, *args: str) -> str:
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 34"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 35"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -276,14 +276,35 @@ else:
         os.environ.get("OPENAI_API_KEY") or
         os.environ.get("GOOGLE_API_KEY")
     )
-    _ollama_url_check = (
+    # THIRD copy of this reader, found by auditing the nosec justifications
+    # rather than by the SSRF fix that corrected the other two. Same CHZ-SEC-06
+    # bypass: env-derived, unvalidated, straight into urlopen. `_load_dotenv`
+    # above reads Path.cwd()/".env", so a cloned repo could point this at
+    # file:// or a cloud-metadata address.
+    #
+    # Guarded import, failing CLOSED to localhost — this file runs as a
+    # standalone script and must not die on package resolution, but an
+    # unavailable validator must not mean an unchecked URL.
+    _ollama_url_raw = (
         os.environ.get("CHUZOM_OLLAMA_URL") or
         os.environ.get("OLLAMA_BASE_URL") or
         "http://localhost:11434"
     )
     try:
+        from chuzom.config import validate_ollama_url as _validate_ollama
+        _ollama_url_check = _validate_ollama(_ollama_url_raw) or "http://localhost:11434"
+    except Exception:
+        _ollama_url_check = (
+            _ollama_url_raw if _ollama_url_raw == "http://localhost:11434"
+            else "http://localhost:11434"
+        )
+    try:
         import urllib.request as _urllib_req
-        with _urllib_req.urlopen(  # nosec B310 — localhost Ollama only
+        # nosec B310 — URL validated above (scheme + host allowlist). The
+        # previous justification read "localhost Ollama only", which was false:
+        # the URL is env-derived. A remote Ollama is still supported, so
+        # "localhost only" would be wrong even now that it is checked.
+        with _urllib_req.urlopen(  # nosec B310
             _urllib_req.Request(f"{_ollama_url_check}/api/tags", method="GET"),
             timeout=0.5,
         ):

@@ -109,13 +109,30 @@ def check_database() -> tuple[bool, str]:
         return False, f"Database error: {e}"
 
 
+
+def _validated_ollama_env_url(raw: str) -> str:
+    """CHZ-SEC-06: never hand an unvalidated env URL to urlopen.
+
+    Imported, not reimplemented — three earlier copies of this reader diverged
+    and bypassed the fix. Fails CLOSED: an unavailable validator falls back to
+    localhost rather than honouring an unchecked URL.
+    """
+    default = "http://localhost:11434"
+    try:
+        from chuzom.config import validate_ollama_url
+    except Exception:
+        return raw if raw == default else default
+    return validate_ollama_url(raw) or default
+
 def check_ollama() -> tuple[bool, str]:
     """Check if Ollama is running and list models.
 
     Returns:
         (success, message)
     """
-    url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    url = _validated_ollama_env_url(
+        os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    )
     try:
         response = urllib.request.urlopen(f"{url}/api/tags", timeout=2)
         data = json.loads(response.read())

@@ -156,7 +156,7 @@ def available_ollama_models(timeout: float = 0.5) -> set[str] | None:
     try:
         ollama_url = _get_ollama_url()
         req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — localhost only
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — URL validated by _get_ollama_url (not localhost-only: a remote Ollama is supported)
             data = json.loads(resp.read())
         return {m.get("name", "") for m in data.get("models", []) if m.get("name")}
     except Exception:
@@ -215,7 +215,7 @@ def call_ollama(
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — localhost only
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — URL validated by _get_ollama_url (not localhost-only: a remote Ollama is supported)
             result = json.loads(resp.read())
             msg = result.get("message", {})
             content = msg.get("content", "")

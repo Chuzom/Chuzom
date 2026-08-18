@@ -958,6 +958,21 @@ def _format_learned_memory() -> str:
         return ""
 
 
+
+def _validated_ollama_env_url(raw: str) -> str:
+    """CHZ-SEC-06: never hand an unvalidated env URL to urlopen.
+
+    Imported, not reimplemented — three earlier copies of this reader diverged
+    and bypassed the fix. Fails CLOSED: an unavailable validator falls back to
+    localhost rather than honouring an unchecked URL.
+    """
+    default = "http://localhost:11434"
+    try:
+        from chuzom.config import validate_ollama_url
+    except Exception:
+        return raw if raw == default else default
+    return validate_ollama_url(raw) or default
+
 def _warm_ollama_bg() -> None:
     """Fire-and-forget warm-up of the primary Ollama classification model.
 
@@ -982,7 +997,9 @@ def _warm_ollama_bg() -> None:
     if os.environ.get("CHUZOM_OLLAMA_WARMUP", "on").strip().lower() in ("0", "off", "false", "no"):
         return
     model = os.environ.get("CHUZOM_OLLAMA_WARMUP_MODEL", "qwen3.5:latest")
-    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+    base_url = _validated_ollama_env_url(
+        os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    ).rstrip("/")
     payload = json.dumps({"model": model, "prompt": " ", "stream": False})
     try:
         subprocess.Popen(
