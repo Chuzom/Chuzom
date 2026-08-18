@@ -1969,8 +1969,12 @@ def _condense(summary: str) -> str:
     routes = re.search(r"(\d[\d,]*)\s+decisions?\b", plain, re.I) or \
              re.search(r"(\d[\d,]*)\s+(?:routes?|calls?)\b", plain, re.I)
 
-    # The bars report quota CONSUMED; the user asked what is LEFT, so invert and
-    # say so in the label rather than leaving the reader to guess the direction.
+    # CONSUMED, matching the status line. This reported REMAINING for one
+    # revision, which was correct arithmetic and a bad decision: the status line
+    # shows consumed, so the same quantity appeared as 39% in one surface and
+    # 61% in the other, and the only way to tell them apart was reading the
+    # label. The first person to see both asked whether the numbers were real.
+    # Two surfaces agreeing beats either one being individually more useful.
     used_5h, used_wk = _pct("5h"), _pct("weekly")
 
     bits: list[str] = []
@@ -1981,12 +1985,12 @@ def _condense(summary: str) -> str:
     if lifetime:
         bits.append(f"lifetime {lifetime}")
     if used_5h is not None or used_wk is not None:
-        left = []
+        used = []
         if used_5h is not None:
-            left.append(f"5h {100 - used_5h}%")
+            used.append(f"5h {used_5h}%")
         if used_wk is not None:
-            left.append(f"wk {100 - used_wk}%")
-        bits.append("quota left " + "/".join(left))
+            used.append(f"wk {used_wk}%")
+        bits.append("quota used " + "/".join(used))
 
     if not bits:
         return ""

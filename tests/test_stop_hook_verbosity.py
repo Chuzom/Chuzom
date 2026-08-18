@@ -95,20 +95,23 @@ def test_condensed_reports_today_lifetime_and_quota(hook):
     assert "44 routed" in line
     assert "today $159.74" in line, "today's savings missing or unlabelled"
     assert "lifetime $2299.39" in line, "lifetime savings missing or unlabelled"
-    assert "quota left" in line, "quota missing"
+    assert "quota used" in line, "quota missing"
     assert chr(10) not in line, "condensed must be ONE line — it prints every turn"
 
 
-def test_quota_is_reported_as_REMAINING_not_consumed(hook):
-    """The bars show consumption; the user asked what is LEFT.
+def test_quota_matches_the_status_line_convention(hook):
+    """CONSUMED, not remaining — the same direction the status line reports.
 
-    16% used -> 84% left, 39% -> 61%. Reporting the raw bar value would be
-    off-by-inversion and read as almost-exhausted when it is almost-full.
+    This showed REMAINING for one revision. The arithmetic was right and the
+    decision was wrong: the status line shows consumed, so one quantity appeared
+    as 39% there and 61% here, and the first person to see both asked whether the
+    numbers were real. Two surfaces agreeing beats either being individually
+    better, so this asserts the DIRECTION, which is the part that regressed.
     """
     line = hook._condense(_BOXED)
-    assert "5h 84%" in line, "5h quota not inverted to remaining"
-    assert "wk 61%" in line, "weekly quota not inverted to remaining"
-    assert "16%" not in line and "39%" not in line, "raw consumed values leaked"
+    assert "5h 16%" in line, "5h should report consumed, matching the status line"
+    assert "wk 39%" in line, "weekly should report consumed, matching the status line"
+    assert "84%" not in line and "61%" not in line, "inverted values leaked back in"
 
 
 
