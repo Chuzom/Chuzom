@@ -1,0 +1,40 @@
+42846fa fix(readme): restore exact wording the G6 claims guard asserts on
+c5686a8 Relocate RouterArena trees under bench/routerarena/
+94ee3c4 fix(ci): re-key claim baseline for Docs/planning/ paths, drop stale archived entries
+5888881 feat(phase0.5): add sidecar route-directive reader (T3/Edit2)
+38c36c3 fix(phase0.1): fix soak harness bugs inflating dispatch-failure/quality-stub artifacts
+963c7c1 fix(hardening): Phase 5 — close the 4 sibling gaps the independent audit found
+9210b06 fix(hardening): cluster B — CHZ-AUD-B-05 shared finalization helper for both success paths
+0a87dd4 fix(hardening): cluster 6 — C-01 fix session_store concurrent-write data loss via cross-process file locking
+7755618 fix: iteration-8 convergence — 6 fixed (0 Critical) + final assessment (BLOCKED)
+48fb535 fix: iteration-7 convergence — envelope settle atomicity + 3 more (0 Critical)
+611c506 fix: iteration-6 convergence — stale-hook delivery (Critical) + 4 more
+d80ab4b fix(test): drain leaked bg-tasks in reservation test; revert RED1-4-01 patch
+2ea0fb5 fix(cost): local-frame month boundary consistent with daily (RED1-07)
+b1f1cb1 fix: remove unbacked "60-90%" claim from all shipped src + broaden guard (RED2-05)
+8fd4af1 feat(router): daily caps downgrade to free-local instead of hard-block (CHZ-TQ-007)
+a5e1abe chore(repo): tidy — archive historical planning docs, add Docs index, drop junk (#230)
+7c6fdaa feat(summary): baseline counterfactual from recorded tokens, not a latency guess (#28, Gate 7) (#221)
+e400faa feat(ledger): realization-gated savings — no unknown counted as realized (Gate 18, #30) (#213)
+1740635 fix(direct_executor): use non-probing registry lookup — kills RC-0 test flake (#206)
+dcb8343 feat(router): lever ② — metered mid-tier + embedding chain hygiene (#204)
+b07cde3 docs(bench): moderate/hard diagnosis → lever ① fix (#201) flips Gates 15/16 to PASS (#200)
+e49cc66 test(bench): mutation-test the savings verdict — close 16 real gaps (Phase 7 / Gate 13) (#191)
+f9877b8 feat(bench): wire ChuzomRouter to the real chuzom.router — retire the v0.0.1 stub (#5) (#189)
+57aa9a8 fix(enforce): route needs-execution work to the tool-capable door (ENF-FIX-1 / GAP-ENF-1) (#181)
+46425a9 fix(session-end): honest baseline labels + fallback + this-session window (DASH-2 + DASH-3) (#175)
+2ecb0dc docs(reset): audit + plan for session-summary Routing dashboard discrepancies (D1–D9) (#174)
+d03b4d7 fix(dashboard): canonical host price + drop stale $15/$75 3x-inflated baseline (AC-3, AC-4) (#169)
+50043e5 fix(digest): price the baseline from cost.py's canonical host rate, not a hardcoded 15/75 (AC-4) (#168)
+2f0b730 fix(cost): calc_savings honors the task-aware baseline, not hardcoded Opus (AC-7, INV-COST-004) (#167)
+3b11c02 feat(ledger): reconcile_session primitive (INV-COST-004) + enforcement-friction gaps (#161)
+26c1854 Correctness reset (Phases 0–6): canonical ledger + P0/B7/C10/B6 fixes — NOT QUALIFIED (#158)
+f9985e7 test(tiers): tier_summary test — check 'all'/'consolidated' not a brittle hardcoded count
+e624c44 fix(hooks): register agent-depth-release hook (F5) — depth becomes a live count
+b08b676 Merge pull request #150 from Chuzom/chore/pin-ruff-ci
+67524a3 chore(ci): pin ruff + curate lint rule-set to stop version drift
+3fb3945 Merge pull request #137 from Chuzom/feat/base-drift-versioned
+0bc5fbc fix(isolation+packaging): deterministic DB isolation, src pythonpath, manifest sync (CHZ-AUD-001/002)
+582b62e fix(session): make record_step atomic — kill lost-update & cancel-clobber races (CHZ-AUD-003/004)
+1749416 release: v0.8.7 — audit remediation (P1–P5) + session-context accumulator
+da59e7e feat(drift): version-scope the base-model-drift signal (G-METRIC-1 follow-up)

@@ -1,0 +1,40 @@
+
+Uninstalling Chuzom...
+
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-session-start.py
+  Unregistered SessionStart hook: chuzom-session-start.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-auto-route.py
+  Unregistered UserPromptSubmit hook: chuzom-auto-route.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-status-bar.py
+  Unregistered UserPromptSubmit hook: chuzom-status-bar.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-enforce-route.py
+  Unregistered PreToolUse hook: chuzom-enforce-route.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-agent-route.py
+  Unregistered PreToolUse hook: chuzom-agent-route.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-subagent-start.py
+  Unregistered SubagentStart hook: chuzom-subagent-start.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-usage-refresh.py
+  Unregistered PostToolUse hook: chuzom-usage-refresh.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-cc-usage-track.py
+  Unregistered PostToolUse hook: chuzom-cc-usage-track.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-agent-depth-release.py
+  Unregistered PostToolUse hook: chuzom-agent-depth-release.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-playwright-compress.py
+  Unregistered PostToolUse hook: chuzom-playwright-compress.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-bash-compress.py
+  Unregistered PostToolUse hook: chuzom-bash-compress.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-context-capture.py
+  Unregistered PostToolUse hook: chuzom-context-capture.py
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-session-end.py
+  Unregistered Stop hook: chuzom-session-end.py
+  Removed chuzom MCP server from ~/.claude/settings.json
+  Removed chuzom from ~/.claude.json (via claude mcp remove)
+  Removed /tmp/red4-sandbox3/.claude/rules/chuzom.md
+  Removed /tmp/red4-sandbox3/.claude/hooks/chuzom-statusline.sh
+  Removed statusLine command from ~/.claude/settings.json
+  Removed sidecar script /tmp/red4-sandbox3/.claude/hooks/start-ollama.sh
+  Removed sidecar script /tmp/red4-sandbox3/.claude/hooks/start-pxpipe.sh
+  Removed chuzom from Claude Desktop → /tmp/red4-sandbox3/Library/Application Support/Claude/claude_desktop_config.json
+
+Done. Restart Claude Code to apply changes.
+

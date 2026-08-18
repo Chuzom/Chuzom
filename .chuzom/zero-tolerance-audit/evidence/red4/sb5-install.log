@@ -1,0 +1,64 @@
+
+╔══════════════════════════════════════════╗
+║   Chuzom — One-Command Install        ║
+╚══════════════════════════════════════════╝
+
+  ✓  Synced hook support module chuzom_tool_surface.py
+  ✓  Copied session-start.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-session-start.py
+  ✓  Registered SessionStart hook: chuzom-session-start.py
+  ✓  Copied auto-route.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-auto-route.py
+  ✓  Registered UserPromptSubmit hook: chuzom-auto-route.py
+  ✓  Copied status-bar.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-status-bar.py
+  ✓  Registered UserPromptSubmit hook: chuzom-status-bar.py
+  ✓  Copied enforce-route.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-enforce-route.py
+  ✓  Registered PreToolUse hook: chuzom-enforce-route.py
+  ✓  Copied agent-route.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-agent-route.py
+  ✓  Registered PreToolUse hook: chuzom-agent-route.py
+  ✓  Copied subagent-start.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-subagent-start.py
+  ✓  Registered SubagentStart hook: chuzom-subagent-start.py
+  ✓  Copied usage-refresh.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-usage-refresh.py
+  ✓  Registered PostToolUse hook: chuzom-usage-refresh.py
+  ✓  Copied cc-usage-track.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-cc-usage-track.py
+  ✓  Registered PostToolUse hook: chuzom-cc-usage-track.py
+  ✓  Copied agent-depth-release.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-agent-depth-release.py
+  ✓  Registered PostToolUse hook: chuzom-agent-depth-release.py
+  ✓  Copied playwright-compress.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-playwright-compress.py
+  ✓  Registered PostToolUse hook: chuzom-playwright-compress.py
+  ✓  Copied bash-compress.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-bash-compress.py
+  ✓  Registered PostToolUse hook: chuzom-bash-compress.py
+  ✓  Copied context-capture.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-context-capture.py
+  ✓  Registered PostToolUse hook: chuzom-context-capture.py
+  ✓  Copied session-end.py → /tmp/red4-sandbox5/.claude/hooks/chuzom-session-end.py
+  ✓  Registered Stop hook: chuzom-session-end.py
+  ✓  Copied start-ollama.sh → /tmp/red4-sandbox5/.claude/hooks/start-ollama.sh
+  ✓  Copied start-pxpipe.sh → /tmp/red4-sandbox5/.claude/hooks/start-pxpipe.sh
+  ✓  Registered chuzom MCP server in ~/.claude/settings.json
+  ✓  Registered chuzom MCP server in ~/.claude.json (via claude mcp add)
+  ✓  Installed routing rules → /tmp/red4-sandbox5/.claude/rules/chuzom.md
+  ✓  Installed statusline → /tmp/red4-sandbox5/.claude/hooks/chuzom-statusline.sh
+  ✓  Registered statusLine command in settings.json
+  ✓  Registered chuzom in Claude Desktop → /tmp/red4-sandbox5/Library/Application Support/Claude/claude_desktop_config.json
+  ✓  Probing local models for agentic capability (background; see `chuzom probe`)
+
+✓ Chuzom installed globally.
+  Every Claude Code session will now auto-route tasks.
+  Restart Claude Code (and Claude Desktop if installed) to activate.
+
+  Provider keys (optional — router works without any):
+    ⬜  Claude subscription mode off (set CHUZOM_CLAUDE_SUBSCRIPTION=true to enable)
+    ⬜  No external provider API keys found in environment
+    ⚠️   No providers configured — set at least one API key or subscription mode
+
+  Try it:
+    In Claude Code, ask: "What does os.path.join do?"
+    You'll see: ⚡ ROUTE → Haiku (simple query)
+
+  Subcommands:
+    chuzom doctor               — verify everything is wired up
+    chuzom status               — today's cost & savings
+    chuzom dashboard            — web dashboard (localhost:7337)
+    chuzom install --check      — preview install state
+    chuzom install --force      — reinstall / update paths
+    chuzom install --claw-code  — also install into claw-code
+    chuzom uninstall            — remove
+

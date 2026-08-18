@@ -1,0 +1,16 @@
+=== frozen_context() entry for the completed milestone (ledger DOES retain artifacts) ===
+id: create-settings-module
+description: Create a settings module exposing the app's configuration as a dict.
+artifacts keys present: ['provider', 'output', 'diff', 'files']
+artifacts['diff'] contains 'SETTINGS': True
+
+=== actual prompt text sent to milestone 3's executor (real pack_prompt()) ===
+TASK: In main.py, import the settings dict created in milestone 'create-settings-module' and print it at startup.
+
+ALREADY COMPLETED — build on these, do NOT redo:
+  - [create-settings-module] Create a settings module exposing the app's configuration as a dict.
+
+An objective check will verify your work — make real, correct changes.
+=== end prompt ===
+
+>>> PROVEN: the ledger retains milestone 1's full artifacts (including the diff that names the exact symbol 'SETTINGS'), but pack_prompt() -- the ONLY code path that turns frozen_context() into what a delegated executor actually reads -- renders JUST the planner-authored description for every completed milestone, never its artifacts/diff/output. Milestone 3's executor is asked to 'import the settings dict created in milestone create-settings-module' with NO WAY to know the dict is named SETTINGS (vs CONFIG, APP_SETTINGS, or anything else) short of independently re-reading the repo itself. Any multi-milestone plan where a later milestone depends on a concrete, execution-time-decided fact from an earlier one has NO guaranteed prompt-level path for that fact to survive -- the executor either has to rediscover it (only possible if it has filesystem tool access, e.g. tier-0 ReAct's read_file, and only if it thinks to look; CodexAdapter with cwd=None can't even do that reliably, see the separate cwd-wiring finding) or it silently guesses wrong.

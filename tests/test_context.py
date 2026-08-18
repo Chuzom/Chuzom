@@ -244,7 +244,7 @@ class TestBuildContextMessages:
             assert "[Additional context]" in msgs[0]["content"]
 
     @pytest.mark.asyncio
-    async def test_combined_context_order(self, tmp_path):
+    async def test_combined_context_order(self, tmp_path, reset_session_buffer):
         db_path = tmp_path / "test.db"
         with patch("chuzom.context._get_db_path", return_value=db_path):
             # Save a previous session summary
@@ -267,7 +267,7 @@ class TestBuildContextMessages:
             assert prev_idx < curr_idx < extra_idx
 
     @pytest.mark.asyncio
-    async def test_respects_token_budget(self, tmp_path):
+    async def test_respects_token_budget(self, tmp_path, reset_session_buffer):
         db_path = tmp_path / "empty.db"
         with patch("chuzom.context._get_db_path", return_value=db_path):
             # Fill buffer with lots of content

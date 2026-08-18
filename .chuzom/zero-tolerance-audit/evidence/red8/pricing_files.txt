@@ -1,0 +1,8 @@
+=== files defining pricing tables ===
+src/chuzom/types.py
+src/chuzom/router.py
+src/chuzom/cost.py
+src/chuzom/provider_budget.py
+=== files defining model alias/name mapping tables ===
+src/chuzom/benchmarks.py
+src/chuzom/hooks/cc-usage-track.py

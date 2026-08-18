@@ -14,12 +14,21 @@ Calibration
 -----------
 ``weekly_pct`` from claude.ai is denominated in opaque subscription units;
 ``saved_usd`` is denominated in dollars. To convert, we need a
-``$_per_pp`` ratio. This module uses a **configured constant** by default
-(``CHUZOM_WEEKLY_QUOTA_USD_OPUS_EQUIV``, default $50 — roughly the
-Opus-equivalent dollar value of one week of Claude Pro Max). The
-constant is intentionally documented as an estimate; an "observed
-calibration" path that derives the ratio from each user's own
-historical claude_usage is a follow-up (T-QS-2).
+``$_per_pp`` ratio. That ratio is derived from what the SUBSCRIPTION COSTS —
+$200/month over 4.345 weeks, ≈$46/week — not from any token rate, and is
+overridable via ``CHUZOM_SUBSCRIPTION_USD_PER_MONTH`` or
+``CHUZOM_WEEKLY_QUOTA_USD``.
+
+It previously read "default $50 — roughly the Opus-equivalent dollar value of
+one week of Claude Pro Max", computed from $15/$75 per million: the retired
+Opus 3 rate. See the note beside ``_default_weekly_quota_usd``. An "observed
+calibration" path deriving the ratio from each user's own historical
+claude_usage remains a follow-up (T-QS-2).
+
+**Quota is not cash.** These figures are percentage points of prepaid capacity.
+They are labelled as quota and must never be added to a dollar saving — a
+subscription user has not been handed money, they have been handed headroom
+(WP-05 / RED8-05).
 
 Time windows
 ------------
@@ -39,11 +48,46 @@ from chuzom.logging import get_logger
 log = get_logger("chuzom.quota_savings")
 
 
-# Default calibration: Opus-equivalent USD per 1% of weekly quota.
-# Anthropic Claude Pro Max ≈ $200/month subscription; rough Opus-cost
-# equivalent at $15-in/$75-out per million tokens lands the weekly
-# budget in the $40-60 range. $50 is the round middle of that band.
-_DEFAULT_WEEKLY_QUOTA_USD = 50.0
+# Default calibration: USD value of one week of subscription quota.
+#
+# RED8-05 / WP-05: this was a hardcoded 50.0, justified in-comment as a "rough
+# Opus-cost equivalent at $15-in/$75-out per million tokens". That is the
+# RETIRED Opus 3 rate — the same 3x-stale price WP-03 removed everywhere else.
+#
+# The number survives scrutiny, but not for the stated reason, and the
+# difference matters. What a week of quota is WORTH is anchored to what the
+# subscription COSTS, not to any token rate: $200/month over 4.345 weeks is
+# ~$46/week. Deriving it from token prices was the wrong model entirely — under
+# that reasoning the figure would have had to drop by two thirds when Opus
+# repriced, and nobody would have known to touch it.
+#
+# Anchoring to the subscription price also keeps the two quantities honestly
+# distinct: quota is prepaid capacity, cash is money spent. WP-05 forbids
+# summing them, and they are labelled separately downstream.
+_SUBSCRIPTION_USD_PER_MONTH_DEFAULT = 200.0
+_WEEKS_PER_MONTH = 4.345  # 365 / 12 / 7
+
+
+def _default_weekly_quota_usd() -> float:
+    """Weekly quota value in USD, overridable for a different plan.
+
+    Read at call time rather than frozen at import, so a user on a $20 or $100
+    plan can set an env var and have every derived figure follow. The old
+    constant could not be corrected without editing the source.
+    """
+    override = os.environ.get("CHUZOM_WEEKLY_QUOTA_USD", "").strip()
+    if override:
+        try:
+            return float(override)
+        except ValueError:
+            log.warning("CHUZOM_WEEKLY_QUOTA_USD=%r is not a number; ignoring", override)
+    monthly = os.environ.get("CHUZOM_SUBSCRIPTION_USD_PER_MONTH", "").strip()
+    if monthly:
+        try:
+            return float(monthly) / _WEEKS_PER_MONTH
+        except ValueError:
+            log.warning("CHUZOM_SUBSCRIPTION_USD_PER_MONTH=%r is not a number", monthly)
+    return _SUBSCRIPTION_USD_PER_MONTH_DEFAULT / _WEEKS_PER_MONTH
 
 
 @dataclass(frozen=True)
@@ -112,18 +156,18 @@ def _resolve_weekly_quota_usd() -> float:
     """Read the configured weekly quota in Opus-equivalent USD."""
     raw = os.environ.get("CHUZOM_WEEKLY_QUOTA_USD_OPUS_EQUIV", "")
     if not raw:
-        return _DEFAULT_WEEKLY_QUOTA_USD
+        return _default_weekly_quota_usd()
     try:
         value = float(raw)
     except ValueError:
         log.warning(
             "invalid_weekly_quota_env",
             value=raw,
-            fallback=_DEFAULT_WEEKLY_QUOTA_USD,
+            fallback=_default_weekly_quota_usd(),
         )
-        return _DEFAULT_WEEKLY_QUOTA_USD
+        return _default_weekly_quota_usd()
     if value <= 0:
-        return _DEFAULT_WEEKLY_QUOTA_USD
+        return _default_weekly_quota_usd()
     return value
 
 
@@ -208,7 +252,7 @@ def compute_quota_savings(
     usd_per_pp, source = _calibration_usd_per_pp()
     # Guard against pathological calibration (env injected as 0).
     if usd_per_pp <= 0:
-        usd_per_pp = _DEFAULT_WEEKLY_QUOTA_USD / 100.0
+        usd_per_pp = _default_weekly_quota_usd() / 100.0
         source = "configured"
 
     weekly_pp = weekly_saved / usd_per_pp if weekly_saved > 0 else 0.0

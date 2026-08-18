@@ -1,0 +1,76 @@
+
+[1mchuzom doctor[0m
+
+[1m  Hooks[0m
+  [32m✓[0m chuzom-session-start.py  (SessionStart)
+  [32m✓[0m chuzom-auto-route.py  (UserPromptSubmit)
+  [32m✓[0m chuzom-status-bar.py  (UserPromptSubmit)
+  [32m✓[0m chuzom-enforce-route.py  (PreToolUse)
+  [32m✓[0m chuzom-agent-route.py  (PreToolUse)
+  [32m✓[0m chuzom-subagent-start.py  (SubagentStart)
+  [32m✓[0m chuzom-usage-refresh.py  (PostToolUse)
+  [32m✓[0m chuzom-cc-usage-track.py  (PostToolUse)
+  [32m✓[0m chuzom-agent-depth-release.py  (PostToolUse)
+  [32m✓[0m chuzom-playwright-compress.py  (PostToolUse)
+  [32m✓[0m chuzom-bash-compress.py  (PostToolUse)
+  [32m✓[0m chuzom-context-capture.py  (PostToolUse)
+  [32m✓[0m chuzom-session-end.py  (Stop)
+
+[1m  Hook interpreter paths[0m
+  [32m✓[0m chuzom-session-start.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-auto-route.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-status-bar.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-enforce-route.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-agent-route.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-subagent-start.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-usage-refresh.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-cc-usage-track.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-agent-depth-release.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-playwright-compress.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-bash-compress.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-context-capture.py → /tmp/red4-venv/bin/python3.11
+  [32m✓[0m chuzom-session-end.py → /tmp/red4-venv/bin/python3.11
+
+[1m  Routing rules[0m
+  [32m✓[0m chuzom.md
+
+[1m  Claude Code MCP[0m
+  [32m✓[0m MCP server registered in ~/.claude/settings.json
+
+[1m  Claude Desktop[0m
+  [32m✓[0m registered (/tmp/red4-sandbox1/Library/Application Support/Claude/claude_desktop_config.json)
+
+[1m  Ollama (optional — free local classifier)[0m
+  [32m✓[0m running — 7 model(s): nomic-embed-text:latest, qwen3.5:latest, qwen3:32b +4 more
+
+[1m  Gateway daemon (interpreter drift)[0m
+  [32m✓[0m daemon Python 3.11.15 matches on-disk venv (/Users/yaliandrona/Projects/Chuzom/.venv/bin/python)
+
+[1m  Usage data (Claude subscription pressure)[0m
+  [33m⚠[0m usage.json not found — run `chuzom_status` in Claude Code to populate
+
+[1m  Provider API keys[0m
+    ⬜  Claude subscription mode off (set CHUZOM_CLAUDE_SUBSCRIPTION=true to enable)
+    ⬜  No external provider API keys found in environment
+    ⚠️   No providers configured — set at least one API key or subscription mode
+
+[1m  Provider circuit breakers[0m
+[2m  no snapshot yet (router has not recorded a failure this session)[0m
+
+[1m  claw-code (optional — open-source Claude Code alternative)[0m
+[2m  not detected (install at github.com/claw-code/claw-code)[0m
+
+[1m  Version[0m
+  [32m✓[0m chuzom 1.1.1
+
+[1m  Quota savings posture[0m
+  [33m⚠[0m OPENROUTER_API_KEY not set — deepseek-v4-flash / qwen3-235b / qwen3-coder-next unreachable. One key unlocks the leaderboard pool.
+  [33m⚠[0m DEEPSEEK_API_KEY not set — direct deepseek-v4-flash unreachable (OpenRouter can still route there if its key is set).
+  [33m⚠[0m CHUZOM_SIDECAR_PREFETCH not set — introspection prompts ('show me my routing today', 'git status') still go through llm(task="query") + tool calls. Set =1 to let the hook pre-execute and inject the result.
+  [32m✓[0m CHUZOM_RESPONSE_ROUTER=on — explanations compressed before they hit Claude's context
+  [32m✓[0m CHUZOM_ENFORCE=smart (default) — blocks Q&A until routed, allows code work
+  [33m⚠[0m ~/.chuzom/last_classification_*.json missing — hook hint bridge has not run yet. Send any prompt to create it.
+  [33m⚠[0m ~/.chuzom/usage.db missing — no telemetry to score
+
+[32m[1m  ✓ All checks passed. Chuzom is healthy.[0m[0m
+

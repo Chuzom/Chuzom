@@ -16,6 +16,7 @@ import os
 from mcp.server.fastmcp import Context
 
 from chuzom.cost import _get_db
+from chuzom.savings import net_saved
 
 # ── ANSI color codes ────────────────────────────────────────────────────────
 
@@ -166,7 +167,7 @@ async def _query_daily_savings(since_sql: str, baseline: str = "opus") -> list[d
     for row in rows:
         day, total_tok, in_tok, out_tok, actual, calls = row
         base_cost = baseline_fn(in_tok, out_tok)
-        saved = max(0, base_cost - actual)
+        saved = net_saved(base_cost, actual)
         results.append({
             "day": day,
             "tokens": total_tok,
@@ -209,7 +210,7 @@ async def _query_provider_breakdown(since_sql: str, baseline: str = "opus") -> l
     for row in rows:
         prov, total_tok, in_tok, out_tok, actual, calls = row
         base_cost = baseline_fn(in_tok, out_tok)
-        saved = max(0, base_cost - actual)
+        saved = net_saved(base_cost, actual)
         results.append({
             "provider": prov,
             "tokens": total_tok,
@@ -275,14 +276,18 @@ def _render_dashboard(
     total_tokens = sum(d["tokens"] for d in daily)
     total_saved = sum(d["saved"] for d in daily) - classifier_overhead
     total_calls = sum(d["calls"] for d in daily)
-    net_saved = max(0, total_saved)
+    net_total_saved = total_saved
+    # AUD-06: net_total_saved is SIGNED. Colour by sign -- a negative
+    # rendered in green reads as a win, which is the display-layer half
+    # of the same defect the clamp caused.
+    _net_col = _GREEN if net_total_saved >= 0 else _RED
 
     lines.append("")
     lines.append(f"  {_BOLD}{window_label}{_RESET}")
     lines.append("")
     lines.append(f"  {_GREEN}{_BOLD}{_format_tokens(total_tokens)}{_RESET} tokens routed  ·  "
                  f"{_GREEN}{_BOLD}{total_calls}{_RESET} calls  ·  "
-                 f"{_GREEN}{_BOLD}${net_saved:.2f}{_RESET} net saved")
+                 f"{_net_col}{_BOLD}${net_total_saved:.2f}{_RESET} net saved")
     lines.append("")
 
     # ── Time-series sparkline ───────────────────────────────────────────
@@ -332,7 +337,7 @@ def _render_dashboard(
             f"{b['calls']:>6} "
             f"{_format_tokens(b['tokens']):>10} "
             f"{_GREEN}${b['saved']:.4f}{_RESET}{'':<6} "
-            f"{_GREEN}${max(0, b['saved'] - (classifier_overhead * b['calls'] / max(total_calls, 1))):.4f}{_RESET}"
+            f"${b['saved'] - (classifier_overhead * b['calls'] / max(total_calls, 1)):+.4f}{_RESET}"
             f"{free_tag}"
         )
         lines.append(f"  {bar}")
@@ -341,7 +346,7 @@ def _render_dashboard(
 
     # Classifier overhead
     lines.append(f"  {_YELLOW}Classifier overhead:{_RESET} {_YELLOW}-${classifier_overhead:.4f}{_RESET}")
-    lines.append(f"  {_BOLD}{_GREEN}NET SAVED:{_RESET} {_BOLD}{_GREEN}${net_saved:.4f}{_RESET} "
+    lines.append(f"  {_BOLD}{_net_col}NET SAVED:{_RESET} {_BOLD}{_net_col}${net_total_saved:.4f}{_RESET} "
                  f"({_format_tokens(total_tokens)} tokens via cheaper models)")
 
     # ── Subscription notice ─────────────────────────────────────────────

@@ -1,0 +1,18 @@
+{
+  "firstStartTime": "2026-08-11T12:48:08.256Z",
+  "machineID": "826717eaac94ed5c109ac37bc0117fa105709b8100812823c0ed2f4a3dac093c",
+  "opusProMigrationComplete": true,
+  "sonnet1m45MigrationComplete": true,
+  "seenNotifications": {},
+  "hasResetAutoModeOptInForDefaultOffer": true,
+  "migrationVersion": 13,
+  "userID": "406ca421c85d3661d69fccefa53e99c9175e6fbe9af8ec072ecc0bc5e688540f",
+  "mcpServers": {
+    "chuzom": {
+      "type": "stdio",
+      "command": "/tmp/red4-venv/bin/chuzom",
+      "args": [],
+      "env": {}
+    }
+  }
+}

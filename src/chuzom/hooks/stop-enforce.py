@@ -135,7 +135,13 @@ def _record_override(session_id: str, task_type: str, pending: dict | None = Non
         # event_id so a retried Stop hook doesn't double-count.
         _route_id = (pending or {}).get("route_id")
         _turn_id = (pending or {}).get("turn_id")
-        record_event(LedgerEvent(
+        # RED5-02: the boolean is BOUND, never discarded. record_event()
+        # is fail-open and returns False on loss; all seven call sites threw
+        # that away, so 66 dropped events across 2400 writes produced no
+        # error, no log and no counter. The visibility now lives inside
+        # record_event() too, but a discarded return value is the habit that
+        # caused this and it should not survive in the source.
+        _ledger_ok = record_event(LedgerEvent(
             event_id=_stable_event_id(session_id, _route_id, "plain_text_override"),
             session_id=session_id,
             route_id=_route_id,

@@ -16,6 +16,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+from chuzom.savings import net_saved
 
 
 
@@ -458,7 +459,7 @@ def _derive_savings(start: datetime, end: datetime) -> float:
         from chuzom.execution_ledger import get_period_accounting
 
         acc = get_period_accounting(start.timestamp(), end.timestamp())
-        return round(max(0.0, acc.baseline_equivalent_cost_usd - acc.actual_cost_usd), 6)
+        return round(net_saved(acc.baseline_equivalent_cost_usd, acc.actual_cost_usd), 6)
     except Exception:  # noqa: BLE001 — a ledger read must never break the debrief
         return 0.0
 

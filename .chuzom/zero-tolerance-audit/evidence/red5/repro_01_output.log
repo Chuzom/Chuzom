@@ -1,0 +1,85 @@
+=== Process results ===
+rc=1 out=''
+  STDERR: Traceback (most recent call last):
+  File "/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/red5_lineage_w4ei6gck/worker.py", line 12, in <module>
+    store = LineageStore(router_dir=router_dir)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 105, in __init__
+    self._init_db()
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 123, in _init_db
+    conn = _connect(self.db_file)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 38, in _connect
+    conn.execute("PRAGMA journal_mode = WAL")
+sqlite3.OperationalError: database is locked
+rc=1 out=''
+  STDERR: Traceback (most recent call last):
+  File "/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/red5_lineage_w4ei6gck/worker.py", line 12, in <module>
+    store = LineageStore(router_dir=router_dir)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 105, in __init__
+    self._init_db()
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 123, in _init_db
+    conn = _connect(self.db_file)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 38, in _connect
+    conn.execute("PRAGMA journal_mode = WAL")
+sqlite3.OperationalError: database is locked
+rc=0 out='proc=2 done errors=0'
+rc=1 out=''
+  STDERR: Traceback (most recent call last):
+  File "/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/red5_lineage_w4ei6gck/worker.py", line 12, in <module>
+    store = LineageStore(router_dir=router_dir)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 105, in __init__
+    self._init_db()
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 123, in _init_db
+    conn = _connect(self.db_file)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 38, in _connect
+    conn.execute("PRAGMA journal_mode = WAL")
+sqlite3.OperationalError: database is locked
+rc=1 out=''
+  STDERR: Traceback (most recent call last):
+  File "/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/red5_lineage_w4ei6gck/worker.py", line 12, in <module>
+    store = LineageStore(router_dir=router_dir)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 105, in __init__
+    self._init_db()
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 123, in _init_db
+    conn = _connect(self.db_file)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/lineage/lineage_store.py", line 38, in _connect
+    conn.execute("PRAGMA journal_mode = WAL")
+sqlite3.OperationalError: database is locked
+rc=0 out='proc=5 done errors=0'
+rc=0 out='proc=6 done errors=0'
+rc=0 out='proc=7 done errors=0'
+rc=0 out='proc=8 done errors=0'
+rc=0 out='proc=9 done errors=0'
+rc=0 out='proc=10 done errors=0'
+rc=0 out='proc=11 done errors=0'
+
+jsonl exists: True path=/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/red5_lineage_w4ei6gck/home/.chuzom/routing_lineage.jsonl
+db exists: True path=/var/folders/mm/pptcthws57b6rz9gw276hrzc0000gn/T/red5_lineage_w4ei6gck/home/.chuzom/routing_lineage.db
+jsonl raw line count: 1600 (expected 2400)
+jsonl lines that parse individually: 1600/1600
+query_jsonl() succeeded: returned 1600 records
+sqlite routing_decisions row count: 1600 (expected 2400)
+
+'database is locked' errors observed: 4
+Total per-write exceptions across all procs: 0
+
+=== ISOLATION RESULT (repro_01b_lineage_warm_append.py) ===
+10/10 iterations clean when LineageStore is pre-constructed (single process,
+no race) BEFORE spawning 12 concurrent writer processes doing append() only.
+jsonl raw line count: 2400/2400 and sqlite row count: 2400/2400 on all 10 runs.
+Zero "database is locked" errors.
+
+CONCLUSION: the race is confined to the COLD-START constructor path
+(_init_db() -> _connect() -> PRAGMA journal_mode=WAL on a not-yet-existing
+or freshly-created file), not to steady-state concurrent append() calls
+against an already-WAL-mode-established file. Commit 14bf8b1's busy_timeout
+fix is effective for its actual target (concurrent writers appending to an
+established WAL db) but does NOT cover concurrent first-time construction
+of the store, which remains a live, unhandled crash/data-loss path.

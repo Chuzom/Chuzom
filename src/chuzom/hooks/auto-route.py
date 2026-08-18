@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# chuzom-hook-version: 32
+# chuzom-hook-version: 35
 """UserPromptSubmit hook — scoring classifier with Ollama + API fallback chain.
 
 Classification chain (stops at first success):
@@ -159,7 +159,7 @@ def route_call(logical: str, *args: str) -> str:
 # Cursor/Windsurf/Codex never start the MCP server so check_and_update_hooks()
 # never fires. This check emits a stderr warning when the installed hook is
 # older than the bundled one. The user sees it in their IDE's output panel.
-_THIS_VERSION_LINE = "# chuzom-hook-version: 32"
+_THIS_VERSION_LINE = "# chuzom-hook-version: 35"
 try:
     _PKG_HOOK = Path(__file__).resolve()
     _INSTALLED_HOOK = Path.home() / ".claude" / "hooks" / "chuzom-auto-route.py"
@@ -276,14 +276,35 @@ else:
         os.environ.get("OPENAI_API_KEY") or
         os.environ.get("GOOGLE_API_KEY")
     )
-    _ollama_url_check = (
+    # THIRD copy of this reader, found by auditing the nosec justifications
+    # rather than by the SSRF fix that corrected the other two. Same CHZ-SEC-06
+    # bypass: env-derived, unvalidated, straight into urlopen. `_load_dotenv`
+    # above reads Path.cwd()/".env", so a cloned repo could point this at
+    # file:// or a cloud-metadata address.
+    #
+    # Guarded import, failing CLOSED to localhost — this file runs as a
+    # standalone script and must not die on package resolution, but an
+    # unavailable validator must not mean an unchecked URL.
+    _ollama_url_raw = (
         os.environ.get("CHUZOM_OLLAMA_URL") or
         os.environ.get("OLLAMA_BASE_URL") or
         "http://localhost:11434"
     )
     try:
+        from chuzom.config import validate_ollama_url as _validate_ollama
+        _ollama_url_check = _validate_ollama(_ollama_url_raw) or "http://localhost:11434"
+    except Exception:
+        _ollama_url_check = (
+            _ollama_url_raw if _ollama_url_raw == "http://localhost:11434"
+            else "http://localhost:11434"
+        )
+    try:
         import urllib.request as _urllib_req
-        with _urllib_req.urlopen(  # nosec B310 — localhost Ollama only
+        # nosec B310 — URL validated above (scheme + host allowlist). The
+        # previous justification read "localhost Ollama only", which was false:
+        # the URL is env-derived. A remote Ollama is still supported, so
+        # "localhost only" would be wrong even now that it is checked.
+        with _urllib_req.urlopen(  # nosec B310
             _urllib_req.Request(f"{_ollama_url_check}/api/tags", method="GET"),
             timeout=0.5,
         ):
@@ -1728,16 +1749,25 @@ def _match_mcp_server(prompt: str, capability_map: dict[str, list[str]]) -> str 
 
 # ── Tool Mapping ─────────────────────────────────────────────────────────────
 
-TOOL_MAP = {
-    "research": "llm_research",
-    "generate": "llm_generate",
-    "analyze": "llm_analyze",
-    "code": "llm_code",
-    "query": "llm_query",
-    "image": "llm_image",
-    "coordination": "llm_query",  # Use llm_query for coordination (cheap model, instant decision)
-    "auto": "llm_route",
-}
+# RED8-06: the canonical task->tool map now lives in chuzom.tool_surface, which
+# is dependency-free and loadable by path — the same reason this copy existed.
+# Three copies drifted apart on their FALLBACK (llm_route here, llm_analyze in
+# agent-route), so the same ambiguous prompt reached a router on one path and a
+# no-tools completion door on the other.
+def _load_task_tool_map():
+    try:
+        from chuzom.tool_surface import TASK_TOOL_MAP as _m, tool_for_task as _f
+        return _m, _f
+    except Exception:  # noqa: BLE001 — hook must survive a partial install
+        _fallback = {
+            "research": "llm_research", "generate": "llm_generate",
+            "analyze": "llm_analyze", "code": "llm_code", "query": "llm_query",
+            "image": "llm_image", "coordination": "llm_query", "auto": "llm_route",
+        }
+        return _fallback, (lambda t: _fallback.get(t, "llm_route"))
+
+
+TOOL_MAP, tool_for_task = _load_task_tool_map()
 
 _ROUTER_DIR = Path.home() / ".chuzom"
 _ENFORCEMENT_LOG_PATH = _ROUTER_DIR / "enforcement.log"
@@ -1780,6 +1810,31 @@ def _zero_claude_enabled() -> bool:
     return bool(bool_match and bool_match.group(1).lower() in ("1", "true", "yes", "on"))
 
 
+def _coverage_unobserved(reason_name: str) -> None:
+    """Record that this prompt produced NO routing directive.
+
+    I-1: six sys.exit(0) sites left no trace, so a run where nearly everything
+    bypassed was indistinguishable from a clean one. Best-effort by design --
+    an observability call that can raise would take down the turn it observes.
+    """
+    try:
+        from chuzom.coverage import Reason, record_unobserved
+
+        record_unobserved(Reason[reason_name])
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _coverage_observed(tool: str) -> None:
+    """Record that this prompt produced a routing directive."""
+    try:
+        from chuzom.coverage import record_observed
+
+        record_observed(tool)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _block_zero_claude(reason: str, task_type: str = "unknown", complexity: str = "unknown") -> None:
     """Fail closed rather than letting a routed prompt invoke Claude."""
     message = (
@@ -1787,6 +1842,10 @@ def _block_zero_claude(reason: str, task_type: str = "unknown", complexity: str 
         "Claude was not invoked, so this turn does not consume Claude Code model quota. "
         "To intentionally use Claude, resubmit the prompt prefixed with `claude:`."
     )
+    # Recorded HERE, not at the call sites: this function exits, so a
+    # _coverage_* call placed after a call to it never runs. A block is an
+    # OBSERVED outcome -- the router made and enforced a decision.
+    _coverage_observed("zero_claude_block")
     json.dump({"decision": "block", "reason": message}, sys.stdout)
     sys.exit(0)
 
@@ -1964,6 +2023,17 @@ def _scrub_secrets_text(text: str) -> str:
         return text
 
 
+def _private_opener(path: str, flags: int) -> int:
+    """Create files at 0600 rather than the umask default.
+
+    Defined locally rather than imported from chuzom.paths: this file is executed
+    as a standalone script by path, so every package import here is wrapped in a
+    try/except fallback. A one-line helper is not worth that fragility, and a
+    failed import in a hook is a routing outage.
+    """
+    return os.open(path, flags, 0o600)
+
+
 def _append_transcript_shard(session_id: str, prompt: str, draft: str) -> None:
     """Audit §2.5/P2: chuzom-answered turns never enter Claude Code's transcript
     (the prompt was blocked), so later routed turns cannot see them. Keep a
@@ -1979,7 +2049,14 @@ def _append_transcript_shard(session_id: str, prompt: str, draft: str) -> None:
         user_content = _scrub_secrets_text(prompt.strip())
         asst_content = _scrub_secrets_text(draft.strip())
         path = _transcript_shard_path(session_id)
-        with open(path, "a", encoding="utf-8") as fh:
+        # 0600 AT CREATION, not created-then-tightened. The chmod below is
+        # correct at rest and leaves a window: `open` uses the umask default
+        # (0644 typically), so on first creation the shard held scrubbed prompt
+        # and draft text while world-readable, and only narrowed afterwards.
+        # Permissions are checked at open time, so a handle acquired in that
+        # window survives the chmod. The chmod stays — an opener only applies on
+        # creation, so it cannot repair shards written by older versions.
+        with open(path, "a", encoding="utf-8", opener=_private_opener) as fh:
             fh.write(json.dumps({"role": "user", "content": user_content}) + "\n")
             fh.write(json.dumps({"role": "assistant", "content": asst_content}) + "\n")
         try:
@@ -2415,7 +2492,8 @@ def _estimate_cost(task_type: str, complexity: str) -> dict:
     installed) so a partial install can still produce a routing directive.
     """
     try:
-        from chuzom.calibration import predict_cost
+        from chuzom.calibration import predict_cost_measured
+        from chuzom.pricing import savings_baseline_model as _savings_baseline_model
         from chuzom.types import TaskType
     except Exception:
         return _legacy_static_savings(task_type, complexity)
@@ -2431,12 +2509,23 @@ def _estimate_cost(task_type: str, complexity: str) -> dict:
     except ValueError:
         tt = TaskType.QUERY
 
-    baseline = predict_cost("claude-sonnet-4-6", tt, input_tokens, quantile=0.5)
+    # WP-05: the one savings baseline, not a sonnet literal. This surface
+    # priced its hint against Sonnet while every other surface used Opus.
+    # #12(b): carry HOW the number was arrived at. The corpus holds one
+    # empirical profile — (claude-sonnet-4-6, QUERY) — so this projection, made
+    # against the savings BASELINE, rests on a static 80-token assumption. A
+    # figure that cannot say that is an assumption wearing a measurement's
+    # clothes, which is the quiet form of the defect RED2-02 showed loudly.
+    est = predict_cost_measured(_savings_baseline_model(), tt, input_tokens, quantile=0.5)
+    baseline = est.or_zero()
     if baseline <= 0:
         # predict_cost returns 0 when the model isn't priced — fall back so
         # the display never reads "$0.0000".
         return _legacy_static_savings(task_type, complexity)
-    return {"savings": _format_usd(baseline)}
+    # `savings` stays a bare parseable "$X" string: callers lstrip('$') it, and
+    # reformatting to embed the label would trade one defect for another. The
+    # tag is an ADDITIONAL key.
+    return {"savings": _format_usd(baseline), "provenance": est.provenance}
 
 
 def _format_usd(amount: float) -> str:
@@ -2460,7 +2549,10 @@ def _legacy_static_savings(task_type: str, complexity: str) -> dict:
         "code": {"simple": "$0.001", "moderate": "$0.003", "complex": "$0.010"},
     }
     task_costs = cost_map.get(task_type, {"simple": "$0.001", "moderate": "$0.002", "complex": "$0.005"})
-    return {"savings": task_costs.get(complexity, "$0.002")}
+    # #12(b): this is the LEAST-measured path in the system — a hardcoded table
+    # used when calibration will not even import. If the calibrated path has to
+    # admit it is estimating, this one certainly does.
+    return {"savings": task_costs.get(complexity, "$0.002"), "provenance": "estimated"}
 
 
 def _prior_violation_notice(pending: dict | None) -> str:
@@ -2729,11 +2821,71 @@ def _normalize_output_for_platform(output: dict, hook_input: dict) -> dict:
     return output
 
 
+#: CHZ-FO-HOOK-SLOW — the hook's self-timing threshold, in seconds.
+#:
+#: Claude Code discards this hook's output at 30s. A ~36s window was measured once and
+#: could not be reproduced: nine hypotheses were refuted by measurement (gateway lock,
+#: gateway existence, WAL size, checkpoint starvation, pytest load, Ollama model, Ollama
+#: generally, import cost, external classifier) and a 2x2 controlled reproduction found
+#: nothing. By the time anyone looks, the conditions have passed.
+#:
+#: So the hook records its own evidence instead. 5s is far above any healthy run — the
+#: measured fast path is 0.2s — and far below the host's budget, so a breach is captured
+#: while the hook is still alive to describe it.
+_SLOW_HOOK_SECONDS = float(os.environ.get("CHUZOM_HOOK_SLOW_SECONDS", "5"))
+
+#: (label, monotonic) pairs. Appended on the fast path, READ only when slow, so the cost
+#: of instrumentation on a healthy run is a list append per phase.
+_MARKS: list[tuple[str, float]] = []
+
+
+def _mark(label: str) -> None:
+    """Record a phase boundary. Deliberately trivial — see _SLOW_HOOK_SECONDS."""
+    try:
+        _MARKS.append((label, time.monotonic()))
+    except Exception:  # noqa: BLE001 — instrumentation must never break the turn
+        pass
+
+
+def _report_if_slow() -> None:
+    """If this invocation breached the threshold, record WHERE the time went.
+
+    Records under a single fail-open code with the phase breakdown in the detail, so the
+    next occurrence answers "which phase" without anyone having to be watching. Silent and
+    nearly free when the hook is healthy, which is the normal case.
+    """
+    try:
+        if len(_MARKS) < 2:
+            return
+        total = _MARKS[-1][1] - _MARKS[0][1]
+        if total < _SLOW_HOOK_SECONDS:
+            return
+        spans = [
+            f"{_MARKS[i + 1][0]}={_MARKS[i + 1][1] - _MARKS[i][1]:.2f}s"
+            for i in range(len(_MARKS) - 1)
+        ]
+        from chuzom import failopen
+        # The breakdown goes in `detail`, NOT in an exception message: record() stores
+        # only type(exc).__name__, so an exception carrying the timings would arrive as
+        # the bare string "RuntimeError" — a record that says the hook was slow and
+        # nothing about where the time went, which is the position this instrumentation
+        # exists to escape. `detail` is truncated at 200 chars, so the phases are ordered
+        # slowest-first and the total leads.
+        spans.sort(key=lambda s: -float(s.rsplit("=", 1)[1].rstrip("s")))
+        failopen.record(
+            "CHZ-FO-HOOK-SLOW",
+            detail=f"total={total:.2f}s budget=30s " + " ".join(spans),
+        )
+    except Exception:  # noqa: BLE001 — a diagnostic must never break the turn
+        pass
+
+
 def main() -> None:
     # Must run before ANY logging call so structlog never falls back to its
     # stdout PrintLogger and corrupt the JSON payload (audit §2.1).
     _init_hook_logging()
 
+    _mark("start")
     invocation_id = time.time()
     _debug_log(f"[INVOCATION START] ID={invocation_id:.3f}")
 
@@ -2762,6 +2914,11 @@ def main() -> None:
                     "native Claude on parse failures."
                 ),
             }))
+            _coverage_observed("zero_claude_parse_failure")
+        else:
+            # Normal mode: an unparseable payload is traffic we could not route
+            # and, until now, did not record. Exactly the I-1 blind spot.
+            _coverage_unobserved("UNHANDLED_EXCEPTION")
         sys.exit(0)
 
     prompt = hook_input.get("prompt", "")
@@ -2773,6 +2930,7 @@ def main() -> None:
         if _zero_claude_enabled():
             _debug_log(f"[INVOCATION {invocation_id:.3f}] ZERO_CLAUDE BLOCKED_EMPTY_PROMPT")
             _block_zero_claude("empty prompt — nothing to route under zero-Claude")
+        _coverage_unobserved("EMPTY_PROMPT")
         sys.exit(0)
 
     # Self-reference bypass: skip routing when the user is debugging chuzom
@@ -2790,6 +2948,7 @@ def main() -> None:
             )
         else:
             _debug_log(f"[INVOCATION {invocation_id:.3f}] SELF_REFERENCE_BYPASS — chuzom-debug prompt, skipping routing")
+            _coverage_unobserved("SELF_REFERENCE_BYPASS")
             sys.exit(0)
 
     session_id = hook_input.get("session_id", "")
@@ -2822,6 +2981,7 @@ def main() -> None:
     # the prompt as a visible record that the user chose quota-consuming work.
     if zero_claude and _EXPLICIT_CLAUDE_PREFIX_RE.match(prompt):
         _debug_log(f"[INVOCATION {invocation_id:.3f}] ZERO_CLAUDE EXPLICIT_NATIVE")
+        _coverage_unobserved("EXPLICIT_CLAUDE_PREFIX")
         sys.exit(0)
 
     # ── v6.0 Visibility: Initialize HUD session state ─────────────────────────
@@ -2868,6 +3028,7 @@ def main() -> None:
                             ),
                         }
                     }
+                    _coverage_observed("sidecar_context")
                     json.dump(
                         _normalize_output_for_platform(_sidecar_output, hook_input),
                         sys.stdout,
@@ -2897,6 +3058,7 @@ def main() -> None:
             _debug_log(f"[INVOCATION {invocation_id:.3f}] CONTINUATION: bypass disabled via env, routing instead")
         else:
             _debug_log(f"[INVOCATION {invocation_id:.3f}] CONTINUATION: bypass to host agent (strict ack)")
+            _coverage_unobserved("CONTINUATION_BYPASS")
             sys.exit(0)
 
     previous_unrouted = _consume_unresolved_pending(session_id) if session_id else None
@@ -2929,6 +3091,7 @@ def main() -> None:
             }
         }
         _debug_log(f"[INVOCATION {invocation_id:.3f}] EARLY EXIT: direct MCP route to {matched_server}")
+        _coverage_observed(f"mcp:{matched_server}")
         json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
         sys.exit(0)
 
@@ -2982,12 +3145,13 @@ def main() -> None:
                 method = "zero-claude-default"
                 tool = "llm_query"
             else:
+                _coverage_unobserved("CLASSIFY_FAILED")
                 sys.exit(0)
         else:
             task_type  = result["task_type"]
             complexity = result["complexity"]
             method     = result["method"]
-            tool       = TOOL_MAP.get(task_type, "llm_route")
+            tool       = tool_for_task(task_type)
 
             # ── v6.1: Check for learned routing overrides ─────────────────────────────
             learned_routes = _load_learned_routes()
@@ -3027,6 +3191,7 @@ def main() -> None:
                     f"| Handle directly (subscription included). Do NOT call llm_* tools."
                 )
                 _debug_log(f"[INVOCATION {invocation_id:.3f}] CRITICAL PRESSURE: routing to Opus")
+                _coverage_observed("subscription_override")
                 json.dump({"decision": "block", "reason": _prior_violation_notice(previous_unrouted) + directive}, sys.stdout)
                 sys.exit(0)
 
@@ -3411,6 +3576,7 @@ def main() -> None:
                         _output["reason"] = _violation_notice + "\n" + _output["reason"]
                     if _mini_summary_block:
                         _output["reason"] = _output["reason"] + "\n\n" + _mini_summary_block
+                _coverage_observed(str(tool))
                 json.dump(_normalize_output_for_platform(_output, hook_input), sys.stdout)
                 sys.exit(0)
             else:
@@ -3753,9 +3919,41 @@ def main() -> None:
     # reported savings. This hook injects `additionalContext` into Claude's context on
     # every routed turn regardless of whether offload actually happens; that cost was
     # previously unmeasured. Estimated at chars/4; fail-open (a hook must never raise).
+    # CHZ-HOOK-ORDER: EMIT BEFORE ACCOUNTING.
+    #
+    # The routing directive is fully computed by this point, so nothing below can
+    # change it -- but everything below can DELAY it. This hook was measured taking
+    # 36.9s, of which 36.26s was 8 sqlite executes (31.19s inside record_event), and
+    # Claude Code's 30s budget then DISCARDED the output. A slow ledger write did not
+    # merely make routing late; it threw the routing decision away, and chuzom
+    # silently stopped doing its job on exactly the turns something else held the
+    # database.
+    #
+    # Writing stdout first bounds that blast radius to "the accounting row may be
+    # late or lost", which is recoverable, instead of "the routing decision is lost",
+    # which is not. The cause of that particular slow window was never established
+    # (nine hypotheses refuted -- see the audit finding); this ordering is justified
+    # by the profile alone and does not depend on knowing it.
+    _mark("classify_and_build_directive")
+    print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool_disp} (via {method})", file=sys.stderr)
+    json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
+    try:
+        sys.stdout.flush()   # the point of the reordering; buffered output is not emitted
+    except Exception:  # noqa: BLE001 — a flush failure must not break the turn
+        pass
+    _mark("emit_stdout")
+    _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUT COMPLETE")
+
+    # INV-COST-005 accounting, now strictly AFTER the directive has been delivered.
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
-        record_event(LedgerEvent(
+        # RED5-02: the boolean is BOUND, never discarded. record_event()
+        # is fail-open and returns False on loss; all seven call sites threw
+        # that away, so 66 dropped events across 2400 writes produced no
+        # error, no log and no counter. The visibility now lives inside
+        # record_event() too, but a discarded return value is the habit that
+        # caused this and it should not survive in the source.
+        _ledger_ok = record_event(LedgerEvent(
             session_id=session_id or os.environ.get("CHUZOM_SESSION_ID", ""),
             event_type="directive_injected",
             task_type=str(task_type),
@@ -3765,10 +3963,11 @@ def main() -> None:
         ))
     except Exception:
         pass
-    # Visible UI signal — Claude Code surfaces stderr per-prompt so the routing decision is observable.
-    print(f"⚡ chuzom routed → {task_type}/{complexity} → {tool_disp} (via {method})", file=sys.stderr)
-    json.dump(_normalize_output_for_platform(output, hook_input), sys.stdout)
-    _debug_log(f"[INVOCATION {invocation_id:.3f}] OUTPUT COMPLETE")
+    _mark("ledger_write")
+
+    # Timing is judged only after everything is done, so the breakdown covers the whole
+    # invocation including the accounting write that once consumed 31 of 36 seconds.
+    _report_if_slow()
 
 
 if __name__ == "__main__":
@@ -3787,4 +3986,5 @@ if __name__ == "__main__":
             _debug_log("fail-open: unhandled exception in main(); exiting 0")
         except Exception:
             pass
+        _coverage_unobserved("UNHANDLED_EXCEPTION")
         sys.exit(0)

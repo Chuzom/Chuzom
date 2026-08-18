@@ -29,6 +29,7 @@ import argparse
 import asyncio
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from chuzom.savings import net_saved
 
 
 async def route_payload_async(payload: dict) -> dict:
@@ -122,7 +123,7 @@ def _log_route_savings(resp, task_type: str, complexity: str, host: str) -> None
             "session_id": host,
             "task_type": task_type,
             "complexity": complexity,
-            "estimated_saved": max(0.0, baseline - external),
+            "estimated_saved": net_saved(baseline, external),
             "external_cost": external,
             "model": model,
             "input_tokens": in_tok,
@@ -247,6 +248,10 @@ def main(argv=None) -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7338)
     args = ap.parse_args(argv)
+    # RED6-04: chuzom-route has no auth checks at all; a public bind exposes the
+    # router -- and the paid calls it makes -- to the network.
+    from chuzom.net_bind import refuse_public_bind_or_exit
+    refuse_public_bind_or_exit(args.host, component="route")
     serve(args.host, args.port)
 
 

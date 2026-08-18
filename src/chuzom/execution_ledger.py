@@ -26,9 +26,16 @@ import os
 import sqlite3
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
+
+import logging
+
+from chuzom.sqlite_wal import enable_wal
+
+_log = logging.getLogger("chuzom.execution_ledger")
 
 SCHEMA_VERSION = 1
 
@@ -255,6 +262,12 @@ def _secure_perms(path: Path) -> None:
         pass
 
 
+#: SQLite busy-timeout, seconds. MUST stay strictly below pytest-timeout's
+#: `timeout` in pyproject.toml — see _connect() and
+#: tests/test_sqlite_timeout_below_test_timeout.py for why equality is a defect.
+_BUSY_TIMEOUT_S = 20.0
+
+
 def _connect(path: Path | None = None) -> sqlite3.Connection:
     p = path or _db_path()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -265,11 +278,32 @@ def _connect(path: Path | None = None) -> sqlite3.Connection:
             pass
     else:
         _secure_perms(p)
-    # 30s busy-timeout (was 5s): under pathological CI-runner load, rapid open/write/
-    # close cycles can transiently hold the WAL lock long enough that a 5s wait errored
-    # with `database is locked`. A longer wait lets the writer drain instead of failing.
-    conn = sqlite3.connect(str(p), timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL")
+    # Busy-timeout: raised from 5s because under pathological CI-runner load,
+    # rapid open/write/close cycles held the WAL lock longer than 5s and the wait
+    # errored with `database is locked`. A longer wait lets the writer drain.
+    #
+    # IT MUST STAY STRICTLY BELOW THE TEST TIMEOUT, and that is why it is 20 and
+    # not 30. It was raised to exactly 30.0 while pyproject.toml sets
+    # `timeout = 30` for pytest-timeout — the same number. Equal values mean a
+    # test that enters the busy-wait is killed at the precise instant SQLite
+    # would still be waiting, so the wait can never complete and the test can
+    # never recover. It does not fail with a useful error; it dies mid-wait:
+    #
+    #     execution_ledger.py record_event -> conn.commit()
+    #     Failed: Timeout (>30.0s) from pytest-timeout
+    #
+    # Ten soak tests died that way, identically, at setup. Two settings each
+    # sensible in isolation, never checked against each other.
+    #
+    # 20s keeps 4x the original 5s headroom the CI-load fix was for, and leaves a
+    # 10s margin for the test to proceed after the lock clears. The relationship
+    # is enforced by tests/test_sqlite_timeout_below_test_timeout.py — change one
+    # of these numbers and that test tells you about the other.
+    conn = sqlite3.connect(str(p), timeout=_BUSY_TIMEOUT_S)
+    # RED5-01 (P0): guarded. Second of three copies of the same cold-start bug —
+    # see chuzom/sqlite_wal.py for why the bare form fails both by raising AND,
+    # more dangerously, by returning a mode nobody checks.
+    enable_wal(conn, label="execution_ledger")
     conn.executescript(_DDL)
     for _stmt in _MIGRATIONS:
         try:
@@ -294,11 +328,38 @@ def _row_to_value(field_name: str, ev: LedgerEvent) -> Any:
     return v
 
 
+#: RED5-02 (P0): how many events this process failed to persist.
+#:
+#: ``record_event`` is fail-open by design — a ledger write must never break the
+#: routing path — but fail-open only works if the failure is *counted*. It was
+#: not: the function returned False, all seven call sites discarded the value,
+#: and nothing logged. 66 events vanished across 2400 concurrent writes and the
+#: only evidence was a total that did not add up. A success signal nobody reads
+#: is not a signal, and a fail-open path with no counter is indistinguishable
+#: from a path that works.
+_dropped_events = 0
+
+
+def dropped_event_count() -> int:
+    """Events this process failed to persist. Surfaced by `doctor` and telemetry."""
+    return _dropped_events
+
+
+def reset_dropped_event_count() -> None:
+    """Test seam. Never call this to make a number look better."""
+    global _dropped_events
+    _dropped_events = 0
+
+
 def record_event(ev: LedgerEvent, *, path: Path | None = None) -> bool:
     """Append *ev* to the canonical ledger. Idempotent on ``event_id`` (INV-COST-003).
 
-    FAIL-OPEN: returns False on any error, never raises into the caller (routing path).
+    FAIL-OPEN: returns False on any error, never raises into the caller (routing
+    path). A False return is also LOGGED and COUNTED here, so a caller that
+    ignores the boolean still cannot make the loss invisible — see
+    :func:`dropped_event_count`.
     """
+    global _dropped_events
     try:
         if not ev.ts:
             ev.ts = time.time()
@@ -315,11 +376,82 @@ def record_event(ev: LedgerEvent, *, path: Path | None = None) -> bool:
         finally:
             conn.close()
         return True
-    except Exception:  # noqa: BLE001 — a ledger failure must never break routing
+    except Exception as exc:  # noqa: BLE001 — a ledger failure must never break routing
+        _dropped_events += 1
+        _log.warning(
+            "LEDGER_EVENT_DROPPED event_id=%s type=%s: %s (dropped this process: %d)",
+            getattr(ev, "event_id", "?"),
+            getattr(ev, "event_type", "?"),
+            exc,
+            _dropped_events,
+        )
         return False
 
 
-def _load_rows(where: str, params: tuple, path: Path | None = None) -> list[dict[str, Any]]:
+#: Comparison operators a filter may use. Anything else is rejected rather than
+#: passed through, so the operator can never carry SQL.
+_ALLOWED_OPS = frozenset({"=", "!=", "<", "<=", ">", ">="})
+
+#: Column names a filter may name. `_COLUMNS` is the table's own definition, so
+#: an identifier is either a real column or an error — never arbitrary text.
+_COLUMN_SET = frozenset(_COLUMNS)
+
+#: One filter: (column, operator, value). The value is always parameterised.
+LedgerFilter = tuple[str, str, Any]
+
+
+def _load_rows(
+    filters: Sequence[LedgerFilter],
+    path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Load ledger rows matching every filter, ANDed together.
+
+    WHY THIS TAKES FILTERS AND NOT A `where` STRING
+    ------------------------------------------------
+    The previous signature was ``_load_rows(where: str, params: tuple, …)`` and
+    interpolated ``where`` straight into the query. Every one of its four callers
+    passed a string literal with ``?`` placeholders, so it was safe — but the
+    safety was a property of the callers, re-established by inspection each time
+    anyone asked, and the signature actively invites an f-string from the fifth.
+
+    32_BANDIT_TRIAGE §3 recorded it as "the fragile spot… safe today", which is
+    the kind of note that ages badly: it documents a hazard instead of removing
+    one, and doc 32 then had to be corrected for a different claim made on the
+    same basis.
+
+    So the unsafe call is now unrepresentable rather than merely unused. Callers
+    supply data — a column name, an operator, a value — and this function is the
+    only place that writes SQL. The column is checked against the table's own
+    definition and the operator against a fixed set, so both sides of every
+    predicate are constrained and the value is parameterised.
+
+    Args:
+        filters: ``(column, operator, value)`` triples, ANDed. Empty means all
+            rows.
+        path: Optional ledger path; defaults to the standard location.
+
+    Raises:
+        ValueError: on an unknown column or operator. Loudly, because a silently
+            dropped filter would return MORE rows than asked for, and callers
+            aggregate what they get.
+    """
+    clauses: list[str] = []
+    params: list[Any] = []
+    for column, op, value in filters:
+        if column not in _COLUMN_SET:
+            raise ValueError(
+                f"unknown ledger column {column!r} — filters may only name "
+                f"columns in _COLUMNS, not arbitrary SQL"
+            )
+        if op not in _ALLOWED_OPS:
+            raise ValueError(
+                f"unsupported operator {op!r} — allowed: {sorted(_ALLOWED_OPS)}"
+            )
+        clauses.append(f"{column} {op} ?")
+        params.append(value)
+
+    where = " AND ".join(clauses) if clauses else "1=1"
+
     conn = _connect(path)
     try:
         conn.row_factory = sqlite3.Row
@@ -329,9 +461,12 @@ def _load_rows(where: str, params: tuple, path: Path | None = None) -> list[dict
         # event timestamp (then the primary key) so "last write wins" means the
         # chronologically-latest event, deterministically.
         cur = conn.execute(
+            # nosec B608 — every fragment of `where` is built above from a
+            # column checked against _COLUMNS and an operator checked against
+            # _ALLOWED_OPS. No caller-supplied text reaches this string.
             f"SELECT {','.join(_COLUMNS)} FROM execution_events WHERE {where} "
             "ORDER BY ts ASC, event_id ASC",
-            params,
+            tuple(params),
         )
         out = []
         for r in cur.fetchall():
@@ -408,7 +543,13 @@ def _host_opus_rates() -> tuple[float, float]:
     try:
         from chuzom.cost import _HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M
         return float(_HOST_INPUT_PER_M), float(_HOST_OUTPUT_PER_M)
-    except Exception:
+    except Exception as exc:
+        # Falling back to (0.0, 0.0) is the conservative default -- but it makes
+        # every baseline read as free, so savings compute as zero and the ledger
+        # reports a quiet, plausible nothing. Counted so that "savings collapsed
+        # to 0" has a cause an operator can find.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-LEDGER-HOST-RATES", exc)
         return 0.0, 0.0
 
 
@@ -612,16 +753,16 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
 def get_route_accounting(route_id: str, *, path: Path | None = None) -> Accounting:
     """INV-COST-002: actual cost == Σ measured cost over billable attempt events."""
     return _aggregate("route", route_id,
-                      _load_rows("route_id = ?", (route_id,), path))
+                      _load_rows([("route_id", "=", route_id)], path))
 
 
 def get_turn_accounting(turn_id: str, *, path: Path | None = None) -> Accounting:
-    return _aggregate("turn", turn_id, _load_rows("turn_id = ?", (turn_id,), path))
+    return _aggregate("turn", turn_id, _load_rows([("turn_id", "=", turn_id)], path))
 
 
 def get_session_accounting(session_id: str, *, path: Path | None = None) -> Accounting:
     return _aggregate("session", session_id,
-                      _load_rows("session_id = ?", (session_id,), path))
+                      _load_rows([("session_id", "=", session_id)], path))
 
 
 def get_period_accounting(
@@ -629,7 +770,7 @@ def get_period_accounting(
 ) -> Accounting:
     return _aggregate(
         "period", f"{start_ts:.0f}-{end_ts:.0f}",
-        _load_rows("ts >= ? AND ts < ?", (start_ts, end_ts), path),
+        _load_rows([("ts", ">=", start_ts), ("ts", "<", end_ts)], path),
     )
 
 

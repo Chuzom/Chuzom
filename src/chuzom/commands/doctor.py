@@ -595,6 +595,23 @@ def _check_savings_posture() -> list[str]:
     return lines
 
 
+def _tool_surface_phantoms() -> list[str]:
+    """Tier entries naming a tool nothing implements, across every tier.
+
+    Checks all tiers rather than only the active one: a defect in a tier this
+    machine does not run is still shipped to every user who does run it, and
+    doctor is the thing people paste into bug reports.
+    """
+    from chuzom.tool_surface import phantom_tools
+
+    found: list[str] = []
+    for tier in ("core", "routing", "consolidated"):
+        for name in phantom_tools(tier):
+            if name not in found:
+                found.append(name)
+    return found
+
+
 def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
     """Comprehensive health check — verify every component is wired up.
 
@@ -1028,10 +1045,52 @@ def _run_doctor(host: Optional[str] = None) -> tuple[int, list[str]]:
     # don't fail the doctor. The user wanted to *see* whether config is
     # optimal, not be blocked by it.
 
+    # ── 11. Tool surface vs ground truth (RED4-02) ────────────────────────
+    # doctor used to exit 0 with output byte-for-byte identical to a healthy run
+    # while a bogus canonical tool name sat in the CORE tier. It checked a
+    # PARALLEL path: tool_surface.unregistered() validates the tier constants
+    # against _TIERS, which IS the tier constants, so renaming a tool inside
+    # CORE_TOOLS leaves the check reporting clean. This resolves against what is
+    # actually implemented in chuzom/tools/ instead.
+    print(f"\n{_bold('  Tool surface')}")
+    try:
+        phantoms = _tool_surface_phantoms()
+    except Exception as exc:  # noqa: BLE001 — a broken check must not mask the rest
+        phantoms = []
+        print(_warn(f"tool-surface ground-truth check could not run: {exc}"))
+    if phantoms:
+        print(_fail(
+            f"tier offers {len(phantoms)} tool(s) nothing implements: "
+            f"{', '.join(phantoms)}",
+            fix="a hint naming these fails with 'No such tool available' and the "
+                "caller silently falls back to the expensive model",
+        ))
+        issues.append(
+            f"tool surface names unimplemented tool(s): {', '.join(phantoms)}"
+        )
+    else:
+        print(_ok("every offered tool resolves to a real implementation"))
+
     # ── Summary ────────────────────────────────────────────────────────────
     print()
+    print(_bold("  NOT CHECKED by doctor"))
+    # A green doctor implies "your install is fine". doctor checks perhaps a
+    # dozen things; stating the rest is what makes a pass honest instead of
+    # merely reassuring. RED4-02's real damage was that a passing run was read
+    # as evidence of far more than it measured.
+    for _unchecked in (
+        "live routing accuracy — whether hints actually reach a cheaper model "
+        "(run scripts/trace_northstar.py for the real hook path)",
+        "quality of routed answers — no judge runs here",
+        "cost/savings correctness — figures are reported, not verified",
+        "provider availability under load, rate limits, or quota exhaustion",
+        "hook behaviour on prompts other than the synthetic probe above",
+    ):
+        print(_dim(f"    · {_unchecked}"))
+    print()
+
     if not issues:
-        print(_green(_bold("  ✓ All checks passed. Chuzom is healthy.")))
+        print(_green(_bold("  ✓ All doctor checks passed (see NOT CHECKED above).")))
         exit_code = 0
     else:
         print(_red(_bold(f"  ✗ {len(issues)} issue(s) found:")))

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "my-other-server": {
+      "command": "node",
+      "args": ["/opt/my-server/index.js"]
+    }
+  },
+  "someOtherTopLevelUserSetting": "preserve-this"
+}

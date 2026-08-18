@@ -19,12 +19,12 @@ conserving Claude quota.
 
 | User request type | Tool to call first |
 |---|---|
-| Write / refactor / fix code | `llm_code(prompt=..., complexity="moderate")` |
-| Quick question / definition / how-to | `llm_query(prompt=..., complexity="simple")` |
-| Debug / analyze / review code | `llm_analyze(prompt=...)` |
-| Research / current events / docs | `llm_research(prompt=...)` |
-| Write prose / docs / email | `llm_generate(prompt=...)` |
-| Deep reasoning / proofs / root cause | `llm_reason(prompt=...)` |
+| Write / refactor / fix code | `llm(task="code", prompt=..., tier="balanced")` |
+| Quick question / definition / how-to | `llm(task="query", prompt=..., tier="fast")` |
+| Debug / analyze / review code | `llm(task="analyze", prompt=...)` |
+| Research / current events / docs | `llm(task="research", prompt=...)` |
+| Write prose / docs / email | `llm(task="generate", prompt=...)` |
+| Deep reasoning / proofs / root cause | `llm(task="analyze", prompt=...)` |
 
 ## Rules
 
@@ -32,4 +32,4 @@ conserving Claude quota.
 2. Return the tool's output to the user **as-is** (don't paraphrase).
 3. Only use native Windsurf intelligence for file navigation, terminal commands,
    or when all Chuzom MCP servers are unavailable.
-4. If `llm_code` or similar is unavailable, proceed normally and note it.
+4. If `llm(task="code")` or similar is unavailable, proceed normally and note it.

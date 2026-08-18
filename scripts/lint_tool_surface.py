@@ -45,22 +45,27 @@ REPO = Path(__file__).resolve().parent.parent
 DEFAULT_TARGETS = [REPO / "src" / "chuzom"]
 
 # Tool names that are NOT registered under at least one tier and therefore must
-# never be spoken aloud unresolved. Longest-first for stable matching.
-GUARDED = (
-    "llm_check_usage",
-    "llm_session_savings",
-    "llm_session_spend",
-    "llm_set_profile",
-    "llm_research",
-    "llm_generate",
-    "llm_analyze",
-    "llm_delegate",
-    "llm_savings",
-    "llm_query",
-    "llm_health",
-    "llm_usage",
-    "llm_code",
-)
+# never be spoken aloud unresolved.
+#
+# RED1-22: DERIVED from DEPRECATED_TOOLS, not hand-listed. The hand-maintained
+# tuple carried 13 of 24 keys — missing llm_reason, llm_providers, llm_gain,
+# llm_dashboard, llm_import_profile, llm_cache_clear, llm_policy, llm_budget and
+# the four chuzom_agent_* names. Any of those could be emitted unresolved with
+# this lint reporting clean, which is worse than no lint: a green check over an
+# unchecked surface.
+#
+# A guard whose coverage is a hand-copied second list will always drift from the
+# thing it guards. Deriving it means adding a deprecation extends the check for
+# free — the same structural move WP-03 made for prices.
+def _guarded_names() -> tuple[str, ...]:
+    sys.path.insert(0, str(REPO / "src"))
+    from chuzom.tool_surface import DEPRECATED_TOOLS
+
+    # Longest-first so no name is matched as a prefix of a longer one.
+    return tuple(sorted(DEPRECATED_TOOLS, key=len, reverse=True))
+
+
+GUARDED = _guarded_names()
 
 # A string is "prose" if it carries anything beyond the bare identifier: spaces,
 # punctuation, formatting. A bare name (or a dotted/qualified variant) is a
@@ -257,28 +262,68 @@ def check_file(path: Path) -> list[str]:
     return problems
 
 
-def check_non_python(path: Path) -> list[str]:
-    """Scan a workflow / shell script for tool names in an ASSERTION or in output.
+#: Documents whose text IS the final artifact a model reads. Unlike a workflow
+#: or a shell script, there is no "assertion vs mention" distinction here — every
+#: occurrence is content, so every occurrence counts.
+_DOC_SUFFIXES = (".md", ".json")
 
-    The Python AST scan cannot see these. A CI smoke test asserting
-    ``'llm_research' in ctx`` stayed green while the emitted hint was unroutable —
-    the test was encoding the bug, which is the worst possible place for it to hide.
-    Lines that merely mention a name in a comment or a state fixture (where the
-    LOGICAL name is correct) are left alone.
+#: RED1-22: the bundled rules templates are the INPUT to localize(), so legacy
+#: names in them are correct and deliberate — localize() rewrites each one to the
+#: active tier at install time. Flagging them would be a false positive, and a
+#: lint with false positives on its highest-traffic directory gets muted.
+#:
+#: The property that actually matters for these files is that the LOCALIZED
+#: OUTPUT names only registered tools, which a literal scan of the template
+#: cannot express. It is asserted in
+#: tests/routing/test_rules_tool_resolution.py, per file, against the live
+#: registered MCP surface.
+_TEMPLATE_DIRS = ("src/chuzom/rules",)
+
+
+def _is_localize_template(path: Path) -> bool:
+    posix = path.as_posix()
+    return any(f"/{d}/" in posix or posix.endswith(d) for d in _TEMPLATE_DIRS)
+
+
+def check_non_python(path: Path) -> list[str]:
+    """Scan a non-Python file for tool names that reach a human or a model.
+
+    Two modes, because two kinds of file are being checked.
+
+    **Scripts and workflows** (``.sh``, ``.yml``): only assertions and emitted
+    output matter. The Python AST scan cannot see these, and a CI smoke test
+    asserting ``'llm_research' in ctx`` stayed green while the emitted hint was
+    unroutable — the test was encoding the bug, the worst place for it to hide.
+    A name merely mentioned in a comment or a state fixture is the LOGICAL name
+    and is fine.
+
+    **Documents** (``.md``, ``.json``): every occurrence counts, because the text
+    IS the artifact. RED1-22: this mode did not exist. `.md` was not scanned at
+    all, and when it was added naively the script heuristic came with it — so the
+    lint "checked" the rules files while being structurally unable to flag
+    anything in one, since a markdown table contains no ``assert`` or ``echo``.
+    Reporting clean over a surface it cannot inspect is the failure mode this
+    whole guard exists to prevent, so it is worth naming here.
     """
     problems: list[str] = []
+    is_doc = path.suffix in _DOC_SUFFIXES
+    if is_doc and _is_localize_template(path):
+        return problems
+
     for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
         stripped = line.strip()
-        if stripped.startswith("#") or PRAGMA.search(line):
+        if stripped.startswith("#") and not is_doc:
+            continue
+        if PRAGMA.search(line):
             continue
         hit = next((g for g in GUARDED if g in line), None)
         if hit is None:
             continue
-        # Assertions and printed/echoed output are the ones that matter.
-        if not any(k in line for k in ("assert", "echo ", "print(", "print ")):
+        if not is_doc and not any(k in line for k in ("assert", "echo ", "print(", "print ")):
             continue
+        where = "a document read by a model" if is_doc else "an assertion or output"
         problems.append(
-            f"{path}:{i}: tool name {hit!r} hardcoded in an assertion or output — "
+            f"{path}:{i}: tool name {hit!r} hardcoded in {where} — "
             f"resolve it via chuzom.tool_surface.route_tool so it tracks the active "
             f"CHUZOM_SLIM tier. Line: {stripped[:70]!r}"
         )
@@ -297,13 +342,25 @@ def main(argv: list[str]) -> int:
             continue
         problems.extend(check_file(f))
 
-    # Workflows and shell scripts, only when scanning the default targets.
+    # RED1-22: .md and .json are scanned too, and src/chuzom is included — not
+    # just workflows and scripts.
+    #
+    # The gap this closes is the whole point of the guard. src/chuzom/rules/*.md
+    # ARE the rules files: the artifact installed into every host, loaded into
+    # every session, and the single strongest teacher of which tool to call. They
+    # were the one thing the tool-name lint never looked at. The check covered
+    # the code that writes the file and not the file.
+    _NON_PY_SUFFIXES = (".md", ".json", ".yml", ".yaml", ".sh")
     if len(argv) <= 1:
-        for extra in (REPO / ".github" / "workflows", REPO / "scripts"):
+        for extra in (
+            REPO / "src" / "chuzom",
+            REPO / ".github" / "workflows",
+            REPO / "scripts",
+        ):
             if not extra.is_dir():
                 continue
             for f in sorted(extra.rglob("*")):
-                if f.suffix in (".yml", ".yaml", ".sh") and f.is_file():
+                if f.suffix in _NON_PY_SUFFIXES and f.is_file():
                     problems.extend(check_non_python(f))
                     files.append(f)
 

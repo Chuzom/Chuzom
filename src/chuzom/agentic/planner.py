@@ -78,11 +78,27 @@ def build_acceptance(spec: dict[str, Any]) -> AcceptanceCheck:
     return canary_check(spec["marker"], field=spec.get("field", "output"))
 
 
+#: Hard ceiling on milestones in one plan (RED3-07). The plan comes from a MODEL,
+#: so its length is model output, not a user-chosen parameter. Worst-case attempts
+#: are milestones x tiers x k — an unbounded plan makes the engine's bound
+#: unbounded too, and the ladder would grind through a hallucinated 400-step
+#: breakdown before anyone noticed. Rejected rather than truncated: silently
+#: dropping milestones would execute a DIFFERENT plan than the one produced, and
+#: the dropped tail is exactly where a plan's finishing/verification steps live.
+MAX_PLAN_MILESTONES = 50
+
+
 def plan_to_milestones(plan: list[dict[str, Any]]) -> list[Milestone]:
     """Validate + build a raw plan into Milestones. Every milestone MUST carry an
     objective acceptance spec or the whole plan is rejected (fail closed)."""
     if not plan:
         raise PlanRejected("empty plan")
+    if len(plan) > MAX_PLAN_MILESTONES:
+        raise PlanRejected(
+            f"plan has {len(plan)} milestones, over the {MAX_PLAN_MILESTONES} cap — "
+            "worst-case attempts scale with milestone count, so an unbounded plan "
+            "removes the engine's hard bound"
+        )
     milestones: list[Milestone] = []
     for item in plan:
         mid = item.get("id")

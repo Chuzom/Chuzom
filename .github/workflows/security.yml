@@ -81,11 +81,20 @@ jobs:
         with:
           languages: python
           queries: security-extended
+          # Excludes the frozen incident-evidence tree only — deployed-hook
+          # snapshots and deliberate PoCs, whose alerts are by construction
+          # unactionable. src/ is NOT excluded. See the config file for the
+          # full reasoning and for what it explicitly does not claim.
+          config-file: ./.github/codeql/codeql-config.yml
       - name: Perform CodeQL analysis
-        # Best-effort: the results upload needs code scanning enabled in repo
-        # Settings → Code security. Until then it 403s on the SARIF upload —
-        # don't fail CI over a repo-level toggle. Drop continue-on-error once
-        # code scanning is enabled to make CodeQL a required check.
+        # Best-effort on the UPLOAD only. NOTE: code scanning is now enabled —
+        # SARIF uploads succeed and alerts appear in the Security tab — so the
+        # 403 this was written for no longer occurs, and the "drop it once
+        # enabled" note below is stale. It is kept for now because main carries
+        # ~40 open pre-existing alerts; dropping it would turn CodeQL into a
+        # hard blocker on that backlog rather than on new findings. Removing it
+        # is a deliberate decision to make once that backlog is triaged, not a
+        # side effect of this change.
         continue-on-error: true
         uses: github/codeql-action/analyze@v3
         with:

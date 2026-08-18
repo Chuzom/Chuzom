@@ -245,6 +245,18 @@ async def llm_usage(period: str = "today") -> str:
     config = get_config()
     if config.chuzom_monthly_budget > 0:
         monthly_spend = await get_monthly_spend()
+        # WP-13: spend getters return inf when a component could not be read
+        # (fail closed). inf is right for the cap COMPARISON and wrong here --
+        # "$inf spent, 0% of budget remaining" is a fabricated number, and a
+        # NaN percentage would render as a bar of unpredictable length.
+        import math as _math
+        if not _math.isfinite(monthly_spend):
+            lines.append(section("MONTHLY BUDGET"))
+            lines.append(
+                "  Unknown — spend could not be read, so routing is denying paid "
+                "models until it can. See `chuzom doctor`."
+            )
+            return "\n".join(lines)
         budget = config.chuzom_monthly_budget
         remaining = max(0, budget - monthly_spend)
         pct = monthly_spend / budget if budget > 0 else 0
@@ -267,7 +279,12 @@ async def llm_usage(period: str = "today") -> str:
             lines.append(row(f"  Projected:   ${forecast.projected_monthly_usd:.2f} for full month"))
         lines.append(HR)
 
-    lines.append(row("  Tip: use llm_dashboard to open the visual web dashboard"))
+    # RED1-22: was a bare `llm_dashboard`, which is not registered under the
+    # consolidated default tier. Surfaced only once GUARDED became derived from
+    # DEPRECATED_TOOLS — the hand-maintained list omitted this name.
+    lines.append(
+        row(f"  Tip: use {route_tool('llm_dashboard')} to open the visual web dashboard")
+    )
     lines.append(HR)
     return "\n".join(lines)
 
@@ -357,17 +374,36 @@ async def llm_quality_report(days: int = 7) -> str:
             lines.append(row(f"  {task:<16} {count:>5}  ({pct:>5.0%})"))
         lines.append(HR)
 
-    # By model
+    # By model — attributed decisions only. Percentages are of ATTRIBUTED, not of
+    # total_decisions: dividing routing shares by a total that includes rows the
+    # classifier never touched is what produced a 69% share for a model the router
+    # never chose.
+    attributed = report.get("attributed_decisions", report["total_decisions"])
     if report["by_model"]:
-        lines.append(section("BY MODEL"))
-        lines.append(row(f"  {'Model':<24} {'Calls':>5}  {'Avg ms':>7}  {'Cost':>8}"))
+        lines.append(section("BY MODEL (routed)"))
+        lines.append(row(f"  {'Model':<20} {'Calls':>5} {'Share':>6}  {'Avg ms':>7} {'Cost':>8}"))
         lines.append(row("  " + "-" * 50))
         for model, stats in report["by_model"].items():
             short = model.split("/")[-1] if "/" in model else model
+            pct = stats["count"] / attributed if attributed else 0
             lines.append(row(
-                f"  {short:<24} {stats['count']:>5}  "
-                f"{stats['avg_latency']:>6.0f}ms  ${stats['total_cost']:>7.4f}"
+                f"  {short:<20} {stats['count']:>5} {pct:>5.0%}  "
+                f"{stats['avg_latency']:>6.0f}ms ${stats['total_cost']:>7.4f}"
             ))
+        lines.append(HR)
+
+    # Unattributed — shown, never hidden. These rows say nothing about routing, but
+    # their EXISTENCE says something: writes nobody can account for. Folding them into
+    # the table above made this dashboard report the opposite of the truth for months.
+    if report.get("unattributed_decisions"):
+        n = report["unattributed_decisions"]
+        lines.append(section("UNATTRIBUTED"))
+        lines.append(row(f"  {n} of {report['total_decisions']} decisions excluded above"))
+        lines.append(row(f"  reason: {report.get('unattributed_reason', 'unknown')}"))
+        lines.append(row("  these are NOT routing choices — the classifier never ran"))
+        for model, count in list(report.get("unattributed_by_model", {}).items())[:5]:
+            short = model.split("/")[-1] if "/" in model else model
+            lines.append(row(f"    {short:<24} {count:>6}"))
         lines.append(HR)
 
     return "\n".join(lines)
@@ -413,7 +449,10 @@ async def llm_health() -> str:
         ollama_status = "reachable ✅" if ollama_reachable else "unreachable ❌ — run: ollama serve"
         lines.append(f"\n🦙 Ollama ({config.ollama_base_url}): {ollama_status}")
 
-    lines.append("\nTip: use llm_dashboard to open the visual web dashboard at localhost:7337")
+    lines.append(
+        f"\nTip: use {route_tool('llm_dashboard')} to open the visual web "
+        "dashboard at localhost:7337"
+    )
     return "\n".join(lines)
 
 

@@ -336,21 +336,33 @@ class TestSavingsMath:
             "query": {"count": 5, "in": 5000, "out": 2500, "cost": 0.01,
                       "models": {"gpt-4o-mini": 5}},
         }
-        lines = se._format_routing_section(tools)
+        # Cash rendering — pin the mode rather than inheriting the dev's config.
+        lines = se._format_routing_section(tools, subscription=False)
         text = "\n".join(lines)
         assert "actual" in text
         assert "baseline" in text
 
-    def test_savings_never_negative_in_display(self):
-        """Savings should be clamped to 0 (never show negative savings)."""
-        # If actual cost > baseline (overspend), savings should be 0
+    def test_overspend_is_shown_not_clamped(self):
+        """INVERTED (AUD-06 / WP-04). This previously asserted "0% saved" when
+        cost exceeded baseline, pinning the clamp as the intended contract and
+        making a session that lost money render identically to one that broke
+        even. The compute layer reported the loss correctly the whole time; only
+        this display layer hid it. Owner decision 2026-08-12: show it.
+
+        Reported in dollars rather than as a negative percentage -- unclamping
+        alone yields "-571329% saved" on a small overspending session, which is
+        honest but unreadable, and a number that shape invites a future "fix"
+        that restores the clamp.
+        """
         tools = {
             "query": {"count": 1, "in": 100, "out": 50, "cost": 10.0,
                       "models": {"o3": 1}},
         }
-        lines = se._format_routing_section(tools)
+        # Cash rendering — pin the mode rather than inheriting the dev's config.
+        lines = se._format_routing_section(tools, subscription=False)
         text = "\n".join(lines)
-        assert "0% saved" in text  # clamped to 0
+        assert "0% saved" not in text, text
+        assert "overspent" in text, text
 
 
 # ── Issue 6: Free model classification ────────────────────────────────────────

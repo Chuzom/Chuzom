@@ -1,0 +1,15 @@
+silent: 65
+wrong: 25
+fabricat: 26
+mislead: 7
+race: 37
+locked: 65
+routing: 285
+savings: 154
+fallback: 98
+regression: 125
+drift: 43
+stale: 51
+bypass: 41
+double-count: 9
+denominator: 4

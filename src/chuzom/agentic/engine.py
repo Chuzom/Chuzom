@@ -44,7 +44,7 @@ class Agent(Protocol):
 
 
 EVENT_KINDS = frozenset(
-    {"plan", "execute", "pass", "fail", "retry", "escalate", "replan", "surface", "complete"}
+    {"plan", "execute", "pass", "fail", "retry", "escalate", "surface", "complete"}
 )
 
 
@@ -61,7 +61,7 @@ class Event:
 
     def render(self) -> str:
         icon = {"plan": "🗺", "execute": "⚙", "pass": "✓", "fail": "✗",
-                "retry": "↻", "escalate": "↑", "replan": "✎", "surface": "⚠",
+                "retry": "↻", "escalate": "↑", "surface": "⚠",
                 "complete": "✅"}.get(self.kind, "·")
         bits = [icon, self.kind, self.milestone_id]
         if self.tier >= 0:
@@ -94,11 +94,28 @@ class TaskResult:
     reason: str = ""
 
 
-# route(milestone) -> starting tier; replan(ledger) mutates remaining tail once.
+# route(milestone) -> starting tier.
 Router = Callable[[Milestone], int]
-ReplanFn = Callable[[TaskLedger], None]
 # gate(milestone, result) -> True if an irreversible action is confirmed/safe to freeze.
 Gate = Callable[[Milestone, AgentRunResult], bool]
+
+
+def _refuse_unisolated_irreversible(milestone: Milestone, result: AgentRunResult) -> bool:
+    """Default gate: reversible work freezes; irreversible work needs isolation.
+
+    RED3-01 (P0). An irreversible milestone — push, merge, delete, external send
+    — that ran straight in the working tree cannot be rolled back if its
+    acceptance check turns out to be wrong, so it does not auto-freeze on a bare
+    pass. It is surfaced instead.
+
+    Callers that CAN isolate should pass ``reversibility_gate(ops)`` from
+    chuzom.agentic.worktree, which merges the worktree when the milestone
+    verified there and discards it otherwise. This default is the honest answer
+    for callers that cannot: refuse, rather than pretend.
+    """
+    if milestone.reversible:
+        return True
+    return bool(result.artifacts.get("worktree"))
 
 
 class MGEEEngine:
@@ -108,9 +125,9 @@ class MGEEEngine:
         *,
         max_attempts_per_tier: int = 2,
         router: Router | None = None,
-        replan_fn: ReplanFn | None = None,
         gate: Gate | None = None,
         event_sink: Callable[[Event], None] | None = None,
+        workdir: str | None = None,
     ) -> None:
         if not agents_by_tier:
             raise ValueError("at least one tier agent is required")
@@ -118,9 +135,20 @@ class MGEEEngine:
         self.top_tier = max(self.agents)
         self.k = max(1, max_attempts_per_tier)
         self.router = router or (lambda _m: min(self.agents))
-        self.replan_fn = replan_fn
-        self.gate = gate or (lambda _m, _r: True)
+        # RED3-01 (P0): the default REFUSES to freeze irreversible work that was
+        # not isolated. It used to be `lambda _m, _r: True` — approve everything.
+        #
+        # The gate mechanism was wired all along (see the call site in
+        # _work_milestone); what made the README's "irreversible steps run in an
+        # isolated git worktree, merged only after they verify" false was that
+        # its default said yes and no caller ever supplied a real one. A
+        # permissive default on a safety gate is indistinguishable from no gate,
+        # and reads in review as though the protection is present.
+        self.gate = gate or _refuse_unisolated_irreversible
         self.event_sink = event_sink
+        # RED3-08: the directory the agents actually work in, threaded to the
+        # acceptance check so a repository-reading check looks at the right tree.
+        self.workdir = workdir
         self.events: list[Event] = []
 
     def _emit(self, kind: str, m: str = "", tier: int = -1, reason: str = "") -> None:
@@ -138,8 +166,30 @@ class MGEEEngine:
         return sum(1 for a in m.attempts if a.tier == tier)
 
     def _verify(self, m: Milestone, artifacts: dict[str, Any]) -> AcceptanceResult:
+        # RED3-03 (P0): reject a do-nothing oracle before trusting it. A
+        # `return True` stub submitted as the acceptance check for a
+        # security-hole task was ACCEPTED and the milestone recorded DONE — at
+        # which point "done" means "the executor said so", the one property this
+        # whole design exists to rule out.
+        #
+        # Enforced here, at the single point every milestone is verified, rather
+        # than in the check factories: a stub does not come from acceptance.py's
+        # factories, it comes from an executor asked to supply its own check.
+        # Guarding anywhere else would leave the path that actually produces
+        # stubs unguarded.
+        from chuzom.agentic.acceptance import reject_stubs
+
+        # RED3-08 (P0): the working directory reaches the check. Without it a
+        # repository-reading check resolves `cwd=None` to the PROCESS's cwd —
+        # which, when chuzom is run from its own checkout, is a different git
+        # repo entirely. It would then verify the milestone against Chuzom's
+        # source tree instead of the agent's, and confidently report the wrong
+        # answer in whichever direction that tree happened to point.
+        if "cwd" not in artifacts and self.workdir is not None:
+            artifacts = {**artifacts, "cwd": self.workdir}
+
         try:
-            return m.acceptance(artifacts)
+            return reject_stubs(m.acceptance)(artifacts)
         except Exception as exc:  # noqa: BLE001 — a broken check must never hang the flow
             return AcceptanceResult(False, f"acceptance check errored: {exc}", deterministic=True)
 
@@ -164,7 +214,7 @@ class MGEEEngine:
                 m.status = MilestoneStatus.BLOCKED
                 blocked.append(f"{m.id}: {reason}")
                 self._emit("surface", m.id, reason=reason)
-            # "done" / "replan" → just continue the outer loop
+            # "done" → just continue the outer loop
 
         if ledger.complete():
             self._emit("complete")
@@ -178,7 +228,7 @@ class MGEEEngine:
     ) -> tuple[str, str]:
         """Attempt/escalation loop for ONE milestone (bounded ⇒ terminates).
 
-        Returns (status, reason): 'done' | 'blocked' | 'replan' | 'budget'.
+        Returns (status, reason): 'done' | 'blocked' | 'budget'.
         """
         while True:
             if ledger.budget_left() <= 0:
@@ -203,11 +253,13 @@ class MGEEEngine:
                 tier += 1  # monotonic escalation, frozen ledger carried forward
                 self._emit("escalate", m.id, tier, res.reason)
                 continue
-            if self.replan_fn and not ledger.replanned:
-                ledger.replanned = True
-                self.replan_fn(ledger)
-                self._emit("replan", m.id, tier)
-                return "replan", ""
+            # WP-10: the replan path is deleted, not disabled. It worked when
+            # called and had NO production caller -- run_delegation threaded
+            # replan_fn through to here and nothing ever supplied one; a single
+            # test was its only caller. Dead safety code reads as coverage, and
+            # this codebase has already had such a path silently wired back up
+            # (RED3-01). Exhausting the ladder now blocks, which is what actually
+            # happened in production the whole time.
             return "blocked", res.reason
 
     def _run_and_verify(

@@ -37,7 +37,10 @@ def test_routing_saved_is_labelled_gross():
     it)."""
     tools = {"query": {"count": 5, "in": 5000, "out": 2500, "cost": 0.01,
                        "models": {"gpt-4o-mini": 5}}}
-    text = _strip("\n".join(se._format_routing_section(tools)))
+    # subscription=False explicitly: this asserts the CASH rendering, which
+    # only a pay-per-token user sees. Left to ambient config it passed or
+    # failed by whose machine ran it.
+    text = _strip("\n".join(se._format_routing_section(tools, subscription=False)))
     assert "% saved" in text, "the '% saved' token must remain (savings-clamp test relies on it)"
     assert "gross" in text, "routing 'saved' must be qualified as gross"
 

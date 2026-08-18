@@ -1,0 +1,148 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-session-start.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-auto-route.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-status-bar.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-enforce-route.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-agent-route.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-subagent-start.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "llm_|mcp__chuzom__llm",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-usage-refresh.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-cc-usage-track.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-agent-depth-release.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-playwright-compress.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-bash-compress.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-context-capture.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/tmp/red4-venv/bin/python3.11 /tmp/red4-sandbox3/.claude/hooks/chuzom-session-end.py"
+          }
+        ]
+      }
+    ]
+  },
+  "mcpServers": {
+    "chuzom": {
+      "command": "/Users/yaliandrona/.local/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "/private/tmp/red4-venv/lib/python3.11",
+        "chuzom"
+      ]
+    }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash /tmp/red4-sandbox3/.claude/hooks/chuzom-statusline.sh"
+  }
+}

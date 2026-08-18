@@ -39,6 +39,141 @@ jobs:
         # so it can only be caught statically.
         run: uv run python scripts/lint_tool_surface.py
 
+      - name: "Fail-open guard (CHZ-FO-01 — no SILENT broad catch where money is)"
+        # RED8-09. ~810 broad `except Exception` handlers exist and most are
+        # correct: a UserPromptSubmit hook that raises kills the user's turn, and
+        # a telemetry write that raises turns observability into an outage.
+        # Removing them would trade a known degradation for a crash.
+        #
+        # The defect is the SILENCE. A handler ending in bare `pass` is
+        # indistinguishable from the happy path in every surface we have — the
+        # same shape as the ledger drop that looked like no traffic and the
+        # savings query failure that rendered "$0.00 saved". This bans catches
+        # that leave NO TRACE, only in the five modules where a silent
+        # degradation mis-reports money or changes a routing decision.
+        #
+        # Zero tolerance, no baseline: WP-13's criterion names those modules
+        # explicitly, so a baseline would list exactly the places that must be
+        # empty.
+        run: uv run python scripts/lint_fail_open.py
+
+      - name: "Savings-sign guard (CHZ-SS-01 — no clamped net in a money module)"
+        # AUD-06: "TOTAL saved is a sum of wins, not a net — losses clamped to
+        # zero before aggregation." WP-04/WP-05 fixed ONE site
+        # (hooks/session-end.py) and pinned it with a test that loads that one
+        # file. ELEVEN other surfaces kept the clamp, including
+        # cost.get_team_savings — which team.py broadcasts to Slack/Discord —
+        # and the dashboard's `net_saved = max(0, gross - overhead)`, AUD-06's
+        # own sentence in code.
+        #
+        # 13_HISTORICAL_DEFECT_PATTERNS.md records the $15/$75 price bug being
+        # fixed locally FOUR times and returning every time, "because no fix was
+        # ever made structural". Eleven point-fixes would have been the fifth.
+        #
+        # Its blind spots are stated in the script: it matches an inline
+        # `max(0, …)` on a savings-named quantity, so a clamp split across two
+        # lines, an `if x < 0: x = 0`, or one inside a helper it never reads all
+        # escape. A pass means "no clamped net is spelled inline in these
+        # modules" — NOT "no surface hides a loss".
+        run: uv run python scripts/lint_savings_sign.py
+
+      - name: "G-C: acceptance criteria unchanged (the executor cannot edit its own oracle)"
+        # The remediation plan says criteria are hashed before a run and
+        # re-verified after, and G-C makes a mismatch a disqualifier. No hash was
+        # ever computed, so G-C could not fire — the same defect as
+        # unregistered() and lint_tool_surface.py: check-shaped, reporting
+        # nothing, counted as protection.
+        #
+        # Deliberately over-reports: it hashes whole files, not criteria blocks,
+        # so unrelated prose edits trip it and must be re-baselined on purpose. A
+        # block parser could silently narrow coverage instead, which is the
+        # under-reporting failure the env-registry scanner already demonstrated.
+        run: uv run python scripts/verify_criteria_hashes.py
+
+      - name: "North-star trace (RED1-23 — the hook→server seam, end to end)"
+        # The lint above is STATIC and, by its own docstring, checks that no
+        # emitter hardcodes a tool name into prose. It cannot see the seam where
+        # the shipped bug lived: the hook's idea of the tool surface versus the
+        # server's actual registration, which are separate processes that never
+        # compared notes. This script runs the REAL hook and resolves tools from
+        # the REAL server object.
+        #
+        # It existed and was referenced by a CHANGELOG line and nothing else —
+        # not by CI, not by doctor. A guard nobody invokes is documentation.
+        #
+        # It also needed hardening before it was worth invoking: "every hint
+        # names a registered tool" is necessary but not sufficient. With a bogus
+        # name in CORE_TOOLS the server simply cannot register it, the tier
+        # silently shrinks 4→3, and the fallback chain degrades llm_query hints
+        # to llm_code — every hint still valid, query prompts routed to the code
+        # tool, trace reporting CLEAN. It now also asserts the reverse direction:
+        # every tool a tier DECLARES must actually be registered.
+        run: uv run python scripts/trace_northstar.py
+
+      - name: Pricing guard (INV-COST-004 — one source of truth for money)
+        # Same failure shape as the tool-surface guard above: a wrong price
+        # produces a plausible number, not an error, so nothing downstream can
+        # notice. The audit found the retired Opus 3 rate ($15/$75, 3x the real
+        # one) in five tables; this lint found thirteen. Baselined as accepted
+        # debt that may shrink but never grow — a NEW price table fails the build.
+        run: uv run python scripts/lint_pricing.py
+
+      - name: Model registry freshness (WP-12 — the ladder is curated, not live)
+        # NORTH_STAR called the capability ranking "live" and
+        # "continuously-updated". It is a hand-edited YAML snapshot; nothing
+        # fetches a ranking at runtime. The file header even told readers to
+        # refresh via scripts/refresh-model-registry.py — which does not exist
+        # and never did, so the documented cadence had no mechanism behind it.
+        #
+        # A stale ladder pins escalation to a previous model generation: the
+        # "fixed vendor ranking" the North Star names as a violation, arrived at
+        # by neglect rather than decision. Enforced here so staleness is a red
+        # build instead of a quietly wrong routing decision.
+        run: uv run python scripts/check_model_registry_freshness.py
+
+      - name: Workflow shell portability (a `run:` block must mean one thing)
+        # All three windows legs of PR #253 were red on a quoting bug in
+        # smoke-test.yml, not on a product defect. `run:` is bash on
+        # ubuntu/macos and pwsh on windows; bash collapses \" to " and pwsh
+        # does not, so the same inline Python was valid on every platform the
+        # developer could reach and a SyntaxError on the one they could not.
+        #
+        # 30_CI_GAP_PLAN §6 named three suspects for those failures and all
+        # three were wrong -- an unreproducible failure invites speculative
+        # fixes, and this lint is the alternative to guessing. Verified by
+        # control against the pre-fix tree: it reports exactly the two lines
+        # that broke CI.
+        run: uv run python scripts/lint_workflow_shell_portability.py
+
+      - name: Suite env parity (both suite runs get the same environment)
+        # The suite runs twice on purpose — source tree here, built wheel in
+        # G-D — so they differ in what they test and must not differ in what
+        # the suite needs to run at all. They did: this job set a dummy
+        # OPENAI_API_KEY and G-D never got it, so G-D failed with 41
+        # `No providers available` errors that had nothing to do with
+        # packaging. A gate red for a reason unrelated to what it gates is a
+        # gate people learn to skip.
+        run: uv run python scripts/lint_suite_env_parity.py
+
+      - name: Documented commands actually run (doc 34 Step 1)
+        # README.md promises `chuzom doctor`, `chuzom benchmark` and a
+        # 60-second install. Those are testable claims and nothing tested them.
+        # First run found a documented command that could never work —
+        # `python -m chuzom benchmark`, with no __main__.py in the package.
+        # Commands are PARSED from the README, so one added later is covered
+        # without editing the checker, and extracting zero FAILS: a doc-checker
+        # that finds nothing passes while checking nothing.
+        run: uv run python scripts/check_docs_commands.py --run
+
+      - name: Ollama URL readers reach the validator (CHZ-SEC-06)
+        # config.validate_ollama_url was written because these env vars were an
+        # SSRF sink, and was then bypassed by SEVEN copies of the reader across
+        # the codebase — found in three separate passes, the last four only by
+        # writing this check. `_load_dotenv` reads Path.cwd()/".env", so a
+        # cloned repo can set them. Three copies would have been a coincidence;
+        # seven is a thing to enforce.
+        run: uv run python scripts/lint_ollama_url_readers.py
+
   quality-gates:
     # v1.0.1 mitigation gates (G4/G5/G6). These target the audit's recurrence
     # patterns directly: new can't-fail tests (G4), regressions of the six fixed
@@ -65,7 +200,39 @@ jobs:
         run: uv run pytest -q tests/test_g3_realization_soak.py
       - name: "G7: realized-savings soak — a defensible number exists (Phase 0)"
         run: uv run pytest -q tests/soak/realized_savings_soak.py
-      - name: "G4: test-hygiene ratchet (no new can't-fail tests)"
+
+      - name: "G7: …and a LOSS survives every layer (WP-16 item 1)"
+        # "A defensible number exists" is satisfied by a clamped zero, which is
+        # how Gate 7 certified a release carrying AUD-06 — the max(0.0, …) clamp
+        # that rendered overspend as "$0.00 saved". The gate asked whether a
+        # figure was produced, never whether an UNFAVOURABLE one could survive
+        # being produced.
+        #
+        # test_savings_sign.py (WP-04, immutable) pins the source arithmetic.
+        # This pins the rest of the chain — statistics, cross-run aggregator,
+        # the savings_claim_supported label, and the printer — because a signed
+        # subtraction feeding a clamped mean is still a lie to the operator.
+        #
+        # Each assertion was verified to FIRE by injecting an AUD-06-style clamp
+        # at its layer; all five injections turn this red. See
+        # evidence/wp16_gate7_loss.md.
+        run: uv run pytest -q tests/soak/test_gate7_loss_representable.py
+      - name: "G4: test-hygiene ratchet (no new SWALLOWED-EXCEPTION tests)"
+        # Renamed from "(no new can't-fail tests)". The script is honest about
+        # itself -- it counts except-handlers whose body is pass/.../continue --
+        # but the step NAME generalised that to the whole class, and a reader
+        # concluding "can't-fail tests are covered" would be wrong.
+        #
+        # A swallowed exception is ONE way a test cannot fail. Others this gate
+        # structurally cannot see, all found in this remediation:
+        #   * a tautological assertion (`assert quota >= 0` on a sum of counts,
+        #     inside Gate 7 itself),
+        #   * an assertion on logic RE-IMPLEMENTED in the test body rather than
+        #     imported (my own first draft of the Gate 7 loss tests),
+        #   * a scan that silently returns nothing, making every later assertion
+        #     vacuous.
+        # Naming the gate for what it measures is cheaper than the alternative,
+        # which is a release note that overstates what was checked.
         run: bash scripts/quality_gate_test_hygiene.sh
       - name: "G5: audit regression suite (the six fixed criticals + follow-ons)"
         run: >

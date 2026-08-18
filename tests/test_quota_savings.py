@@ -193,6 +193,10 @@ def test_compute_aggregates_weekly_and_5h(
     assert snap is not None
     assert snap.weekly_saved_usd == pytest.approx(3.0)  # 1.0 + 2.0
     assert snap.session_saved_usd == pytest.approx(1.0)
+    # This test PINS the calibration via the env var set above, so it measures
+    # the aggregation arithmetic rather than the default. Left at 0.50 on
+    # purpose: swapping in the derived default here would couple an arithmetic
+    # test to the default's derivation and make both harder to read.
     # $50/week → $0.50/pp → $3 = 6.0 pp weekly, $1 = 2.0 pp session
     assert snap.calibration_usd_per_pp == pytest.approx(0.50)
     assert snap.weekly_pp_saved == pytest.approx(6.0)
@@ -204,7 +208,7 @@ def test_compute_aggregates_weekly_and_5h(
 # ── 4. Calibration env var ────────────────────────────────────────────────
 
 
-def test_calibration_default_is_50_dollars_per_week(
+def test_calibration_default_tracks_the_subscription_price(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CHUZOM_WEEKLY_QUOTA_USD_OPUS_EQUIV", raising=False)
@@ -214,8 +218,15 @@ def test_calibration_default_is_50_dollars_per_week(
     ):
         snap = compute_quota_savings()
     assert snap is not None
-    # $50/week → $0.50/pp
-    assert snap.calibration_usd_per_pp == pytest.approx(0.50)
+    # RED8-05 / WP-05: was a flat $50/week -> $0.50/pp, and the $50 was
+    # justified in-comment as an Opus equivalent at $15/$75 per million —
+    # the RETIRED Opus 3 rate. The test name even froze the number.
+    #
+    # Quota value is anchored to what the SUBSCRIPTION COSTS, not to a token
+    # rate: $200/month over 4.345 weeks. Under the old reasoning this figure
+    # would have had to fall by two thirds when Opus repriced, and nothing
+    # here would have noticed.
+    assert snap.calibration_usd_per_pp == pytest.approx(200.0 / 4.345 / 100.0, abs=1e-4)
 
 
 def test_calibration_respects_env_override(
@@ -241,7 +252,7 @@ def test_calibration_invalid_env_falls_back_to_default(
     ):
         snap = compute_quota_savings()
     assert snap is not None
-    assert snap.calibration_usd_per_pp == pytest.approx(0.50)
+    assert snap.calibration_usd_per_pp == pytest.approx(200.0 / 4.345 / 100.0, abs=1e-4)
 
 
 def test_calibration_negative_env_falls_back_to_default(
@@ -254,7 +265,7 @@ def test_calibration_negative_env_falls_back_to_default(
     ):
         snap = compute_quota_savings()
     assert snap is not None
-    assert snap.calibration_usd_per_pp == pytest.approx(0.50)
+    assert snap.calibration_usd_per_pp == pytest.approx(200.0 / 4.345 / 100.0, abs=1e-4)
 
 
 # ── 5. llm_quota_saved tool surface ───────────────────────────────────────

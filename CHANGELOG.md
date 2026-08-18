@@ -5,6 +5,62 @@
 _Nothing yet. Add a bullet here in your PR when you change routing behavior or a
 user-facing surface, then move it under the next version heading at release time._
 
+## v1.2.0 — 2026-08-17 — Zero-tolerance audit remediation
+
+**Release gate status: G-A/B/C/D PASS · G-E satisfiable · G-F NOT QUALIFIED.**
+
+G-F (mutation coverage) is reported as **not qualified** — not waived, not amended, not
+deferred. Mutation coverage improved 0.12 → 0.7387 across ~280 individually verified kills,
+but that is a **train/validation figure and not a held-out estimate**: the sealed holdout was
+contaminated by the audit's own verification method, which enumerated mutants from generated
+source rather than from the train split, and then adapted tests to the resulting survivor
+lists. Full account in `.chuzom/zero-tolerance-audit/26_HOLDOUT_CONTAMINATION.md`; gate record
+in `29_GF_GATE_RECORD.md`. No claim is made that this release satisfies that gate.
+
+Separately and unaffected: on the held-out **quality** benchmark Chuzom scores **q=4.17 vs
+static-chain 4.50 and premium 4.50 — a delta of −0.33. Chuzom is not the champion there.**
+
+### Fixed — user-visible
+
+- **The routing hook no longer discards directives it has already computed.** It called
+  `execution_ledger.record_event()` *before* writing its JSON to stdout. A profile measured
+  that write at 31.19s of a 36.9s invocation, past Claude Code's 30s budget, so the host
+  reported "hook timed out — output discarded" and routing silently did not happen. Output is
+  now emitted and flushed first; the accounting row can be late without costing the decision.
+- **`coverage.snapshot` no longer discards the whole store on one malformed line.** A JSON
+  array or string parses successfully but has no `.get`, and the parse had been hoisted out of
+  the `try` — so one `[1,2,3]` line raised past the loop and threw away every line counted
+  before it. Downstream this rendered coverage as zero rather than as unknown.
+- **`fire_budget_alert` and `_native_notify` are now tested for platform dispatch and binary
+  name** — previously `fire_budget_alert` had no test coverage at all, so a broken macOS
+  branch would have silently stopped every budget alert.
+- A duplicate `'anthropic'` entry in the routing-insert provider allowlist, and `malformed`
+  counted but never exposed on `Coverage`.
+
+### Changed — reporting
+
+- **The MODELS panel now states what it covers.** The 14-day mix is built from
+  `routing_decisions`, which only `llm_route`/`llm_auto` write — the `llm(task=…)` family does
+  not — so it is labelled *"classified routes only"*. When rows exist but none fall in the
+  window it now says so, instead of rendering nothing, which read as "no routing happened".
+  **Treat savings figures derived from that table as covering one tool, not all traffic**
+  (`27_ROUTING_DECISIONS_COVERS_ONE_TOOL.md`).
+- `paths.is_isolated()` no longer implies process-wide sandboxing. It certifies that
+  `chuzom.paths` honours `CHUZOM_HOME`; 182 sites resolve `~/.chuzom` independently and are
+  unaffected by it. The limit is now in its docstring rather than only in an audit document.
+
+### Added — guards
+
+- **CHZ-FO-02**: flags a broad `except` that returns *live data* without recording a
+  fail-open. The existing check asked whether a failure was *logged*; the redaction defect
+  that shipped unredacted prompts logged impeccably and passed. Landed at zero violations.
+- **CHZ-SR-01**: ratchets direct `~/.chuzom` resolutions at 182 so the backlog cannot grow.
+- **CHZ-FO-HOOK-SLOW**: the hook records its own phase breakdown when it exceeds 5s, so a
+  slow invocation diagnoses itself rather than requiring live investigation.
+- The hook version stamp is now enforced by a committed content hash — it had been changed
+  twice without a bump, which left Cursor/Windsurf/Codex users (where the auto-sync never
+  fires) with no staleness warning at all.
+
 ## v1.1.1 — 2026-08-08 — Hotfix: routing hints named tools that were not registered (CHZ-SURF-01)
 
 **Every default install was affected.** `chuzom_slim` has defaulted to `consolidated` since

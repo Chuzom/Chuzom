@@ -44,7 +44,7 @@ from pathlib import Path
 # it silently does the work on the expensive model and the savings dashboard
 # cannot distinguish that from "chose not to route".
 def _load_tool_surface_fns():
-    """(route_tool, route_call, route_call_with_complexity) from chuzom.tool_surface.
+    """(route_tool, route_call, route_call_with_complexity, call_parts, tool_for_task).
 
     Falls back to the stdlib-only copy the installer drops next to the hooks, then
     to the in-repo source, then to identity (correct only for tier `off`).
@@ -55,8 +55,9 @@ def _load_tool_surface_fns():
             route_call,
             route_call_with_complexity,
             route_tool,
+            tool_for_task,
         )
-        return route_tool, route_call, route_call_with_complexity, call_parts
+        return route_tool, route_call, route_call_with_complexity, call_parts, tool_for_task
     except ImportError:
         pass
     try:
@@ -71,7 +72,8 @@ def _load_tool_surface_fns():
             sys.modules["chuzom_tool_surface"] = _mod  # dataclasses needs this
             _spec.loader.exec_module(_mod)
             return (_mod.route_tool, _mod.route_call,
-                    _mod.route_call_with_complexity, _mod.call_parts)
+                    _mod.route_call_with_complexity, _mod.call_parts,
+                    _mod.tool_for_task)
     except Exception:  # noqa: BLE001 — a broken support module must not kill the hook
         pass
     return (
@@ -79,11 +81,17 @@ def _load_tool_surface_fns():
         lambda n, *a, **k: (f"{n}({', '.join(a)})" if a else n),
         lambda n, c, *a, **k: f"{n}(complexity='{c}'" + ("".join(', ' + x for x in a)) + ")",
         lambda n, **k: (n, []),
+        # Last-resort fallback mirrors tool_surface.DEFAULT_TASK_TOOL: llm_route,
+        # never a completion door — see RED8-06.
+        lambda t: {"research": "llm_research", "generate": "llm_generate",
+                   "analyze": "llm_analyze", "code": "llm_code",
+                   "query": "llm_query", "image": "llm_image",
+                   "coordination": "llm_query", "auto": "llm_route"}.get(t, "llm_route"),
     )
 
 
 (route_tool, route_call,
- route_call_with_complexity, call_parts) = _load_tool_surface_fns()
+ route_call_with_complexity, call_parts, tool_for_task) = _load_tool_surface_fns()
 
 # ── .env loader (mirrors auto-route.py) ──────────────────────────────────────
 # PreToolUse[Agent] runs without an interactive shell, so OLLAMA_BUDGET_MODELS,
@@ -212,13 +220,12 @@ _TASK_SIGNALS: dict[str, re.Pattern] = {
     ),
 }
 
-_TOOL_MAP = {
-    "code": "llm_code",
-    "analyze": "llm_analyze",
-    "research": "llm_research",
-    "generate": "llm_generate",
-    "query": "llm_query",
-}
+# RED8-06: the private _TOOL_MAP is gone. It held 5 of the 8 task types and fell
+# back to llm_analyze — a COMPLETION DOOR that cannot run tools — while
+# auto-route.py fell back to llm_route for the same unrecognised input. The five
+# shared keys agreed, so the maps looked consistent; the divergence only showed
+# on everything else, and no test drove one prompt through both. The canonical
+# map now lives in chuzom.tool_surface (see tool_for_task above).
 
 
 # ── Agent loop circuit breaker ──────────────────────────────────────────────
@@ -357,6 +364,41 @@ def _log_agent_call(subagent_type: str, prompt: str, decision: str) -> None:
 
 # ── Agent cost estimation ───────────────────────────────────────────────────
 
+# WP-03: hoisted out of _estimate_agent_cost (it was rebuilt on every call) and
+# split by complexity. These are NOT model rates — they are whole-call USD
+# budget guesses keyed by task shape, and none corresponds to any per-token
+# price. The pricing lint flagged them anyway, because ("moderate","analyze")
+# = 0.80 and ("complex","analyze") = 4.00 happen to spell the retired Haiku
+# pair. Splitting by complexity keeps that coincidence out of one node so the
+# lint stays credible; the numbers are unchanged.
+#
+# Worth stating now that they are visible: all ten are hand-estimated and have
+# no derivation from real token pricing, so `budget_usd` is being enforced
+# against invented figures. Making them real belongs with the escalation-budget
+# work (WP-10), not here.
+_SIMPLE_TASK_USD = {
+    ("simple", "retrieval"): 0.15,
+    ("simple", "query"): 0.30,
+    ("simple", "code"): 0.20,
+}
+_MODERATE_TASK_USD = {
+    ("moderate", "retrieval"): 0.30,
+    ("moderate", "query"): 0.50,
+    ("moderate", "code"): 1.00,
+    ("moderate", "analyze"): 0.80,
+}
+_COMPLEX_TASK_USD = {
+    ("complex", "code"): 3.00,
+    ("complex", "analyze"): 4.00,
+    ("complex", "research"): 2.50,
+}
+_AGENT_COST_ESTIMATES_USD = {
+    **_SIMPLE_TASK_USD,
+    **_MODERATE_TASK_USD,
+    **_COMPLEX_TASK_USD,
+}
+
+
 def _estimate_agent_cost(complexity: str, task_type: str) -> float:
     """Estimate agent call cost in USD based on complexity and task type.
     
@@ -374,20 +416,8 @@ def _estimate_agent_cost(complexity: str, task_type: str) -> float:
     
     Returns conservative estimate to avoid budget surprises.
     """
-    rates = {
-        ("simple", "retrieval"): 0.15,
-        ("simple", "query"): 0.30,
-        ("simple", "code"): 0.20,
-        ("moderate", "retrieval"): 0.30,
-        ("moderate", "query"): 0.50,
-        ("moderate", "code"): 1.00,
-        ("moderate", "analyze"): 0.80,
-        ("complex", "code"): 3.00,
-        ("complex", "analyze"): 4.00,
-        ("complex", "research"): 2.50,
-    }
     # Default conservative estimate for unmapped types
-    return rates.get((complexity, task_type), 1.50)
+    return _AGENT_COST_ESTIMATES_USD.get((complexity, task_type), 1.50)
 
 
 def _initialize_session_budget() -> float:
@@ -1081,7 +1111,7 @@ def main() -> None:
         pass
 
     profile = _complexity_to_profile(complexity, _p["session"], _p["sonnet"], _p["weekly"])
-    tool = _TOOL_MAP.get(task_type, "llm_analyze")
+    tool = tool_for_task(task_type)
 
     _model_hint = {
         "budget": "Gemini Flash / Groq (session pressure — cheap external)",

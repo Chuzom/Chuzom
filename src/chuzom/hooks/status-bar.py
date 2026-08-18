@@ -79,9 +79,25 @@ STATUS_EVERY = os.environ.get("CHUZOM_STATUS_EVERY", "0")
 STATUS_MODE = os.environ.get("CHUZOM_STATUS_MODE", "compact")  # compact | full
 ENFORCE_MODE = os.environ.get("CHUZOM_ENFORCE", "hard").lower()
 
-# Baseline cost for "what would Opus have cost?" comparison
-HOST_INPUT_PER_M = 15.0
-HOST_OUTPUT_PER_M = 75.0
+# Baseline cost for "what would Opus have cost?" comparison.
+#
+# WP-03: was a hardcoded 15.0/75.0 — the retired Opus 3 tier — so the savings
+# figure on the status line, the number a user sees on every prompt, was
+# overstated 3x. The pricing lint missed this: its value check wants both halves
+# of a retired pair inside ONE assignment and these are two separate scalars,
+# while its structural check only fires on dict/list/tuple containers. A bare
+# float named ..._PER_M slips through both. Recorded as a lint gap — the lint is
+# an immutable asset for this work package and cannot be edited here.
+try:
+    from chuzom import pricing as _pricing
+
+    _host_price = _pricing.price_for("opus")
+except ImportError:  # pragma: no cover — copied to ~/.claude/hooks/, runs standalone
+    _host_price = None
+
+HOST_PRICE_KNOWN = _host_price is not None
+HOST_INPUT_PER_M = _host_price.input if _host_price else 0.0
+HOST_OUTPUT_PER_M = _host_price.output if _host_price else 0.0
 
 # ── ANSI colours ───────────────────────────────────────────────────────────
 G = "\033[92m"   # green  — savings, provider OK, enforce
@@ -179,20 +195,25 @@ def _savings_for_period(conn: sqlite3.Connection, since: str) -> tuple[float, fl
         (since,),
     ).fetchall()
 
+    if not HOST_PRICE_KNOWN:
+        # No price source: report nothing rather than a baseline of $0, which
+        # would render as "saved $0.00" and read as a measurement.
+        return 0.0, 0.0
+
     actual = baseline = 0.0
     for provider, in_tok, out_tok, cost in rows:
         in_tok = in_tok or 0
         out_tok = out_tok or 0
         cost = cost or 0.0
-        sonnet_cost = (in_tok * HOST_INPUT_PER_M + out_tok * HOST_OUTPUT_PER_M) / 1_000_000
+        host_cost = (in_tok * HOST_INPUT_PER_M + out_tok * HOST_OUTPUT_PER_M) / 1_000_000
         if provider == "subscription":
             continue  # no token data for subscription calls
         elif provider in _FREE_PROVIDERS:
-            baseline += sonnet_cost
+            baseline += host_cost
             # actual cost is $0 for free providers
         else:
             actual += cost
-            baseline += sonnet_cost
+            baseline += host_cost
 
     return max(0.0, baseline - actual), baseline
 

@@ -949,7 +949,48 @@ def install(force: bool = False) -> list[str]:
         else:
             statusline_cmd = f"bash {statusline_dst}"
             current_sl = settings3.get("statusLine")
-            if not current_sl or current_sl.get("command") != statusline_cmd:
+            _already_ours = (
+                isinstance(current_sl, dict) and current_sl.get("command") == statusline_cmd
+            )
+            if not _already_ours:
+                # RED4-01 (P0): this used to assign straight over settings.json's
+                # statusLine. A user's own status line — Powerline, a custom
+                # script, anything — was destroyed silently: no backup, no
+                # warning, and uninstall did not put it back. "We only touch one
+                # key" is not a defence when that key IS the feature the user
+                # configured.
+                #
+                # Three things happen before the write and all three are load
+                # bearing: CAPTURE so uninstall can undo it, BACKUP so the file is
+                # recoverable even if the manifest is lost, and WARN so the user
+                # learns at install time instead of by noticing it is gone.
+                from chuzom import install_manifest as _im
+
+                _is_ours = isinstance(current_sl, dict) and "chuzom-statusline.sh" in str(
+                    current_sl.get("command", "")
+                )
+                if not _is_ours and _im.find("json_key", _SETTINGS_PATH, key="statusLine") is None:
+                    # Captured once, by the first install that sees a foreign
+                    # value. A re-install finds chuzom's own command in the key,
+                    # and re-capturing would overwrite the user's original with
+                    # chuzom's replacement — destroying precisely what the record
+                    # exists to preserve.
+                    _im.record(
+                        "json_key",
+                        _SETTINGS_PATH,
+                        key="statusLine",
+                        had_key=current_sl is not None,
+                        previous=current_sl,
+                    )
+                    if current_sl is not None:
+                        _b = _backup_before_overwrite(_SETTINGS_PATH)
+                        _where = f"; backup at {_b.name}" if _b else ""
+                        actions.append(
+                            "WARNING: replacing an existing statusLine in "
+                            f"settings.json{_where}. The original is recorded and "
+                            "`chuzom uninstall` restores it."
+                        )
+
                 settings3["statusLine"] = {
                     "type": "command",
                     "command": statusline_cmd,
@@ -1059,9 +1100,32 @@ def uninstall() -> list[str]:
     if isinstance(current_sl, dict) and "chuzom-statusline.sh" in str(
         current_sl.get("command", "")
     ):
-        del settings_sl["statusLine"]
-        _save_settings(settings_sl)
-        actions.append("Removed statusLine command from ~/.claude/settings.json")
+        # RED4-01: restore rather than delete. Deleting leaves a user who HAD a
+        # status line with none at all, which is the same loss as the original
+        # defect — just discovered at uninstall instead of install.
+        from chuzom import install_manifest as _im
+
+        _rec = _im.find("json_key", _SETTINGS_PATH, key="statusLine")
+        if _rec is not None:
+            actions += _im._restore_json_key(
+                _SETTINGS_PATH, "statusLine", bool(_rec.get("had_key")), _rec.get("previous")
+            )
+        else:
+            del settings_sl["statusLine"]
+            _save_settings(settings_sl)
+            actions.append("Removed statusLine command from ~/.claude/settings.json")
+
+    # RED4-08: the hook support modules copied by _sync_hook_support_files()
+    # carry no event/matcher, so the _HOOK_DEFS removal loop never saw them and
+    # they were left behind in ~/.claude/hooks/ after uninstall.
+    for _src_name, _dst_name in _HOOK_SUPPORT_FILES:
+        _support = _HOOKS_DST / _dst_name
+        if _support.exists():
+            try:
+                _support.unlink()
+                actions.append(f"Removed hook support module {_support}")
+            except OSError as e:
+                actions.append(f"  could not remove {_support}: {e}")
 
     # RED2-5-02: remove the sidecar helper scripts install() copied into the
     # hooks dir. They carry no event/matcher so the _HOOK_DEFS removal loop above

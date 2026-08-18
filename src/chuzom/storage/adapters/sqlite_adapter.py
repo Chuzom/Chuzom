@@ -10,6 +10,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+from chuzom.sqlite_wal import enable_wal
+
 
 
 _SCHEMA = """
@@ -46,10 +48,14 @@ class SqliteAdapter:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path), timeout=5.0)
+        # RED5-01 (P0): third copy of the cold-start bug, and the worst-ordered
+        # of the three. WAL was enabled AFTER executescript, so schema creation —
+        # the statement most likely to contend on a cold start — ran with no WAL
+        # and the 5s default timeout. enable_wal() raises the busy timeout first,
+        # which is precisely why it must come first.
+        enable_wal(self._conn, label="sqlite_adapter")
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
-        # Enable WAL mode for concurrent access
-        self._conn.execute("PRAGMA journal_mode=WAL")
 
     def read(self) -> list[dict] | None:
         """Read all audit events from database.

@@ -38,6 +38,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from chuzom import pricing as _pricing
+
+#: Counterfactual model these savings are computed against. WP-05: projected
+#: from the ONE policy in chuzom.pricing rather than restated here, so this
+#: surface cannot drift from the ledger writer or the session-end hook.
+_BASELINE_MODEL = _pricing.savings_baseline_model()
+
 WindowLiteral = Literal["today", "week", "month", "lifetime", "14d"]
 
 DEFAULT_DB_PATH = Path.home() / ".chuzom" / "usage.db"
@@ -47,6 +54,31 @@ DEFAULT_DB_PATH = Path.home() / ".chuzom" / "usage.db"
 _PLATFORM_TABLES = ("claude_usage", "codex_usage", "gemini_usage")
 _LEGACY_TABLE = "usage"
 _JSONL_TABLE = "savings_stats"
+
+
+def _coverage_fields() -> dict:
+    """Observed/unobserved counts for WindowTotals. Never raises.
+
+    A dashboard that cannot render because coverage telemetry is unavailable
+    would trade a known blind spot for an outage. Unreadable coverage is
+    reported AS unreadable (-> "Unknown"), not as zero traffic.
+    """
+    try:
+        from chuzom import coverage as _coverage
+
+        snap = _coverage.snapshot()
+        return {
+            "observed_n": snap.observed_n,
+            "unobserved_n": snap.unobserved_n,
+            "coverage_readable": snap.readable,
+        }
+    except Exception as exc:  # noqa: BLE001
+        # coverage_readable=False already renders "Unknown" downstream, so the
+        # user is not misled -- but nothing said WHY, and a permanently unknown
+        # coverage figure looks like a missing feature rather than a broken one.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-DASHBOARD-COVERAGE", exc)
+        return {"observed_n": 0, "unobserved_n": 0, "coverage_readable": False}
 
 
 def _window_sql(window: WindowLiteral) -> str:
@@ -104,6 +136,38 @@ class WindowTotals:
     saved_usd: float
     # Per-source breakdown so consumers can show drill-down detail.
     by_source: dict[str, dict] = field(default_factory=dict)
+
+    # WP-07 / I-1: `calls` counts traffic Chuzom OBSERVED. Without a count of
+    # what it missed, every rate derived from `calls` silently redefines its own
+    # denominator -- "100% of the calls we saw" is not "100% of the calls", and
+    # the gap is invisible exactly when routing is broken. These carry the
+    # denominator alongside the numerator so no consumer has to assume one.
+    #
+    # Rolling, not windowed: the coverage store is a capped append-only log with
+    # no per-window partition, so this describes recent routing health rather
+    # than this window specifically. Labelled that way wherever it is rendered --
+    # quietly presenting it as window-scoped would be its own false precision.
+    observed_n: int = 0
+    unobserved_n: int = 0
+    coverage_readable: bool = True
+
+    @property
+    def coverage_pct(self) -> float | None:
+        """Observed share of routed traffic, or ``None`` when unknowable."""
+        total = self.observed_n + self.unobserved_n
+        if not self.coverage_readable or total == 0:
+            return None
+        return 100.0 * self.observed_n / total
+
+    @property
+    def coverage_is_degraded(self) -> bool:
+        pct = self.coverage_pct
+        return pct is not None and pct < 90.0
+
+    def render_coverage(self) -> str:
+        """``Unknown`` when the denominator is -- never a fabricated number."""
+        pct = self.coverage_pct
+        return "Unknown" if pct is None else f"{pct:.1f}%"
 
 
 @dataclass(frozen=True)
@@ -167,7 +231,9 @@ def query_window(
     """
     db = Path(db_path) if db_path else DEFAULT_DB_PATH
     if not db.exists():
-        return WindowTotals(window=window, calls=0, tokens=0, saved_usd=0.0)
+        return WindowTotals(
+            window=window, calls=0, tokens=0, saved_usd=0.0, **_coverage_fields()
+        )
 
     where = _window_sql(window)
     conn = sqlite3.connect(str(db))
@@ -179,8 +245,12 @@ def query_window(
         # Opus: $15/M input, $75/M output.  Stored saved_usd used a blended
         # $0.045/1K estimate that is inaccurate for input-heavy calls.
         # Subscription provider rows have no meaningful token cost so exclude them.
-        _OPUS_IN_PER_M = 15.0
-        _OPUS_OUT_PER_M = 75.0
+        # RED8-01: these were hardcoded at $15/$75 — the retired Opus 3 rate,
+        # 3x the real one — and this read path feeds ~26 reporting surfaces, so
+        # every savings figure downstream was overstated by the same factor.
+        # Sourced from chuzom.pricing now; a literal here fails scripts/lint_pricing.py.
+        _OPUS_IN_PER_M = _pricing.input_rate(_BASELINE_MODEL)
+        _OPUS_OUT_PER_M = _pricing.output_rate(_BASELINE_MODEL)
         if _table_exists(conn, _LEGACY_TABLE):
             cols = _columns(conn, _LEGACY_TABLE)
             row = conn.execute(  # nosec B608 — table/where are module constants & validated enum, not user input
@@ -196,7 +266,8 @@ def query_window(
             out_tok = int(row[2])
             cost = float(row[3])
             opus_baseline = (in_tok * _OPUS_IN_PER_M + out_tok * _OPUS_OUT_PER_M) / 1_000_000
-            saved = max(0.0, opus_baseline - cost)
+            # AUD-06: signed. Clamping here made the aggregate a sum of wins.
+            saved = opus_baseline - cost
             by_source[_LEGACY_TABLE] = {
                 "calls": calls, "tokens": in_tok + out_tok,
                 "cost_usd": cost, "saved_usd": saved,
@@ -254,6 +325,7 @@ def query_window(
         tokens=total_tokens,
         saved_usd=total_saved,
         by_source=by_source,
+        **_coverage_fields(),
     )
 
 
@@ -283,8 +355,12 @@ def query_daily(
 
     conn = sqlite3.connect(str(db))
     try:
-        _OPUS_IN_PER_M = 15.0
-        _OPUS_OUT_PER_M = 75.0
+        # RED8-01: these were hardcoded at $15/$75 — the retired Opus 3 rate,
+        # 3x the real one — and this read path feeds ~26 reporting surfaces, so
+        # every savings figure downstream was overstated by the same factor.
+        # Sourced from chuzom.pricing now; a literal here fails scripts/lint_pricing.py.
+        _OPUS_IN_PER_M = _pricing.input_rate(_BASELINE_MODEL)
+        _OPUS_OUT_PER_M = _pricing.output_rate(_BASELINE_MODEL)
         if _table_exists(conn, _LEGACY_TABLE):
             cols = _columns(conn, _LEGACY_TABLE)
             rows = conn.execute(
@@ -304,7 +380,9 @@ def query_daily(
                 b["calls"] += int(calls)
                 b["tokens"] += int(in_tok) + int(out_tok)
                 opus_baseline = (int(in_tok) * _OPUS_IN_PER_M + int(out_tok) * _OPUS_OUT_PER_M) / 1_000_000
-                b["saved"] += max(0.0, opus_baseline - float(cost))
+                # AUD-06: `+=` on a clamped term is the exact defect — a loss
+                # on one item could never offset a gain on another.
+                b["saved"] += opus_baseline - float(cost)
 
         for table in _PLATFORM_TABLES:
             if not _table_exists(conn, table):

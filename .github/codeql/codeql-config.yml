@@ -1,0 +1,54 @@
+name: "chuzom CodeQL config"
+
+# WHY THIS FILE EXISTS
+# ====================
+#
+# The "CodeQL" check on PR #253 reported "19 new alerts including 18 high
+# severity security vulnerabilities" and failed the PR. Read literally that is
+# alarming. It is not what happened:
+#
+#   14 of the 19 are on src/ files that ALREADY have open alerts on main
+#      (context.py, compaction.py, router.py, code_context.py, okf.py,
+#      session_store.py, doctor.py, hooks/auto-route.py). CodeQL says so itself
+#      in the check summary -- "Alerts not introduced by this pull request might
+#      have been detected because the code changes were too large" -- and an
+#      81-commit branch is exactly that case. They are pre-existing, they are
+#      still open, and excluding them here would be hiding real findings.
+#      Nothing in this file touches src/.
+#
+#    5 of the 19 are in .chuzom/zero-tolerance-audit/evidence/, and those are
+#      what this file excludes.
+#
+# WHAT THE EVIDENCE TREE IS
+# =========================
+#
+# A frozen forensic record of the AUDITOR_INCIDENT: the hook scripts as they
+# were DEPLOYED at the time of the incident, plus proof-of-concept scripts that
+# demonstrate the defects being reported.
+#
+#   evidence/adjudication/sandbox_home/.claude/hooks/*.py
+#       Point-in-time snapshots of the deployed hooks, not the maintained source
+#       (they differ from src/chuzom/hooks/ by ~250 lines). Their alerts describe
+#       code that ran during the incident. That is the evidence's whole purpose.
+#
+#   evidence/adjudication/myadj_red603_error_sanitization_gap_poc.py
+#       A proof of concept whose job is to EXHIBIT a sanitization gap.
+#       "Fixing" it would delete the demonstration it exists to preserve.
+#
+# Scanning this tree cannot produce an actionable finding. It reports either a
+# defect that was already adjudicated and fixed in the live code, or a defect
+# deliberately reproduced to document it. Both are noise that pushes real alerts
+# down the list -- and a security check people learn to ignore is worse than no
+# check, which is the failure mode this audit exists to prevent.
+#
+# The tree is not shipped: pyproject packages `src/chuzom` only, so none of this
+# reaches a wheel, an import path, or a user.
+#
+# THE LIMIT OF THIS FILE
+# ======================
+# This suppresses SCANNING of a historical snapshot. It does not fix, dismiss,
+# or excuse the equivalent findings in live code. The pre-existing src/ alerts
+# on main remain open and are a separate piece of work.
+
+paths-ignore:
+  - .chuzom/zero-tolerance-audit/evidence

@@ -155,3 +155,21 @@ Docs/AUDIT_PROMPT_*.md
 
 # Internal business/enterprise-evaluation docs — never publish to the public repo
 docs-private/
+
+# Audit evidence: sqlite SNAPSHOTS only (two 61M usage.db captures from RED2's
+# unknown-vs-zero reproduction). The audit DOCUMENTS are tracked — see
+# .chuzom/zero-tolerance-audit/ — because G-C grades work against criteria in
+# them and an untracked oracle is one the executor can silently edit. The
+# snapshots are excluded for size alone; their sha256 is recorded in
+# CRITERIA_MANIFEST.sha256 so their integrity is still checkable.
+.chuzom/zero-tolerance-audit/evidence/**/*.db
+.chuzom/zero-tolerance-audit/evidence/**/*.db-shm
+.chuzom/zero-tolerance-audit/evidence/**/*.db-wal
+
+# G-F working run artefacts (scripts/gf_mutmut.py --out). Deliberately IGNORED:
+# G-C's hash manifest covers .chuzom/zero-tolerance-audit/ only, so anything
+# committed here would look like audit evidence while being unsealed. The
+# artefacts that must be tamper-evident — the universe manifest, the seed inputs
+# and the holdout hash — go under .chuzom/zero-tolerance-audit/ in Phase 1,
+# where the seal actually applies.
+.chuzom/gf/

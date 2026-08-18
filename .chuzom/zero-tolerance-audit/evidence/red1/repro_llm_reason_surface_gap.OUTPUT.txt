@@ -1,0 +1,55 @@
+=== 1. Confirm shipped default tier ===
+active_slim() = consolidated
+
+=== 2. Is 'llm_reason' known to tool_surface.py at all? ===
+in CORE_TOOLS:         False
+in ROUTING_TOOLS:      False
+in CONSOLIDATED_TOOLS: False
+in DEPRECATED_TOOLS:   False
+in KNOWN_TOOLS:        False
+in EMITTABLE_TOOLS:    False
+
+=== 3. Is 'llm_reason' registered under consolidated/routing/core? ===
+  is_registered('llm_reason', 'core') = False
+  is_registered('llm_reason', 'routing') = False
+  is_registered('llm_reason', 'consolidated') = False
+  is_registered('llm_reason', 'off') = True
+
+=== 4. resolve('llm_reason', 'consolidated') ===
+  -> llm_reason  (name='llm_reason', degraded=False)
+
+=== 5. localize() on the exact table row shipped in cli.py ===
+  before: | Deep reasoning, proofs, root cause | `llm_reason` |
+  after:  | Deep reasoning, proofs, root cause | `llm_reason` |
+
+=== 6. unregistered() CI/startup guard does NOT catch this ===
+  unregistered(slim='consolidated') = []
+
+=== 7. Confirm the string literally ships in cli.py, inside localize()-wrapped blobs ===
+  cli.py occurrences of 'llm_reason' at lines: [192, 495]
+    L192: '| Deep reasoning, proofs, root cause | `llm_reason` |'
+    L495: '| Deep reasoning, proofs, root cause | `llm_reason` |'
+
+=== 8. Confirm text.py actually defines/registers llm_reason as a real MCP tool ===
+  confirmed: llm_reason is a real tool function, registered only if gate('llm_reason') is True
+  but gate = make_should_register(active tier); tier is never in llm_reason's tier set for
+  core/routing/consolidated -> under the SHIPPED DEFAULT it is never registered.
+
+=== 9. lint_tool_surface.py's own GUARDED tuple also omits llm_reason ===
+  GUARDED names: ['llm_analyze', 'llm_check_usage', 'llm_code', 'llm_delegate', 'llm_generate', 'llm_health', 'llm_query', 'llm_research', 'llm_savings', 'llm_session_savings', 'llm_session_spend', 'llm_set_profile', 'llm_usage']
+
+=== 10. GUARDED vs DEPRECATED_TOOLS drift (separate, secondary finding) ===
+  DEPRECATED_TOOLS keys NOT covered by lint's GUARDED tuple:
+    'chuzom_agent_check_budget'    unregistered under: ['core', 'routing', 'consolidated']
+    'chuzom_agent_complete_session' unregistered under: ['core', 'routing', 'consolidated']
+    'chuzom_agent_lineage'         unregistered under: ['core', 'routing', 'consolidated']
+    'chuzom_agent_list'            unregistered under: ['core', 'routing', 'consolidated']
+    'llm_budget'                   unregistered under: ['core', 'routing', 'consolidated']
+    'llm_cache_clear'              unregistered under: ['core', 'routing', 'consolidated']
+    'llm_dashboard'                unregistered under: ['core', 'routing', 'consolidated']
+    'llm_gain'                     unregistered under: ['core', 'routing', 'consolidated']
+    'llm_import_profile'           unregistered under: ['core', 'routing', 'consolidated']
+    'llm_policy'                   unregistered under: ['core', 'routing', 'consolidated']
+    'llm_providers'                unregistered under: ['core', 'routing', 'consolidated']
+
+ALL ASSERTIONS PASSED — RED1-01 and RED1-02 are PROVEN, not suspected.

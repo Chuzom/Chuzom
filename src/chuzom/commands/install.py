@@ -839,15 +839,35 @@ def uninstall_host_integrations() -> list[str]:
 
 
 def _append_routing_rules(dest_path, rules_filename: str) -> list[str]:
-    """Append routing rules from src/rules/ to dest_path. Returns list of action strings."""
+    """Append routing rules from src/rules/ to dest_path. Returns action strings.
+
+    RED1-20 (P0): tool names are LOCALIZED against the active surface before the
+    file is written. They were not, and this is the function serving the ten
+    NON-Claude hosts — Cursor, Windsurf, Copilot, Gemini CLI, opencode, Trae and
+    the rest. The Claude Code path had already been fixed (CHZ-SURF-01, via
+    `_localized_rules_text`); every other host still got the bundle verbatim, so
+    a rules file naming `llm_code` taught those models to make a call that 404s,
+    in every session, for the life of the file.
+
+    That asymmetry is the finding, not a detail of it. Vendor-neutrality is the
+    North Star's central claim and the vendor-neutral path was the unlocalized one.
+
+    This is now the ONLY copy. `cli.py` held a second implementation that also
+    lacked the resolver AND never recorded to the install manifest, so the rules
+    files it wrote survived `chuzom uninstall`. Two implementations of one
+    installer is the RED8-06 duplicate-source class, and is precisely why one got
+    fixed and the other did not.
+    """
     import pathlib
+
+    from chuzom.install_hooks import _localized_rules_text
 
     actions: list[str] = []
     dest_path = pathlib.Path(dest_path)
     rules_src = pathlib.Path(__file__).parent.parent / "rules" / rules_filename
     if not rules_src.exists():
         return actions
-    rules_text = rules_src.read_text()
+    rules_text = _localized_rules_text(rules_src)
     if dest_path.exists():
         existing = dest_path.read_text()
         if "chuzom" not in existing:

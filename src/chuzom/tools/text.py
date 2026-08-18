@@ -266,28 +266,42 @@ def _record_quality(resp: LLMResponse, task_type: str, complexity: str | None) -
 # "verbose", "off". Legacy CHUZOM_EXPLAIN=1 maps to "header".
 # ---------------------------------------------------------------------------
 
-#: Approximate cost-per-1k-output-tokens for Sonnet baseline comparison.
+#: Cost-per-1k-output-tokens, for the "vs Opus" comparison in the footer.
+#
+# WP-03: derived from chuzom.pricing instead of hand-listed. The old literals
+# were not even internally consistent about what they measured — Opus 0.075 and
+# gpt-4o 0.010 are output rates, o3's 0.040 matched neither its input nor its
+# output rate, and the two Gemini entries were an order of magnitude below the
+# published rate. Normalising them all to output/1000 is the point; several
+# displayed figures move because several were wrong.
+_MODEL_IDS = (
+    "anthropic/claude-opus-5",
+    "anthropic/claude-sonnet-5",
+    "anthropic/claude-haiku-4-5",
+    "gemini/gemini-2.5-flash",
+    "gemini/gemini-2.5-pro",
+    "openai/gpt-4o",
+    "openai/gpt-4o-mini",
+    "openai/o3",
+    "groq/llama-3.3-70b-versatile",
+    "deepseek/deepseek-chat",
+    "deepseek/deepseek-reasoner",
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v4-pro",
+    "mistral/mistral-large-latest",
+    "xai/grok-3",
+)
+from chuzom import pricing as _pricing  # noqa: E402
+
 _COST_PER_1K = {
-    "anthropic/claude-opus-4-6": 0.075,
-    "anthropic/claude-sonnet-4-6": 0.015,
-    "anthropic/claude-haiku-4-5-20251001": 0.00125,
-    "gemini/gemini-2.5-flash": 0.00035,
-    "gemini/gemini-2.5-pro": 0.00315,
-    "openai/gpt-4o": 0.010,
-    "openai/gpt-4o-mini": 0.0006,
-    "openai/o3": 0.040,
-    "groq/llama-3.3-70b-versatile": 0.00059,
-    "deepseek/deepseek-chat": 0.0007,
-    "deepseek/deepseek-reasoner": 0.0014,
-    "deepseek/deepseek-v4-flash": 0.0002,
-    "deepseek/deepseek-v4-pro": 0.0026,
-    "mistral/mistral-large-latest": 0.008,
-    "xai/grok-3": 0.009,
+    _mid: _v for _mid in _MODEL_IDS if (_v := _pricing.output_per_1k(_mid)) is not None
 }
 # Family-based so the host (Opus) baseline survives version bumps even if the
 # exact id in _COST_PER_1K changes (e.g. opus-4-6 -> opus-4-8 -> opus-5).
 from chuzom.model_aliases import family_lookup  # noqa: E402
-_HOST_COST = family_lookup(_COST_PER_1K, "anthropic/claude-opus", 0.075)
+_HOST_COST = family_lookup(
+    _COST_PER_1K, "anthropic/claude-opus", _pricing.output_per_1k("opus") or 0.0
+)
 
 
 def _get_explain_mode() -> str:
@@ -308,16 +322,27 @@ def _get_explain_mode() -> str:
 
 def _savings_info(resp: LLMResponse) -> tuple[str, float]:
     """Calculate savings vs host (Opus) baseline. Returns (display_str, saved_usd)."""
-    model_key = resp.model if resp.model in _COST_PER_1K else None
-    if model_key is None:
-        # Try without provider prefix
-        for k in _COST_PER_1K:
-            if k.endswith("/" + resp.model) or k == resp.model:
-                model_key = k
-                break
-    # family_lookup lets a new version (opus-4-8, opus-5, …) inherit its
-    # family's cost instead of silently falling back to the host baseline.
-    actual_cost = family_lookup(_COST_PER_1K, model_key, _HOST_COST) if model_key else _HOST_COST
+    # WP-03: ask chuzom.pricing first. It already normalises "anthropic/x", "x"
+    # and family aliases, so the three-step key hunt below is only needed for
+    # ids the price table does not know at all. Resolving against the table's
+    # literal keys was silently wrong once those keys moved: a model missing
+    # from the dict fell through to _HOST_COST, i.e. "exactly as expensive as
+    # Opus", and so reported no saving rather than an unknown one.
+    actual_cost = _pricing.output_per_1k(resp.model)
+
+    if actual_cost is None:
+        model_key = resp.model if resp.model in _COST_PER_1K else None
+        if model_key is None:
+            # Try without provider prefix
+            for k in _COST_PER_1K:
+                if k.endswith("/" + resp.model) or k == resp.model:
+                    model_key = k
+                    break
+        # family_lookup lets a new version (opus-4-8, opus-5, …) inherit its
+        # family's cost instead of silently falling back to the host baseline.
+        actual_cost = (
+            family_lookup(_COST_PER_1K, model_key, _HOST_COST) if model_key else _HOST_COST
+        )
     if actual_cost < _HOST_COST and actual_cost > 0:
         ratio = _HOST_COST / actual_cost
         saved = resp.cost_usd * (ratio - 1) / ratio if resp.cost_usd else 0.0

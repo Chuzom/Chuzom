@@ -162,9 +162,20 @@ async def test_no_pin_default_ordering_varies_by_task_type(monkeypatch):
     reorders the configured Ollama candidates per task type, so most users —
     who never write a pin — get real variety by default, not just users who
     take the extra step of configuring one.
+
+    ``best_agentic_model`` is FORCED to a member of the configured set rather
+    than left to read this machine's registry. Unpatched, it is cache-only over
+    the developer's verified models, so the dynamic agentic pin fired locally
+    (hermes3 verified) and not in CI (nothing verified) — the test passed and
+    failed by machine, and the collapse it guards against was live for every
+    user who had a verified agentic model. Forcing the pick makes the pinned
+    path the one under test everywhere.
     """
     monkeypatch.setattr("chuzom.router.is_codex_available", lambda: True)
     monkeypatch.setattr("chuzom.router.is_gemini_cli_available", lambda: True)
+    monkeypatch.setattr(
+        "chuzom.agentic_registry.best_agentic_model", lambda *a, **k: "ollama/hermes3:8b"
+    )
     config = _MatrixConfig(
         available_providers={"ollama", "openai", "gemini"},
         ollama_models=["ollama/qwen:7b", "ollama/hermes3:8b", "ollama/mistral:latest"],

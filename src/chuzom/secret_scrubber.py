@@ -5,7 +5,6 @@ from log records before they're written to stdout/files. It prevents accidental
 leakage of API keys, tokens, passwords, and other credentials.
 """
 
-import os
 import re
 from typing import Any
 
@@ -185,22 +184,11 @@ def scrub_event(event: dict[str, Any]) -> dict[str, Any]:
     return scrubbed
 
 
-def scrub_environment() -> dict[str, str]:
-    """Get a scrubbed copy of the environment.
-
-    Removes API keys and secrets from environment variables before logging.
-
-    Returns:
-        A copy of os.environ with sensitive values redacted.
-    """
-    scrubbed = {}
-    for key, value in os.environ.items():
-        if key in SENSITIVE_ENV_VARS:
-            scrubbed[key] = "[REDACTED]"
-        else:
-            scrubbed[key] = _scrub_value(value) if isinstance(value, str) else value
-    return scrubbed
-
+# WP-15: scrub_environment() deleted. It had ZERO production callers and a
+# NARROWER allowlist than the one actually in use (safe_subprocess's), so it
+# read as a second, weaker layer of protection that nothing invoked. Dead
+# safety code is worse than none: it makes an auditor count a defence that
+# does not run. The live path is safe_subprocess's env allowlist (WP-01).
 
 def structlog_scrubber_processor(logger, name, event):
     """Structlog processor for scrubbing secrets from events.

@@ -9,7 +9,7 @@ from mcp.server.fastmcp import Context
 from chuzom.config import get_config
 from chuzom.ensemble import classify_for_routing
 from chuzom.cost import (
-    _claude_cost, _get_baseline_for_task, get_correction_count,
+    _claude_cost, get_correction_count,
     get_daily_claude_breakdown, get_daily_claude_tokens, get_savings_summary,
     log_claude_usage, log_correction, log_usage,
 )
@@ -28,6 +28,7 @@ from chuzom.types import (
     ClassificationResult, Complexity, QualityMode,
     RoutingProfile, RoutingRecommendation, TaskType, _budget_bar,
 )
+from chuzom import pricing as _pricing
 from chuzom import state as _state
 from chuzom.tool_surface import route_tool  # CHZ-SURF-01
 
@@ -151,21 +152,32 @@ async def llm_classify(
 
     # Explainable routing: "why not Opus/Sonnet?" cost comparison
     # Always shown — this is the core of v2.2 explainability.
-    _COST_PER_1K_OUT = {
-        "opus":   0.075,
-        "sonnet": 0.015,
-        "haiku":  0.00125,
+    # WP-03: derived from chuzom.pricing. These were three literals here and
+    # three more on the loop below — six copies of the same three numbers in
+    # nine lines, all of them the retired Opus tier. This block is shown to the
+    # user as the justification for a routing decision, so a stale rate here
+    # does not just misreport: it argues for the wrong model.
+    from chuzom import pricing as _pricing
+    _tier_out_per_1k = {
+        _tier: _v
+        for _tier in ("opus", "sonnet", "haiku")
+        if (_v := _pricing.output_per_1k(_tier)) is not None
     }
     chosen_tier = rec.recommended_model  # "haiku" | "sonnet" | "opus"
-    chosen_cost = _COST_PER_1K_OUT.get(chosen_tier, 0.015)
+    chosen_cost = _tier_out_per_1k.get(chosen_tier) or _tier_out_per_1k.get("sonnet", 0.0)
     lines.append(HR)
     lines.append(row("  Why not a more expensive model?"))
-    for tier, cost in [("opus", 0.075), ("sonnet", 0.015), ("haiku", 0.00125)]:
+    for tier, cost in sorted(_tier_out_per_1k.items(), key=lambda kv: -kv[1]):
         if tier == chosen_tier:
             marker = "✓ chosen"
         elif cost > chosen_cost:
-            ratio = cost / chosen_cost
-            marker = f"↑ {ratio:.0f}x more expensive — unnecessary for {classification.complexity.value} task"
+            # chosen_cost is 0 for a free local tier; report the delta as a
+            # price rather than dividing by it.
+            marker = (
+                f"↑ {cost / chosen_cost:.0f}x more expensive"
+                if chosen_cost > 0
+                else f"↑ ${cost:.5f}/1k vs free"
+            ) + f" — unnecessary for {classification.complexity.value} task"
         else:
             marker = "↓ cheaper option exists"
         lines.append(row(f"    {tier:<8} ${cost:.5f}/1k  {marker}"))
@@ -404,9 +416,7 @@ async def llm_route(
     # HUD's session savings match usage.saved_usd instead of the historical
     # permanent $0 (AC-7: baseline_cost was never supplied). Fail-open to None.
     try:
-        _baseline_model = _get_baseline_for_task(
-            resolved_task_type.value, classification.complexity.value
-        )
+        _baseline_model = _pricing.savings_baseline_model()
         _hud_baseline_cost = _claude_cost(
             _baseline_model,
             resp.input_tokens,

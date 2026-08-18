@@ -1,0 +1,43 @@
+
+[chuzom] Install check  (no changes made)
+
+  Hooks & rules
+  ✗  chuzom-session-start.py  (SessionStart)  — not installed
+       → chuzom install
+  ✗  chuzom-auto-route.py  (UserPromptSubmit)  — not installed
+       → chuzom install
+  ✗  chuzom-status-bar.py  (UserPromptSubmit)  — not installed
+       → chuzom install
+  ✗  chuzom-enforce-route.py  (PreToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-agent-route.py  (PreToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-subagent-start.py  (SubagentStart)  — not installed
+       → chuzom install
+  ✗  chuzom-usage-refresh.py  (PostToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-cc-usage-track.py  (PostToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-agent-depth-release.py  (PostToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-playwright-compress.py  (PostToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-bash-compress.py  (PostToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-context-capture.py  (PostToolUse)  — not installed
+       → chuzom install
+  ✗  chuzom-session-end.py  (Stop)  — not installed
+       → chuzom install
+  ✗  chuzom.md  (routing rules)  — not installed
+       → chuzom install
+
+  Claude Desktop
+  ⚠  config not found  (/tmp/red4-sandbox1/Library/Application Support/Claude/claude_desktop_config.json)
+
+  Provider keys
+    ⬜  Claude subscription mode off (set CHUZOM_CLAUDE_SUBSCRIPTION=true to enable)
+    ⬜  No external provider API keys found in environment
+    ⚠️   No providers configured — set at least one API key or subscription mode
+
+  Run `chuzom install` to fix the issues above.
+

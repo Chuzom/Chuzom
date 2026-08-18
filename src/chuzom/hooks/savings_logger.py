@@ -35,6 +35,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from chuzom import pricing as _pricing
+
 if TYPE_CHECKING:
     from chuzom.hooks.direct_executor import DirectResult
     from chuzom.receipt_store import Receipt
@@ -51,42 +53,42 @@ _INFLIGHT_PERSISTS: set = set()
 # savings estimation in the JSONL — not for billing. Unknown models map to
 # (0.0, 0.0) so they don't crash and don't claim spurious savings.
 
-# NOTE: these should ideally derive from config/models.yaml (the canonical
-# registry) rather than being hand-maintained here — a follow-up. Updated
-# 2026-07-10 to current prices; the prior table (opus $15/$75, o3 $15/$60) was
-# badly stale and INFLATED reported savings on complex tasks by ~3x.
+# WP-03: the rates come from chuzom.pricing now; only provider→model membership
+# is stated here. This table's own history is the argument for that. Its comment
+# recorded a hand-update on 2026-07-10 to undo a ~3x inflation, and it was the
+# ONLY table in the codebase that had o3 right — "repriced from stale $15/$60"
+# while three others kept $15/$60. A fix applied to one copy is not a fix; it is
+# a divergence with a good changelog entry.
+_PROVIDER_MODELS: dict[str, tuple[str, ...]] = {
+    # Claude — baseline references: what the subscription would otherwise spend.
+    "claude": ("claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-8"),
+    "gemini": ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-pro"),
+    "openai": ("gpt-4o-mini", "gpt-4o", "o3"),
+}
+
+# Prepaid or local: marginal cost is genuinely zero for every model served this
+# way, which is why these are wildcards rather than per-model rates.
+_ZERO_MARGINAL_PROVIDERS: tuple[str, ...] = ("ollama", "codex")
+_ZERO_RATE = (0.0, 0.0)
+
 _PRICING_PER_MTOK: dict[tuple[str, str], tuple[float, float]] = {
-    # Claude (baseline references — what the user's subscription would otherwise spend)
-    ("claude", "claude-haiku-4-5"):   (1.00,  5.00),
-    ("claude", "claude-sonnet-5"):    (2.00, 10.00),   # intro; standard $3/$15 from 2026-09-01
-    ("claude", "claude-opus-4-8"):    (5.00, 25.00),
-    # Ollama — local, free
-    ("ollama", "*"):                  (0.00,  0.00),
-    # Gemini
-    ("gemini", "gemini-2.5-flash"):   (0.075, 0.30),
-    ("gemini", "gemini-2.0-flash"):   (0.075, 0.30),
-    ("gemini", "gemini-2.0-pro"):     (1.25,  5.00),
-    # OpenAI
-    ("openai", "gpt-4o-mini"):        (0.15,  0.60),
-    ("openai", "gpt-4o"):             (2.50, 10.00),
-    ("openai", "o3"):                 (2.00,  8.00),   # repriced from stale $15/$60
-    # Codex — prepaid subscription, marginal cost ≈ 0
-    ("codex",  "*"):                  (0.00,  0.00),
+    **{
+        (_provider, _model): (_p.input, _p.output)
+        for _provider, _models in _PROVIDER_MODELS.items()
+        for _model in _models
+        if (_p := _pricing.price_for(_model)) is not None
+    },
+    **{(_provider, "*"): _ZERO_RATE for _provider in _ZERO_MARGINAL_PROVIDERS},
 }
 
-# 2026-07-12 (user decision): savings are reported as OPUS-EQUIVALENT only —
-# the counterfactual is always claude-opus-4-8 regardless of complexity. The
-# earlier complexity-tiered ("honest") baseline was dropped because routing
-# baseline comparison doesn't reflect how the user actually works. This keeps
-# the inline DIRECT-hook path consistent with receipt_store.compute_receipt and
-# cost._OPUS_PRICING, which price savings against Opus at $5/$25 per 1M (the
-# current rate — the stale $15/$75 tier inflated reported savings ~3x).
-_BASELINE_MODEL_BY_COMPLEXITY: dict[str, str] = {
-    "simple":   "claude-opus-4-8",
-    "moderate": "claude-opus-4-8",
-    "complex":  "claude-opus-4-8",
-}
-
+# 2026-07-12 (user decision): savings are reported as OPUS-EQUIVALENT only — the
+# counterfactual does not vary by complexity. The earlier complexity-tiered
+# ("honest") baseline was dropped because it did not reflect how the user
+# actually works. WP-05 keeps that decision and finishes it: the flat baseline is
+# no longer restated here as a per-complexity table, it is read from the one
+# policy in chuzom.pricing. The table shape was itself the hazard — a mapping
+# keyed by complexity invites a future edit to make one row differ, which is
+# precisely how this file and cost.py ended up 5x apart.
 _SAVINGS_LOG_FILENAME = "savings_log.jsonl"
 
 
@@ -107,11 +109,22 @@ def _cost_for(provider: str, model: str, input_tokens: int, output_tokens: int) 
 
 
 def _baseline_cost(complexity: str, input_tokens: int, output_tokens: int) -> float:
-    # Fallback default is the latest Opus (the "always Opus-equivalent" decision
-    # above), not Sonnet — an unknown complexity string must not silently switch
-    # the baseline model and understate savings.
-    baseline_model = _BASELINE_MODEL_BY_COMPLEXITY.get(complexity, "claude-opus-4-8")
-    return _cost_for("claude", baseline_model, input_tokens, output_tokens)
+    """Counterfactual cost at the one savings baseline.
+
+    ``complexity`` is accepted (callers still pass it, and it stays in the logged
+    record) but deliberately does not select a model — see the note above.
+    """
+    del complexity  # retained in the signature; no longer a baseline input
+    try:
+        from chuzom import pricing as _pricing
+
+        in_rate, out_rate = _pricing.savings_baseline_rates()
+    except Exception:
+        # A hook must never crash. Fall open to the current Opus list rate,
+        # which is what the policy resolves to — not 0.0, which would log every
+        # routed call as having saved nothing.
+        in_rate, out_rate = 5.0, 25.0
+    return (input_tokens / 1_000_000) * in_rate + (output_tokens / 1_000_000) * out_rate
 
 
 def _savings_log_path() -> Path:

@@ -1,0 +1,6 @@
+adapter.cwd: None
+artifacts['diff']  : ''
+artifacts['files'] : []
+artifacts['output']: 'Applied patch to auth.py successfully.'
+
+>>> PROVEN: with the production default wiring, artifacts['diff'] and artifacts['files'] are ALWAYS empty regardless of what codex actually did on disk, because CodexAdapter.run() only shells out to `git diff` `if self.capture_diff and self.cwd:` and cwd is never set anywhere in the llm_delegate() call chain. Any milestone plan using {'type':'diff',...} acceptance -- documented in the planner's own prompt template as a valid, objective check type -- is UNCONDITIONALLY UNSATISFIABLE in production. This silently forces all real delegated work through canary/cmd checks only, and (separately) means nothing pins the executor's actual working directory to the user's repository at all -- it inherits whatever cwd the MCP server process happens to have.

@@ -19,11 +19,58 @@ from pathlib import Path
 
 import aiosqlite
 
-from chuzom.config import get_config
+from chuzom import pricing as _pricing
+from chuzom.provenance import Measured
+from chuzom.config import get_config, state_path
 from chuzom.types import (
     LLMResponse, MODEL_COST_PER_1K, MODEL_SPEED_TPS,
     RoutingProfile, TaskType, colorize_model,
 )
+from chuzom.savings import net_saved
+
+
+def _refuse_unisolated_test_write(db_path: Path) -> bool:
+    """True when a test is about to write into the user's real database.
+
+    WHY THIS EXISTS
+    ---------------
+    A "stub-detection guard" used to be the only protection, matching an exact
+    fingerprint of token/cost values. Every fixture added after it was written walked
+    straight through. Measured against the rows that actually reached production it
+    would have blocked **0 of 28,536** — while its own comment asserted that unisolated
+    tests "can never pollute the real ~/.chuzom/usage.db".
+
+    The damage was not hypothetical. Those 28,536 synthetic rows were 69.4% of
+    `routing_decisions`, all naming `openai/gpt-4o-mini`, and the dashboard reported
+    them as routing behaviour. They are exactly the rows with
+    `classifier_type='unknown'` — the classifier never ran for one of them. Excluding
+    them, the router's real preference is `hermes3:8b` (local) at 38.6%, `gpt-4o` at
+    35.6%, and gpt-4o-mini at 0.0%. The product's primary surface understated local
+    routing threefold and invented a majority share for a model it never chose.
+
+    WHAT CHANGED
+    ------------
+    "Does this row look synthetic?" is a guess that ages badly — it enumerates the
+    values its author happened to know. "Is a test writing to the production database?"
+    is directly observable and cannot drift as fixtures change.
+
+    This takes only a path, deliberately: a guard that inspects row values is the
+    fingerprint defect returning under a new name, and `tests/test_prod_db_isolation.py`
+    asserts the signature to keep it that way.
+
+    The suite's own writes are unaffected — the `temp_db` fixture repoints
+    `CHUZOM_DB_PATH`, so `db_path` is a tmp file and this returns False. Only a test
+    aimed at the real database is refused, and `CHUZOM_ALLOW_STUBS=1` opts out
+    deliberately for tests that mean it.
+    """
+    if os.environ.get("CHUZOM_ALLOW_STUBS") == "1":
+        return False
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return False  # not a test — this is a real user's routing decision
+    try:
+        return Path(db_path).resolve() == state_path("usage.db").resolve()
+    except OSError:  # pragma: no cover — an unresolvable path is not the production one
+        return False
 
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS usage (
@@ -269,6 +316,19 @@ MIGRATE_ROUTING_DECISIONS_ADD_SUBJECT = [
 ]
 """Plan 07 Cat E — enables (policy, subject, model) outcome aggregation for bandit selection."""
 
+MIGRATE_ROUTING_DECISIONS_ADD_PROVENANCE = [
+    "ALTER TABLE routing_decisions ADD COLUMN provenance TEXT",
+]
+"""Where a row came from, written by `_write_provenance()` at insert time.
+
+Deliberately has NO DEFAULT. `is_real` (v7.5) tried to answer the same question with
+`INTEGER DEFAULT 1`, which means a column named "is real" reads 1 on rows that are
+demonstrably synthetic — a default that asserts the very thing it should be recording.
+
+A NULL here means "written before this column existed" and is reported as UNKNOWN by
+`chuzom.attribution`, never promoted into attributed or unattributed. Absence of evidence
+is its own answer; the alternative is a default that manufactures one."""
+
 CREATE_BENCHMARK_RESULTS_TABLE = """
 CREATE TABLE IF NOT EXISTS benchmark_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -499,8 +559,12 @@ async def _safe_migrate(db: aiosqlite.Connection, stmt: str) -> None:
             return  # already migrated — skip
     try:
         await db.execute(stmt)
-    except Exception:
-        pass  # last-resort fallback for non-standard ALTER forms
+    except Exception as exc:
+        # Non-standard ALTER forms. Benign individually; a spike means schema
+        # migration is silently not happening, and every later query then fails
+        # on a missing column somewhere far from here.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-MIGRATE-ALTER", exc)
 
 
 def _mark_worker_daemon(conn: "aiosqlite.Connection") -> None:
@@ -607,6 +671,7 @@ async def _get_db() -> aiosqlite.Connection:
         + MIGRATE_ROUTING_DECISIONS_MARK_CONTAMINATED
         + MIGRATE_ADD_QUOTA_SNAPSHOTS_TABLE
         + MIGRATE_ROUTING_DECISIONS_ADD_SUBJECT
+        + MIGRATE_ROUTING_DECISIONS_ADD_PROVENANCE
     )
     for stmt in all_migrations:
         await _safe_migrate(db, stmt)
@@ -652,7 +717,11 @@ def _get_team_identity() -> tuple[str, str]:
         uid = get_user_id(override=cfg.chuzom_user_id)
         pid = get_project_id()
         return uid, pid
-    except Exception:
+    except Exception as exc:
+        # Empty identity means rows are attributed to nobody. Team reporting then
+        # shows a plausible, quietly incomplete picture.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-IDENTITY", exc)
         return "", ""
 
 
@@ -680,12 +749,20 @@ async def log_usage(
             trace for the same routing call (first 8 chars of UUID4).
         complexity: Task complexity level (simple, moderate, complex).
     """
-    # Stub-detection guard: reject the exact synthetic shapes used in test
+    # PRIMARY GUARD: a test must not write to the production database. See
+    # `_refuse_unisolated_test_write` for why the fingerprint below was not enough.
+    if _refuse_unisolated_test_write(get_config().chuzom_db_path):
+        return
+
+    # Secondary, retained: rejects the exact synthetic shapes used in some test
     # LLMResponse fixtures (input_tokens=100, output_tokens∈{50,100},
-    # cost_usd∈{0.001,0.003}) so unisolated tests can never pollute the real
-    # ~/.chuzom/usage.db. Tests that legitimately need to write stub rows
-    # must set CHUZOM_ALLOW_STUBS=1 or use the temp_db fixture (which
-    # repoints CHUZOM_DB_PATH and is unaffected by this guard).
+    # cost_usd∈{0.001,0.003}).
+    #
+    # This was ONCE THE ONLY GUARD, and its comment claimed unisolated tests "can
+    # never pollute the real ~/.chuzom/usage.db". Measured against the rows that
+    # reached production, it would have blocked 0 of 28,536 (0.0%): the fixtures in
+    # use are in=62/out=164, in=74/out=1, in=97/out=126 — none match. It is kept only
+    # because it costs nothing; it is not load-bearing and must not be treated as such.
     if (
         os.environ.get("CHUZOM_ALLOW_STUBS") != "1"
         and response.input_tokens == 100
@@ -704,7 +781,7 @@ async def log_usage(
         # realized-savings metric has data. Previously baseline_model was
         # NULL and potential_cost_usd/saved_usd defaulted to 0.0, so every
         # routed call appeared to save nothing.
-        baseline_model = _get_baseline_for_task(task_type.value, complexity)
+        baseline_model = _pricing.savings_baseline_model()
         potential_cost_usd = _claude_cost(
             baseline_model,
             response.input_tokens,
@@ -806,6 +883,22 @@ async def get_correction_count(tool: str) -> int:
         await db.close()
 
 
+def format_spend_for_display(spend_usd: float) -> str:
+    """Render a spend figure for humans, or "Unknown" when it is not a number.
+
+    Spend getters return ``inf`` when a component could not be read (fail
+    closed). That sentinel is correct for a cap COMPARISON and wrong for a
+    dashboard: a user told they spent "$inf" learns less than one told
+    "Unknown", and a fabricated infinity is the same class of lie as a
+    fabricated zero.
+    """
+    import math
+
+    if spend_usd is None or not math.isfinite(spend_usd):
+        return "Unknown"
+    return f"${spend_usd:.2f}" if spend_usd >= 1.0 else f"${spend_usd:.4f}"
+
+
 async def get_monthly_spend() -> float:
     """Get total USD spent on external LLMs in the current calendar month.
 
@@ -853,8 +946,19 @@ async def _rejected_attempt_spend(db, period: str = "day", task_type: str | None
 
     ``period`` is "day" (local calendar day) or "month" (local calendar month),
     matching the frames of get_daily_spend*/get_monthly_spend respectively.
-    Fail-open: any error returns 0.0 so the cap-check degrades to the previous
-    under-count rather than breaking routing.
+    FAIL CLOSED (owner decision 2026-08-12). Any error returns ``inf``, not 0.0.
+
+    Returning 0.0 under-reports total spend, so the cap comparison PASSES — a
+    guard that cannot read the ledger did not reject, it silently approved. Same
+    failure direction as the budget TOCTOU race and the savings query that
+    rendered "$0.00 saved": failing where it looks harmless, which is why it
+    survived. ``inf`` makes every cap comparison deny.
+
+    Routing is not broken by this: free and local providers do not consult the
+    cap, so work continues — money is simply not spent against a total we cannot
+    account for. Display consumers must render non-finite spend as "Unknown"
+    (see :func:`format_spend_for_display`); a dashboard showing "$inf" is its own
+    fabrication.
     """
     try:
         if period == "month":
@@ -877,8 +981,18 @@ async def _rejected_attempt_spend(db, period: str = "day", task_type: str | None
         )
         row = await cursor.fetchone()
         return float(row[0]) if row else 0.0
-    except Exception:  # noqa: BLE001 — cap-check must never break on ledger read
-        return 0.0
+    except Exception as exc:  # noqa: BLE001 — must not raise into the routing path
+        # A MISSING TABLE is not an unreadable one. On a fresh install
+        # execution_events does not exist yet, and that genuinely means "no
+        # rejected attempts" — returning inf there would deny every paid route on
+        # a new machine until the first ledger write, which is an outage dressed
+        # as prudence. Fail closed on the unknown, not on the known-empty.
+        if "no such table" in str(exc).lower():
+            return 0.0
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-CAP-LEDGER-READ", exc)
+        # inf, not 0.0 — see the docstring. Deny rather than approve blind.
+        return float("inf")
 
 
 async def _rejected_attempt_spend_today(db, task_type: str | None = None) -> float:
@@ -973,8 +1087,11 @@ def fire_budget_alert(title: str, message: str) -> None:
                     "Budget alert: %s — %s (install win10toast for desktop notifications)",
                     title, message,
                 )
-    except Exception:
-        pass  # notification is best-effort — never block routing
+    except Exception as exc:
+        # Best-effort by design, but a budget alert that never fires means the
+        # user learns about an overrun from the bill.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-BUDGET-ALERT", exc)
 
 
 async def rate_routing_decision(decision_id: int | None, good: bool) -> int | None:
@@ -1122,7 +1239,7 @@ def _validate_routing_insert(
         'ollama', 'openai', 'gemini', 'codex',
         'claude_subscription', 'subscription', 'anthropic',
         'perplexity', 'groq', 'deepseek', 'cc',
-        'anthropic', 'claude'  # variations
+        'claude'  # variations
     })
 
     # Check provider is valid
@@ -1147,6 +1264,34 @@ def _validate_routing_insert(
             f"routing_decisions insert rejected: cost_usd={cost_usd} is implausible. "
             f"Expected 0 < cost < 100 USD. Real costs: Haiku ~$0.00002, Opus ~$0.015 per 1K tokens."
         )
+
+
+#: Written into `routing_decisions.provenance` on every new row.
+PROVENANCE_RUNTIME = "runtime"      # a real routing decision, made while serving a user
+PROVENANCE_TEST = "test"            # produced under a test harness or with stubs allowed
+PROVENANCE_UNATTRIBUTED = "unattributed"   # retroactively marked; see 0aab32f
+
+
+def _write_provenance() -> str:
+    """Where this row came from, decided by the writer at insert time.
+
+    Until now nothing wrote this column, so EVERY row — genuine or synthetic — was born
+    `NULL`. `0aab32f` then marked one known-bad population `unattributed` after the fact,
+    which made `provenance IS NULL` *look* like "real traffic" when it actually meant
+    "not yet cleaned up". A second synthetic population (2,373 rows, one prompt_hash,
+    a fixed 3.200:1 model split) sat inside that NULL set and was reported as routing.
+
+    Recording origin at the point of writing is the only version of this that cannot
+    drift: a cleanup pass can always be out of date, and a reader cannot recover a fact
+    the writer never stored.
+
+    `CHUZOM_ALLOW_STUBS=1` counts as test provenance. It is the documented escape hatch
+    for writing stub data deliberately, and data written through an escape hatch is not
+    user traffic — the flag says so.
+    """
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CHUZOM_ALLOW_STUBS") == "1":
+        return PROVENANCE_TEST
+    return PROVENANCE_RUNTIME
 
 
 async def log_routing_decision(
@@ -1209,7 +1354,15 @@ async def log_routing_decision(
     """
     # Validate inputs before database insert
     _validate_routing_insert(final_model, final_provider, cost_usd)
-    
+
+    # THIS is the path that put 28,536 synthetic rows into a user's real database and
+    # made the dashboard report a 69% gpt-4o-mini share the router never chose.
+    # `_validate_routing_insert` above rejects obviously-fake models ("test/..."), but
+    # these rows named a real model with realistic tokens and costs, so nothing stopped
+    # them. Isolation, not plausibility, is the property that matters here.
+    if _refuse_unisolated_test_write(get_config().chuzom_db_path):
+        return
+
     db = await _get_db()
     try:
         # Track complexity mismatch: if requested_complexity differs from final complexity,
@@ -1222,8 +1375,9 @@ async def log_routing_decision(
                 recommended_model, base_model, was_downshifted, budget_pct_used,
                 quality_mode, final_model, final_provider, success,
                 input_tokens, output_tokens, cost_usd, latency_ms, reason_code,
-                correlation_id, requested_complexity, complexity_downgraded, subject)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                correlation_id, requested_complexity, complexity_downgraded, subject,
+                provenance)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 _prompt_hash(prompt),
                 task_type,
@@ -1250,6 +1404,7 @@ async def log_routing_decision(
                 requested_complexity,
                 complexity_downgraded,
                 subject,
+                _write_provenance(),
             ),
         )
         await db.commit()
@@ -1270,8 +1425,11 @@ async def log_routing_decision(
                     task_type=task_type,
                     routing_decision_id=routing_decision_id,
                 )
-            except Exception:
-                pass  # Silent failure — judge is optional enhancement
+            except Exception as exc:
+                # The judge is optional, but a permanently failing judge means
+                # quality telemetry is empty rather than good.
+                from chuzom import failopen
+                failopen.record("CHZ-FO-COST-JUDGE-EVAL", exc)
     finally:
         await db.close()
 
@@ -1335,16 +1493,55 @@ async def get_quality_report(days: int = 7) -> dict:
         )
         by_task_type = {r[0]: r[1] for r in await cursor.fetchall()}
 
-        # By model
+        # By model — ATTRIBUTED ONLY, i.e. decisions this router actually made.
+        #
+        # A row with classifier_type='unknown' is one where the classifier never ran, so
+        # it says nothing about routing behaviour. Mixing the two made the dashboard
+        # report the opposite of the truth: 28,536 such rows (69.4% of the table, every
+        # one of them classifier_type='unknown') all named openai/gpt-4o-mini and were
+        # written by an unisolated TEST SUITE into the user's real ~/.chuzom/usage.db.
+        # The report showed a 69% gpt-4o-mini share for a model the router never chose,
+        # while the actual top destination — ollama/hermes3:8b, local, 38.6% — appeared
+        # as 11.7%. Understating local routing threefold is the exact class of dishonesty
+        # this codebase's audit exists to remove, sitting in its most-read surface.
+        #
+        # The unattributed rows are REPORTED, not dropped. Hiding them would restore a
+        # tidy number and lose the signal that something is writing rows nobody can
+        # account for — which is how this went unnoticed in the first place.
+        attributed = f"{where} AND classifier_type != 'unknown'"
         cursor = await db.execute(
             f"""SELECT final_model, COUNT(*), AVG(latency_ms), COALESCE(SUM(cost_usd), 0)
-                FROM routing_decisions {where}
+                FROM routing_decisions {attributed}
                 GROUP BY final_model ORDER BY COUNT(*) DESC"""
         )
         by_model = {
             r[0]: {"count": r[1], "avg_latency": float(r[2]), "total_cost": float(r[3])}
             for r in await cursor.fetchall()
         }
+
+        cursor = await db.execute(
+            f"""SELECT final_model, COUNT(*) FROM routing_decisions
+                {where} AND classifier_type = 'unknown'
+                GROUP BY final_model ORDER BY COUNT(*) DESC"""
+        )
+        unattributed_by_model = {r[0]: r[1] for r in await cursor.fetchall()}
+        unattributed_total = sum(unattributed_by_model.values())
+
+        # Unattributed rows carry COST, so they do not merely mis-decorate a table.
+        # `total_cost_usd` feeds RouteredTeam._apply_budget_pressure in
+        # integrations/agno.py, which downshifts every model to the budget profile once
+        # spend crosses a threshold. Measured on this database: $3.62 of the last 30
+        # days' $39.79 (9.1%) is unattributed, so a real deployment could be downshifted
+        # early by spend that never happened.
+        #
+        # `total_cost_usd` is left as-is because changing what agno reads changes runtime
+        # behaviour, which is a separate decision from reporting. This exposes the honest
+        # figure alongside it so that decision can be made on numbers rather than guesses.
+        cursor = await db.execute(
+            f"""SELECT COALESCE(SUM(cost_usd), 0) FROM routing_decisions
+                {where} AND classifier_type != 'unknown'"""
+        )
+        attributed_cost = (await cursor.fetchone())[0]
 
         return {
             "total_decisions": int(total),
@@ -1356,7 +1553,14 @@ async def get_quality_report(days: int = 7) -> dict:
             "total_cost_usd": float(total_cost),
             "total_tokens": int(total_tok),
             "success_rate": float(success_rate or 0),
+            # Decisions the classifier actually made. NOT the same as total_decisions.
             "by_model": by_model,
+            "attributed_decisions": int(total) - unattributed_total,
+            "attributed_cost_usd": float(attributed_cost),
+            # Rows where the classifier never ran. Surfaced deliberately — see above.
+            "unattributed_decisions": unattributed_total,
+            "unattributed_by_model": unattributed_by_model,
+            "unattributed_reason": "classifier did not run (classifier_type='unknown')",
         }
     finally:
         await db.close()
@@ -1365,30 +1569,32 @@ async def get_quality_report(days: int = 7) -> dict:
 # ── Claude Code token tracking ───────────────────────────────────────────────
 
 
-# v9.2.2 — Anthropic public per-million-token rates split by token component.
-# Matches Claude Code's upstream 4-component billing formula:
+# v9.2.2 — per-million-token rates split by token component, matching Claude
+# Code's upstream 4-component billing formula:
 #   cost = input_t × input_$/M + output_t × output_$/M
 #        + cache_write_t × cache_write_$/M + cache_read_t × cache_read_$/M
-# Keep in sync with https://www.anthropic.com/pricing. All values $/Mtok.
-CLAUDE_RATES_PER_M: dict[str, dict[str, float]] = {
-    "haiku":  {"input": 0.80,  "output": 4.00,  "cache_read": 0.08, "cache_write": 1.00},
-    "sonnet": {"input": 3.00,  "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
-    "opus":   {"input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_write": 18.75},
-}
+#
+# The numbers no longer live here. These three tables held their own copies of
+# the Opus and Haiku rates and both were stale ($15/$75 is Opus *3*); they are
+# now projections of chuzom.pricing, so the shape callers rely on survives and
+# the drift does not. The per-provider key lists are deliberate: _claude_cost
+# must not silently price a Gemini model just because pricing.py knows it.
+def _rate_table(names: tuple[str, ...]) -> dict[str, dict[str, float]]:
+    """Project ``names`` out of chuzom.pricing into the legacy table shape."""
+    out: dict[str, dict[str, float]] = {}
+    for name in names:
+        rates = _pricing.rates_per_m(name)
+        if rates is not None:
+            out[name] = rates
+    return out
 
-# v9.3.0 — OpenAI public per-million-token rates for models commonly invoked
-# from Codex CLI. Keep in sync with https://openai.com/api/pricing.
-# Cache rates use OpenAI's documented prompt-caching discount where applicable.
-# All values $/Mtok. NOTE: verify against current pricing before each release.
-OPENAI_RATES_PER_M: dict[str, dict[str, float]] = {
-    "gpt-5.5":       {"input": 3.00,  "output": 12.00, "cache_read": 0.30, "cache_write": 3.75},
-    "gpt-5.4":       {"input": 5.00,  "output": 20.00, "cache_read": 1.25, "cache_write": 6.25},
-    "gpt-5-mini":    {"input": 0.40,  "output": 2.00,  "cache_read": 0.10, "cache_write": 0.50},
-    "o3":            {"input": 15.00, "output": 60.00, "cache_read": 3.75, "cache_write": 18.75},
-    "o3-mini":       {"input": 1.10,  "output": 4.40,  "cache_read": 0.275, "cache_write": 1.375},
-    "gpt-4o":        {"input": 2.50,  "output": 10.00, "cache_read": 1.25, "cache_write": 3.125},
-    "gpt-4o-mini":   {"input": 0.15,  "output": 0.60,  "cache_read": 0.075, "cache_write": 0.1875},
-}
+
+CLAUDE_RATES_PER_M: dict[str, dict[str, float]] = _rate_table(("haiku", "sonnet", "opus"))
+
+# v9.3.0 — OpenAI models commonly invoked from Codex CLI.
+OPENAI_RATES_PER_M: dict[str, dict[str, float]] = _rate_table(
+    ("gpt-5.5", "gpt-5.4", "gpt-5-mini", "o3", "o3-mini", "gpt-4o", "gpt-4o-mini")
+)
 
 
 def _codex_cost(
@@ -1437,18 +1643,17 @@ def _get_codex_baseline_for_task(task_type: str | None, complexity: str | None) 
     return "gpt-5.4"
 
 
-# v9.3.1 — Google AI public per-million-token rates for Gemini models commonly
-# invoked from Gemini CLI. Keep in sync with https://ai.google.dev/pricing.
-# Cache rates use Google's documented context-caching discount where applicable.
-# All values $/Mtok. NOTE: verify against current pricing before each release.
-GEMINI_RATES_PER_M: dict[str, dict[str, float]] = {
-    "gemini-2.5-flash": {"input": 0.30, "output": 2.50, "cache_read": 0.075, "cache_write": 0.375},
-    "gemini-2.5-pro":   {"input": 1.25, "output": 10.0, "cache_read": 0.31,  "cache_write": 1.5625},
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40, "cache_read": 0.025, "cache_write": 0.125},
-    "gemini-2.0-pro":   {"input": 1.25, "output": 5.00, "cache_read": 0.31,  "cache_write": 1.5625},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30, "cache_read": 0.019, "cache_write": 0.0938},
-    "gemini-1.5-pro":   {"input": 1.25, "output": 5.00, "cache_read": 0.31, "cache_write": 1.5625},
-}
+# v9.3.1 — Gemini models commonly invoked from Gemini CLI.
+GEMINI_RATES_PER_M: dict[str, dict[str, float]] = _rate_table(
+    (
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-pro",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+    )
+)
 
 
 def _gemini_cost(
@@ -1508,8 +1713,23 @@ def _claude_cost(
     """Compute the actual $ cost of a Claude API call using the 4-component formula.
 
     Unknown models return 0.0 (graceful — non-Claude routes don't trip this).
+
+    WP-05: ``CLAUDE_RATES_PER_M`` is keyed by FAMILY ALIAS ("opus", "sonnet",
+    "haiku"), so a full model ID such as ``claude-opus-5`` missed the table and
+    priced at 0.0 — silently, because the miss is indistinguishable from a
+    legitimately-unpriced non-Claude route. Passing a baseline model ID through
+    here therefore produced a zero baseline and NEGATIVE savings. Resolve
+    through chuzom.pricing before giving up, so an ID that the price table knows
+    can never read as free.
     """
     rates = CLAUDE_RATES_PER_M.get(model)
+    if rates is None:
+        # Claude IDs only. Widening this to every priced model would change what
+        # the function means: callers rely on non-Claude routes costing 0.0 here
+        # and being priced on their own provider's path.
+        _resolved = _pricing.resolve(model)
+        if _resolved is not None and _resolved.startswith("claude-"):
+            rates = _pricing.rates_per_m(_resolved)
     if rates is None:
         return 0.0
     return (
@@ -1540,11 +1760,11 @@ def calc_savings(
        cost is computed via the 4-component formula (input + output +
        cache_write + cache_read at separate rates) rather than a single
        lumped per-1K rate. The lumped path is kept for back-compat.
-    2. **Task-aware baseline**: if `task_type` and `complexity` are
-       provided, the counterfactual model is picked via
-       `_get_baseline_for_task()` (Haiku for simple Q&A, Sonnet for code,
-       Opus only for genuinely complex work). Without task context, the
-       baseline defaults to Opus (matching legacy behaviour).
+    2. **One baseline** (WP-05): the counterfactual is always
+       `pricing.savings_baseline_model()`, regardless of task_type or
+       complexity. The former task-aware picker (Haiku for simple Q&A,
+       Sonnet for code, Opus for complex work) was a second savings policy
+       and disagreed with every other surface by up to 5x.
     3. **No floor**: returned savings are NOT clamped to >= 0. Routing
        overhead can exceed gross savings on small prompts; that should
        surface as a negative number, not be hidden.
@@ -1563,15 +1783,15 @@ def calc_savings(
     Returns:
         (net_cost_saved_usd, net_time_saved_sec). May be negative.
     """
-    # Task-aware baseline (INV-COST-004 / AC-7): credit against the REALISTIC
-    # model that would have handled this task without routing, not always Opus —
-    # otherwise a Haiku-appropriate query is measured against Opus rates and
-    # savings are wildly overstated. Falls back to Opus only when no task context
-    # is supplied (legacy default), exactly as this function's docstring promises.
-    if task_type is not None and complexity is not None:
-        baseline = _get_baseline_for_task(task_type, complexity)
-    else:
-        baseline = "opus"
+    # WP-05: one baseline, whatever the task. This used to credit against a
+    # task-aware "realistic" model (query -> Haiku), on the reasoning that
+    # measuring a Haiku-appropriate query at Opus rates overstates savings. That
+    # reasoning priced a counterfactual nobody performs — a subscriber runs their
+    # top model, they do not hand-pick a cheaper Claude per prompt — and it put
+    # this function 5x apart from savings_logger, the dashboard and session-end
+    # on the identical call. task_type/complexity remain in the signature for
+    # callers and telemetry; they no longer select a baseline.
+    baseline = _pricing.savings_baseline_model()
 
     # Cache-aware path: when any sub-component count is provided, use the
     # 4-component formula. Otherwise fall back to the lumped per-1K rate.
@@ -1926,8 +2146,11 @@ async def get_realized_savings(period: str = "today", *, platform: str = "all") 
             )
             row = await cursor.fetchone()
             return float(row[0] if row else 0.0), float(row[1] if row else 0.0)
-        except Exception:
-            # Table may not exist on older DBs — treat as zero.
+        except Exception as exc:
+            # Table may not exist on older DBs — treat as zero. But a persistent
+            # failure here UNDERSTATES savings without any visible symptom.
+            from chuzom import failopen
+            failopen.record("CHZ-FO-COST-PLATFORM-TABLE", exc)
             return 0.0, 0.0
 
     db = await _get_db()
@@ -2146,14 +2369,41 @@ async def get_savings_summary(period: str = "today") -> dict:
                 f"COALESCE(SUM(cost_saved_usd), 0), COALESCE(SUM(time_saved_sec), 0) "
                 f"FROM claude_usage {where}"
             )
-        except Exception:
-            return {"total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
-                    "time_saved_sec": 0.0, "by_model": {}}
+        except Exception as exc:
+            # Counted as well as flagged: provenance already tells the CALLER, but
+            # nothing told an operator how often this fires.
+            from chuzom import failopen
+            failopen.record("CHZ-FO-COST-SAVINGS-QUERY", exc)
+            # RED2-02 (P1): a FAILED QUERY is not a zero-saving week.
+            #
+            # This branch returned exactly the dict the genuine-zero branch
+            # below returns, so a broken telemetry path rendered as a confident
+            # "$0.00 saved" on every downstream surface. Two entirely different
+            # situations, one indistinguishable output — and it fails in the
+            # direction that looks harmless, which is why it survived.
+            #
+            # `provenance` is what callers key on. The numeric fields stay (as
+            # 0.0) so existing consumers do not KeyError, and they must not be
+            # DISPLAYED when provenance is "unknown".
+            return {
+                "total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
+                "time_saved_sec": 0.0, "by_model": {},
+                "provenance": "unknown",
+                "detail": f"savings query failed: {exc}",
+                "saved": Measured.unknown(f"savings query failed: {exc}"),
+            }
 
         row = await cursor.fetchone()
         if not row or row[0] == 0:
-            return {"total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
-                    "time_saved_sec": 0.0, "by_model": {}}
+            # A real, MEASURED zero: the table was readable and holds no rows
+            # for this period. Distinct from the branch above, and now says so.
+            return {
+                "total_calls": 0, "total_tokens": 0, "cost_saved_usd": 0.0,
+                "time_saved_sec": 0.0, "by_model": {},
+                "provenance": "measured",
+                "detail": "no routed calls in this period",
+                "saved": Measured.measured(0.0),
+            }
 
         total_calls, total_tokens, cost_saved, time_saved = row
 
@@ -2178,6 +2428,9 @@ async def get_savings_summary(period: str = "today") -> dict:
             "cost_saved_usd": float(cost_saved),
             "time_saved_sec": float(time_saved),
             "by_model": by_model,
+            "provenance": "measured",
+            "detail": "",
+            "saved": Measured.measured(float(cost_saved)),
         }
     finally:
         await db.close()
@@ -2187,54 +2440,66 @@ async def get_savings_summary(period: str = "today") -> dict:
 
 # Configurable baseline pricing for savings calculations
 # Users can override via CHUZOM_SAVINGS_BASELINE env var (default: "sonnet")
+# RED2-01: this table held $15/$75 for Opus — the retired Opus 3 rate, 3x the
+# current one — and fed the ledger write path, so stored savings were overstated
+# by that factor. Haiku's $0.80/$4.00 was wrong too (the real rate is $1.00/$5.00).
+# Now derived from chuzom.pricing so a family alias can never carry its own
+# number again; the alias resolves to a model ID and the ID carries the price.
 BASELINE_PRICING = {
-    "haiku":  {"input": 0.80, "output": 4.0},    # $ per 1M tokens (v9.2.2)
-    "sonnet": {"input": 3.0,  "output": 15.0},
-    "opus":   {"input": 15.0, "output": 75.0},
+    family: {
+        "input": _pricing.input_rate(family),
+        "output": _pricing.output_rate(family),
+    }
+    for family in ("haiku", "sonnet", "opus")
 }
 
-def _get_baseline_model() -> str:
-    """Legacy: returns the env-configured global baseline (default: sonnet).
+# WP-05 removed `_get_baseline_model()` (env-or-sonnet) and
+# `_get_baseline_for_task()` (research/complex -> opus, query -> haiku, else
+# sonnet). Both were savings-baseline policies of their own, and the tiered one
+# contradicted the flat baseline that savings_logger, the dashboard and the
+# session-end hook already used — 5x apart on a QUERY call.
+#
+# They are deleted rather than re-pointed. A second baseline function left
+# importable is a second policy waiting for a caller, and this codebase has
+# already demonstrated that dead safety/duplicate code gets wired back up
+# (RED3-01, RED3-10). The one policy is pricing.savings_baseline_model().
 
-    Prefer `_get_baseline_for_task()` when task_type / complexity are known —
-    that picks a *realistic* counterfactual model per call instead of crediting
-    every routed call against a single fixed baseline.
-    """
-    import os
-    return os.environ.get("CHUZOM_SAVINGS_BASELINE", "sonnet")
-
-
-def _get_baseline_for_task(task_type: str | None, complexity: str | None) -> str:
-    """Pick the *realistic* baseline model — what would have been used without routing.
-
-    Without this, every cheap-model call gets credited against the full Opus rate,
-    overstating savings. The heuristic mirrors COMPLEXITY_BASE_MODEL but accounts
-    for task_type since the same complexity can imply different default models
-    (e.g., a "moderate" query task realistically goes to Haiku, not Sonnet).
-
-    v9.2.2.
-    """
-    import os
-    # Env override still wins (back-compat with CHUZOM_SAVINGS_BASELINE).
-    override = os.environ.get("CHUZOM_SAVINGS_BASELINE", "").strip().lower()
-    if override in CLAUDE_RATES_PER_M:
-        return override
-
-    if task_type == "research":
-        return "opus"
-    if complexity == "complex":
-        return "opus"
-    if task_type in ("query",):
-        return "haiku"
-    return "sonnet"
 
 def _get_baseline_cost(in_tokens: int, out_tokens: int, baseline_model: str = None) -> float:
-    """Calculate cost using specified baseline model (default: sonnet)."""
+    """Cost of ``in_tokens``/``out_tokens`` at the savings baseline.
+
+    ``baseline_model`` is retained for callers that price against a specific
+    model, but it no longer defaults to a second policy: with no argument this
+    uses the one baseline. An unpriced model falls back to the baseline rates
+    instead of 0.0, so a bad model name can never render as "saved nothing".
+    """
     if baseline_model is None:
-        baseline_model = _get_baseline_model()
-    
-    pricing = BASELINE_PRICING.get(baseline_model, BASELINE_PRICING["sonnet"])
-    return (in_tokens * pricing["input"] + out_tokens * pricing["output"]) / 1_000_000
+        in_rate, out_rate = _pricing.savings_baseline_rates()
+    else:
+        in_rate = _pricing.input_rate(baseline_model)
+        out_rate = _pricing.output_rate(baseline_model)
+        if in_rate is None or out_rate is None:
+            in_rate, out_rate = _pricing.savings_baseline_rates()
+    return (in_tokens * in_rate + out_tokens * out_rate) / 1_000_000
+
+
+def _coverage_counts() -> dict:
+    """observed_n / unobserved_n for a rate metric. Never raises.
+
+    WP-07: a rate is a fraction of traffic Chuzom SAW. Shipping it without its
+    denominator lets it silently redefine itself when routing degrades.
+    """
+    try:
+        from chuzom import coverage as _coverage
+
+        snap = _coverage.snapshot()
+        return {"observed_n": snap.observed_n, "unobserved_n": snap.unobserved_n}
+    except Exception as exc:  # noqa: BLE001
+        # Zero denominators make every rate render Unknown downstream (correct),
+        # but nothing said the telemetry itself was broken.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-COVERAGE-COUNTS", exc)
+        return {"observed_n": 0, "unobserved_n": 0}
 
 
 async def get_router_efficiency(period: str = "today") -> dict:
@@ -2266,15 +2531,34 @@ async def get_router_efficiency(period: str = "today") -> dict:
             FROM routing_decisions {where}"""
         )
         row = await cursor.fetchone()
+        _cov = _coverage_counts()
         if not row or row[0] == 0:
-            return {"total": 0, "on_target": 0, "efficiency_pct": 0.0}
-        
+            # WP-07 / RED2-02: no routing decisions is NOT a 0%-effective
+            # router. The previous 0.0 was indistinguishable from a router that
+            # got every decision wrong, and it failed in the direction that
+            # looks like a real measurement. `efficiency_pct` is None and
+            # provenance says why; callers must render "Unknown", not a number.
+            return {
+                "total": 0,
+                "on_target": 0,
+                "efficiency_pct": None,
+                "provenance": "unknown",
+                "detail": "no routing decisions recorded for this period",
+                **_cov,
+            }
+
         total, on_target = row
         efficiency_pct = round(on_target / total * 100) if total > 0 else 0
         return {
             "total": int(total),
             "on_target": int(on_target),
             "efficiency_pct": float(efficiency_pct),
+            # The rate is over OBSERVED decisions. unobserved_n says how much
+            # traffic never reached the decision table at all, so a consumer can
+            # tell "90% on-target over everything" from "90% over the 3% we saw".
+            "provenance": "measured",
+            "detail": "",
+            **_cov,
         }
     finally:
         await db.close()
@@ -2373,7 +2657,9 @@ async def get_cache_hit_stats(period: str = "today") -> dict:
             "hit_rate_pct": float(hit_rate),
             "estimated_saved_usd": round(estimated_saved, 4),
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-CACHE-STATS", exc)
         return {"total_requests": 0, "cache_hits": 0, "hit_rate_pct": 0.0, "estimated_saved_usd": 0.0}
     finally:
         await db.close()
@@ -2628,7 +2914,9 @@ async def get_model_latency_stats(window_days: int = 7) -> dict[str, dict]:
             (f"-{window_days} days",),
         )
         rows = await cursor.fetchall()
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-LATENCY-STATS", exc)
         return {}
     finally:
         await db.close()
@@ -2665,26 +2953,43 @@ async def get_model_latency_stats(window_days: int = 7) -> dict[str, dict]:
 # Opus-4.1-and-earlier tier; Opus 4.5 onward (incl. 4.6/4.7/4.8) is $5/$25 per
 # million tokens. Every historical `saved_usd` was therefore ~3x inflated.
 
-LATEST_OPUS_MODEL = "claude-opus-4-8"
-"""The current host/baseline Opus model. Bump when a newer Opus ships."""
+LATEST_OPUS_MODEL = "claude-opus-5"
+"""The current host Opus model. Bump when a newer Opus ships.
 
-# Opus per-million-token pricing (input, output) in USD, from the Claude model
-# catalog. Opus 4.5+ is $5/$25. Extend as new Opus models release; the values
-# can also be refreshed at runtime via refresh_baseline_pricing_from_api().
+This lagged at claude-opus-4-8 while chuzom.pricing already priced claude-opus-5
+— the "bump when a newer Opus ships" instruction was not followed, which is the
+same failure mode WP-03 removed by deriving prices rather than restating them.
+It is no longer a savings baseline (see pricing.SAVINGS_BASELINE_MODEL); it only
+answers "which Opus is current"."""
+
+# Opus per-million-token pricing (input, output) in USD, projected out of
+# chuzom.pricing rather than restated. Extend the tuple as new Opus models
+# release; the values can also be refreshed at runtime via
+# refresh_baseline_pricing_from_api().
+_OPUS_MODELS: tuple[str, ...] = (
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-opus-4-6",
+    "claude-opus-4-5",
+)
 _OPUS_PRICING: dict[str, tuple[float, float]] = {
-    "claude-opus-4-8": (5.0, 25.0),
-    "claude-opus-4-7": (5.0, 25.0),
-    "claude-opus-4-6": (5.0, 25.0),
-    "claude-opus-4-5": (5.0, 25.0),
+    _m: (_p.input, _p.output)
+    for _m in _OPUS_MODELS
+    if (_p := _pricing.price_for(_m)) is not None
 }
 
-BASELINE_MODEL_FOR_SAVINGS = LATEST_OPUS_MODEL
-"""Reference model for savings. All savings = host Opus cost - actual routed
-cost; the host model is the latest Opus (Claude Code subscription)."""
+BASELINE_MODEL_FOR_SAVINGS = _pricing.savings_baseline_model()
+"""Reference model for savings, projected from the ONE policy in chuzom.pricing.
 
-_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = _OPUS_PRICING[LATEST_OPUS_MODEL]
-"""Baseline per-million-token rates ($/M) for the latest Opus, derived from
-_OPUS_PRICING so there is a single source of truth (was a hardcoded $15/$75)."""
+WP-05: this used to be its own binding (``LATEST_OPUS_MODEL``), one of three
+competing baselines. It is now a view onto ``pricing.savings_baseline_model()``
+so it cannot drift from the dashboard, the session-end hook, or the ledger
+writer again. ``LATEST_OPUS_MODEL`` remains, but only as "which Opus is current"
+— it is no longer a savings policy."""
+
+_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = _pricing.savings_baseline_rates()
+"""Baseline per-million-token rates ($/M), from the one savings policy."""
 
 _FREE_PROVIDERS = {"ollama", "codex", "gemini_cli"}
 """Providers that incur zero cost (local or included in subscription)."""
@@ -2732,8 +3037,12 @@ def refresh_baseline_pricing_from_api() -> bool:
             _HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M = float(in_pm), float(out_pm)
             _OPUS_PRICING[LATEST_OPUS_MODEL] = (_HOST_INPUT_PER_M, _HOST_OUTPUT_PER_M)
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        # Live pricing refresh failed, so the BASELINE stays at whatever the
+        # static table holds. Stale prices produce plausible wrong money — the
+        # exact RED2-01 shape, which shipped a 3x overstatement.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-PRICING-REFRESH", exc)
     return False
 
 
@@ -2792,7 +3101,7 @@ async def get_savings_by_period() -> dict[str, dict]:
                     saved_total += host_est
                 else:
                     actual += cost
-                    saved_total += max(0.0, host_est - cost)
+                    saved_total += net_saved(host_est, cost)
 
             efficiency = baseline / actual if actual > 0.001 else 0.0
             # RETROSPECTIVE B-7: report two figures, never conflated.
@@ -2852,7 +3161,11 @@ async def get_model_failure_rates(window_days: int = 30) -> dict[str, float]:
             for row in rows
             if row[1] > 0
         }
-    except Exception:
+    except Exception as exc:
+        # An empty quality map reads as "no quality signal yet", which is what a
+        # fresh install looks like. A broken query is indistinguishable from it.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-QUALITY-AGG", exc)
         return {}
     finally:
         await db.close()
@@ -2890,7 +3203,9 @@ async def get_model_acceptance_scores(window_days: int = 30) -> dict[str, float]
         )
         rows = await cursor.fetchall()
         return {row[0]: row[2] / row[1] for row in rows if row[1] > 0}
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-RATING-AGG", exc)
         return {}
     finally:
         await db.close()
@@ -2936,8 +3251,14 @@ async def get_team_savings(
 
     _free = {"ollama", "codex", "gemini_cli", "subscription"}
 
-    db = await _get_db()
+    # #24: _get_db() was OUTSIDE this try, so the MOST LIKELY failure -- the
+    # ledger missing, locked, or permission-denied at OPEN time -- propagated
+    # instead of returning a provenance-marked result. The except path below
+    # then only covered query failures, which is the rarer case. An honest
+    # "unknown" beats an exception a caller may swallow into a silent broadcast.
+    db = None
     try:
+        db = await _get_db()
         cursor = await db.execute(
             f"""
             SELECT model, provider,
@@ -2952,10 +3273,22 @@ async def get_team_savings(
             params,
         )
         rows = await cursor.fetchall()
-    except Exception:
-        return {"total_calls": 0, "saved_usd": 0.0, "actual_usd": 0.0, "free_pct": 0.0, "top_models": []}
+    except Exception as exc:
+        # Zeroes here render as "you routed nothing and saved nothing" — a
+        # working install that looks idle.
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-ROUTING-SUMMARY", exc)
+        # RED2-02 / #24: the zeros are unavoidable (callers index these keys),
+        # but they must not READ as data. provenance="unknown" is what lets
+        # team.py print "unknown" instead of "$0.0000" to a Slack channel.
+        # failopen.record above counts this internally; a counter the caller
+        # cannot see does not stop a false broadcast.
+        return {"total_calls": 0, "saved_usd": 0.0, "actual_usd": 0.0, "free_pct": 0.0,
+                "top_models": [], "provenance": "unknown",
+                "provenance_detail": "usage ledger unreadable"}
     finally:
-        await db.close()
+        if db is not None:
+            await db.close()
 
     total_calls = sum(r[2] for r in rows)
     actual_usd = sum(r[3] for r in rows)
@@ -2965,7 +3298,7 @@ async def get_team_savings(
     # Estimate savings vs Opus baseline using token counts
     total_tokens = sum(r[4] for r in rows)
     host_baseline = total_tokens / 1000 * ((_HOST_INPUT_PER_M + _HOST_OUTPUT_PER_M) / 2 / 1000)
-    saved_usd = max(0.0, host_baseline - actual_usd)
+    saved_usd = net_saved(host_baseline, actual_usd)
     # INV-COST-006 / AC-2: split baseline-equivalent avoided (counterfactual) from
     # real metered dollars avoided. On a flat-rate subscription host the marginal host
     # cost is ~$0, so real dollars avoided is 0 unless the host is genuinely metered —
@@ -2987,6 +3320,10 @@ async def get_team_savings(
         "actual_usd": actual_usd,
         "free_pct": free_pct,
         "top_models": top_models,
+        # The tag must DISTINGUISH: if it only appeared on the error path it
+        # would carry no information, since a caller cannot tell "absent
+        # because measured" from "absent because nobody set it".
+        "provenance": "measured",
     }
 
 
@@ -3040,7 +3377,7 @@ async def get_routing_savings_vs_sonnet(days: int = 0) -> dict:
 
         total, actual_cost, in_tok, out_tok = row
         baseline = (in_tok * _HOST_INPUT_PER_M + out_tok * _HOST_OUTPUT_PER_M) / 1_000_000
-        saved = max(0.0, baseline - actual_cost)
+        saved = net_saved(baseline, actual_cost)
 
         cursor = await db.execute(
             f"""SELECT final_model, COUNT(*),
@@ -3058,7 +3395,7 @@ async def get_routing_savings_vs_sonnet(days: int = 0) -> dict:
                 "calls": int(cnt),
                 "actual_cost": float(m_cost),
                 "baseline_cost": float(m_baseline),
-                "saved": max(0.0, m_baseline - float(m_cost)),
+                "saved": net_saved(m_baseline, float(m_cost)),
             }
 
         return {
@@ -3070,7 +3407,9 @@ async def get_routing_savings_vs_sonnet(days: int = 0) -> dict:
             "output_tokens": int(out_tok),
             "by_model": by_model,
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-SAVINGS-BREAKDOWN", exc)
         return empty
     finally:
         await db.close()
@@ -3124,7 +3463,9 @@ async def get_cache_savings(period: str = "today") -> dict[str, float]:
             "total_savings_usd": float(cached_savings),
             "cache_hit_rate": float(cache_hit_rate),
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-CACHE-SAVINGS", exc)
         return {
             "total_calls_cached": 0,
             "total_savings_usd": 0.0,
@@ -3323,7 +3664,9 @@ async def get_compression_stats(days: int = 7) -> dict:
             "by_strategy": strategies,
             "total_tokens_saved": total_saved,
         }
-    except Exception:
+    except Exception as exc:
+        from chuzom import failopen
+        failopen.record("CHZ-FO-COST-TOKEN-SAVER-STATS", exc)
         return {
             "period_days": days,
             "total_operations": 0,

@@ -1,10 +1,46 @@
 """Shared pytest fixtures for all chuzom tests."""
 
 import os
+import socket as _socket
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+# ── G-D: prove the wheel is what is under test ──────────────────────────────
+def pytest_configure(config):
+    """When CHUZOM_REQUIRE_WHEEL=1, fail unless chuzom resolves from an install.
+
+    Hard gate G-D requires the suite to be green on the BUILT WHEEL, not an
+    editable install. That was previously unsatisfiable, and not merely
+    unimplemented: ``pythonpath = ["src"]`` in pyproject.toml forces chuzom to
+    resolve from the source tree no matter which venv runs pytest, so installing
+    a wheel and running the suite still tested the source and reported green.
+
+    That setting is correct for the ordinary run — it exists because a bare
+    ``uv run pytest`` on a Python without chuzom silently ERRORed 67 enforcement
+    tests into a false pass (CHZ-AUD-002). Two different false-greens; they need
+    two invocations, not one compromise. The wheel job passes ``-o pythonpath=``
+    and sets this flag.
+
+    Without this assertion the wheel job degrades silently into a second
+    source-tree run the moment anything puts src/ back on the path — a gate that
+    stops testing what it claims to test while still reporting green is the
+    exact failure this audit keeps finding.
+    """
+    if os.environ.get("CHUZOM_REQUIRE_WHEEL", "").strip().lower() not in ("1", "true", "yes", "on"):
+        return
+    import chuzom
+
+    resolved = Path(chuzom.__file__).resolve()
+    if "site-packages" not in resolved.parts:
+        raise pytest.UsageError(
+            "CHUZOM_REQUIRE_WHEEL=1 but chuzom resolved from the source tree, not "
+            f"an installed wheel: {resolved}\n"
+            "Run with `-o pythonpath=` in a venv where the wheel is installed."
+        )
+    print(f"\n[G-D] chuzom under test: {resolved}")
 
 
 # ── Chuzom disk-write isolation (INV-TEST-000) ──────────────────────────────
@@ -666,3 +702,141 @@ def _close_db_connections():
         gc.collect()
     except Exception:
         pass
+
+
+# ── Hermetic reachability: no live daemon, no leaked probe cache ──────────────
+#
+# WHY THIS EXISTS
+# ---------------
+# `config.probe_ollama` caches its result in a MODULE-LEVEL global for 60 seconds:
+#
+#     global _ollama_reachable_cache, _ollama_cache_time
+#     if _ollama_reachable_cache is not None and (now - _ollama_cache_time) < _OLLAMA_PROBE_TTL:
+#         return _ollama_reachable_cache
+#
+# Nothing resets that between tests. So one test that reaches a running Ollama sets it
+# True, and EVERY test for the next minute sees Ollama as available — changing the
+# routing chain under tests that never asked for it.
+#
+# That single global produced a failure that looked like three different bugs:
+#   * order-dependent — whether the cache is warm depends on which tests ran before
+#   * nondeterministic — and on how long ago, against a 60s TTL
+#   * invisible alone — `test_codex_at_front_when_pressure_very_high` passed 10/10 in
+#     isolation, failed 1 of 3 in company under one fixed ordering, and blocked the G-F
+#     mutation baseline twice. One of its runs logged
+#     model=ollama/qwen3-coder:30b latency_ms=104362 — a 104-SECOND live inference
+#     inside a test that asserts a routing ORDER and needs no model at all.
+#
+# Per-test stubbing could not fix this: EIGHT modules reach the daemon (gateway, config,
+# auto_profile, safe_config, discover, model_evaluator, semantic_cache,
+# agentic_registry). Stubbing `discover.get_cached_ollama_models` left 4 connections;
+# also stubbing `config.probe_ollama` left 3. Guarding the PROPERTY — no live daemon in
+# tests — is the only fix that does not depend on enumerating call sites.
+#
+# Tests that genuinely need the daemon opt in with the EXISTING `requires_ollama`
+# marker, which pyproject already deselects by default.
+#
+# Blocking is graceful, not fatal: `probe_ollama` catches every exception and returns
+# False, so a blocked probe reads as "Ollama unavailable" — which is the deterministic
+# answer a hermetic test should get.
+
+@pytest.fixture(autouse=True)
+def _hermetic_reachability(request, monkeypatch):
+    if request.node.get_closest_marker("requires_ollama"):
+        yield
+        return
+
+    import chuzom.config as _cfg
+
+    # Reset BOTH TTL caches. `_pxpipe_reachable_cache` has the identical shape and the
+    # identical latent defect; fixing only the one that bit us would leave the next
+    # investigation to rediscover it.
+    for name, value in (
+        ("_ollama_reachable_cache", None), ("_ollama_cache_time", 0.0),
+        ("_pxpipe_reachable_cache", None), ("_pxpipe_cache_time", 0.0),
+    ):
+        if hasattr(_cfg, name):
+            monkeypatch.setattr(_cfg, name, value, raising=False)
+
+    _real_connect = _socket.socket.connect
+
+    def _blocked(self, address):
+        try:
+            port = int(address[1]) if isinstance(address, tuple) and len(address) >= 2 else None
+        except (TypeError, ValueError):
+            port = None
+        if port == 11434:
+            raise OSError(
+                "live Ollama connection blocked in tests (localhost:11434). "
+                "Mark the test @pytest.mark.requires_ollama if it genuinely needs the "
+                "daemon; otherwise stub the call. See _hermetic_reachability in conftest."
+            )
+        return _real_connect(self, address)
+
+    monkeypatch.setattr(_socket.socket, "connect", _blocked)
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _restore_redactor_registry():
+    """Snapshot and restore `plugins.redaction._REDACTORS` around every test.
+
+    The registry is a module-level dict. Five classes in
+    tests/test_c1_redaction_plugin_seam.py mutate it in `setup_method`
+    (`_REDACTORS.clear()`, then register a Mock or Failing redactor); exactly one has a
+    `teardown_method`, and that one only CLEARS — which still leaks an empty registry.
+
+    Found by bisecting a shuffled full-suite ordering, 1440 candidates down to one:
+    `TestMaybeRedactWithPlugin::test_redaction_off_ignores_plugin` installs a
+    MockRedactor that returns "[MOCK] <prompt>" instead of scrubbing. Every later test
+    calling `maybe_redact` gets that mock, so `test_maybe_redact_on_scrubs_email` sees
+    its email come back unredacted and correctly fails.
+
+    RESTORE, NOT CLEAR. Clearing leaves the next test with no redactor at all, which now
+    raises RedactionUnavailable (redaction fails closed as of 8d34e17) — trading a silent
+    wrong answer for a loud wrong one.
+
+    THIRD INSTANCE TONIGHT of one defect class — a module-level global mutated without
+    monkeypatch and never put back:
+      1. register_redactor(BrokenRedactor()) in the routing tests   (fixed 3cb81d1)
+      2. probe_ollama's 60-second reachability cache                 (reset above)
+      3. this registry clear-and-replace
+    A per-test snapshot fixes the class here; it does not fix the other globals, and it
+    is not yet known how many of the 46 order-dependent failures share this cause.
+    """
+    import chuzom.plugins.redaction as _redaction
+    saved = dict(_redaction._REDACTORS)
+    yield
+    _redaction._REDACTORS.clear()
+    _redaction._REDACTORS.update(saved)
+
+
+@pytest.fixture(autouse=True)
+def _restore_environ():
+    """Snapshot and restore os.environ around every test.
+
+    `monkeypatch.setenv` restores itself; a bare `os.environ[...] = ...` does not.
+    tests/test_c1_redaction_plugin_seam.py writes CHUZOM_REDACTION directly seven times
+    and never puts it back, so whichever value it left last became the default for every
+    later test in the process.
+
+    That is what broke `test_loop5_deployment_profile_rename::test_redaction_honours_new_env`
+    under a shuffled order: it sets CHUZOM_DEPLOYMENT_PROFILE=enterprise and asserts
+    `_redaction_enabled() is True`, which holds only when CHUZOM_REDACTION is UNSET —
+    the enterprise default applies to an empty value. A leaked "off" makes the assertion
+    fail, correctly, for a reason that has nothing to do with the test.
+
+    FOURTH INSTANCE of one defect class tonight — process-wide state mutated without
+    monkeypatch and never restored:
+      1. register_redactor(BrokenRedactor())      module global   (fixed 3cb81d1)
+      2. probe_ollama's 60s reachability cache    module global   (reset above)
+      3. _REDACTORS.clear() + mock install        module global   (restored above)
+      4. os.environ["CHUZOM_REDACTION"] = ...     process env     (this)
+    The first three were found one at a time by bisecting shuffled orderings. Snapshotting
+    the whole environment closes the fourth without needing to enumerate which variables
+    matter — the same reason the DB guard keys on isolation rather than on row shapes.
+    """
+    saved = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(saved)

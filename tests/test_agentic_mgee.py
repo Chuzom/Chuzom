@@ -131,18 +131,37 @@ def test_s7_budget_exhaustion_surfaces_partial():
     assert ledger.spent_usd <= ledger.budget_cap_usd + 0.4  # bounded by one over-charge
 
 
-# ── S8: replan the tail once when a milestone is structurally unmeetable ─────
-def test_s8_replan_tail_once():
+# ── S8: a structurally unmeetable milestone BLOCKS (replan deleted, WP-10) ───
+def test_s8_unmeetable_milestone_blocks():
+    """This test previously supplied replan_fn and asserted the tail was revised
+    once. It was the ONLY caller of that parameter anywhere -- run_delegation
+    threaded it through and no production code ever passed one, so the behaviour
+    it asserted never happened outside this file.
+
+    WP-10 required replan to work end-to-end or be deleted; owner chose deleted.
+    The assertion now pins what production actually does when the ladder is
+    exhausted: it blocks. Keeping the old test would have gone on describing a
+    capability the product does not have.
+    """
     ms = [Milestone("M1", "", needs_tier(9))]
-    replans: list[int] = []
 
-    def replan(ledger: TaskLedger) -> None:
-        replans.append(1)
-        ledger.milestones[0] = Milestone("M1", "", needs_tier(0))  # revised, now meetable
+    res = MGEEEngine(ladder(0, 1), max_attempts_per_tier=1).run(_ledger(ms))
 
-    res = MGEEEngine(ladder(0, 1), max_attempts_per_tier=1, replan_fn=replan).run(_ledger(ms))
-    assert replans == [1]
-    assert res.outcome is Outcome.COMPLETE
+    assert res.outcome is not Outcome.COMPLETE
+    assert not hasattr(MGEEEngine, "replan_fn")
+
+
+def test_replan_is_not_reachable_from_any_entry_point():
+    """Guards re-introduction. The engine's event vocabulary must not name a
+    transition nothing can emit -- an unreachable status reads as a supported
+    capability to anyone auditing the surface."""
+    import inspect
+
+    from chuzom.agentic import delegate, engine
+
+    assert "replan" not in engine.EVENT_KINDS, engine.EVENT_KINDS
+    assert "replan_fn" not in inspect.signature(engine.MGEEEngine.__init__).parameters
+    assert "replan_fn" not in inspect.signature(delegate.delegate).parameters
 
 
 # ── S11: irreversible milestone is gated — no auto-freeze without confirmation

@@ -1,0 +1,15 @@
+=== RESULT ===
+outcome: Outcome.COMPLETE
+ok: True
+milestone status: MilestoneStatus.DONE
+milestone.reversible: False
+achieved_by tier: 1
+
+🗺 plan — 1 milestones
+⚙ execute deploy-hotfix t1
+✓ pass deploy-hotfix t1
+✅ complete
+saved +$0.2000 (∞ vs baseline)
+✅ complete
+
+>>> PROVEN: an IRREVERSIBLE milestone (reversible=False) froze DONE with ZERO worktree isolation, ZERO merge-gate check, and ZERO real work -- only because the executing agent's own self-reported stdout happened to contain the canary string. reversibility_gate()/GitWorktreeOps (worktree.py) were never invoked: delegate() was called with no gate=, exactly as production tools/agentic.py::llm_delegate() calls it.

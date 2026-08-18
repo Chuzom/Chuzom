@@ -18,6 +18,7 @@ from typing import Any
 import aiohttp
 
 from chuzom.cost import _get_db
+from chuzom.savings import net_saved
 
 log = logging.getLogger("chuzom.digest")
 
@@ -89,7 +90,7 @@ async def _fetch_period_data(period: str) -> dict[str, Any]:
         elif provider == "subscription":
             saved = 0.0
         else:
-            saved = max(0.0, baseline - cost)
+            saved = net_saved(baseline, cost)
         total_calls += calls
         total_cost  += cost
         total_saved += saved

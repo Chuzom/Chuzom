@@ -107,11 +107,21 @@ def _agent_system_prompt(context: str | None) -> str | None:
 # ── Provider HTTP calls ──────────────────────────────────────────────────────
 
 def _get_ollama_url() -> str:
-    """Get Ollama base URL, reading env at call time (after dotenv is loaded)."""
-    url = os.environ.get("CHUZOM_OLLAMA_URL") or \
+    """Get Ollama base URL, reading env at call time (after dotenv is loaded).
+
+    Validated via agent_loop's shared wrapper — see `_validated_ollama_url`
+    there for why, and for the measured gap this closes. This module had the
+    SECOND unvalidated copy of the same reader; config.py's CHZ-SEC-06 fix
+    covered neither.
+    """
+    raw = os.environ.get("CHUZOM_OLLAMA_URL") or \
           os.environ.get("OLLAMA_BASE_URL") or \
           "http://localhost:11434"
-    return url
+    try:
+        from chuzom.hooks.agent_loop import _validated_ollama_url
+    except Exception:
+        return raw if raw == "http://localhost:11434" else "http://localhost:11434"
+    return _validated_ollama_url(raw)
 
 
 def ollama_is_alive(timeout: float = 0.5) -> bool:
@@ -124,7 +134,12 @@ def ollama_is_alive(timeout: float = 0.5) -> bool:
     try:
         ollama_url = _get_ollama_url()
         req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
-        with urllib.request.urlopen(req, timeout=timeout):  # nosec B310 — localhost only
+        # nosec B310 — URL is validated by _get_ollama_url (scheme + host).
+        # The previous justification here read "localhost only", which was not
+        # true: the URL comes from CHUZOM_OLLAMA_URL/OLLAMA_BASE_URL, which a
+        # cloned repo's .env can set. A suppression resting on a false premise
+        # is worse than no suppression, because it stops anyone re-checking.
+        with urllib.request.urlopen(req, timeout=timeout):  # nosec B310
             return True
     except Exception:
         return False
@@ -141,7 +156,7 @@ def available_ollama_models(timeout: float = 0.5) -> set[str] | None:
     try:
         ollama_url = _get_ollama_url()
         req = urllib.request.Request(f"{ollama_url}/api/tags", method="GET")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — localhost only
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — URL validated by _get_ollama_url (not localhost-only: a remote Ollama is supported)
             data = json.loads(resp.read())
         return {m.get("name", "") for m in data.get("models", []) if m.get("name")}
     except Exception:
@@ -200,7 +215,7 @@ def call_ollama(
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — localhost only
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — URL validated by _get_ollama_url (not localhost-only: a remote Ollama is supported)
             result = json.loads(resp.read())
             msg = result.get("message", {})
             content = msg.get("content", "")
@@ -326,6 +341,39 @@ _PROVIDER_CALLS = {
 }
 
 
+def _okf_inject(prompt: str) -> str:
+    """Prepend relevant stored knowledge, or return the prompt unchanged.
+
+    Best-effort in every failure mode: OKF is an enhancement, and a hook that
+    raises here would drop the whole turn through to the expensive model — the
+    opposite of the point.
+    """
+    try:
+        from chuzom import okf
+
+        concepts = okf.find_relevant(prompt)
+        return okf.inject_context(prompt, concepts) if concepts else prompt
+    except Exception:  # noqa: BLE001
+        return prompt
+
+
+def _okf_enrich(prompt: str, response: str, model: str) -> None:
+    """Record verified structure from a successful direct call.
+
+    ``enrich_from_response`` is a coroutine, and this runs in the hook's synchronous
+    path, so it gets its own short-lived loop. Wrapped whole: enrichment must never
+    turn a successful routed answer into a failed turn.
+    """
+    try:
+        import asyncio as _asyncio
+
+        from chuzom import okf
+
+        _asyncio.run(okf.enrich_from_response(prompt, response, model))
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def execute_chain(
     prompt: str,
     chain: list[ModelSpec],
@@ -351,6 +399,15 @@ def execute_chain(
     _ollama_alive: bool | None = None  # lazily evaluated once per chain execution
     _ollama_installed: set[str] | None = _UNSET  # tag set, fetched once per chain
     system_prompt = _system_prompt(context)
+
+    # CHZ-OKF-03: OKF on the DIRECT path too.
+    #
+    # OKF used to be wired only into router.route_and_call. But direct execution
+    # is the default (CHUZOM_DIRECT_EXECUTION=true) and bypasses the router
+    # entirely — it calls providers over raw HTTP from the hook process. So the
+    # majority of routed traffic neither received stored context nor contributed
+    # to the store, and OKF looked enabled while doing nothing for most calls.
+    prompt = _okf_inject(prompt)
 
     for model in chain:
         if model.provider == "claude":
@@ -385,6 +442,7 @@ def execute_chain(
 
         if response and quality_ok(response, task_type):
             latency_ms = int((time.monotonic() - t0) * 1000)
+            _okf_enrich(prompt, response, f"{model.provider}/{model.model}")
             return DirectResult(
                 text=response,
                 model=model,

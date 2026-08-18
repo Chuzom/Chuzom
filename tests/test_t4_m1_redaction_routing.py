@@ -17,8 +17,9 @@ Pins:
    write \\`\\`detail.redactions\\`\\` with per-pattern hit counts.
 4. **No PII pinned in tests** — assertions are on counts + the absence
    of the sensitive substring in the post-redaction prompt.
-5. **Fail-open.** A broken redactor does NOT break the turn — the
-   original prompt is sent and the call proceeds.
+5. **Fail-CLOSED.** A broken redactor DOES break the turn. `maybe_redact`
+   raises `RedactionUnavailable` and nothing is dispatched, so a failed
+   scrub cannot leak the prompt. This inverted a prior fail-open contract.
 
 See: Docs/audit/post-remediation/GAP_ANALYSIS.md G-013.
 """
@@ -37,7 +38,11 @@ from chuzom import router as router_mod
 from chuzom.audit_routing import reset_audit_log_for_tests
 from chuzom.enterprise.audit import AuditLog
 from chuzom.idempotency import reset_store_for_tests
-from chuzom.redaction_routing import _redaction_enabled, maybe_redact
+from chuzom.redaction_routing import (
+    RedactionUnavailable,
+    _redaction_enabled,
+    maybe_redact,
+)
 from chuzom.router import route_and_call
 from chuzom.types import LLMResponse, TaskType
 
@@ -296,7 +301,7 @@ async def test_audit_row_omits_redactions_when_off(
     assert "redactions" not in detail
 
 
-# ── 5. Fail-open ─────────────────────────────────────────────────────────────
+# ── 5. Fail-CLOSED ───────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -306,9 +311,17 @@ async def test_redaction_failure_does_not_break_turn(
     isolated_audit_db: Path,
     isolated_idempotency,
 ) -> None:
-    """A broken redactor must not break the turn — the original
-    prompt is sent and the call proceeds."""
-    from chuzom.plugins.redaction import Redactor, RedactionResult, register_redactor
+    """A broken redactor must BREAK THE TURN rather than leak the prompt.
+
+    This assertion was the exact inverse until 2026-08-13: it required the original
+    prompt to be sent and the call to proceed, so the suite would have failed anyone
+    who made redaction safe. A test can encode a defect as the contract, and this one
+    did — for a feature whose only purpose is keeping PII out of a third-party model.
+
+    Found when a mutation run captured the fail-open in action: `redactor died`,
+    followed by `alice@example.com` arriving at the dispatcher intact.
+    """
+    from chuzom.plugins.redaction import Redactor, RedactionResult
 
     monkeypatch.setenv("CHUZOM_REDACTION", "on")
 
@@ -317,7 +330,23 @@ async def test_redaction_failure_does_not_break_turn(
             raise RuntimeError("redactor died")
 
     # Register a broken redactor; maybe_redact swallows the exception and returns original.
-    register_redactor(BrokenRedactor())
+    #
+    # RESTORE IT AFTERWARDS. `register_redactor` mutates a module-level dict
+    # (`plugins.redaction._REDACTORS`) and nothing undoes it — `clean_redaction_env`
+    # only clears the env var. Registering directly therefore leaked a BROKEN redactor
+    # into every test that ran later in the same process.
+    #
+    # That is not hypothetical: it broke
+    # `test_dispatcher_receives_redacted_prompt_when_on`, which asserts an email is
+    # scrubbed before dispatch. It passes standalone and in the full suite, and failed
+    # only under mutmut's clean-test stage, which runs a SUBSET whose ordering put this
+    # test first. A leaked global that depends on test order to do damage is invisible
+    # exactly until something reorders the suite.
+    from chuzom.plugins import redaction as _redaction_plugin
+
+    monkeypatch.setitem(
+        _redaction_plugin._REDACTORS, _redaction_plugin._DEFAULT, BrokenRedactor()
+    )
 
     captured: list[str] = []
 
@@ -328,7 +357,12 @@ async def test_redaction_failure_does_not_break_turn(
     monkeypatch.setattr(router_mod, "_dispatch_model_loop", _dispatch)
 
     original = f"hi {_FAKE_EMAIL}"
-    resp = await route_and_call(task_type=TaskType.QUERY, prompt=original)
-    assert resp.content == "ok"
-    # On fail-open the dispatcher receives the original unmodified prompt.
-    assert captured[0] == original
+    with pytest.raises(RedactionUnavailable):
+        await route_and_call(task_type=TaskType.QUERY, prompt=original)
+
+    # THE ASSERTION THAT MATTERS: nothing was dispatched. Checking only that an
+    # exception was raised would pass even if the prompt had already gone out before
+    # the raise — the leak happens at dispatch, not at the raise.
+    assert captured == [], (
+        f"the prompt reached the dispatcher despite redaction failing: {captured!r}"
+    )

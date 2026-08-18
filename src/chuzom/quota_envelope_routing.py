@@ -123,10 +123,42 @@ async def release_envelope(key: Any, est_cost_usd: float, *, backend=None) -> No
     if key is None:
         return
     b = backend or _get_backend()
+    amount = float(est_cost_usd or 0.0)
     try:
-        await b.release(key, float(est_cost_usd or 0.0))
+        await b.release(key, amount)
+        return
     except Exception as exc:
-        log.warning("envelope_release_failed", error=str(exc))
+        # A failed release already fails CLOSED for money: the reservation stays
+        # held, so the system believes it has LESS headroom and denies more. The
+        # defect is not the direction, it is the PERMANENCE -- the held amount is
+        # never recovered and nothing records how much was stranded, so headroom
+        # shrinks monotonically across a process's life with no way to reconcile.
+        #
+        # Retry once: the common cause is a transient backend blip, and a second
+        # attempt costs nothing on an already-failed path.
+        log.warning("envelope_release_failed", error=str(exc), attempt=1)
+        first = exc
+
+    try:
+        await b.release(key, amount)
+        return
+    except Exception as exc:
+        # Still stranded. Record the AMOUNT and the KEY, not just the fact:
+        # "release failed" is unactionable, whereas "$0.0400 stranded on key X"
+        # can be reconciled. Counted so a slow leak has a number before it
+        # presents as "routing got stingy for no reason".
+        log.error(
+            "envelope_release_stranded",
+            error=str(exc), first_error=str(first), amount_usd=amount,
+        )
+        try:
+            from chuzom import failopen
+
+            failopen.record(
+                "CHZ-FO-ENVELOPE-STRANDED", exc, detail=f"{amount:.6f}|{key}"
+            )
+        except Exception:  # noqa: BLE001 — accounting must not break the exit path
+            pass
 
 
 __all__ = ["reserve_envelope", "commit_envelope", "release_envelope"]

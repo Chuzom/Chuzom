@@ -169,6 +169,32 @@ def main() -> int:
 
         print(f"\n{'═'*78}\n  CHUZOM_SLIM={tier}   server registers {len(registered)} tools\n{'═'*78}")
 
+        # "Every hint names a registered tool" is NECESSARY but NOT SUFFICIENT.
+        # With a bogus name injected into CORE_TOOLS, the server simply cannot
+        # register it, the tier silently shrinks 4 -> 3, and the fallback chain
+        # degrades every llm_query hint to llm_code. Each hint still names a
+        # registered tool, so this trace reported CLEAN while query prompts were
+        # being routed to the CODE tool. Consistency preserved, correctness lost.
+        #
+        # So also assert the other direction: every tool the tier CLAIMS to offer
+        # must actually be registered. A tool that vanishes between the constant
+        # and the server is the exact seam this script exists to watch.
+        try:
+            from chuzom.tool_surface import registered_tools as _declared_for
+
+            declared = _declared_for(tier)
+        except Exception:
+            declared = None
+        if declared:
+            missing = sorted(n for n in declared if n not in registered)
+            if missing:
+                failures += 1
+                print(f"  {R}✗ tier declares {len(declared)} tools but the server "
+                      f"registered {len(registered)}; missing: {', '.join(missing)}{X}")
+                print(f"      {R}THIS IS THE BUG: the tier lost a tool between the "
+                      f"constant and the server. Hints for it degrade silently to "
+                      f"whatever the fallback chain offers.{X}")
+
         nonce = uuid.uuid4().hex[:6] if args.fresh else ""
         for i, (prompt, _kind) in enumerate(CASES):
             if nonce:

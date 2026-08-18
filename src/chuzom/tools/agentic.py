@@ -93,7 +93,7 @@ def _default_adapters() -> dict[int, Any]:
 
 async def llm_delegate(
     task: str, budget_usd: float = 1.0, baseline_cost_per_milestone: float = 0.20,
-    context: str = "", bounded: bool | None = None,
+    context: str = "", bounded: bool | None = None, workdir: str | None = None,
 ) -> str:
     """Agentic delegation: decompose *task* into milestones, run them on the
     cheapest capable tier with objective acceptance checks, escalate on failure
@@ -143,12 +143,23 @@ async def llm_delegate(
         budget_usd = bounded_op_budget_usd(task_type="delegate", model_tier=1)
         max_attempts = MAX_BOUNDED_ATTEMPTS
 
+    # RED3-08: the acceptance check has to know WHERE the work happened.
+    # Defaulting to the process cwd is right for the MCP server (it runs in the
+    # user's project) but must stay overridable — an explicit value is the only
+    # way a caller working in a scratch directory can be verified against the
+    # right tree. Left unresolved, a repo-reading check silently inspects
+    # whatever directory the server happens to be in.
+    import os as _os
+
+    effective_workdir = workdir or _os.getcwd()
+
     result = run_delegation(
         task, milestones, adapters,
         baseline_cost_per_milestone=baseline_cost_per_milestone,
         budget_cap_usd=budget_usd,
         max_attempts_per_tier=max_attempts,
         session_context=(context or "")[:2000],  # bound: don't blow the agent's prompt
+        workdir=effective_workdir,
     )
     result["route_kind"] = route_kind
     # Record the honest saving into chuzom's ledger (fail-open — never breaks the call).

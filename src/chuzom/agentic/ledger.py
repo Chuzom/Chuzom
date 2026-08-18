@@ -60,6 +60,24 @@ class Milestone:
     attempts: list[Attempt] = field(default_factory=list)
 
 
+#: Hard ceiling on artifact text handed to a downstream milestone. An artifact is
+#: agent output and can be arbitrarily large; an unbounded one would push the real
+#: task out of the context window, which fails as "the agent ignored its
+#: instructions" rather than as a size error.
+_MAX_ARTIFACT_CHARS = 2000
+
+
+def _render_artifacts(artifacts: dict) -> str:
+    """Flatten an artifact map to bounded text for the delegated prompt."""
+    parts: list[str] = []
+    for key, value in sorted(artifacts.items()):
+        text = str(value)
+        if len(text) > _MAX_ARTIFACT_CHARS:
+            text = text[:_MAX_ARTIFACT_CHARS] + f"… [truncated, {len(text)} chars total]"
+        parts.append(f"{key}: {text}")
+    return "\n".join(parts)
+
+
 @dataclass
 class TaskLedger:
     """Ordered milestones + the frozen done-frontier + budget/tier cursor."""
@@ -69,7 +87,6 @@ class TaskLedger:
     current_tier: int = 0
     budget_cap_usd: float = 1.0
     spent_usd: float = 0.0
-    replanned: bool = False
     # P1-S2 (Known Limit A): conversation context from the calling session, handed
     # to every delegated agent via frozen_context() so a routed model isn't blind
     # to what was discussed (not just its own milestones).
@@ -108,24 +125,51 @@ class TaskLedger:
     def frozen_context(self) -> list[dict[str, Any]]:
         """Read-only view of achieved milestones handed to an escalated tier so
         it resumes at the frontier instead of redoing completed work."""
+        from chuzom.prompt_injection import wrap_untrusted_context
+
         frozen = [
             {"id": m.id, "description": m.description,
-             "achieved_by": m.achieved_by, "artifacts": m.artifacts}
+             "achieved_by": m.achieved_by, "artifacts": m.artifacts,
+             # RED3-06: pack_prompt renders these so a later milestone can build
+             # on what an earlier one PRODUCED, not merely learn that it ran.
+             # RED6-02: artifacts are agent output — untrusted by construction —
+             # so they are neutralised HERE, alongside the other context blocks,
+             # rather than at the render site. Wrapping at the point of rendering
+             # would let an escalated tier that packs its own prompt route around
+             # it, which is the whole reason the other two are wrapped here.
+             "artifacts_rendered": wrap_untrusted_context(
+                 _render_artifacts(m.artifacts), f"ARTIFACTS FROM {m.id}"
+             ) if m.artifacts else ""}
             for m in self.milestones
             if m.status is MilestoneStatus.DONE
         ]
+        # RED6-02 (P0): both context blocks are UNTRUSTED and are neutralised
+        # here — the last point before pack_prompt renders them into a delegated
+        # prompt. Doing it here rather than at each caller means an escalation to
+        # a different tier cannot route around it: every tier takes its context
+        # from this one method.
+        from chuzom.prompt_injection import wrap_untrusted_context
+
         if self.session_context:
             # Prepended, distinct id — pack_prompt renders it as conversation
             # context, NOT as a completed milestone.
-            frozen.insert(0, {"id": "SESSION_CONTEXT", "description": self.session_context,
+            frozen.insert(0, {"id": "SESSION_CONTEXT",
+                              "description": wrap_untrusted_context(
+                                  self.session_context, "CONVERSATION CONTEXT"),
                               "achieved_by": None, "artifacts": {}})
         if self.relevant_context is not None:
             # CF-2: a separate RELEVANT_CONTEXT entry (candidate files / repo state),
             # prepended ahead of SESSION_CONTEXT. Ledger-level, so it survives
             # escalation and is not truncated with conversation history.
+            #
+            # The sharper risk of the two: this is literal repository content,
+            # and on the delegation path the repository is precisely the thing
+            # the user may not control.
             from chuzom.capabilities import serialize_relevant_context
             frozen.insert(0, {"id": "RELEVANT_CONTEXT",
-                              "description": serialize_relevant_context(self.relevant_context),
+                              "description": wrap_untrusted_context(
+                                  serialize_relevant_context(self.relevant_context),
+                                  "REPOSITORY CONTEXT"),
                               "achieved_by": None, "artifacts": {}})
         return frozen
 

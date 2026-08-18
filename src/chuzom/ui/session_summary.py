@@ -247,6 +247,7 @@ class SessionSummaryDashboard:
         session_delta_pct: float | None = None,
         weekly_delta_pct: float | None = None,
         model_breakdown: dict[str, float] | None = None,
+        model_breakdown_note: str | None = None,
         session_models: list[dict] | None = None,
         subscriptions: list[dict] | None = None,
         routing_policy: str = "balanced",
@@ -630,10 +631,15 @@ class SessionSummaryDashboard:
                 (f"  saved {_fmt_usd(total_m_saved)}", PALETTE.success),
             ))
         elif model_breakdown:
+            # The heading carries WHAT THIS COVERS, not just the window. This panel is
+            # built from `routing_decisions`, which only llm_route and llm_auto write —
+            # the llm(task=…) family never does (audit doc 27). Rendering it as a bare
+            # "14-day mix" presented one tool's routing as though it were all of it.
             model_lines.append(Text(""))
-            model_lines.append(
-                Text("  MODELS  14-day mix", style=f"bold {PALETTE.violet}")
-            )
+            _mb_title = "  MODELS  14-day mix"
+            if model_breakdown_note:
+                _mb_title += f"  ·  {model_breakdown_note}"
+            model_lines.append(Text(_mb_title, style=f"bold {PALETTE.violet}"))
             for model, pct in sorted(model_breakdown.items(), key=lambda x: -x[1])[:5]:
                 short = model.split("/")[-1][:20]
                 bar = self._colored_quota_bar(pct, width=14)
@@ -645,6 +651,16 @@ class SessionSummaryDashboard:
                     bar,
                     (f"  {pct:.0f}%", PALETTE.text_dim),
                 ))
+        elif model_breakdown_note:
+            # No per-session data AND no classified routes in the window. Rendering
+            # nothing here reads as "no routing happened", which is false — the observed
+            # case was three days with zero classified routes while `usage` took 643 rows
+            # in 24 hours. Absence of data and absence of activity are different facts and
+            # a panel that cannot tell them apart is the RED2-02 shape.
+            model_lines.append(Text(""))
+            model_lines.append(
+                Text(f"  MODELS  {model_breakdown_note}", style=f"bold {PALETTE.violet}")
+            )
 
         return Panel(
             Group(grid, *quota_lines, *model_lines),
@@ -979,6 +995,7 @@ class SessionSummaryDashboard:
         daily_costs: list[float] | None = None,
         total_saved: float = 0.0,
         model_breakdown: dict[str, float] | None = None,
+        model_breakdown_note: str | None = None,
         session_models: list[dict] | None = None,
         models: list[dict] | None = None,
         claude_quota_pct: float = 0.0,
@@ -1034,6 +1051,7 @@ class SessionSummaryDashboard:
             session_delta_pct=session_delta_pct,
             weekly_delta_pct=weekly_delta_pct,
             model_breakdown=model_breakdown,
+            model_breakdown_note=model_breakdown_note,
             session_models=session_models,
             subscriptions=subscriptions,
             routing_policy=_routing_policy,

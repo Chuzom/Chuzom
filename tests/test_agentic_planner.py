@@ -18,9 +18,25 @@ from chuzom.agentic.planner import (
 
 def test_build_acceptance_objective_types():
     assert build_acceptance({"type": "canary", "marker": "OBJ_CANARY"})({"output": "OBJ_CANARY"}).ok
-    assert build_acceptance({"type": "diff", "files": ["a.py"]})({"files": ["a.py"]}).ok
     ok = build_acceptance({"type": "cmd", "command": [sys.executable, "-c", "pass"]})
     assert ok({}).ok
+
+
+def test_build_acceptance_diff_does_not_trust_the_claim():
+    """RED3-02. INVERTED — third test asserting the same defect.
+
+    It read `build_acceptance({"type": "diff", ...})({"files": ["a.py"]}).ok`,
+    i.e. that saying "I touched a.py" was proof of touching a.py. Three separate
+    tests encoded that, which is why the behaviour felt well covered: the suite
+    agreed with the code, and both were wrong in the same direction.
+
+    The builder's job is to produce a diff check; whether the diff is real is
+    test_agentic_acceptance.py's business.
+    """
+    check = build_acceptance({"type": "diff", "files": ["a.py"]})
+    result = check({"files": ["a.py"]})
+    assert not result.ok
+    assert "repository is unchanged" in result.reason
 
 
 def test_build_acceptance_rejects_subjective_and_unknown():
@@ -39,7 +55,14 @@ def test_plan_to_milestones_builds_and_validates():
     ms = plan_to_milestones(plan)
     assert [m.id for m in ms] == ["M1", "M2"]
     assert ms[1].deps == ("M1",)
-    assert ms[0].acceptance({"files": ["m.py"]}).ok
+    # RED3-02: this asserted `ms[0].acceptance({"files": ["m.py"]}).ok` — i.e.
+    # that merely CLAIMING to have touched m.py satisfied the check. A diff
+    # check now reads the repository, so the claim alone must not pass. What
+    # this test is really about is that the planner BUILDS the checks, so it
+    # asserts that and leaves diff semantics to test_agentic_acceptance.py.
+    assert callable(ms[0].acceptance)
+    assert not ms[0].acceptance({"files": ["m.py"]}).ok
+    assert ms[1].acceptance({"output": "... M2_CANARY ..."}).ok
 
 
 def test_plan_rejected_when_milestone_has_no_objective_check():

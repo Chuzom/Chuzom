@@ -15,6 +15,18 @@ Record kinds:
 - ``created_file`` {path}                    → delete a whole file chuzom created
 - ``file``         {path}                     → delete a copied file (e.g. a hook script)
 - ``dir``          {path}                     → recursively delete a chuzom-created dir
+- ``json_key``     {path, key, had_key, previous}
+                                              → RESTORE a JSON key to the value it
+                                                held before install, or delete it if
+                                                there was none
+
+The last kind is different in shape from the others and the difference matters.
+Every other record answers "delete this thing chuzom created". ``json_key``
+answers "put back the thing chuzom *replaced*" — needed the moment the installer
+overwrites a key it does not own, which is what RED4-01 found it doing to a
+user's ``statusLine``. Removal-only records cannot express that: deleting the key
+would leave the user with nothing where their own config used to be, which is the
+same data loss with a tidier name.
 
 All operations are best-effort and defensive: a manifest write must never break
 install, and a single removal failure must never abort uninstall.
@@ -67,6 +79,60 @@ def record(kind: str, path: Any, **meta: Any) -> None:
         p.write_text(json.dumps(records, indent=2))
     except Exception:
         pass  # best-effort; install must proceed regardless
+
+
+def find(kind: str, path: Any, **match: Any) -> dict[str, Any] | None:
+    """First record of ``kind`` for ``path`` also matching every key in ``match``.
+
+    Exists so a *restore* record can be written exactly once. Install is expected
+    to be re-run, and the second run sees chuzom's own value sitting in the key —
+    so a blind re-record would overwrite the user's captured original with
+    chuzom's replacement, destroying the very thing the record exists to protect.
+    Callers check here first and skip if a capture already exists.
+    """
+    try:
+        target = str(pathlib.Path(path).absolute())
+        for rec in _load():
+            if not isinstance(rec, dict) or rec.get("kind") != kind:
+                continue
+            if rec.get("path") not in (target, str(path)):
+                continue
+            if all(rec.get(k) == v for k, v in match.items()):
+                return rec
+    except Exception:  # noqa: BLE001 — a lookup failure must not break install
+        return None
+    return None
+
+
+def _restore_json_key(
+    path: pathlib.Path, key: str, had_key: bool, previous: Any
+) -> list[str]:
+    """Put ``key`` back to its pre-install value, or remove it if there was none."""
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        return [f"  restore skipped ({path}): {e}"]
+    if not isinstance(data, dict):
+        return [f"  restore skipped ({path}): top level is not an object"]
+
+    if had_key:
+        if data.get(key) == previous:
+            return []
+        data[key] = previous
+        verb = f"✓ Restored {key} in {path} to its pre-install value"
+    else:
+        if key not in data:
+            return []
+        del data[key]
+        verb = f"✓ Removed {key} from {path} (absent before install)"
+
+    try:
+        path.write_text(json.dumps(data, indent=2) + "\n")
+    except OSError as e:
+        return [f"  restore skipped ({path}): {e}"]
+    return [verb]
 
 
 def clear() -> None:
@@ -125,6 +191,10 @@ def apply_uninstall() -> list[str]:
                 if path.exists():
                     _shutil.rmtree(path, ignore_errors=True)
                     actions.append(f"✓ Removed {path}")
+            elif kind == "json_key":
+                actions += _restore_json_key(
+                    path, rec.get("key", ""), bool(rec.get("had_key")), rec.get("previous")
+                )
         except Exception as e:  # noqa: BLE001 — one bad record must not abort the rest
             _p = rec.get("path", "?")
             actions.append(f"  manifest removal skipped ({_p}): {e}")

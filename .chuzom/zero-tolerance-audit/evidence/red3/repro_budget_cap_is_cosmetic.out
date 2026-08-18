@@ -1,0 +1,11 @@
+=== Scenario A: production default cost accounting (cost_per_call_usd=0.0), budget_usd set VERY low ($0.0001) ===
+outcome: Outcome.SURFACED | ledger.spent_usd: 0.0
+tier0 real .run() calls: 2 | tier1 real .run() calls: 2
+total real backend invocations: 4
+
+=== Scenario B: SAME task, SAME budget_usd ($0.0001), but with HONEST cost accounting (cost_per_call_usd=$0.01/call) -- what a caller believes budget_usd is protecting them against ===
+outcome: Outcome.BUDGET_EXHAUSTED | ledger.spent_usd: 0.01
+tier0 real .run() calls: 1 | tier1 real .run() calls: 0
+total real backend invocations: 1
+
+>>> PROVEN: with the production default adapters (CodexAdapter, ReActAgent -- both cost_per_call_usd=0.0 by default, and _default_adapters() in tools/agentic.py never overrides this), `budget_usd` provides ZERO real protection against retry-storm exposure. An impossible/miscalibrated task burns through the FULL structural ladder (2 tiers x 2 attempts = 4 real subprocess/network invocations per milestone here; more with multiple milestones and the non-deterministic flaky-retry doubling in engine.py::_run_and_verify) NO MATTER what budget_usd the caller passes -- 'budget exhausted' can never fire from real work. The parameter only does something if a caller supplies an adapter with honest non-zero cost accounting, which nothing in the shipped default path does. A user who passes budget_usd=0.05 believing it caps their exposure is not protected by that number at all; the actual brake is the hardcoded structural bound (tier count x max_attempts_per_tier x up to 2x flaky-retry), which is not user-configurable and not what budget_usd communicates.

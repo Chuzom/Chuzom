@@ -53,6 +53,35 @@ variance, and Gate 16 became **robust**: across four strict-full-metering runs t
   counting them in `baseline_estimated_rows`), so no user-facing surface presents an estimate as a
   measured total (#28 / #221).
 
+> **Gates 15 and 16 are COUPLED, not independent confirmations** (AUD-04, disclosed under WP-16).
+>
+> Both are moved by the same lever. Precision-tier routing (#220) is what made Gate 16 robust: it
+> fronts the **paid** `gpt-4o-mini` (~$0.0003/prompt) for short exact-answer prompts that
+> previously went cheap-local-first and returned confident-but-wrong terse answers. Those paid
+> calls are a cost line in the very net-savings figure Gate 15 reports.
+>
+> The size of the trade, from this repo's own measured runs
+> ([`10_CODEX_QUOTA_BENCHMARK.md`](10_CODEX_QUOTA_BENCHMARK.md), ninth run):
+>
+> | | net cash | quality delta |
+> |---|---|---|
+> | audit, **before** #220 | +$0.02814 | **−0.58 (FAIL)** |
+> | re-audit Pass 1, after #220 | +$0.02723 | −0.21 |
+> | re-audit Pass 2, after #220 | +$0.02722 | +0.00 |
+>
+> **Gate 16's robustness cost roughly $0.0009 — about 3% — of Gate 15's margin.** Both gates still
+> pass comfortably, and on these numbers the trade is a good one. That is not the point of this
+> note.
+>
+> The point is that reading "15 PASS" and "16 PASS" as two independent results overstates the
+> evidence: they draw on one account. A future quality fix of the same shape — buying correctness
+> with paid routing — spends Gate 15's margin again, and doing that repeatedly could carry both
+> gates green right up until the savings claim stops being true. Anyone re-qualifying should read
+> the pair together and watch the net-cash column, not just the two verdicts.
+>
+> The mechanism was already stated in `10_CODEX_QUOTA_BENCHMARK.md`. What was missing was saying
+> so **here**, in the summary a reader consults to learn what passed.
+
 Residual (non-blocking): 2 moderate prompts (`mod-07`, `mod-12`) still score q=1 on a local
 model without escalating — a classifier/escalation-threshold tuning item, not a gate blocker.
 
@@ -83,8 +112,8 @@ model without escalating — a classifier/escalation-threshold tuning item, not 
 | 12 | Doctor and router provider-health reconcile | **PASS** | C10 fixed + tested (`test_doctor_health_reconciliation`) |
 | 13 | All critical mutations killed | **PASS (redefined honest bar — see `12_MUTATION_EQUIVALENTS.md`)** | "All mutants killed" is literally unsatisfiable (equivalent mutants can't be killed by any test). The redefined, documented bar — **every non-equivalent mutant killed; every survivor proven equivalent and registered** — is met. Mutation-tested (hermetic) modules closed: **`gates.py` 253/255** (this session, #211/#215/#216 — all `_check_*`/`run_gates` closed; 2 registered equivalents: IGNORECASE-uppercase pattern, unset-default `""`vs`"xxxx"`), `execution_ledger.py` (#173), `execution_signal.py` (48/54), `operational_signal.py` (48/54), `context_signal.py` (12/13), `bench/savings.py` (98/102) — all remaining survivors registered as provable equivalents. `router.py` (4,374-line async orchestrator) is out of file-level mutation scope by the established Phase-7 methodology; its new reset code is covered by dedicated fail-before/pass-after regression tests (`test_exhaustion_floor`, `test_block_providers`, `test_lever2_ladder`). Registry: `12_MUTATION_EQUIVALENTS.md` |
 | 14 | No numeric public claim without current reproducible evidence | **PASS** | B6: unsupported claim retracted; claim-evidence registry + CI validator gate |
-| 15 | Control-group benchmark shows positive net verified token savings | **PASS (robust — strict full-metering)** | Harness built and **run for real** (`10_CODEX_QUOTA_BENCHMARK.md`). Strict full-metering (Codex/Gemini hard-blocked, no offload confound): the two re-audit passes on frozen `7c6fdaa` measured **NET +$0.02723 / +$0.02722** (chuzom ≈$0.0036 vs GPT-4o ≈$0.030). Lever ① (#201) + lever ② (#204) removed the embedding-model pollution and added the metered `gpt-4o-mini` mid-tier (~$0.0003); precision-tier routing (#220) adds it for exact-answer prompts. Regression-locked by `test_lever2_ladder`, `test_block_providers`, `test_precision_tier_routing` |
-| 16 | Quality within non-inferiority margin | **PASS (robust — precision-tier routing, #220)** | Easy delta −0.20. The audit's earlier −0.58 flip was root-caused to short objective prompts where cheap-local-first returns confident-**wrong** terse answers the runtime heuristic can't catch (`mod-07`/`mod-12`). **Precision-tier routing (#220)** fronts the reliable cheap metered `gpt-4o-mini` for exact-answer prompts (arithmetic / code-output / precise count), removing those misses. Result: strict-full-metering delta held at **−0.18 / −0.21 / −0.21 / +0.00** across four runs (the two re-audit passes on `7c6fdaa`: −0.21 and +0.00), all within margin, **0 exhaustions**. Variance collapsed because the objective misses no longer swing 4 quality points. Regression-locked by `test_precision_tier_routing`, `test_exhaustion_floor`, `test_lever2_ladder` |
+| 15 | Control-group benchmark shows positive net verified token savings | **PASS (robust — strict full-metering)** | Harness built and **run for real** (`10_CODEX_QUOTA_BENCHMARK.md`). Strict full-metering (Codex/Gemini hard-blocked, no offload confound): the two re-audit passes on frozen `7c6fdaa` measured **NET +$0.02723 / +$0.02722** (chuzom ≈$0.0036 vs GPT-4o ≈$0.030). Lever ① (#201) + lever ② (#204) removed the embedding-model pollution and added the metered `gpt-4o-mini` mid-tier (~$0.0003); precision-tier routing (#220) adds it for exact-answer prompts. Regression-locked by `test_lever2_ladder`, `test_block_providers`, `test_precision_tier_routing`. **Coupled with Gate 16 — see the coupling note above; #220 bought Gate 16's robustness with ~$0.0009 (~3%) of this margin, so the two are not independent confirmations.** |
+| 16 | Quality within non-inferiority margin | **PASS (robust — precision-tier routing, #220)** | Easy delta −0.20. The audit's earlier −0.58 flip was root-caused to short objective prompts where cheap-local-first returns confident-**wrong** terse answers the runtime heuristic can't catch (`mod-07`/`mod-12`). **Precision-tier routing (#220)** fronts the reliable cheap metered `gpt-4o-mini` for exact-answer prompts (arithmetic / code-output / precise count), removing those misses. Result: strict-full-metering delta held at **−0.18 / −0.21 / −0.21 / +0.00** across four runs (the two re-audit passes on `7c6fdaa`: −0.21 and +0.00), all within margin, **0 exhaustions**. Variance collapsed because the objective misses no longer swing 4 quality points. Regression-locked by `test_precision_tier_routing`, `test_exhaustion_floor`, `test_lever2_ladder`. **Coupled with Gate 15 — see the coupling note above; this robustness was bought with paid routing that Gate 15's net-savings figure absorbs.** |
 | 17 | No benchmark event has unclassified spend | **PASS (clean control shipped — `unclassified=[]` proven)** | Closed by `CHUZOM_BLOCK_PROVIDERS` (#202): a hard provider block on EVERY routing path (base chain, injection, broker), distinct from the subprocess-only `DISABLE_SUBPROCESS_BACKENDS` so the gateway daemon keeps its free broker-Codex path. Re-run with `CHUZOM_BLOCK_PROVIDERS=codex,gemini_cli`: **`GATE17=True`, `unclassified=[]`, zero Codex/Gemini leaks** — every escalation hit a metered OpenAI model (o3/gpt-4o/gpt-4o-mini), all priced. Regression-locked by `test_block_providers` incl. the guard that `DISABLE_SUBPROCESS_BACKENDS` still allows broker-Codex |
 | 18 | No unknown realization counted as verified realized | **PASS** | `_aggregate` now derives realization-gated savings per route: `potential_savings_usd` sums every route's `baseline_eq − actual`, but `realized_savings_usd` sums ONLY `verified_used` routes — `unknown`, `verified_overridden`, and routes with no realization event contribute to potential but NEVER to realized. Regression-locked by `test_gate18_realization` (unknown/overridden/no-event all excluded; session-level invariant `realized ≤ potential`) |
 | 19 | Schema migrations + rollback tested | **PASS (additive, forward-safe)** | Both stores migrate additively via a PRAGMA-guarded `ALTER TABLE ADD COLUMN … DEFAULT` (agent-session cols; `execution_events` `CREATE TABLE IF NOT EXISTS`; lineage token cols #28). The lineage token migration is now **tested** (`test_lineage_token_schema::test_migration_adds_token_columns_to_pre_28_db` — a pre-migration db gains the columns and a legacy row survives + backfills to 0). Rollback is inherently safe for additive columns: an older binary ignores the trailing columns (SQLite `SELECT`/`INSERT` by name), so downgrading needs no down-migration — documented as the rollback contract |

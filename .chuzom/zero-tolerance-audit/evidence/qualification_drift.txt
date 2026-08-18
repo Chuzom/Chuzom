@@ -1,0 +1,34 @@
+=== QUALIFICATION DRIFT: 7c6fdaa (qualified) -> c2c2882 (v1.1.1, audited) ===
+
+qualified SHA: 7c6fdaac191b113a5a23adf3f1e538b539a7ce98
+qualified date: 2026-07-28 18:50:31 +0100
+subject: feat(summary): baseline counterfactual from recorded tokens, not a latency guess (#28, Gate 7) (#221)
+
+audited SHA:   c2c28821f690f7cbda42b46da06fc36ef77d816e (tag v1.1.1)
+audited date:  2026-08-08 21:39:02 +0100
+
+commits between: 125
+overall:  488 files changed, 217260 insertions(+), 6188 deletions(-)
+
+=== CORE ROUTING/COST/TELEMETRY CHURN ===
+ src/chuzom/cost.py                        |   99 ++-
+ src/chuzom/hooks/agent-error.py           |   91 ++-
+ src/chuzom/hooks/agent-route.py           |   85 ++-
+ src/chuzom/hooks/auto-route.py            |  441 ++++++++++--
+ src/chuzom/hooks/bash-compress.py         |    2 +-
+ src/chuzom/hooks/enforce-route.py         |  306 +++++++-
+ src/chuzom/hooks/gemini-cli-auto-route.py |   59 +-
+ src/chuzom/hooks/session-end-clawcode.py  |    3 +-
+ src/chuzom/hooks/session-end.py           |   35 +-
+ src/chuzom/hooks/session-start.py         |  235 +++++--
+ src/chuzom/hooks/status-bar.py            |   50 +-
+ src/chuzom/hooks/statusline-command.sh    |  142 ++--
+ src/chuzom/hooks/stop-enforce.py          |   28 +-
+ src/chuzom/hooks/subagent-start.py        |   62 +-
+ src/chuzom/hooks/usage-refresh.py         |   82 ++-
+ src/chuzom/lineage/lineage_store.py       |   36 +-
+ src/chuzom/router.py                      | 1094 +++++++++++++++++++++--------
+ src/chuzom/server.py                      |   49 +-
+ src/chuzom/tool_surface.py                |  480 +++++++++++++
+ src/chuzom/tool_tiers.py                  |   57 +-
+ 20 files changed, 2824 insertions(+), 612 deletions(-)

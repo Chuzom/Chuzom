@@ -21,6 +21,7 @@ import secrets
 from pathlib import Path
 
 from chuzom.logging import configure_logging, get_logger
+from chuzom.paths import private_opener
 
 log = get_logger("chuzom.dashboard")
 
@@ -34,7 +35,14 @@ def _get_or_create_token() -> str:
     if _TOKEN_FILE.exists():
         return _TOKEN_FILE.read_text().strip()
     token = secrets.token_urlsafe(32)
-    _TOKEN_FILE.write_text(token)
+    # Created at 0600, not created-then-tightened. `write_text` would make the
+    # file with the umask default (0644 typically), put the AUTH TOKEN in it,
+    # and only restrict it afterwards — anything that opened it in that window
+    # keeps a readable handle, since permissions are checked at open time.
+    # The chmod stays for files written by older versions, which an opener
+    # cannot fix because it only applies on creation.
+    with open(_TOKEN_FILE, "w", encoding="utf-8", opener=private_opener) as fh:
+        fh.write(token)
     os.chmod(_TOKEN_FILE, 0o600)
     return token
 
@@ -121,8 +129,16 @@ async def _get_stats() -> dict:
                 for r in await c.fetchall()
             ]
 
-            # Savings = baseline Sonnet cost minus actual external spend
-            SONNET_IN, SONNET_OUT = 3.0, 15.0  # $/M tokens
+            # Savings = baseline Sonnet cost minus actual external spend.
+            # WP-03: rates from chuzom.pricing. They were 3.0/15.0 inline, which
+            # does not follow Sonnet 5's introductory pricing and so overstates
+            # the dashboard's headline saving by 50% while that is live.
+            from chuzom import pricing as _pricing
+
+            _sonnet = _pricing.price_for("sonnet")
+            SONNET_IN, SONNET_OUT = (
+                (_sonnet.input, _sonnet.output) if _sonnet else (0.0, 0.0)
+            )  # $/M tokens
             c = await db.execute(
                 "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), "
                 "COALESCE(SUM(cost_usd),0) FROM usage "

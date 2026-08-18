@@ -1,0 +1,165 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+.......................................x................................ [  5%]
+....................ss..ssss..s......................................... [  6%]
+........................................................................ [  7%]
+......ssssss...................ss.sssss.ss.ss.sssss.ss.ss.sssss.ss...... [  8%]
+...s...........s...........s..ss.ss.ssssssss.ss.ssssssss.ss.ssssssss.ss. [  9%]
+ssssss.................................................................. [ 10%]
+.............................ss...ss.ss.ssssssss.ss.ssssssss.ss.ssssssss [ 11%]
+.ss.ssssssss.ss.ssssss..........................sss..................... [ 12%]
+sssssssssssss........................................................... [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+.............................ssssssss................................... [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+...........................s............................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+............................s........................................... [ 37%]
+........................................................................ [ 38%]
+.........................................................sss............ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+..............................................ssss...................... [ 53%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+....................................................................s... [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+.........................................ss............................. [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+................................................................s....... [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+.......................................                                  [100%]
+📜 Scenario report written: /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/Docs/SCENARIO_REPORT.md (24 scenarios, 24 passed)
+
+=============================== warnings summary ===============================
+.venv-audit/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/.venv-audit/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+.venv-audit/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:47
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/.venv-audit/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()` on the model where the field is defined, once all the referenced types are defined.
+    warnings.warn(
+
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_request_model
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/src/chuzom/service.py:332: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_adaptive_router.py::TestSidecarScoreEndpoint::test_score_request_model
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/.venv-audit/lib/python3.11/site-packages/fastapi/applications.py:4681: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+tests/test_cat_f_deferred_sites.py::TestAutoRouteEstimateCost::test_returns_savings_dict
+tests/test_deep_reasoning_classifier.py::TestAutoRouteClassifyComplexity::test_classify_complexity_returns_deep_reasoning_for_formal
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/.venv-audit/lib/python3.11/site-packages/_pytest/fixtures.py:1313: PytestRemovedIn10Warning: Class-scoped fixture defined as instance method is deprecated.
+  Instance attributes set in this fixture will NOT be visible to test methods,
+  as each test gets a new instance while the fixture runs only once per class.
+  Use @classmethod decorator and set attributes on cls instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
+    fixturefunc = resolve_fixture_function(fixturedef, request)
+
+tests/test_dashboard_auth.py::test_auth_middleware_allows_index_without_token
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/tests/test_dashboard_auth.py:91: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_dashboard_auth.py::test_auth_middleware_blocks_api_without_token
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/tests/test_dashboard_auth.py:125: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_dashboard_auth.py::test_auth_middleware_allows_api_with_valid_token
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/tests/test_dashboard_auth.py:157: DeprecationWarning: Decorator `@unittest_run_loop` is no longer needed in aiohttp 3.8+
+    @unittest_run_loop
+
+tests/test_judge.py::test_evaluate_background_writes_judge_score
+  /Users/yaliandrona/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/base_events.py:428: RuntimeWarning: coroutine '_evaluate_background' was never awaited
+    return futures.Future(loop=self)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_t3_m2_deadline_propagation.py::test_deadline_fires_during_slow_dispatch
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/tests/test_t3_m2_deadline_propagation.py:188: RuntimeWarning: coroutine 'test_deadline_fires_during_slow_dispatch.<locals>._slow' was never awaited
+    with pytest.raises(DeadlineExceeded):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_t3_m2_deadline_propagation.py::test_min_cap_wins_when_both_set
+  /private/tmp/claude-501/-Users-yaliandrona-Projects-llm-router/b006765e-249f-49a4-a54c-c3030f141d78/scratchpad/AUDIT-c2c2882/tests/test_t3_m2_deadline_propagation.py:242: RuntimeWarning: coroutine 'test_min_cap_wins_when_both_set.<locals>._slow' was never awaited
+    with pytest.raises(DeadlineExceeded):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

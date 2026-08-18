@@ -1,0 +1,35 @@
+
+╔══════════════════════════════════════════╗
+║   Chuzom — One-Command Install        ║
+╚══════════════════════════════════════════╝
+
+  ✓  MCP server already in ~/.claude/settings.json: chuzom
+  ✓  MCP server already in ~/.claude.json: chuzom
+  ✓  Installed routing rules → /tmp/red4-sandbox3/.claude/rules/chuzom.md
+  ✓  Installed statusline → /tmp/red4-sandbox3/.claude/hooks/chuzom-statusline.sh
+  ✓  statusLine already configured
+  ✓  Claude Desktop: chuzom already registered
+  ✓  Probing local models for agentic capability (background; see `chuzom probe`)
+
+✓ Chuzom installed globally.
+  Every Claude Code session will now auto-route tasks.
+  Restart Claude Code (and Claude Desktop if installed) to activate.
+
+  Provider keys (optional — router works without any):
+    ⬜  Claude subscription mode off (set CHUZOM_CLAUDE_SUBSCRIPTION=true to enable)
+    ⬜  No external provider API keys found in environment
+    ⚠️   No providers configured — set at least one API key or subscription mode
+
+  Try it:
+    In Claude Code, ask: "What does os.path.join do?"
+    You'll see: ⚡ ROUTE → Haiku (simple query)
+
+  Subcommands:
+    chuzom doctor               — verify everything is wired up
+    chuzom status               — today's cost & savings
+    chuzom dashboard            — web dashboard (localhost:7337)
+    chuzom install --check      — preview install state
+    chuzom install --force      — reinstall / update paths
+    chuzom install --claw-code  — also install into claw-code
+    chuzom uninstall            — remove
+

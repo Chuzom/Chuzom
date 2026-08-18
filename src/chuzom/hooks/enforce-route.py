@@ -569,7 +569,8 @@ def _record_realization_used(session_id: str, pending: dict | None) -> None:
         _eid = hashlib.sha256(
             f"{session_id}|{_route_id or ''}|route_realized".encode()
         ).hexdigest()[:32]
-        record_event(LedgerEvent(
+        # RED5-02: bound, not discarded — see execution_ledger.record_event.
+        _ledger_ok = record_event(LedgerEvent(
             event_id=_eid,
             session_id=session_id,
             route_id=_route_id,
@@ -603,7 +604,8 @@ def _record_agent_marked(session_id: str, pending: dict | None) -> None:
         _eid = hashlib.sha256(
             f"{session_id}|{_route_id or ''}|route_realized|agent_marked".encode()
         ).hexdigest()[:32]
-        record_event(LedgerEvent(
+        # RED5-02: bound, not discarded — see execution_ledger.record_event.
+        _ledger_ok = record_event(LedgerEvent(
             event_id=_eid,
             session_id=session_id,
             route_id=_route_id,
@@ -661,7 +663,8 @@ def _record_escalation(session_id: str, turn_id, task_type: str,
     accounting must never block or crash enforcement."""
     try:
         from chuzom.execution_ledger import LedgerEvent, record_event
-        record_event(LedgerEvent(
+        # RED5-02: bound, not discarded — see execution_ledger.record_event.
+        _ledger_ok = record_event(LedgerEvent(
             session_id=session_id,
             turn_id=str(turn_id),
             event_type="escalation_started",
