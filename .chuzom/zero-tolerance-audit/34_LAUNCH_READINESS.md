@@ -61,6 +61,15 @@ execute them, record real exit codes.
 - [ ] `chuzom doctor` exits 0 on a clean install with no keys configured, or its non-zero exit
       is documented as expected with the exact remediation printed.
 - [ ] The job runs in CI on every push and **fails the build** on drift.
+- [ ] It runs on **ubuntu, macos AND windows**, and on the **lowest and highest supported
+      Python** (3.11 and 3.14). Added after the fact, and it is the criterion most likely to
+      earn its keep: this audit's Windows failure was invisible on every platform reachable
+      locally, and the cause — `\"` meaning one thing in bash and another in pwsh — lives in
+      exactly the kind of shell-quoted install command this step executes. A single-platform
+      install check would repeat that mistake precisely.
+- [ ] Each criterion above names **where its proof lives** — the CI job and log — so "it
+      worked" is a link, not a recollection. A launch checklist whose evidence is somebody's
+      memory of a green run is the same defect as a manifest recording files nobody re-checked.
 
 **Done when:** a reviewer with no prior knowledge, on a clean machine, following only the
 README, reaches a working install — and CI proves it stays that way.
