@@ -26,6 +26,7 @@ import os
 import sqlite3
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -363,7 +364,70 @@ def record_event(ev: LedgerEvent, *, path: Path | None = None) -> bool:
         return False
 
 
-def _load_rows(where: str, params: tuple, path: Path | None = None) -> list[dict[str, Any]]:
+#: Comparison operators a filter may use. Anything else is rejected rather than
+#: passed through, so the operator can never carry SQL.
+_ALLOWED_OPS = frozenset({"=", "!=", "<", "<=", ">", ">="})
+
+#: Column names a filter may name. `_COLUMNS` is the table's own definition, so
+#: an identifier is either a real column or an error — never arbitrary text.
+_COLUMN_SET = frozenset(_COLUMNS)
+
+#: One filter: (column, operator, value). The value is always parameterised.
+LedgerFilter = tuple[str, str, Any]
+
+
+def _load_rows(
+    filters: Sequence[LedgerFilter],
+    path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Load ledger rows matching every filter, ANDed together.
+
+    WHY THIS TAKES FILTERS AND NOT A `where` STRING
+    ------------------------------------------------
+    The previous signature was ``_load_rows(where: str, params: tuple, …)`` and
+    interpolated ``where`` straight into the query. Every one of its four callers
+    passed a string literal with ``?`` placeholders, so it was safe — but the
+    safety was a property of the callers, re-established by inspection each time
+    anyone asked, and the signature actively invites an f-string from the fifth.
+
+    32_BANDIT_TRIAGE §3 recorded it as "the fragile spot… safe today", which is
+    the kind of note that ages badly: it documents a hazard instead of removing
+    one, and doc 32 then had to be corrected for a different claim made on the
+    same basis.
+
+    So the unsafe call is now unrepresentable rather than merely unused. Callers
+    supply data — a column name, an operator, a value — and this function is the
+    only place that writes SQL. The column is checked against the table's own
+    definition and the operator against a fixed set, so both sides of every
+    predicate are constrained and the value is parameterised.
+
+    Args:
+        filters: ``(column, operator, value)`` triples, ANDed. Empty means all
+            rows.
+        path: Optional ledger path; defaults to the standard location.
+
+    Raises:
+        ValueError: on an unknown column or operator. Loudly, because a silently
+            dropped filter would return MORE rows than asked for, and callers
+            aggregate what they get.
+    """
+    clauses: list[str] = []
+    params: list[Any] = []
+    for column, op, value in filters:
+        if column not in _COLUMN_SET:
+            raise ValueError(
+                f"unknown ledger column {column!r} — filters may only name "
+                f"columns in _COLUMNS, not arbitrary SQL"
+            )
+        if op not in _ALLOWED_OPS:
+            raise ValueError(
+                f"unsupported operator {op!r} — allowed: {sorted(_ALLOWED_OPS)}"
+            )
+        clauses.append(f"{column} {op} ?")
+        params.append(value)
+
+    where = " AND ".join(clauses) if clauses else "1=1"
+
     conn = _connect(path)
     try:
         conn.row_factory = sqlite3.Row
@@ -373,9 +437,12 @@ def _load_rows(where: str, params: tuple, path: Path | None = None) -> list[dict
         # event timestamp (then the primary key) so "last write wins" means the
         # chronologically-latest event, deterministically.
         cur = conn.execute(
+            # nosec B608 — every fragment of `where` is built above from a
+            # column checked against _COLUMNS and an operator checked against
+            # _ALLOWED_OPS. No caller-supplied text reaches this string.
             f"SELECT {','.join(_COLUMNS)} FROM execution_events WHERE {where} "
             "ORDER BY ts ASC, event_id ASC",
-            params,
+            tuple(params),
         )
         out = []
         for r in cur.fetchall():
@@ -662,16 +729,16 @@ def _aggregate(scope: str, scope_id: str, rows: list[dict[str, Any]]) -> Account
 def get_route_accounting(route_id: str, *, path: Path | None = None) -> Accounting:
     """INV-COST-002: actual cost == Σ measured cost over billable attempt events."""
     return _aggregate("route", route_id,
-                      _load_rows("route_id = ?", (route_id,), path))
+                      _load_rows([("route_id", "=", route_id)], path))
 
 
 def get_turn_accounting(turn_id: str, *, path: Path | None = None) -> Accounting:
-    return _aggregate("turn", turn_id, _load_rows("turn_id = ?", (turn_id,), path))
+    return _aggregate("turn", turn_id, _load_rows([("turn_id", "=", turn_id)], path))
 
 
 def get_session_accounting(session_id: str, *, path: Path | None = None) -> Accounting:
     return _aggregate("session", session_id,
-                      _load_rows("session_id = ?", (session_id,), path))
+                      _load_rows([("session_id", "=", session_id)], path))
 
 
 def get_period_accounting(
@@ -679,7 +746,7 @@ def get_period_accounting(
 ) -> Accounting:
     return _aggregate(
         "period", f"{start_ts:.0f}-{end_ts:.0f}",
-        _load_rows("ts >= ? AND ts < ?", (start_ts, end_ts), path),
+        _load_rows([("ts", ">=", start_ts), ("ts", "<", end_ts)], path),
     )
 
 
