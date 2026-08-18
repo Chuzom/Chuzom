@@ -180,12 +180,25 @@ constraint from doc 34, for the reason given there.
 - [ ] `CHUZOM_REQUIRE_WHEEL=1` run resolves from **site-packages**, not `src/` — G-D's own
       precondition, and the thing that made an earlier "verified" claim hollow.
 
-### A3 · `port-downstream`
+### A3 · `port-verify-discriminating`
 
-- [ ] llm-router re-verified **against the renamed fields specifically** — not "the suite
-      passes", which is what made it provisional. Its suite has zero tests touching them, so
-      a test must be added or the check is vacuous.
-- [ ] Doc 33's L1 status updated from PROVISIONAL to VERIFIED **only if** that holds.
+> **CORRECTED 2026-08-18.** This stage originally read *"llm-router re-verified against the
+> renamed fields"* — work in the downstream repository, which contradicts the standing
+> direction that everything lands upstream first and downstream receives copies at sync time.
+> I followed this plan instead of that instruction and had to revert the result
+> (llm-router `c97c3ee`). **A plan that contradicts a standing direction is a defect in the
+> plan, not authority to ignore the direction** — corrected here so the next reader is not
+> sent down the same path.
+
+- [ ] A test asserting the renamed fields **directly**, upstream. The handshake tests read
+      them incidentally while checking something else, so a major-version mismatch surfaces
+      as a missing attribute inside a server fixture rather than as a statement about the
+      version.
+- [ ] It must **discriminate**: pass on 2.x and **fail on 1.x**. "The suite passes" is what
+      made the downstream claim hollow — that suite passed regardless of which major was
+      installed, so it was never evidence about the port.
+- [ ] Doc 33's L1 status moves to VERIFIED **only if** the control holds.
+- [ ] Downstream receives this as a **copy at sync time**, not as separate work.
 
 ### B1 · `install-container` *(verifier — blocks the gate)*
 
