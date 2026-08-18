@@ -740,8 +740,42 @@ def isolation_test_command() -> None:
         sys.exit(1)
 
 
+def _make_output_encoding_safe() -> None:
+    """Stop the CLI dying on Windows because its own output has emoji in it.
+
+    CHZ-WIN-01. `chuzom doctor` prints ✓ / ✗ / ⚡ / 💰. On Windows the console
+    default is cp1252, which cannot encode any of them, so the first status glyph
+    raises UnicodeEncodeError and the command exits non-zero with a traceback —
+    on a machine where nothing is actually wrong.
+
+    CI did not catch this because the windows smoke job sets PYTHONUTF8=1 and
+    PYTHONIOENCODING=utf-8 at the JOB level. Those env vars make the suite pass
+    and do nothing for a user, who has neither. Adding them to the new
+    docs-command job would have turned CI green while leaving every Windows user
+    with a crashing `doctor` — fixing the CI signal instead of the defect.
+
+    `errors="replace"` rather than a strict re-encode: a console that genuinely
+    cannot represent a glyph should print `?` and carry on. A diagnostic command
+    that refuses to run because it cannot draw a tick is worse than one that
+    draws the wrong character.
+
+    No-op where stdout is already UTF-8, and guarded because a detached or
+    redirected stream may not support reconfigure at all — this must never be
+    the reason a command fails.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        enc = (getattr(stream, "encoding", "") or "").lower().replace("-", "")
+        if enc in ("utf8", "utf8mb4"):
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, OSError, ValueError):
+            pass  # nothing to do; better a mangled glyph than a dead command
+
+
 def main() -> None:
     """Unified CLI: dispatches to MCP server or subcommands."""
+    _make_output_encoding_safe()
     args = sys.argv[1:]
 
     if args and args[0] in ("-h", "--help"):
