@@ -69,6 +69,65 @@ nobody can read.
 - [ ] Consider shipping this alone as **12.0.1** — the install fix reaches users without waiting
       for the sync. Every day it waits is another day of broken fresh installs.
 
+### Step 1.5 · Make upstream an actual superset — **added 2026-08-19, was not in the original plan**
+
+Step 2 below says "copy upstream `src/` … into the downstream package layout". That is safe
+only if upstream contains everything downstream does. **It does not**, and nobody had
+checked — the plan asserted a containment relationship instead of measuring one.
+
+`scripts/check_downstream_superset.py` measures it. Result on the day it was written:
+
+```
+upstream symbols:   2413
+downstream symbols: 1340
+downstream-only:    42  (21 public, 21 private)
+path collisions:    2
+```
+
+The 21 public symbols are whole features, not stragglers:
+
+| downstream file | absent upstream |
+|---|---|
+| `response_validation.py` | the entire module — `validate_response`, `validate_streaming_chunk`, `safe_extract_content`, … |
+| `audit_routing.py` | `run_audit`, `score_decision`, `sample_unaudited_decisions`, `AuditedDecision` |
+| `dashboard_data.py` | `query_realized_savings`, `RealizedSavingsTotals` |
+| `signals/__init__.py` | `detect_pii`, `force_local_for_pii` |
+| `cost.py` | `get_savings_by_task_type` |
+| `commands/audit.py` | `cmd_audit` — the whole `audit` CLI command |
+| `secret_scrubber.py` | `scrub_environment` |
+| `capabilities.py` | `serialize_capability_decision` |
+| `subscription_local_routing.py` | `set_pressure_provider` |
+| `budget_envelope.py` | `budget_envelope_enabled` |
+
+**The `audit_routing.py` collision is why this is a script and not a paragraph.** Both trees
+have a file at that path and they are *unrelated features*: upstream is an append-only log of
+routing turns (`audit_routing_turn`), downstream is a post-hoc misroute **scorer**
+(`run_audit`, `score_decision`). A file copy overwrites one with the other — same path, no
+merge conflict, no import error, no failing upstream test. The feature just stops existing.
+That is the silent-deletion shape, and it is precisely what "copy `src/` across" produces
+when the two trees are not the containment the instruction assumed.
+
+- [ ] Port each downstream-only public symbol upstream, or record a decision not to
+- [ ] `scripts/check_downstream_superset.py` exits 0
+- [ ] Only then proceed to Step 2
+
+This is also what the standing direction already required — *"after Chuzom is completely
+ready, we'll copy its components"*. "Completely ready" cannot mean "missing 21 public symbols
+the copy would delete." The direction was right; the plan under-specified what satisfying it
+involved.
+
+**Two upstream defects were already found this way**, before the script existed, from a
+five-minute diff of one module:
+
+- `QUOTA_BALANCED` and `SUBSCRIPTION_LOCAL` resolved to no chain at three of four lookup
+  sites — `subscription_local` measured at **one** model (the paid seat, no fallback) under
+  the profile whose purpose is preferring the free local bucket. Fixed in `8c38e38`.
+- `subscription_local_routing` had **zero production callers** — module, enum member, gate,
+  reorder and its own test file, all correct, all unreachable. Fixed in `de850da`.
+
+Both were fixed downstream and never travelled back. The sync direction is not one-way, and
+treating it as one-way is what let two live defects sit upstream.
+
 ### Step 2 · The sync
 
 - [ ] Copy upstream `src/` minus the exclusion set, into the downstream package layout
