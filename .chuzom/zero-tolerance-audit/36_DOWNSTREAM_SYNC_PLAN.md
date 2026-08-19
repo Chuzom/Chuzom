@@ -107,9 +107,34 @@ merge conflict, no import error, no failing upstream test. The feature just stop
 That is the silent-deletion shape, and it is precisely what "copy `src/` across" produces
 when the two trees are not the containment the instruction assumed.
 
-- [ ] Port each downstream-only public symbol upstream, or record a decision not to
-- [ ] `scripts/check_downstream_superset.py` exits 0
-- [ ] Only then proceed to Step 2
+- [x] Port each downstream-only public symbol upstream, or record a decision not to
+- [x] `scripts/check_downstream_superset.py` exits 0
+- [x] Only then proceed to Step 2
+
+**Done 2026-08-19.** Four capabilities ported, each with controls proving its tests fail
+without the fix:
+
+| ported | as | note |
+|---|---|---|
+| misroute audit scorer + CLI | `misroute_audit.py`, `chuzom audit misroute` | renamed to avoid the `audit_routing.py` collision; CLI nested as a subcommand |
+| `query_realized_savings` | `dashboard_data.py` | a delegating surface — INV-COST-004; asserted structurally, not numerically |
+| `serialize_capability_decision` | `capabilities.py` | + `capabilities_json` column + gated write, because the serialiser alone would be an orphan |
+
+**Seven symbols deliberately NOT ported.** They are reached by nothing downstream —
+`response_validation.py` entire (6 public symbols, 0 references in `src/`, one test file),
+`scrub_environment`, `detect_pii`, `force_local_for_pii`, `set_pressure_provider`,
+`budget_envelope_enabled`, `get_savings_by_task_type`. Porting an orphan moves dead code
+between repositories and calls it progress. Wire or delete them downstream; that is a
+separate decision and it does not gate the sync.
+
+**Two collisions stay recorded, not resolved.** `audit_routing.py` and `commands/audit.py`
+exist in both trees with disjoint APIs, and the check prints the sync rule for each on every
+run. They are routing instructions for Step 2 — "map to `misroute_audit.py`, not to
+`audit_routing.py`"; "merge, do not overwrite" — not problems that have gone away.
+
+**Also fixed upstream along the way**, both found by diffing rather than by reading:
+`8c38e38` (reordering profiles resolved to no chain at three of four lookup sites) and
+`de850da` (`SUBSCRIPTION_LOCAL` had no production caller).
 
 This is also what the standing direction already required — *"after Chuzom is completely
 ready, we'll copy its components"*. "Completely ready" cannot mean "missing 21 public symbols
