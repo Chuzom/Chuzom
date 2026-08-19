@@ -311,6 +311,17 @@ MIGRATE_ROUTING_DECISIONS_ADD_COMPLEXITY_TRACKING = [
 ]
 """Idempotent migration to track pressure-based complexity downgrades (v5.9)."""
 
+MIGRATE_ROUTING_DECISIONS_ADD_AUDIT = [
+    "ALTER TABLE routing_decisions ADD COLUMN audit_verdict TEXT DEFAULT NULL",
+    "ALTER TABLE routing_decisions ADD COLUMN audit_checked_at TEXT DEFAULT NULL",
+]
+"""Post-hoc misroute audit (see misroute_audit.py).
+
+Both columns default NULL, and NULL is the "not yet audited" marker the
+sampler selects on — so an existing database needs no backfill and the audit
+picks up every pre-existing row on its first run.
+"""
+
 MIGRATE_ROUTING_DECISIONS_ADD_SUBJECT = [
     "ALTER TABLE routing_decisions ADD COLUMN subject TEXT",
 ]
@@ -666,6 +677,7 @@ async def _get_db() -> aiosqlite.Connection:
         + MIGRATE_ADD_CACHE_METRICS
         + MIGRATE_ROUTING_DECISIONS_ADD_JUDGE_SCORE
         + MIGRATE_ROUTING_DECISIONS_ADD_COMPLEXITY_TRACKING
+        + MIGRATE_ROUTING_DECISIONS_ADD_AUDIT
         + MIGRATE_ADD_MODEL_QUALITY_TRENDS
         + MIGRATE_ROUTING_DECISIONS_ADD_REAL_FLAG
         + MIGRATE_ROUTING_DECISIONS_MARK_CONTAMINATED

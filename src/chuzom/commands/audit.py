@@ -32,6 +32,7 @@ _USAGE = (
     "  verify [--json]                 verify the hash chain (exit 1 on tamper)\n"
     "  export [--format FMT] [--limit N]\n"
     "                                  dump the log (FMT: cef|json|csv)\n"
+    "  misroute [--json] [--limit N]   re-score past routing decisions offline\n"
 )
 
 
@@ -73,6 +74,48 @@ def _export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _misroute(args: argparse.Namespace) -> int:
+    """Run the post-hoc misroute audit and render its report.
+
+    A subcommand of ``audit`` rather than a command of its own: the downstream
+    package made it a top-level ``audit`` command, which is precisely what
+    collided with this module's existing ``main``. Nesting it composes instead.
+
+    Read-only with respect to routing — it only fills in ``audit_verdict`` on
+    rows that already exist. Always exits 0, including when the audit is
+    disabled or the database is unreadable, because this reports on history and
+    a reporting failure is not an operational failure.
+    """
+    import asyncio
+
+    from chuzom.misroute_audit import run_audit
+
+    report = asyncio.run(run_audit(limit=args.limit))
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return 0
+
+    if report.get("disabled"):
+        print("misroute audit is disabled (CHUZOM_AUDIT_DISABLED)")
+        return 0
+
+    counts = report.get("verdict_counts", {})
+    print(f"sampled {report['sampled']} decision(s), recorded {report['audited']} verdict(s)")
+    for verdict in ("likely_misroute", "likely_correct", "insufficient_data"):
+        print(f"  {verdict:20} {counts.get(verdict, 0)}")
+
+    baseline = report.get("mis_route_rate_inferred_baseline")
+    if baseline is None:
+        # Distinguished from 0.0 on purpose: "no population baseline available"
+        # and "the population baseline is zero" are different facts, and
+        # printing 0.0 for the first would be a claim the data does not support.
+        print("  population misroute-rate baseline: unavailable")
+    else:
+        print(f"  population misroute-rate baseline: {baseline:.1%}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="chuzom audit", description="Tamper-evident audit log operations",
@@ -90,11 +133,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_export.add_argument("--limit", type=int, default=1000, help="max rows (default: 1000)")
 
+    p_misroute = sub.add_parser(
+        "misroute", help="re-score past routing decisions for likely misroutes"
+    )
+    p_misroute.add_argument("--json", action="store_true", help="machine-readable output")
+    p_misroute.add_argument(
+        "--limit", type=int, default=100, help="max decisions to score (default: 100)"
+    )
+
     args = parser.parse_args(argv)
     if args.command == "verify":
         return _verify(args)
     if args.command == "export":
         return _export(args)
+    if args.command == "misroute":
+        return _misroute(args)
     parser.print_help()
     return 2
 
