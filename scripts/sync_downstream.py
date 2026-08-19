@@ -309,6 +309,14 @@ def _hard_imports(tree: ast.AST) -> set[str]:
                 continue
             if isinstance(node, ast.ImportFrom) and node.module:
                 names.add(node.module)
+                # `from chuzom.control_plane import audit` depends on
+                # `chuzom.control_plane.audit`, not just on the package. The
+                # module-path-only version missed exactly that form and let two
+                # tests for an excluded capability through — the same
+                # name-versus-path gap that the import REWRITER hit separately.
+                # Recording both means neither syntax hides a dependency.
+                for alias in node.names:
+                    names.add(f"{node.module}.{alias.name}")
             elif isinstance(node, ast.Import):
                 names.update(a.name for a in node.names)
 
@@ -358,6 +366,53 @@ def _transitively_unavailable() -> set[str]:
     return bad
 
 
+#: Declarative module lists that must lose their excluded entries on the way
+#: down. Value is a marker that identifies the list in the source.
+_CRITICAL_LIST_MARKERS = ("_CRITICAL_MODULES",)
+
+
+def _drop_excluded_from_critical_lists(text: str) -> str:
+    """Remove excluded modules from `_CRITICAL_MODULES`-style tuples.
+
+    `server._critical_modules_or_die` refuses to boot if any listed module is
+    missing. Upstream lists `chuzom.admin_api` and
+    `chuzom.invoice_reconciliation`, and upstream SHIPS both — verified against
+    the published package — so the check is correct there.
+
+    Downstream excludes them. Copying the list verbatim therefore produces a
+    server that cannot start, with a message telling the user to reinstall,
+    which would not help.
+
+    This is a cost of the exclusion decision that 36_DOWNSTREAM_SYNC_PLAN §1
+    did not capture: it measured "five import sites to sever" and missed a
+    startup gate that hard-fails. Worth recording, because the same shape was
+    already fixed once for `enterprise/` — the comment above
+    `_ENTERPRISE_CRITICAL_MODULES` says requiring it universally "made the
+    published MCP server refuse to boot". Same defect, second cause, and the
+    existing fix did not generalise.
+
+    Line-based on purpose: these lists are one module string per line, and a
+    parse-and-rewrite would be far more machinery for a strictly smaller set of
+    inputs.
+    """
+    if not any(marker in text for marker in _CRITICAL_LIST_MARKERS):
+        return text
+    excluded = tuple(UNAVAILABLE_IMPORT_ROOTS)
+    out: list[str] = []
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith(('"chuzom.', "'chuzom.")) and stripped.endswith(","):
+            name = stripped.strip("\"',")
+            if any(name == e or name.startswith(e + ".") for e in excluded):
+                out.append(
+                    " " * (len(line) - len(line.lstrip()))
+                    + f"# removed by sync: {name} is not shipped downstream\n"
+                )
+                continue
+        out.append(line)
+    return "".join(out)
+
+
 def _import_rewrites() -> list[tuple[str, str]]:
     """Import-path rewrites implied by PATH_MAP, derived rather than restated.
 
@@ -377,8 +432,16 @@ def _import_rewrites() -> list[tuple[str, str]]:
     must NOT turn ``llm_router.observability.summary`` into
     ``llm_router.observability.core.summary``.
     """
+    # ALWAYS derived from the src map, whatever tree is being synced.
+    #
+    # File relocation is per-tree; IMPORT rewriting is not. A test file has no
+    # relocations of its own, but its imports name src modules — so syncing
+    # tests/ with the (empty) tests path map produced
+    # `from llm_router.summary import …` untouched, and six modules failed to
+    # collect. Conflating "where does this file go" with "what does this file
+    # import" is the same mistake in two directions.
     out: list[tuple[str, str]] = []
-    for src_rel, dst_rel in PATH_MAP.items():
+    for src_rel, dst_rel in PATH_MAP_BY_TREE["src"].items():
         src_mod = "llm_router." + src_rel.removesuffix(".py").replace("/", ".")
         dst_mod = "llm_router." + dst_rel.removesuffix(".py").replace("/", ".")
         if src_mod == dst_mod:
@@ -618,16 +681,38 @@ def main() -> int:
         # this rule to src/ dropped 19 working modules on its first run.
         # A TEST has no such fallback: it imports the thing it exists to
         # exercise, and without it the module cannot even be collected.
+        # Applies to BOTH trees, now that the closure is accurate.
+        #
+        # For tests: a test for a capability that was not shipped is not a
+        # failure, it is a test that should not have travelled.
+        # For src: a module that requires an excluded capability AT MODULE
+        # LEVEL cannot import downstream at all — control_plane/audit.py does
+        # `from chuzom.enterprise... import` unguarded on line 17, so shipping
+        # it just moves the ImportError somewhere less obvious.
+        #
+        # This was restricted to tests earlier for a good reason: the FIRST
+        # closure was wrong (it counted guarded and TYPE_CHECKING imports) and
+        # applying it to src/ dropped 19 working modules. The rule was never
+        # the problem; the closure was. With the closure down from 66 to 14 —
+        # all of them genuinely excluded capabilities — it is safe both sides.
         unavailable = (
             _imports_unavailable_module(content)
-            if args.tree == "tests" and src_path.suffix == ".py"
+            if src_path.suffix == ".py"
             else None
         )
         if unavailable:
             skipped_unavailable.append(f"{rel} (imports {unavailable})")
             continue
 
-        new_content = rewrite(content)
+        # BEFORE rewrite(): the drop matches on `chuzom.` prefixes, and after
+        # the rewrite those are `llm_router.` — the first version ran it after
+        # and matched nothing, silently.
+        pre = (
+            _drop_excluded_from_critical_lists(content)
+            if src_path.suffix == ".py"
+            else content
+        )
+        new_content = rewrite(pre)
         if target.suffix == ".py":
             problem = _still_parses(content, new_content, rel)
             if problem:
