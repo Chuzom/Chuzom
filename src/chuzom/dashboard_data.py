@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -204,6 +205,43 @@ class DataSourceAudit:
     rows_for_window: int
     contributed_to_totals: bool
     unread_rows: int = 0
+
+
+@dataclass(frozen=True)
+class RealizedSavingsTotals:
+    """Adoption-gated realized-savings split for a window.
+
+    Deliberately NOT the same number as ``WindowTotals.saved_usd``, and
+    deliberately never reconciled against it. That figure is a per-surface
+    estimate (a Sonnet-baseline calculation for the legacy ``usage`` table,
+    ``cost_saved_usd`` for the per-platform tables). This one reads
+    ``execution_ledger``'s accounting, where a route's *potential* saving only
+    becomes *realized* when its ``realization_status`` is ``verified_used``
+    AND its ``adoption_method`` is in ``COUNTS_AS_REALIZED``.
+
+    Routes that were verified as overridden (the host went its own way) or
+    never verified at all contribute to ``potential_savings_usd`` only. Keeping
+    both numbers on the same object is the point: the gap between them is the
+    adoption gap, and collapsing them into one figure would hide exactly the
+    thing worth knowing.
+
+    This is the third savings number in the codebase, so INV-COST-004 applies
+    with force: this is a SURFACE, not an aggregation. It delegates every
+    figure to ``execution_ledger.get_period_accounting`` and computes nothing
+    itself. Three hand-rolled savings queries once reported $73.97, $102.31 and
+    $205.19 for the same day; a fourth independent implementation is how that
+    happens again.
+    """
+
+    window: str
+    potential_savings_usd: float
+    realized_savings_usd: float
+    net_realized_savings_usd: float
+    realized_routes: int
+    overridden_routes: int
+    realization_unknown_routes: int
+    likely_used_routes: int
+    cost_unknown_attempts: int
 
 
 # ── Core queries ─────────────────────────────────────────────────────────────
@@ -562,3 +600,114 @@ def audit_sources(
     finally:
         conn.close()
     return out
+
+
+# ── Realized savings (adoption-gated) ────────────────────────────────────────
+
+
+def _window_epoch_bounds(window: WindowLiteral) -> tuple[float, float]:
+    """Epoch-second ``(start_ts, end_ts)`` bounds for ``window``.
+
+    ``_window_sql`` above emits a SQL WHERE fragment that SQLite evaluates
+    against the ``timestamp`` columns of the usage tables.
+    ``execution_ledger.get_period_accounting`` instead takes Python float
+    Unix-epoch bounds, so this maps window names into that second shape.
+
+    The two are NOT guaranteed to select an identical row set at day
+    boundaries, and that is deliberate rather than an oversight: ``"today"``
+    uses local time here because ``_window_sql`` uses an explicit
+    ``'localtime'`` modifier for the same window, while the other windows use
+    UTC arithmetic because ``_window_sql`` uses a bare ``datetime('now')``,
+    which SQLite evaluates as UTC. Making both windows agree on one timezone
+    would make this helper self-consistent and put it out of step with the SQL
+    it is meant to parallel.
+    """
+    now_utc = datetime.now(timezone.utc)
+    if window == "today":
+        local_now = datetime.now().astimezone()
+        local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return local_midnight.timestamp(), local_now.timestamp()
+    if window == "week":
+        return (now_utc - timedelta(days=7)).timestamp(), now_utc.timestamp()
+    if window == "month":
+        start_of_month = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start_of_month.timestamp(), now_utc.timestamp()
+    if window == "14d":
+        return (now_utc - timedelta(days=14)).timestamp(), now_utc.timestamp()
+    if window == "lifetime":
+        return 0.0, now_utc.timestamp()
+    raise ValueError(f"unknown window: {window!r}")
+
+
+def query_realized_savings(
+    window: WindowLiteral,
+    *,
+    db_path: Path | str | None = None,
+) -> RealizedSavingsTotals:
+    """The adoption-gated realized-savings split for ``window``.
+
+    A SURFACE over ``execution_ledger.get_period_accounting`` (INV-COST-004):
+    every figure below is copied from the accounting object, none is computed
+    here. See ``RealizedSavingsTotals`` for why this must never become a
+    fourth independent savings calculation.
+
+    Fails open — a missing database, a missing ``execution_events`` table, or
+    any error inside the accounting yields all zeros rather than raising,
+    matching this module's existing ``if not db.exists(): return <empty>``
+    convention. A dashboard panel must not be able to take the dashboard down.
+
+    One subtlety worth keeping: the existence check runs against a plain
+    ``sqlite3`` connection FIRST, and returns before ``execution_ledger`` is
+    imported. Calling into the ledger directly would CREATE the database and
+    the table as a side effect of connecting — so reading a figure would
+    materialise the thing it was reading. Reading must not have side effects.
+    """
+    db = Path(db_path) if db_path else DEFAULT_DB_PATH
+    empty = RealizedSavingsTotals(
+        window=window,
+        potential_savings_usd=0.0,
+        realized_savings_usd=0.0,
+        net_realized_savings_usd=0.0,
+        realized_routes=0,
+        overridden_routes=0,
+        realization_unknown_routes=0,
+        likely_used_routes=0,
+        cost_unknown_attempts=0,
+    )
+    if not db.exists():
+        return empty
+
+    try:
+        conn = sqlite3.connect(str(db))
+        try:
+            if not _table_exists(conn, "execution_events"):
+                return empty
+        finally:
+            conn.close()
+
+        from chuzom.execution_ledger import get_period_accounting
+
+        start_ts, end_ts = _window_epoch_bounds(window)
+        accounting = get_period_accounting(start_ts, end_ts, path=db)
+    except Exception as exc:  # noqa: BLE001 - a savings panel must never break the dashboard
+        # CHZ-FO-02: a fail-open path that returns live-looking data must say
+        # so. Zeros here are indistinguishable from "genuinely no realized
+        # savings this window", which is the more dangerous of the two —
+        # silently reporting $0 realized reads as an adoption problem rather
+        # than a broken read.
+        from chuzom import failopen
+
+        failopen.record("CHZ-FO-DASHBOARD-REALIZED", exc)
+        return empty
+
+    return RealizedSavingsTotals(
+        window=window,
+        potential_savings_usd=accounting.potential_savings_usd,
+        realized_savings_usd=accounting.realized_savings_usd,
+        net_realized_savings_usd=accounting.net_realized_savings_usd,
+        realized_routes=accounting.realized_routes,
+        overridden_routes=accounting.overridden_routes,
+        realization_unknown_routes=accounting.realization_unknown_routes,
+        likely_used_routes=accounting.likely_used_routes,
+        cost_unknown_attempts=accounting.cost_unknown_attempts,
+    )
