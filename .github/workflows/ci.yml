@@ -331,7 +331,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -386,12 +386,27 @@ jobs:
             --junit-xml=/tmp/pytest-results.xml &
           PYTEST_PID=$!
 
-          # Wait for pytest to exit normally. The full suite is ~150s locally,
-          # but the slowest CI runner (3.11) under a GitHub cache-service outage
-          # has been observed >280s while still ACTIVELY RUNNING (not exit-hung).
-          # 540s leaves ample margin under the 10m job timeout so the watchdog
-          # only fires on a real aiosqlite exit-hang, not a merely-slow run.
-          for i in $(seq 1 540); do
+          # Wait for pytest to exit normally. The slowest CI runner (3.11)
+          # under a GitHub cache-service outage has been observed >280s while
+          # still ACTIVELY RUNNING (not exit-hung), so the watchdog must clear
+          # a genuinely slow run by a wide margin.
+          #
+          # RAISED 540 -> 900, and the job timeout 10m -> 20m with it. At 540s
+          # under a 600s job cap the watchdog had 60s of headroom: if it ever
+          # fired, the job would die before the hang-handler below could read
+          # the junit xml and report the real result.
+          #
+          # The downstream redistribution hit exactly that. Its watchdog was
+          # sized for ~2,700 tests, the suite grew to ~6,900, and the wait
+          # expired at 31% progress — the handler fired on a pytest that was
+          # working perfectly, found no junit xml (not written yet) and reported
+          # failure. Nothing was broken; the watchdog was shorter than the work,
+          # and it reported that as a broken build. Its CI run then took 317s
+          # for 6,891 tests; this suite is larger.
+          #
+          # 900s is a ceiling, not an expectation — a healthy run exits the loop
+          # the moment pytest does.
+          for i in $(seq 1 900); do
             if ! kill -0 $PYTEST_PID 2>/dev/null; then
               wait $PYTEST_PID
               exit $?
