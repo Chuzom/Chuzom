@@ -25,19 +25,23 @@ echo ""
 
 # 2. Verify version sync across all files
 echo "2️⃣  Verifying version synchronization..."
-if ! python3 scripts/verify-version-sync.py; then
+if ! uv run python scripts/verify-version-sync.py; then
     exit 1
 fi
 echo ""
 
 # 3. Verify plugin distributions are aligned
 echo "3️⃣  Verifying plugin distribution synchronization..."
-if ! python3 scripts/verify-plugin-sync.py; then
+if ! uv run python scripts/verify-plugin-sync.py; then
     exit 1
 fi
 echo ""
 
-V_PYPROJECT=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+# `uv run python`, not bare `python3`: this repo requires >=3.11 and tomllib is
+# stdlib only from 3.11. On macOS `python3` is the system 3.9, so the bare form
+# died with ModuleNotFoundError *after* steps 1-3 had already printed green — a
+# release script that fails halfway reads like a release problem.
+V_PYPROJECT=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 
 # 4. Check CHANGELOG updated
 echo "4️⃣  Checking CHANGELOG.md updated..."
@@ -61,6 +65,12 @@ echo ""
 
 # 6. Run tests
 echo "6️⃣  Running test suite..."
+# SAME ENVIRONMENT AS CI, or this check answers a different question.
+# ci.yml sets a dummy OPENAI_API_KEY because several modules need SOME
+# candidate in the provider chain (they patch dispatch and make no network
+# call) and a bare machine has neither keys nor Ollama. A release gate that
+# disagrees with CI is one people learn to override.
+export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-test-dummy-key-for-ci-only-no-real-calls-made}"
 if ! uv run pytest tests/ -q --tb=short > /dev/null 2>&1; then
     echo -e "${RED}❌ Tests failed${NC}"
     uv run pytest tests/ -q --tb=short
