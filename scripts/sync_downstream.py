@@ -90,6 +90,41 @@ EXCLUDED_PATHS = {
 }
 EXCLUDED_DIRS = {"enterprise", "invoice_reconciliation", "__pycache__"}
 
+#: Test paths that must NOT sync, because they assert something that is true of
+#: THIS repository and false of the downstream one. Distinct from the
+#: availability skip: these import fine and run fine, they are just asserting
+#: the wrong thing.
+#:
+#: Both current entries are brand/packaging gates. `test_host_integrations`
+#: asserts "every reference must be 'chuzom', never 'llm-router'" — the exact
+#: mirror of downstream's own check_identity.py. Syncing it puts two
+#: opposite-polarity brand gates in one repository, which cannot both pass.
+#:
+#: It also runs into a rewrite ambiguity that has no mechanical answer:
+#: `chuzom` maps to BOTH `llm_router` (the Python package) and `llm-router`
+#: (the CLI and user-facing brand) depending on context, and a test asserting
+#: which one appears in a generated rules file needs the distinction the single
+#: rewrite rule cannot make.
+#:
+#: `test_plugin_packaging` asserts the shape of THIS repo's plugin manifests;
+#: downstream maintains its own, with its own verify-plugin-sync.py.
+EXCLUDED_TEST_PATHS = {
+    "integration/test_host_integrations.py",
+    "qa/test_plugin_packaging.py",
+    # Load bench/routerarena/… BY PATH, not by import, so the availability
+    # check cannot see the dependency — an import-graph walk is blind to
+    # spec_from_file_location. The bench tree is upstream's benchmark
+    # submission harness and is not downstream product surface.
+    #
+    # These two are here for a second reason worth stating: quarantining a file
+    # downstream does NOT survive the next sync. Moving them into
+    # tests/_downstream_legacy/ made the suite green and the very next
+    # `--tree tests` run offered to put them straight back. An exclusion has to
+    # live in the tooling; the quarantine directory is a record, not a barrier.
+    "test_deep_reasoning_classifier.py",
+    "test_routerarena_submit.py",
+}
+
 #: Import targets that do not exist downstream, because the module they name is
 #: excluded above or lives outside the synced trees. Any test importing one of
 #: these is skipped — a test for a capability that was deliberately not shipped
@@ -551,6 +586,8 @@ def _iter_upstream_files():
             continue
         rel = str(path.relative_to(UPSTREAM_SRC))
         if rel in EXCLUDED_PATHS:
+            continue
+        if UPSTREAM_SRC.name == "tests" and rel in EXCLUDED_TEST_PATHS:
             continue
         if path.suffix in {".pyc", ".pyo", ".db", ".sqlite3"}:
             continue
