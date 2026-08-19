@@ -119,7 +119,13 @@ UNAVAILABLE_IMPORT_ROOTS = {
 #: Every entry here is a collision `check_downstream_superset.py` reports: the
 #: same path already means something else downstream, so copying onto it would
 #: destroy a feature.
-PATH_MAP = {
+#: Keyed by TREE. A single flat map was wrong the moment the scripts tree was
+#: added: `summary.py -> observability/summary.py` is a src/ relocation and
+#: means nothing under scripts/, where a file of that name would be silently
+#: moved into a directory that does not exist there.
+PATH_MAP_BY_TREE: dict[str, dict[str, str]] = {}
+
+PATH_MAP_BY_TREE["src"] = {
     # NOTE ON audit_routing.py — the collision that started this script.
     #
     # The first version mapped upstream misroute_audit.py ONTO downstream
@@ -153,6 +159,20 @@ PATH_MAP = {
     # __init__ is a public-API decision left to the human doing the merge.
     "observability.py": "observability/core.py",
 }
+
+PATH_MAP_BY_TREE["tests"] = {}
+
+PATH_MAP_BY_TREE["scripts"] = {
+    # Upstream `scripts/release.py` collides with downstream's `scripts/release/`
+    # PACKAGE — caught by the structural check on the very first scripts run,
+    # against a tree that check was not written for. Renamed rather than
+    # skipped: the upstream release helper is what the synced tests import.
+    "release.py": "release_helper.py",
+}
+
+#: Set per-run from PATH_MAP_BY_TREE. Module-level so `rewrite()` and
+#: `_import_rewrites()` can see it without threading it through every call.
+PATH_MAP: dict[str, str] = PATH_MAP_BY_TREE["src"]
 
 #: Downstream paths this script must never write, because the downstream file is
 #: a DIFFERENT feature that happens to share a name, or is a merge rather than a
@@ -195,6 +215,9 @@ def _check_rewrite_order() -> list[str]:
     return problems
 
 
+_unavailable_cache: set[str] = set()
+
+
 def _imports_unavailable_module(text: str) -> str | None:
     """The import root that makes this file unshippable, or None.
 
@@ -206,17 +229,133 @@ def _imports_unavailable_module(text: str) -> str | None:
         tree = ast.parse(text)
     except SyntaxError:
         return None
-    for node in ast.walk(tree):
-        names: list[str] = []
-        if isinstance(node, ast.ImportFrom) and node.module:
-            names.append(node.module)
-        elif isinstance(node, ast.Import):
-            names.extend(a.name for a in node.names)
-        for name in names:
-            for root in UNAVAILABLE_IMPORT_ROOTS:
-                if name == root or name.startswith(root + "."):
-                    return root
+    for name in _hard_imports(tree):
+        for root in _unavailable_cache:
+            if name == root or name.startswith(root + "."):
+                return root
     return None
+
+
+def _is_type_checking(test: ast.expr) -> bool:
+    """True for `TYPE_CHECKING` / `typing.TYPE_CHECKING` guards."""
+    if isinstance(test, ast.Name):
+        return test.id == "TYPE_CHECKING"
+    if isinstance(test, ast.Attribute):
+        return test.attr == "TYPE_CHECKING"
+    return False
+
+
+def _hard_imports(tree: ast.AST) -> set[str]:
+    """Imports that are NOT optional — i.e. not inside a try/except ImportError.
+
+    A guarded import is a declared optional dependency::
+
+        try:
+            from chuzom.enterprise.audit import AuditLog
+        except ImportError:      # enterprise/ is not in public distributions
+            AuditLog = None
+
+    Counting those as hard dependencies made the transitive closure absurd: 9
+    excluded roots expanded to 66 modules INCLUDING ``chuzom.__init__``, which
+    would have marked essentially the whole package unavailable and skipped
+    every test. The guard is the module telling you it copes without the thing.
+
+    MODULE SCOPE ONLY, for the same reason. ``ast.walk`` finds imports at any
+    depth, including inside function bodies — and a function-local import is
+    DEFERRED, not a load-time dependency::
+
+        def _route(...):
+            ...
+            if rbac_skipped and not chain_attempts:
+                from chuzom.enterprise.rbac import Permission   # only on this path
+
+    ``import chuzom.router`` succeeds perfectly well without ``enterprise``;
+    only that one error branch would fail. Treating it as a hard dependency was
+    what still poisoned the closure to 52 modules after the try/except fix, via
+    the chain __init__ -> sdk -> gateway -> route_server -> router ->
+    enterprise.rbac. Every link real, the conclusion wrong.
+    """
+    names: set[str] = set()
+
+    def visit(body: list, inside_try: bool) -> None:
+        for node in body:
+            if isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+            ):
+                continue  # deferred: not required to import this module
+            if isinstance(node, ast.Try):
+                # A try with handlers makes its imports optional by construction.
+                optional = inside_try or bool(node.handlers)
+                visit(node.body, optional)
+                for handler in node.handlers:
+                    visit(handler.body, optional)
+                visit(node.orelse, optional)
+                visit(node.finalbody, inside_try)
+                continue
+            if isinstance(node, ast.If) and _is_type_checking(node.test):
+                # `if TYPE_CHECKING:` never executes. identity.py declares
+                # `from chuzom.enterprise.rbac import Permission` there purely
+                # for annotations, and counting it made identity -> audit_routing
+                # -> router -> server all look unavailable while every one of
+                # them imports fine in reality. The empirical check
+                # (`import llm_router.router` succeeds) is what exposed it.
+                visit(node.orelse, inside_try)
+                continue
+            if isinstance(node, (ast.If, ast.With, ast.AsyncWith, ast.For, ast.While)):
+                visit(node.body, inside_try)
+                visit(getattr(node, "orelse", []), inside_try)
+                continue
+            if inside_try:
+                continue
+            if isinstance(node, ast.ImportFrom) and node.module:
+                names.add(node.module)
+            elif isinstance(node, ast.Import):
+                names.update(a.name for a in node.names)
+
+    visit(getattr(tree, "body", []), False)
+    return names
+
+
+def _transitively_unavailable() -> set[str]:
+    """Upstream modules that reach an excluded capability, at any depth.
+
+    ``_imports_unavailable_module`` only sees DIRECT imports, so a test
+    importing ``chuzom.control_plane`` — which itself imports
+    ``chuzom.enterprise`` — sailed through the skip and then failed at runtime
+    with ``No module named 'llm_router.enterprise'``. 39 of the 165 remaining
+    failures were that one gap.
+
+    Closed by walking the upstream source tree's import graph to a fixed point:
+    a module is unavailable if it imports an excluded root OR imports a module
+    that is already known unavailable. Iterating to a fixed point rather than
+    one extra level, because "one level deeper" is the same mistake with a
+    larger constant.
+    """
+    src_root = UPSTREAM_ROOT / "src" / "chuzom"
+    imports: dict[str, set[str]] = {}
+    for path in src_root.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        mod = "chuzom." + str(path.relative_to(src_root)).removesuffix(".py").replace(
+            "/", "."
+        ).removesuffix(".__init__")
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        imports[mod] = _hard_imports(tree)
+
+    bad = set(UNAVAILABLE_IMPORT_ROOTS)
+    changed = True
+    while changed:
+        changed = False
+        for mod, names in imports.items():
+            if mod in bad:
+                continue
+            if any(n == b or n.startswith(b + ".") for n in names for b in bad):
+                bad.add(mod)
+                changed = True
+    return bad
 
 
 def _import_rewrites() -> list[tuple[str, str]]:
@@ -361,19 +500,34 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true", help="write (default: dry run)")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
-        "--tests",
-        action="store_true",
+        "--tree",
+        choices=("src", "tests", "scripts"),
+        default="src",
         help=(
-            "sync tests/ instead of src/. Separate flag, not automatic: the two "
-            "halves fail differently and mixing them makes it impossible to tell "
-            "a code problem from a test problem."
+            "which tree to sync. One at a time, deliberately: the three fail "
+            "differently, and running them together makes it impossible to tell "
+            "a code problem from a test problem from a tooling problem. "
+            "`scripts` carries the CI guards — the half of a sync people forget, "
+            "and the half that keeps the ported fixes from silently regressing."
         ),
     )
+    parser.add_argument(
+        "--tests", action="store_true", help="deprecated alias for --tree tests"
+    )
     args = parser.parse_args()
+    if args.tests:
+        args.tree = "tests"
 
     global UPSTREAM_SRC
-    if args.tests:
-        UPSTREAM_SRC = UPSTREAM_ROOT / "tests"  # noqa: F824
+    UPSTREAM_SRC = {  # noqa: F824
+        "src": UPSTREAM_ROOT / "src" / "chuzom",
+        "tests": UPSTREAM_ROOT / "tests",
+        "scripts": UPSTREAM_ROOT / "scripts",
+    }[args.tree]
+
+    global PATH_MAP, _unavailable_cache
+    PATH_MAP = PATH_MAP_BY_TREE[args.tree]
+    _unavailable_cache = _transitively_unavailable()
 
     order_problems = _check_rewrite_order()
     if order_problems:
@@ -382,11 +536,11 @@ def main() -> int:
             print(f"  {p}", file=sys.stderr)
         return 1
 
-    dst_pkg = (
-        args.downstream / "tests"
-        if args.tests
-        else args.downstream / "src" / "llm_router"
-    )
+    dst_pkg = {
+        "src": args.downstream / "src" / "llm_router",
+        "tests": args.downstream / "tests",
+        "scripts": args.downstream / "scripts",
+    }[args.tree]
     if not dst_pkg.exists():
         print(f"no downstream target at {dst_pkg}", file=sys.stderr)
         return 1
@@ -466,7 +620,7 @@ def main() -> int:
         # exercise, and without it the module cannot even be collected.
         unavailable = (
             _imports_unavailable_module(content)
-            if args.tests and src_path.suffix == ".py"
+            if args.tree == "tests" and src_path.suffix == ".py"
             else None
         )
         if unavailable:
