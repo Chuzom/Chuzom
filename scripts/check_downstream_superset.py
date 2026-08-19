@@ -81,6 +81,45 @@ EXCLUDED = {
     "commands/admin_api.py",
 }
 
+#: Downstream name -> the upstream name carrying the same capability.
+#:
+#: This is a RENAME RECORD, not a suppression list, and the difference is
+#: enforced: the check verifies the upstream name actually exists and fails if
+#: it does not. Mapping a downstream symbol to a name that is absent here turns
+#: one gap into a louder gap rather than hiding it.
+#:
+#: Only for cases where porting under the same name would COLLIDE with an
+#: existing upstream feature. Not for "I'd rather call it something else" —
+#: gratuitous divergence makes every future sync harder, which is the cost this
+#: whole exercise exists to avoid paying twice.
+RENAMED: dict[str, tuple[str, str]] = {
+    "cmd_audit": (
+        "_misroute",
+        "downstream exposes the misroute audit as a top-level `audit` command, "
+        "which is precisely what collides with upstream's existing enterprise "
+        "audit-log CLI (commands/audit.py::main). Ported upstream as the "
+        "`misroute` SUBcommand of that same command — composing instead of "
+        "displacing. Same capability, one level down in the command tree.",
+    ),
+}
+
+#: Paths that exist in both trees with disjoint APIs *by design*, because the
+#: same filename came to mean two different features. Recorded rather than
+#: resolved: renaming either file now would break imports for no benefit, and
+#: the sync must simply not treat these as the same file.
+KNOWN_DIVERGENT_PATHS: dict[str, str] = {
+    "audit_routing.py": (
+        "upstream = live per-turn compliance log (audit_routing_turn); "
+        "downstream = offline misroute scorer, ported upstream as "
+        "misroute_audit.py. The sync must map downstream/audit_routing.py to "
+        "upstream/misroute_audit.py, NOT to upstream/audit_routing.py."
+    ),
+    "commands/audit.py": (
+        "upstream = enterprise audit-log CLI (verify/export/misroute); "
+        "downstream = misroute CLI only. The sync must merge, not overwrite."
+    ),
+}
+
 
 def _defined_symbols(root: Path) -> dict[str, list[str]]:
     """Every top-level function/class name in the tree -> the files defining it."""
@@ -223,7 +262,30 @@ def main() -> int:
         )
         return 1
 
-    missing = {name: files for name, files in downstream.items() if name not in upstream}
+    # A recorded rename must point at a name that really exists upstream, or
+    # the record is fiction and the gap is still open.
+    broken_renames = [
+        (dn_name, up_name, why)
+        for dn_name, (up_name, why) in RENAMED.items()
+        if up_name not in upstream
+    ]
+    if broken_renames:
+        print("BROKEN RENAME RECORD — mapped to a name that does not exist upstream:")
+        for dn_name, up_name, why in broken_renames:
+            print(f"  {dn_name} -> {up_name}  (absent)")
+            print(f"      recorded reason: {why}")
+        print(
+            "\nA rename record is a claim that the capability was ported under "
+            "another name.\nIf that name is missing, the claim is false and the "
+            "gap is still open."
+        )
+        return 1
+
+    missing = {
+        name: files
+        for name, files in downstream.items()
+        if name not in upstream and name not in RENAMED
+    }
     public_missing = {n: f for n, f in missing.items() if not n.startswith("_")}
     private_missing = {n: f for n, f in missing.items() if n.startswith("_")}
     collisions = _file_level_collisions(args.upstream, args.downstream)
@@ -235,12 +297,18 @@ def main() -> int:
     print(f"path collisions:    {len(collisions)}")
     print()
 
+    unrecorded_collisions = [c for c in collisions if c[0] not in KNOWN_DIVERGENT_PATHS]
+
     if collisions:
         print("SAME PATH, DISJOINT API — a file copy here deletes a feature silently:")
         for rel, usyms, dsyms in collisions:
-            print(f"  {rel}")
+            known = KNOWN_DIVERGENT_PATHS.get(rel)
+            marker = "recorded" if known else "UNRECORDED"
+            print(f"  {rel}  [{marker}]")
             print(f"      upstream:   {', '.join(sorted(usyms))}")
             print(f"      downstream: {', '.join(sorted(dsyms))}")
+            if known:
+                print(f"      sync rule:  {known}")
         print()
 
     # A downstream-only symbol that nothing downstream calls is not an upstream
@@ -292,7 +360,7 @@ def main() -> int:
             print(f"  {name:38} {private_missing[name][0]}")
         print()
 
-    if collisions or live:
+    if unrecorded_collisions or live:
         print(
             "NOT A SUPERSET. Copying upstream src/ over downstream would drop the\n"
             "GAPS above. Port those upstream first — that is what 'after Chuzom is\n"
@@ -300,6 +368,14 @@ def main() -> int:
             "The orphan list is a separate, downstream decision and does not gate."
         )
         return 1
+
+    if collisions:
+        print(
+            "SUPERSET OK, but the recorded path divergences above still apply:\n"
+            "the sync must follow each one's stated rule rather than copying the\n"
+            "file across. A recorded collision is a routing instruction for the\n"
+            "sync, not a resolved problem."
+        )
 
     print("SUPERSET OK: every downstream symbol has an upstream definition.")
     return 0
