@@ -163,9 +163,19 @@ def test_failure_path_handles_non_importerror_exceptions(
     monkeypatch.delenv("CHUZOM_SKIP_CRITICAL_MODULE_CHECK", raising=False)
     original = importlib.import_module
 
+    # The vehicle is taken FROM the list rather than named. Any critical module
+    # demonstrates the failure path equally well, and hardcoding one couples
+    # the test to the list's contents: it broke both when the list was
+    # reordered and when the downstream sync dropped `admin_api` (excluded
+    # there), at which point nothing raised and the test reported
+    # "DID NOT RAISE" — a failure with nothing to do with the behaviour it
+    # covers.
+    assert server._CRITICAL_MODULES, "no critical modules to exercise"
+    target = server._CRITICAL_MODULES[0]
+
     def stub(name: str, *args, **kwargs):
-        if name == "chuzom.admin_api":
-            raise SyntaxError("invalid syntax in installed admin_api.py")
+        if name == target:
+            raise SyntaxError(f"invalid syntax in installed {name}")
         return original(name, *args, **kwargs)
 
     with patch.object(importlib, "import_module", side_effect=stub):
@@ -173,7 +183,7 @@ def test_failure_path_handles_non_importerror_exceptions(
             server._critical_modules_or_die()
     err = capsys.readouterr().err
     assert "SyntaxError" in err
-    assert "chuzom.admin_api" in err
+    assert target in err
 
 
 # ── 3. Bypass env ────────────────────────────────────────────────────────

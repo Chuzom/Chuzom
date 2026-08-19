@@ -60,9 +60,25 @@ REWRITES: list[tuple] = [
     # `_config.llm-router_claude_subscription`, which parses as a subtraction
     # and raised AttributeError at import. The bare form is too greedy to be
     # safe; the quoted and tilde forms are unambiguous.
+    # The home directory, in every form it is actually written. NOT a bare
+    # `.chuzom` rule — that also matches ATTRIBUTE ACCESS, and did:
+    # `_config.chuzom_claude_subscription` became
+    # `_config.llm-router_claude_subscription`, which parses as a subtraction.
+    #
+    # The enumeration is the price of that. Three forms were listed at first
+    # and two more turned up later, both inside a larger string where the
+    # quoted-literal rules could not see them:
+    #   STATE_DIR="$HOME/.chuzom"                 (statusline-command.sh)
+    #   <string>{home}/.chuzom/gateway.out.log    (gateway_service.py plist)
+    # Both silently became `.llm_router` — a directory nothing reads — so the
+    # statusline rendered with no savings segment at all.
     ('".chuzom"', '".llm-router"'),
     ("'.chuzom'", "'.llm-router'"),
     ("~/.chuzom", "~/.llm-router"),
+    ("$HOME/.chuzom", "$HOME/.llm-router"),
+    ("{home}/.chuzom", "{home}/.llm-router"),
+    ("{HOME}/.chuzom", "{HOME}/.llm-router"),
+    ("/.chuzom/", "/.llm-router/"),
     ("chuzom", "llm_router"),              # python package / module paths
     # `Chuzom` appears in two contexts that need OPPOSITE treatment, and a
     # single rule cannot serve both:
@@ -407,6 +423,12 @@ def _transitively_unavailable() -> set[str]:
 #: down. Value is a marker that identifies the list in the source.
 _CRITICAL_LIST_MARKERS = ("_CRITICAL_MODULES",)
 
+#: `assert "chuzom.x" in server._CRITICAL_MODULES` — the assertion that pins a
+#: list entry. Matched alongside the entry itself so the two stay consistent.
+_CRITICAL_ASSERT_RE = re.compile(
+    r"""assert\s+["'](?P<name>chuzom[\w.]*)["']\s+in\s+\w*\.?_CRITICAL_MODULES"""
+)
+
 
 def _drop_excluded_from_critical_lists(text: str) -> str:
     """Remove excluded modules from `_CRITICAL_MODULES`-style tuples.
@@ -435,17 +457,34 @@ def _drop_excluded_from_critical_lists(text: str) -> str:
     if not any(marker in text for marker in _CRITICAL_LIST_MARKERS):
         return text
     excluded = tuple(UNAVAILABLE_IMPORT_ROOTS)
+
+    def _is_excluded(name: str) -> bool:
+        return any(name == e or name.startswith(e + ".") for e in excluded)
+
     out: list[str] = []
     for line in text.splitlines(keepends=True):
         stripped = line.strip()
+        indent = " " * (len(line) - len(line.lstrip()))
+
+        # The list ENTRY itself: one quoted module per line.
         if stripped.startswith(('"chuzom.', "'chuzom.")) and stripped.endswith(","):
             name = stripped.strip("\"',")
-            if any(name == e or name.startswith(e + ".") for e in excluded):
-                out.append(
-                    " " * (len(line) - len(line.lstrip()))
-                    + f"# removed by sync: {name} is not shipped downstream\n"
-                )
+            if _is_excluded(name):
+                out.append(f"{indent}# removed by sync: {name} is not shipped downstream\n")
                 continue
+
+        # And the TEST that pins it. Dropping the entry without dropping its
+        # assertion just moves the failure from the server to the suite —
+        # `assert "chuzom.admin_api" in server._CRITICAL_MODULES` fails on a
+        # list the sync itself edited, which is a self-inflicted red.
+        match = _CRITICAL_ASSERT_RE.match(stripped)
+        if match and _is_excluded(match.group("name")):
+            out.append(
+                f"{indent}# removed by sync: {match.group('name')} is not "
+                f"shipped downstream, so it is not a critical module here\n"
+            )
+            continue
+
         out.append(line)
     return "".join(out)
 
