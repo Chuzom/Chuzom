@@ -5,6 +5,102 @@
 _Nothing yet. Add a bullet here in your PR when you change routing behavior or a
 user-facing surface, then move it under the next version heading at release time._
 
+## v1.4.0 — 2026-08-19 — Four defects found by building the redistribution
+
+The work was "sync this core into the downstream package". The useful output was four
+defects **here**, each surfaced by running this code in a configuration this repository
+never tests. That is the release note's real subject; the ports are secondary.
+
+### Security
+
+- **The persistence redactor never shipped.** `persist_redact` lived in
+  `chuzom/enterprise/redaction.py`, and `enterprise/` is excluded from public
+  distributions. Five write paths — `result_cache`, `semantic_cache`, `idempotency`,
+  `context`, `session_store` — imported it inside a `try/except` that falls back to
+  `secret_scrubber.scrub_text`, which carries none of its patterns.
+
+  Measured against the **published `chuzom-router` package**, installed from PyPI into a
+  clean venv with `chuzom.enterprise` confirmed absent: JWTs, Slack tokens, emails, SSNs,
+  phone numbers, credit-card numbers and prose secrets all reached disk verbatim —
+  **7 of 7**.
+
+  The suite was green throughout, *including* `test_cluster1_persistence_hardening`, which
+  asserts exactly that those secrets never reach disk. It passed because the development
+  tree *has* `enterprise/`. **The control was only ever exercised in its strongest
+  configuration.** Moved to `chuzom/persist_redaction.py`, in core, where it ships;
+  `enterprise/redaction.py` is now a re-export shim.
+
+- **An optional tool group was a load-bearing import of the MCP server.** `server.py`
+  imported `chuzom.tools.agoragentic` at module level, alongside every mandatory tool —
+  while SEC-003 makes it off-by-default and the sync exclusion set drops it. A build
+  without it could not import at all: `ModuleNotFoundError` before a single tool
+  registered, surfacing to the client as `CONNECTION_CLOSED`. The gate was already right;
+  the import was not.
+
+### Fixed
+
+- **Reordering profiles resolved to no chain at three of four lookup sites.**
+  `QUOTA_BALANCED` and `SUBSCRIPTION_LOCAL` own no chains in `standard.yaml` — they
+  reorder another profile's. Measured for `CODE`: `get_model_chain` gave `subscription_local`
+  a **one-model** chain (the paid seat, no fallback — the exact inverse of a profile whose
+  purpose is preferring the free local bucket), and `_static_chain` gave both an **empty**
+  chain on the two paths that exist to guarantee a non-empty one. One mapping,
+  `base_lookup_profile`, now serves every lookup.
+- **`SUBSCRIPTION_LOCAL` had zero production callers.** Module, enum member, activation
+  gate, reorder and its own test file — all correct, all unreachable. Wired into
+  `build_chain`; inert without `CHUZOM_SUBSCRIPTION_PROVIDER`, so an install that has not
+  opted in gets a byte-identical chain.
+
+### Added
+
+- `misroute_audit.py` — the post-hoc misroute scorer, plus `chuzom audit misroute`. Named
+  apart from the existing `audit_routing.py` (a live compliance log) precisely because the
+  two shared a filename downstream, and a file-level copy would have deleted one in
+  silence.
+- `dashboard_data.query_realized_savings` — the adoption gap had no dashboard surface.
+  A delegating surface only (INV-COST-004); the test asserts that structurally, because a
+  value test would pass against a reimplementation that agrees today.
+- `capabilities.serialize_capability_decision` + a `capabilities_json` column. Shadow mode
+  ran the detector and discarded the result, so the question it exists to answer had no
+  data behind it.
+- `scripts/check_downstream_superset.py`, `scripts/sync_downstream.py` — the sync is
+  reproducible rather than a one-off copy.
+- `tests/test_built_artifact_is_complete.py` — builds both artifacts and looks inside
+  them. Nine sdist exclude patterns were unanchored; none collides with a package name
+  today, and the redistribution had one that did and shipped a release that could not
+  import.
+- `tests/test_security_doc_direct_execution.py` — re-derives SECURITY.md's blocklist
+  coverage table (3 of 12) from the live regex.
+
+### CI
+
+- Watchdog 540s → 900s, job timeout 10m → 20m. At 540s under a 600s cap the watchdog had
+  60s of headroom; if it fired, the job would die before the hang-handler could report the
+  real result.
+- The G7 soak now carries its own 300s timeout. It failed CI on `Timeout (>30.0s)` with
+  every assertion fine — a corpus replay measured at ~8s locally, 3-4x slower on a runner.
+  The global 30s stays, because it is the right size for the ~1,700 tests that should
+  never take that long.
+
+## v1.3.0 — 2026-08-18 — mcp 2.0 port, Windows CLI fix, statusline and Stop-line accuracy
+
+_Reconstructed from the commit range `v1.2.0..v1.3.0`; this release shipped without a
+changelog entry._
+
+- **mcp 2.0 port.** `FastMCP` → `MCPServer`, `mcp.server.fastmcp` → `mcp.server.mcpserver`,
+  camelCase → snake_case model fields, pin moved to `mcp>=2.0.0,<3.0.0`. 17 failures to 0.
+  A test asserts the field names directly, so the port is testable rather than assumed.
+- **CHZ-WIN-01: the CLI died on Windows because its own output has emoji in it.** Fixed in
+  the product (`_make_output_encoding_safe`) rather than by setting `PYTHONUTF8` in CI,
+  which would have turned CI green while users kept crashing.
+- **Statusline delegates savings to the canonical aggregation.** Three surfaces had three
+  numbers for the same day ($73.97 / $102.31 / $205.19); 78 lines of hand-rolled SQL
+  removed.
+- **Stop line reports quota consumed**, matching the status line, and shows today,
+  lifetime and quota-remaining.
+- Documented commands now run against the **built wheel** on every platform, not the
+  source tree.
+
 ## v1.2.0 — 2026-08-17 — Zero-tolerance audit remediation
 
 **Release gate status: G-A/B/C/D PASS · G-E satisfiable · G-F NOT QUALIFIED.**
