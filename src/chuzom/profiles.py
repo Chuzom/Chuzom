@@ -119,6 +119,63 @@ ROUTING_TABLE: dict[tuple[RoutingProfile, TaskType], list[str]] = _load_routing_
 # src/chuzom/policies/standard.yaml.
 
 
+# ── Reordering profiles ──────────────────────────────────────────────────────
+#
+# Two profiles have NO chains of their own in standard.yaml. They are
+# *reorderings* of another profile's chain, applied at a later stage:
+#
+#   QUOTA_BALANCED      reordered by quota_balance.reorder_chain_by_providers()
+#                       in router._build_and_filter_chain()
+#   SUBSCRIPTION_LOCAL  reordered by
+#                       subscription_local_routing.reorder_for_subscription_local()
+#
+# A ROUTING_TABLE lookup keyed on one of them therefore misses, and every
+# caller has to know to substitute the base profile first. Three callers did
+# not, and each failed differently:
+#
+#   get_model_chain()             SUBSCRIPTION_LOCAL -> the `["anthropic/
+#                                 claude-sonnet-4-6"]` default: a ONE-model
+#                                 chain with no fallback, consisting solely of
+#                                 the paid seat. The exact inverse of what a
+#                                 "one paid seat + free local bucket" profile
+#                                 is for.
+#   chain_builder._static_chain() both profiles -> [], breaking that module's
+#                                 documented "Never empty (falls back to
+#                                 static)" guarantee on the two paths that
+#                                 exist to provide it (discovery empty, or the
+#                                 dynamic build raised).
+#   memory/profiles.py            both profiles -> the raw tool name returned
+#                                 in place of a model id.
+#
+# Measured before the fix, task_type=CODE:
+#
+#     get_model_chain    balanced 6 · quota_balanced 6 · subscription_local 1
+#     _static_chain      balanced 7 · quota_balanced 0 · subscription_local 0
+#
+# So: one table, one mapping, and every lookup goes through it. Adding a third
+# reordering profile without an entry here fails
+# tests/test_reordering_profiles_resolve.py, which enumerates the enum rather
+# than naming profiles, so it covers profiles that do not exist yet.
+_REORDERING_PROFILE_BASE: dict[RoutingProfile, RoutingProfile] = {
+    RoutingProfile.QUOTA_BALANCED: RoutingProfile.BALANCED,
+    RoutingProfile.SUBSCRIPTION_LOCAL: RoutingProfile.BALANCED,
+}
+
+
+def base_lookup_profile(profile: RoutingProfile) -> RoutingProfile:
+    """The profile whose chain table ``profile`` should be looked up under.
+
+    Identity for every profile that owns its chains. Use this before ANY
+    ``ROUTING_TABLE`` / policy-chains lookup that takes a caller-supplied
+    profile — see ``_REORDERING_PROFILE_BASE`` above for what goes wrong
+    without it.
+
+    This deliberately does not apply the reordering itself; it only resolves
+    the base chain to reorder. The reordering stays where it is.
+    """
+    return _REORDERING_PROFILE_BASE.get(profile, profile)
+
+
 # ── Classifier model preferences (cheapest/fastest first) ────────────────────
 # These models are used exclusively by the complexity classifier, NOT for
 # user-facing responses. They are ordered cheapest-first because classification
@@ -443,9 +500,11 @@ def get_model_chain(
     Returns:
         Ordered list of model IDs to try, best-fit first.
     """
-    # QUOTA_BALANCED uses BALANCED as base chain; REASONING uses its own chain.
-    # Reordering for QUOTA_BALANCED happens in router.py.
-    profile_for_lookup = RoutingProfile.BALANCED if profile == RoutingProfile.QUOTA_BALANCED else profile
+    # Reordering profiles (QUOTA_BALANCED, SUBSCRIPTION_LOCAL) have no chains
+    # of their own; resolve to the base they reorder. The reordering itself
+    # still happens downstream — router.py for QUOTA_BALANCED,
+    # chain_builder.build_chain for SUBSCRIPTION_LOCAL.
+    profile_for_lookup = base_lookup_profile(profile)
 
     # Plan 06 Step 1 — consult the active policy's chains first so non-standard
     # policies (cost_aggressive, user-defined custom) actually take effect at the routing

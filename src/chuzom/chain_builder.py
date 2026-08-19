@@ -155,8 +155,12 @@ async def _build_dynamic_chain(
 def _static_chain(task_type: "TaskType", profile: "RoutingProfile") -> list[str]:
     """Return the static chain from profiles.py for the given (task_type, profile)."""
     try:
-        from chuzom.profiles import ROUTING_TABLE
-        # ROUTING_TABLE keys are (RoutingProfile, TaskType) tuples.
-        return list(ROUTING_TABLE.get((profile, task_type), []))
+        from chuzom.profiles import ROUTING_TABLE, base_lookup_profile
+        # ROUTING_TABLE keys are (RoutingProfile, TaskType) tuples, and the
+        # reordering profiles have no key of their own — look them up under the
+        # base they reorder or this returns [], which is how QUOTA_BALANCED and
+        # SUBSCRIPTION_LOCAL got an empty chain on exactly the two paths that
+        # exist to guarantee a non-empty one.
+        return list(ROUTING_TABLE.get((base_lookup_profile(profile), task_type), []))
     except Exception:
         return []
