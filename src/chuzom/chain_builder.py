@@ -75,12 +75,14 @@ async def build_chain(
     ) as span:
         try:
             chain = await _build_dynamic_chain(task_type, complexity, profile)
+            chain = await _apply_subscription_local(chain, complexity, profile)
             top = chain[0] if chain else None
             set_span_attributes(span, chain_length=len(chain), top_model=top)
             return chain
         except Exception as e:
             log.debug("dynamic chain builder failed, using static: %s", e)
             chain = _static_chain(task_type, profile)
+            chain = await _apply_subscription_local(chain, complexity, profile)
             set_span_attributes(
                 span,
                 fallback_reason="dynamic_chain_builder_failed",
@@ -88,6 +90,43 @@ async def build_chain(
                 top_model=chain[0] if chain else None,
             )
             return chain
+
+
+async def _apply_subscription_local(
+    chain: list[str], complexity: str, profile: "RoutingProfile"
+) -> list[str]:
+    """Apply the cost-inverted SUBSCRIPTION_LOCAL reorder, if it is active.
+
+    ``subscription_local_routing`` shipped with its own module, its own
+    ``RoutingProfile`` member, and its own test file -- and NO production
+    caller. Selecting SUBSCRIPTION_LOCAL changed nothing; the profile was
+    inert. This is the call site it was written for.
+
+    Safe to apply unconditionally: ``is_subscription_local_active`` returns
+    False unless ``CHUZOM_SUBSCRIPTION_PROVIDER`` is set, so an install that
+    has not opted in gets a byte-identical chain. Fails open -- a reorder that
+    raises must not take routing down with it, since the un-reordered chain is
+    still a working chain.
+    """
+    try:
+        from chuzom.subscription_local_routing import (
+            get_subscription_pressure,
+            is_subscription_local_active,
+            reorder_for_subscription_local,
+        )
+
+        if not is_subscription_local_active(profile):
+            return chain
+        pressure = await get_subscription_pressure()
+        return reorder_for_subscription_local(
+            chain,
+            complexity=complexity,
+            profile=profile,
+            subscription_pressure=pressure,
+        )
+    except Exception as exc:  # pragma: no cover - fail-open path
+        log.debug("subscription-local reorder failed, using unreordered chain: %s", exc)
+        return chain
 
 
 async def _build_dynamic_chain(
