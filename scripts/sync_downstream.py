@@ -139,6 +139,24 @@ EXCLUDED_TEST_PATHS = {
     # live in the tooling; the quarantine directory is a record, not a barrier.
     "test_deep_reasoning_classifier.py",
     "test_routerarena_submit.py",
+    # Assert the UPSTREAM DOCUMENTATION CORPUS — README.md plus the Docs/
+    # pages it links. Docs/ is not synced (it describes this repository), and
+    # downstream maintains its own guide/ structure, so these check the
+    # presence and wording of sections in a document set that does not exist
+    # there. `## Enforcement Modes`, the config table, the corpus-size claim
+    # and the magnitude-claim scan are all upstream's to keep accurate.
+    #
+    # NOT a way to dodge a documentation duty: downstream's own README is
+    # covered by its own checks. This is the same category as
+    # test_host_integrations — a test asserting a property of the repository
+    # rather than of the package.
+    "test_chz_aud_006.py",
+    "test_chz_aud_007.py",
+    "test_chz_aud_012_028.py",
+    "test_claims_no_fabricated_magnitudes.py",
+    # Reads the audit-tree baseline under .chuzom/zero-tolerance-audit/, which
+    # doc 36 §1 excludes from the sync outright.
+    "test_state_root_ratchet.py",
 }
 
 #: Import targets that do not exist downstream, because the module they name is
