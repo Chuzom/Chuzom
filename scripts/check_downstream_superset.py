@@ -101,6 +101,38 @@ def _defined_symbols(root: Path) -> dict[str, list[str]]:
     return found
 
 
+def _reachable_names(root: Path, defining_file: str, name: str) -> int:
+    """How many times ``name`` is referenced OUTSIDE the file that defines it.
+
+    Zero means the symbol is an orphan in this tree: correct, tested, and
+    reached by nothing. That distinction decides whether a downstream-only
+    symbol is a real upstream GAP or just downstream dead code, and the two
+    call for opposite actions -- port it, versus wire or delete it there.
+
+    It is the same shape as the SUBSCRIPTION_LOCAL defect found upstream on the
+    same day: a complete module with its own tests and no production caller.
+    Measured downstream, `response_validation.py` is exactly that -- six public
+    symbols, zero references anywhere in `src/`, one test file. Porting it
+    upstream would move dead code between repositories and call it progress.
+
+    References inside the defining file are excluded deliberately, so a helper
+    called only by its own module's public entry point does not read as
+    reachable on its own. The entry point is what has to be reachable.
+    """
+    count = 0
+    for path in root.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        if str(path.relative_to(root)) == defining_file:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        count += text.count(name)
+    return count
+
+
 def _file_level_collisions(upstream: Path, downstream: Path) -> list[tuple[str, set[str], set[str]]]:
     """Same path, disjoint public API -- the silent-overwrite case.
 
@@ -186,14 +218,47 @@ def main() -> int:
             print(f"      downstream: {', '.join(sorted(dsyms))}")
         print()
 
-    if public_missing:
+    # A downstream-only symbol that nothing downstream calls is not an upstream
+    # gap — it is downstream dead code, and porting it moves dead code between
+    # repositories. Split on that before reporting anything as a gap.
+    live: dict[str, list[str]] = {}
+    orphaned: dict[str, list[str]] = {}
+    for name, files in public_missing.items():
+        target = live if _reachable_names(args.downstream, files[0], name) else orphaned
+        target[name] = files
+
+    if live:
         by_file: dict[str, list[str]] = {}
-        for name, files in public_missing.items():
+        for name, files in live.items():
             by_file.setdefault(files[0], []).append(name)
-        print("PUBLIC API defined downstream and nowhere upstream:")
+        print("GAPS — public, downstream-only, and REACHED by downstream code:")
         for f in sorted(by_file):
             print(f"  {f}")
             print(f"      {', '.join(sorted(by_file[f]))}")
+        print()
+
+    if orphaned:
+        by_file_o: dict[str, list[str]] = {}
+        for name, files in orphaned.items():
+            by_file_o.setdefault(files[0], []).append(name)
+        print("NOT gaps on their own — public, downstream-only, and referenced")
+        print("NOWHERE OUTSIDE their own module.")
+        print()
+        print("Read this list carefully before acting on it. It contains two")
+        print("different things, and the check cannot separate them without a call")
+        print("graph:")
+        print("  (a) genuine dead code — a whole module nothing reaches, e.g.")
+        print("      response_validation.py: 6 public symbols, 0 references in src/,")
+        print("      one test file. Porting it upstream moves dead code between")
+        print("      repositories; wire or delete it downstream instead.")
+        print("  (b) module-internal helpers of an entry point that IS live, e.g.")
+        print("      score_decision is called by run_audit inside audit_routing.py.")
+        print("      Those travel with their entry point and are NOT dead.")
+        print("Rule of thumb: if the file appears in the GAPS list above, its")
+        print("entries here are case (b).")
+        for f in sorted(by_file_o):
+            print(f"  {f}")
+            print(f"      {', '.join(sorted(by_file_o[f]))}")
         print()
 
     if args.verbose and private_missing:
@@ -202,11 +267,12 @@ def main() -> int:
             print(f"  {name:38} {private_missing[name][0]}")
         print()
 
-    if collisions or public_missing:
+    if collisions or live:
         print(
             "NOT A SUPERSET. Copying upstream src/ over downstream would drop the\n"
-            "above. Port these upstream first — that is what 'after Chuzom is\n"
-            "completely ready' has to mean before a copy is safe — then re-run."
+            "GAPS above. Port those upstream first — that is what 'after Chuzom is\n"
+            "completely ready' has to mean before a copy is safe — then re-run.\n"
+            "The orphan list is a separate, downstream decision and does not gate."
         )
         return 1
 
