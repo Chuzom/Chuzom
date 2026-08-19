@@ -118,6 +118,21 @@ def _reachable_names(root: Path, defining_file: str, name: str) -> int:
     References inside the defining file are excluded deliberately, so a helper
     called only by its own module's public entry point does not read as
     reachable on its own. The entry point is what has to be reachable.
+
+    MENTION IS NOT USE
+    ------------------
+
+    Counted by parsing, not by ``text.count(name)``. The string version was
+    written first and was wrong, in the direction that hides gaps: it scored
+    ``force_local_for_pii`` as reachable on the strength of a docstring in a
+    sibling module ("see llm_router.signals.force_local_for_pii") and its own
+    ``__all__`` entry. Neither is a call. An orphan was about to be reported as
+    live capability and ported on that basis.
+
+    So: ``ast.Name`` / ``ast.Attribute`` references only. A name in a comment,
+    a docstring, a string literal, or an ``__all__`` list does not count --
+    ``__all__`` in particular is an export declaration, which is exactly what
+    an orphaned public symbol still has.
     """
     count = 0
     for path in root.rglob("*.py"):
@@ -126,10 +141,20 @@ def _reachable_names(root: Path, defining_file: str, name: str) -> int:
         if str(path.relative_to(root)) == defining_file:
             continue
         try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
             continue
-        count += text.count(name)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == name:
+                count += 1
+            elif isinstance(node, ast.Attribute) and node.attr == name:
+                count += 1
+            elif isinstance(node, ast.ImportFrom):
+                # An import is a genuine reference to the symbol, but only if
+                # something then uses it -- which the Name/Attribute walk above
+                # already counts in the same file. Counting the import too
+                # would score a re-export as a use.
+                continue
     return count
 
 
