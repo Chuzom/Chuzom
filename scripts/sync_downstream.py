@@ -197,6 +197,8 @@ PATH_MAP_BY_TREE["src"] = {
 
 PATH_MAP_BY_TREE["tests"] = {}
 
+PATH_MAP_BY_TREE["config"] = {}
+
 PATH_MAP_BY_TREE["scripts"] = {
     # Upstream `scripts/release.py` collides with downstream's `scripts/release/`
     # PACKAGE — caught by the structural check on the very first scripts run,
@@ -601,7 +603,7 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
         "--tree",
-        choices=("src", "tests", "scripts"),
+        choices=("src", "tests", "scripts", "config"),
         default="src",
         help=(
             "which tree to sync. One at a time, deliberately: the three fail "
@@ -623,6 +625,13 @@ def main() -> int:
         "src": UPSTREAM_ROOT / "src" / "chuzom",
         "tests": UPSTREAM_ROOT / "tests",
         "scripts": UPSTREAM_ROOT / "scripts",
+        # Product DATA the package reads at runtime — the model registry
+        # (models.yaml), agent definitions (agents.yaml), signal weights.
+        # Not repo furniture: without it, model-registry freshness and agent
+        # loading fail downstream with "config/models.yaml not found".
+        # `deploy/` and `Docs/` are deliberately NOT trees here — a helm chart
+        # and a planning doc are upstream's, not this package's.
+        "config": UPSTREAM_ROOT / "config",
     }[args.tree]
 
     global PATH_MAP, _unavailable_cache
@@ -640,6 +649,7 @@ def main() -> int:
         "src": args.downstream / "src" / "llm_router",
         "tests": args.downstream / "tests",
         "scripts": args.downstream / "scripts",
+        "config": args.downstream / "config",
     }[args.tree]
     if not dst_pkg.exists():
         print(f"no downstream target at {dst_pkg}", file=sys.stderr)
