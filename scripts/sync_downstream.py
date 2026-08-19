@@ -40,6 +40,8 @@ trusting the list to stay sorted.
 from __future__ import annotations
 
 import argparse
+import ast
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -49,11 +51,30 @@ UPSTREAM_SRC = UPSTREAM_ROOT / "src" / "chuzom"
 DOWNSTREAM_ROOT_DEFAULT = Path.home() / "Projects" / "llm-router"
 
 #: Ordered longest-first. See _check_rewrite_order.
-REWRITES: list[tuple[str, str]] = [
+REWRITES: list[tuple] = [
     ("chuzom-router", "llm-routing"),      # distribution name
     ("CHUZOM_", "LLM_ROUTER_"),            # env var prefix
-    (".chuzom", ".llm-router"),            # home directory
+    # The home directory, in the three forms it is actually written. NOT a bare
+    # `.chuzom` rule: that also matches ATTRIBUTE ACCESS, and it did —
+    # `_config.chuzom_claude_subscription` became
+    # `_config.llm-router_claude_subscription`, which parses as a subtraction
+    # and raised AttributeError at import. The bare form is too greedy to be
+    # safe; the quoted and tilde forms are unambiguous.
+    ('".chuzom"', '".llm-router"'),
+    ("'.chuzom'", "'.llm-router'"),
+    ("~/.chuzom", "~/.llm-router"),
     ("chuzom", "llm_router"),              # python package / module paths
+    # `Chuzom` appears in two contexts that need OPPOSITE treatment, and a
+    # single rule cannot serve both:
+    #
+    #   ChuzomDashboard   a CamelCase IDENTIFIER -> LLMRouterDashboard
+    #   "Chuzom routes…"  PROSE                  -> "LLM Router routes…"
+    #
+    # The prose rule alone produced `class LLM RouterDashboard(App[None]):` in
+    # three files — a syntax error, caught by the parse guard rather than by a
+    # human reading 359 files. Identifier context is "followed by an uppercase
+    # letter", handled by the regex rule below, which must run FIRST.
+    (r"Chuzom(?=[A-Z])", "LLMRouter", "regex"),
     ("Chuzom", "LLM Router"),              # prose brand
     ("CHUZOM", "LLM_ROUTER"),              # any remaining shout-case
 ]
@@ -69,12 +90,53 @@ EXCLUDED_PATHS = {
 }
 EXCLUDED_DIRS = {"enterprise", "invoice_reconciliation", "__pycache__"}
 
+#: Import targets that do not exist downstream, because the module they name is
+#: excluded above or lives outside the synced trees. Any test importing one of
+#: these is skipped — a test for a capability that was deliberately not shipped
+#: is not a test failure, it is a test that should not have travelled.
+#:
+#: Detected by parsing imports rather than by listing filenames, so a new test
+#: for an excluded module is skipped automatically instead of arriving broken.
+#: 51 of the 75 collection errors on the first tests sync were exactly this:
+#: 27 enterprise, 20 admin_api, 3 invoice_reconciliation, 1
+#: tenant_policy_sidecar.
+UNAVAILABLE_IMPORT_ROOTS = {
+    "chuzom.enterprise",
+    "chuzom.admin_api",
+    "chuzom.commands.admin_api",
+    "chuzom.invoice_reconciliation",
+    "chuzom.tenant_policy_sidecar",
+    "chuzom.tools.agoragentic",
+    # Repo-root dev helpers that live outside src/ and tests/, so the sync never
+    # carries them. Their tests are upstream-development tooling, not downstream
+    # product surface.
+    "bench",
+    "soak",
+    "backfill_sidecars",
+}
+
 #: Upstream path -> downstream path, where the names legitimately differ.
 #: Every entry here is a collision `check_downstream_superset.py` reports: the
 #: same path already means something else downstream, so copying onto it would
 #: destroy a feature.
 PATH_MAP = {
-    "misroute_audit.py": "audit_routing.py",
+    # NOTE ON audit_routing.py — the collision that started this script.
+    #
+    # The first version mapped upstream misroute_audit.py ONTO downstream
+    # audit_routing.py, to preserve downstream's existing name. That was wrong,
+    # and the tree it produced could not import: upstream router.py does
+    # `from llm_router.audit_routing import audit_routing_turn`, and with the
+    # scorer occupying that path the compliance log had nowhere to land.
+    #
+    # Upstream now has BOTH modules under distinct names, so the right move is
+    # for downstream to mirror that. Downstream's audit_routing.py (the scorer)
+    # is replaced by upstream's audit_routing.py (the compliance log), and the
+    # scorer arrives beside it as misroute_audit.py. No capability is lost —
+    # the two features simply stop sharing a name, which is what made the
+    # collision possible in the first place. The rename is a breaking change
+    # for anyone importing llm_router.audit_routing expecting the scorer, and
+    # belongs in the 13.0.0 release note for that reason.
+    #
     # Relocations, verified by symbol overlap rather than by name:
     # upstream summary.py shares 7 symbols with downstream
     # observability/summary.py, and surface_status.py shares 22 with
@@ -95,16 +157,22 @@ PATH_MAP = {
 #: Downstream paths this script must never write, because the downstream file is
 #: a DIFFERENT feature that happens to share a name, or is a merge rather than a
 #: replace. Listed explicitly so the reason survives.
-DO_NOT_OVERWRITE = {
-    "audit_routing.py": (
-        "downstream audit_routing.py is the misroute scorer; upstream's is the "
-        "live compliance log. The scorer arrives via PATH_MAP from "
-        "misroute_audit.py instead."
-    ),
-    "commands/audit.py": (
-        "upstream has verify/export/misroute subcommands, downstream has only "
-        "misroute. Needs a merge decision, not an overwrite."
-    ),
+DO_NOT_OVERWRITE: dict[str, str] = {
+    # Empty, deliberately, and worth explaining rather than deleting.
+    #
+    # Both former entries turned out to be cases where preserving the
+    # downstream name was the WORSE option:
+    #
+    #   audit_routing.py    — see the note in PATH_MAP. Protecting it left
+    #                         upstream's compliance log with nowhere to go and
+    #                         the package could not import at all.
+    #   commands/audit.py   — upstream's version is a strict SUPERSET
+    #                         (verify/export/misroute vs misroute alone), so
+    #                         "needs a merge decision" was overcautious; taking
+    #                         the superset loses nothing.
+    #
+    # Kept as a mechanism because the next sync may well need it, and because
+    # the reasoning above is the useful part.
 }
 
 
@@ -116,8 +184,9 @@ def _check_rewrite_order() -> list[str]:
     assumed, because the failure is silent: the output still looks like code.
     """
     problems = []
-    for i, (src, _) in enumerate(REWRITES):
-        for later_src, _ in REWRITES[i + 1 :]:
+    plain = [r for r in REWRITES if len(r) == 2]
+    for i, (src, _) in enumerate(plain):
+        for later_src, _ in plain[i + 1 :]:
             if src in later_src:
                 problems.append(
                     f"{src!r} precedes {later_src!r} but is a substring of it — "
@@ -126,10 +195,150 @@ def _check_rewrite_order() -> list[str]:
     return problems
 
 
+def _imports_unavailable_module(text: str) -> str | None:
+    """The import root that makes this file unshippable, or None.
+
+    Parsed, not grepped: a module named in a docstring or a comment is not an
+    import, and skipping a test on the strength of a mention would drop tests
+    that are perfectly fine.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return None
+    for node in ast.walk(tree):
+        names: list[str] = []
+        if isinstance(node, ast.ImportFrom) and node.module:
+            names.append(node.module)
+        elif isinstance(node, ast.Import):
+            names.extend(a.name for a in node.names)
+        for name in names:
+            for root in UNAVAILABLE_IMPORT_ROOTS:
+                if name == root or name.startswith(root + "."):
+                    return root
+    return None
+
+
+def _import_rewrites() -> list[tuple[str, str]]:
+    """Import-path rewrites implied by PATH_MAP, derived rather than restated.
+
+    Moving a file is only half a relocation. ``summary.py`` ->
+    ``observability/summary.py`` also means every ``from llm_router.summary
+    import …`` has to become ``from llm_router.observability.summary import …``,
+    and the first version of this script did the move without the imports — 4
+    test modules failed to collect with ``No module named
+    'llm_router.summary'``.
+
+    Derived from PATH_MAP so the two can never disagree. Restating them as a
+    second hand-written list is how a later PATH_MAP entry gets a file move with
+    no matching import fix.
+
+    Each pattern ends in a negative lookahead so a package rename does not eat
+    its own children: ``llm_router.observability`` -> ``…observability.core``
+    must NOT turn ``llm_router.observability.summary`` into
+    ``llm_router.observability.core.summary``.
+    """
+    out: list[tuple[str, str]] = []
+    for src_rel, dst_rel in PATH_MAP.items():
+        src_mod = "llm_router." + src_rel.removesuffix(".py").replace("/", ".")
+        dst_mod = "llm_router." + dst_rel.removesuffix(".py").replace("/", ".")
+        if src_mod == dst_mod:
+            continue
+        out.append((re.escape(src_mod) + r"(?![.\w])", dst_mod))
+
+        # A relocated module is also imported as a NAME from its old parent:
+        #
+        #     from chuzom import surface_status        <- this form
+        #     from chuzom.surface_status import …      <- the form above
+        #
+        # The path rule alone misses the first, and three test modules failed to
+        # collect with `cannot import name 'surface_status' from 'llm_router'`.
+        # Same relocation, two syntaxes, and only one of them looks like a path.
+        src_parent, _, src_leaf = src_mod.rpartition(".")
+        dst_parent, _, dst_leaf = dst_mod.rpartition(".")
+        if src_leaf == dst_leaf and src_parent != dst_parent:
+            out.append(
+                (
+                    rf"from {re.escape(src_parent)} import (?=.*\b{re.escape(src_leaf)}\b)",
+                    f"from {dst_parent} import ",
+                )
+            )
+    # Longest source first, so a shorter module path does not match inside a
+    # longer one before the longer rule gets its turn.
+    out.sort(key=lambda pair: -len(pair[0]))
+    return out
+
+
 def rewrite(text: str) -> str:
-    for src, dst in REWRITES:
-        text = text.replace(src, dst)
+    for rule in REWRITES:
+        if len(rule) == 3:
+            src, dst, _ = rule
+            text = re.sub(src, dst, text)
+        else:
+            src, dst = rule
+            text = text.replace(src, dst)
+    # ONE pass over all import rules, via alternation.
+    #
+    # Applying them sequentially let each rule rewrite the previous rule's
+    # OUTPUT. `from chuzom import surface_status` correctly became
+    # `from llm_router.observability import surface_status`, and then the
+    # `observability -> observability.core` rule fired on that result and
+    # produced `from llm_router.observability.core import surface_status`,
+    # which does not exist. Every ordering fixed one pair and broke another,
+    # because the rules genuinely overlap.
+    #
+    # A single alternation pass cannot do that: each position in the text is
+    # matched at most once, so no rule ever sees another's output.
+    rules = _import_rewrites()
+    if rules:
+        # NAMED groups, so the dispatcher knows which alternative fired.
+        #
+        # The first version re-matched `match.group(0)` against each pattern to
+        # find the winner. That silently never worked for any rule containing a
+        # LOOKAHEAD: the lookahead needs the text that follows the match, and
+        # `group(0)` does not include it, so `re.fullmatch` always failed and
+        # every such rule fell through to "return the text unchanged". The
+        # rewrite looked like it ran and did nothing.
+        combined = "|".join(
+            f"(?P<r{index}>{pattern})" for index, (pattern, _) in enumerate(rules)
+        )
+        replacements = [replacement for _, replacement in rules]
+
+        def _pick(match: re.Match) -> str:
+            for index in range(len(rules)):
+                if match.group(f"r{index}") is not None:
+                    return replacements[index]
+            return match.group(0)  # pragma: no cover - alternation always sets one
+
+        text = re.sub(combined, _pick, text)
     return text
+
+
+def _still_parses(original: str, rewritten: str, rel: str) -> str | None:
+    """The rewritten Python must still parse. Returns an error string or None.
+
+    This is the guard that would have caught the `.chuzom` rule immediately.
+    A bare `.chuzom` -> `.llm-router` replacement hit attribute access as well
+    as paths, turning `_config.chuzom_claude_subscription` into
+    `_config.llm-router_claude_subscription` — which is not a syntax error (it
+    parses as a subtraction) but fails at runtime with a bewildering
+    `'RouterConfig' object has no attribute 'llm'`.
+
+    Text substitution across 359 files WILL eventually produce something that
+    is not the code it looks like. Checking that the input parsed and the
+    output still does is cheap, catches the whole class, and localises the
+    failure to the file and rule that caused it instead of to an import
+    traceback three modules away.
+    """
+    try:
+        ast.parse(original)
+    except SyntaxError:
+        return None  # upstream file was already unparseable; not ours to fix
+    try:
+        ast.parse(rewritten)
+    except SyntaxError as exc:
+        return f"  {rel}: rewritten source no longer parses — {exc}"
+    return None
 
 
 def _iter_upstream_files():
@@ -151,7 +360,20 @@ def main() -> int:
     parser.add_argument("--downstream", type=Path, default=DOWNSTREAM_ROOT_DEFAULT)
     parser.add_argument("--apply", action="store_true", help="write (default: dry run)")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--tests",
+        action="store_true",
+        help=(
+            "sync tests/ instead of src/. Separate flag, not automatic: the two "
+            "halves fail differently and mixing them makes it impossible to tell "
+            "a code problem from a test problem."
+        ),
+    )
     args = parser.parse_args()
+
+    global UPSTREAM_SRC
+    if args.tests:
+        UPSTREAM_SRC = UPSTREAM_ROOT / "tests"  # noqa: F824
 
     order_problems = _check_rewrite_order()
     if order_problems:
@@ -160,9 +382,13 @@ def main() -> int:
             print(f"  {p}", file=sys.stderr)
         return 1
 
-    dst_pkg = args.downstream / "src" / "llm_router"
+    dst_pkg = (
+        args.downstream / "tests"
+        if args.tests
+        else args.downstream / "src" / "llm_router"
+    )
     if not dst_pkg.exists():
-        print(f"no downstream package at {dst_pkg}", file=sys.stderr)
+        print(f"no downstream target at {dst_pkg}", file=sys.stderr)
         return 1
 
     # A file landing where a directory already lives (or the reverse) produces a
@@ -198,8 +424,21 @@ def main() -> int:
         return 1
 
     written = skipped_protected = unchanged = 0
+    parse_failures: list[str] = []
+    skipped_unavailable: list[str] = []
     new_files: list[str] = []
     binary: list[str] = []
+
+    # TWO PASSES, and the separation is the whole point.
+    #
+    # The first version validated and wrote in ONE loop, so a parse failure on
+    # file 300 printed "refusing to write" after 299 files had already been
+    # written. A refusal that has already written is not a refusal, and it left
+    # the downstream tree in a half-synced state that looked like a clean one.
+    #
+    # Pass 1 computes and validates everything, touching nothing. Pass 2 writes,
+    # and only runs if pass 1 was completely clean.
+    planned: list[tuple[Path, str | None, Path]] = []  # (target, content, source)
 
     for src_path, rel in _iter_upstream_files():
         target_rel = PATH_MAP.get(rel, rel)
@@ -214,22 +453,38 @@ def main() -> int:
             content = src_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             binary.append(rel)
-            if args.apply:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src_path, target)
-                written += 1
+            planned.append((target, None, src_path))
+            written += 1
+            continue
+
+        # TESTS ONLY. A source module that imports an excluded package almost
+        # always guards it (`try: from chuzom.enterprise.audit import …  except
+        # ImportError:`) precisely because enterprise/ is not in public
+        # distributions — so it ships fine and degrades gracefully. Applying
+        # this rule to src/ dropped 19 working modules on its first run.
+        # A TEST has no such fallback: it imports the thing it exists to
+        # exercise, and without it the module cannot even be collected.
+        unavailable = (
+            _imports_unavailable_module(content)
+            if args.tests and src_path.suffix == ".py"
+            else None
+        )
+        if unavailable:
+            skipped_unavailable.append(f"{rel} (imports {unavailable})")
             continue
 
         new_content = rewrite(content)
+        if target.suffix == ".py":
+            problem = _still_parses(content, new_content, rel)
+            if problem:
+                parse_failures.append(problem)
         existing = target.read_text(encoding="utf-8") if target.exists() else None
         if existing == new_content:
             unchanged += 1
             continue
         if existing is None:
             new_files.append(str(target.relative_to(dst_pkg)))
-        if args.apply:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(new_content, encoding="utf-8")
+        planned.append((target, new_content, src_path))
         written += 1
 
     # Downstream files with no upstream counterpart. NEVER deleted -- several
@@ -245,11 +500,35 @@ def main() -> int:
         and str(p.relative_to(dst_pkg)) not in upstream_targets
     )
 
+    if parse_failures:
+        print("REWRITE PRODUCED UNPARSEABLE PYTHON:\n", file=sys.stderr)
+        print("\n".join(parse_failures), file=sys.stderr)
+        print(
+            "\nA rewrite rule is matching more than it should. Narrow the rule; "
+            "do not exclude the file.",
+            file=sys.stderr,
+        )
+        print(
+            f"NOTHING WAS WRITTEN — {len(planned)} planned changes discarded.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Pass 2. Only reached when pass 1 found no problem at all.
+    if args.apply:
+        for target, content, src_path in planned:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if content is None:
+                shutil.copy2(src_path, target)
+            else:
+                target.write_text(content, encoding="utf-8")
+
     mode = "APPLIED" if args.apply else "DRY RUN — nothing written"
     print(f"=== sync_downstream: {mode} ===")
     print(f"  files written/changed : {written}")
     print(f"  already identical     : {unchanged}")
     print(f"  protected (not copied): {skipped_protected}")
+    print(f"  skipped, import unavailable downstream: {len(skipped_unavailable)}")
     print(f"  new downstream files  : {len(new_files)}")
     print(f"  binary copied verbatim: {len(binary)}")
     print(f"  downstream-only, LEFT ALONE: {len(downstream_only)}")
