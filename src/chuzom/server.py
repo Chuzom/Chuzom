@@ -34,7 +34,24 @@ from chuzom.config import get_config
 from chuzom.health import get_tracker
 from chuzom.logging import configure_logging, get_logger
 from chuzom.state import _check_tier, get_active_profile  # noqa: F401  (backward compat)
-from chuzom.tools import admin, agentic, agents, agoragentic, codex, consolidated, dashboard, fs, gemini_cli, media, pipeline, routing, setup, subscription, text
+from chuzom.tools import admin, agentic, agents, codex, consolidated, dashboard, fs, gemini_cli, media, pipeline, routing, setup, subscription, text
+
+# agoragentic is an OPTIONAL tool group, and the import says so.
+#
+# It is off by default (SEC-003: `register()` no-ops without CHUZOM_AGORAGENTIC=on)
+# and it is excluded from redistributions that do not want marketplace/wallet
+# tools. A hard module-level import contradicted both: it made a default-off,
+# excludable tool group a load-bearing dependency of the MCP server, so a
+# distribution that dropped it got a server that could not import at all —
+# failing at startup over a feature nobody had enabled.
+#
+# Found by the downstream sync: the availability closure marked server.py
+# unreachable for exactly this reason, which meant the sync could not carry the
+# server module at all. The gate was already right; the import was not.
+try:
+    from chuzom.tools import agoragentic
+except ImportError:  # pragma: no cover - only in builds that exclude it
+    agoragentic = None
 from chuzom.tools.admin import llm_health, llm_set_profile, llm_usage  # noqa: F401
 from chuzom.tools.pipeline import llm_orchestrate  # noqa: F401
 from chuzom.tools.routing import llm_route  # noqa: F401
@@ -169,7 +186,8 @@ gemini_cli.register(mcp, _gate)
 setup.register(mcp, _gate)
 dashboard.register(mcp, _gate)
 fs.register(mcp, _gate)
-agoragentic.register(mcp)
+if agoragentic is not None:
+    agoragentic.register(mcp)  # SEC-003: no-ops unless CHUZOM_AGORAGENTIC=on
 agents.register(mcp, _gate)  # v0.0.2 — agent-session tools (gated; consolidated keeps the rich two)
 agentic.register(mcp, _gate)  # agentic router — llm_delegate (gated; consolidated hides it behind llm_act)
 consolidated.register(mcp, _gate)  # North Star P4 — 1.0 front-door aliases (llm_act; non-breaking)
