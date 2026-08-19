@@ -1,6 +1,6 @@
 [project]
 name = "chuzom-router"
-version = "1.3.0"
+version = "1.4.0"
 description = "LLM cost router. On Claude Code a UserPromptSubmit hook intercepts every prompt and can run eligible ones on local/free providers (Ollama, Codex CLI, Gemini CLI) before using Claude quota; on Cursor/Copilot/Windsurf a rules file asks the host model to route (best-effort, not guaranteed). Savings depend on a configured local provider and workload."
 readme = "README.md"
 license = "MIT"
@@ -160,6 +160,18 @@ packages = ["src/chuzom"]
 # only the survivors below remain.
 exclude = [
     # IDE / plugin / agent configs
+    # ANCHORED WITH A LEADING SLASH — every directory entry below.
+    #
+    # Unanchored, a pattern like "tests/" matches a directory of that name at
+    # ANY depth, including one under src/. Nothing here does today, purely
+    # because no entry happens to collide with a package name. The downstream
+    # redistribution had "agents/" in this list, it matched
+    # src/<pkg>/agents/, the sdist lost the package — and because `uv build`
+    # builds the wheel FROM the sdist, the published wheel lost it too. That
+    # shipped, and the package could not import at all.
+    #
+    # Anchoring removes the coincidence. tests/test_built_artifact_is_complete.py
+    # checks the result rather than trusting the patterns.
     ".claude/",
     ".claude-plugin/",
     ".codex-plugin/",
@@ -172,7 +184,7 @@ exclude = [
     ".windsurf/",
     "/skills/",
     # Internal docs (NEVER ship per CLAUDE.md)
-    "Docs/",
+    "/Docs/",
     "CLAUDE.md",
     "SECURITY.md",
     "KIMI.md",
@@ -181,21 +193,21 @@ exclude = [
     "CHUZOM_AUDIT_REPORT.md",
     "STUCK_PATTERNS_ANALYSIS.md",
     "CHUZOM_ROADMAP.md",
-    ".audit/",
-    "audit_deliverables/",
+    "/.audit/",
+    "/audit_deliverables/",
     # Infrastructure (deployment-only, not needed for pip install)
     "Dockerfile",
     "docker-compose.yml",
     ".dockerignore",
-    "deploy/",
+    "/deploy/",
     # Enterprise source code (public distribution only includes public features)
     "src/chuzom/enterprise/",
     # Dev-only directories
-    "tests/",
-    "scripts/",
-    "research/",
-    "demo/",
-    "deprecation/",
+    "/tests/",
+    "/scripts/",
+    "/research/",
+    "/demo/",
+    "/deprecation/",
     "bench/",
     # Local venvs — they contain absolute symlinks and break the build.
     ".venv/",

@@ -311,6 +311,27 @@ MIGRATE_ROUTING_DECISIONS_ADD_COMPLEXITY_TRACKING = [
 ]
 """Idempotent migration to track pressure-based complexity downgrades (v5.9)."""
 
+MIGRATE_ROUTING_DECISIONS_ADD_CAPABILITIES = [
+    "ALTER TABLE routing_decisions ADD COLUMN capabilities_json TEXT DEFAULT NULL",
+]
+"""Shadow-mode capability vector (see capabilities.serialize_capability_decision).
+
+Written only when CHUZOM_CAPABILITY_ROUTING is on, never read by live routing.
+NULL therefore means "shadow mode was off for this decision", which is the
+common case and must stay distinguishable from "was on and found nothing".
+"""
+
+MIGRATE_ROUTING_DECISIONS_ADD_AUDIT = [
+    "ALTER TABLE routing_decisions ADD COLUMN audit_verdict TEXT DEFAULT NULL",
+    "ALTER TABLE routing_decisions ADD COLUMN audit_checked_at TEXT DEFAULT NULL",
+]
+"""Post-hoc misroute audit (see misroute_audit.py).
+
+Both columns default NULL, and NULL is the "not yet audited" marker the
+sampler selects on — so an existing database needs no backfill and the audit
+picks up every pre-existing row on its first run.
+"""
+
 MIGRATE_ROUTING_DECISIONS_ADD_SUBJECT = [
     "ALTER TABLE routing_decisions ADD COLUMN subject TEXT",
 ]
@@ -666,6 +687,8 @@ async def _get_db() -> aiosqlite.Connection:
         + MIGRATE_ADD_CACHE_METRICS
         + MIGRATE_ROUTING_DECISIONS_ADD_JUDGE_SCORE
         + MIGRATE_ROUTING_DECISIONS_ADD_COMPLEXITY_TRACKING
+        + MIGRATE_ROUTING_DECISIONS_ADD_AUDIT
+        + MIGRATE_ROUTING_DECISIONS_ADD_CAPABILITIES
         + MIGRATE_ADD_MODEL_QUALITY_TRENDS
         + MIGRATE_ROUTING_DECISIONS_ADD_REAL_FLAG
         + MIGRATE_ROUTING_DECISIONS_MARK_CONTAMINATED
@@ -1368,6 +1391,33 @@ async def log_routing_decision(
         # Track complexity mismatch: if requested_complexity differs from final complexity,
         # a pressure downgrade occurred (e.g., complex→moderate when budget high)
         complexity_downgraded = 1 if requested_complexity and requested_complexity != complexity else 0
+
+        # Shadow mode: record what capability-aware routing WOULD have decided,
+        # without letting it touch the decision above. `capability_routing_enabled`
+        # gates it, so this is None on every install that has not opted in.
+        # Fail-open — a shadow observation must never cost us the real record.
+        capabilities_json: str | None = None
+        try:
+            from chuzom.capabilities import (
+                capability_routing_enabled,
+                detect_capabilities,
+                serialize_capability_decision,
+            )
+
+            if capability_routing_enabled():
+                capabilities_json = serialize_capability_decision(
+                    detect_capabilities(prompt, task_type)
+                )
+        except Exception as _cap_err:  # noqa: BLE001
+            # Module-local import: cost.py has no module-level logger, and
+            # adding one here for a shadow path would be a wider change than
+            # this warrants.
+            import logging
+
+            logging.getLogger("chuzom").debug(
+                "capability_shadow_detection_failed: %s", _cap_err
+            )
+
         await db.execute(
             """INSERT INTO routing_decisions
                (prompt_hash, task_type, profile, classifier_type, classifier_model,
@@ -1376,8 +1426,8 @@ async def log_routing_decision(
                 quality_mode, final_model, final_provider, success,
                 input_tokens, output_tokens, cost_usd, latency_ms, reason_code,
                 correlation_id, requested_complexity, complexity_downgraded, subject,
-                provenance)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                provenance, capabilities_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 _prompt_hash(prompt),
                 task_type,
@@ -1405,6 +1455,7 @@ async def log_routing_decision(
                 complexity_downgraded,
                 subject,
                 _write_provenance(),
+                capabilities_json,
             ),
         )
         await db.commit()

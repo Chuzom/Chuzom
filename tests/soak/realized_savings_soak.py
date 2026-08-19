@@ -28,6 +28,22 @@ import pytest
 from soak.corpus_schema import load_corpus, validate_corpus
 from soak.report import DEFAULT_N_SOAK_RUNS, run_soak_n
 
+#: A soak replays the whole corpus N times; it is not a unit test and the
+#: suite-wide `timeout = 30` in pyproject is sized for ones that are.
+#:
+#: Measured: the fixture takes ~8s on a developer machine. A GitHub runner is
+#: roughly 3-4x slower, which puts it either side of 30s depending on the
+#: runner — so this gate failed with `Timeout (>30.0s) from pytest-timeout`
+#: while every assertion in it was fine, and passed on a re-run. A gate that
+#: reports "broken" for being slow is one people learn to re-run rather than
+#: read.
+#:
+#: 300s is a ceiling, not an expectation. Raising the GLOBAL timeout instead
+#: would have hidden genuine hangs in the ~1,700 tests that should never take
+#: 30 seconds.
+pytestmark = pytest.mark.timeout(300)
+
+
 REQUIRED_REPORT_KEYS = {
     "corpus_version",
     "n_routes",

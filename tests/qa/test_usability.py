@@ -242,9 +242,15 @@ def test_pyproject_advertises_chuzom_binary():
     ROOT = Path(__file__).resolve().parent.parent.parent
     data = tomllib.loads((ROOT / "pyproject.toml").read_text())
     scripts = data["project"].get("scripts", {})
-    assert "chuzom" in scripts, "pyproject scripts must expose `chuzom` binary"
+    # Accepts the downstream command name too. This file is SYNCED, and there
+    # the console script is `llm-router` — while the sync rewrites `chuzom` to
+    # `llm_router`, the PYTHON PACKAGE, which is not a console script anywhere.
+    # One upstream name, two downstream ones, distinguishable only by context.
+    _CANDIDATES = ("chuzom", "llm-router", "llm-routing")
+    name = next((c for c in _CANDIDATES if c in scripts), None)
+    assert name, f"pyproject scripts must expose one of {_CANDIDATES}, got {sorted(scripts)}"
     # Sanity-check the entrypoint resolves
-    target = scripts["chuzom"]
+    target = scripts[name]
     module_path, func_name = target.split(":")
     import importlib
 

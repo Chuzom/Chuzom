@@ -25,13 +25,38 @@ def test_public_modules_import_without_enterprise():
         sys.modules["chuzom.enterprise"] = None
         # These are the modules that import chuzom.enterprise at top level and
         # sit on the core routing / CLI / API import paths.
-        import chuzom.audit_routing   # noqa: F401  (imported by chuzom.router)
-        import chuzom.router          # noqa: F401
-        import chuzom.server          # noqa: F401  (MCP entrypoint — `chuzom` CLI)
-        import chuzom.rbac_routing     # noqa: F401
-        import chuzom.admin_api        # noqa: F401
-        import chuzom.scim_api         # noqa: F401
-        import chuzom.commands.audit   # noqa: F401
+        import importlib
+
+        # Modules that import chuzom.enterprise at top level and sit on the
+        # core routing / CLI / API import paths.
+        #
+        # Imported by NAME rather than with `import x` statements so a module
+        # that is absent for a DECLARED reason can be told apart from one that
+        # fails on an unguarded enterprise import. This file is synced to a
+        # downstream package that excludes admin_api and scim_api entirely;
+        # there, a bare `import chuzom.admin_api` fails with
+        # ModuleNotFoundError and reads as "an unguarded enterprise import
+        # regressed", which is the opposite of what happened.
+        #
+        # The distinction is exact: ModuleNotFoundError naming the module
+        # ITSELF means it was not shipped. Anything else — including a
+        # ModuleNotFoundError naming chuzom.enterprise — is the regression
+        # this test exists to catch, and still fails.
+        for _name in (
+            "chuzom.audit_routing",   # imported by chuzom.router
+            "chuzom.router",
+            "chuzom.server",          # MCP entrypoint
+            "chuzom.rbac_routing",
+            "chuzom.admin_api",
+            "chuzom.scim_api",
+            "chuzom.commands.audit",
+        ):
+            try:
+                importlib.import_module(_name)
+            except ModuleNotFoundError as exc:
+                if exc.name == _name:
+                    continue  # not shipped in this distribution — fine
+                raise
         print("PUBLIC_IMPORT_OK")
         """
     )

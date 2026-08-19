@@ -41,8 +41,18 @@ def test_plugin_declares_chuzom_name(host: HostSpec):
         pytest.skip(f"{host.id} has no plugin manifest")
     data = json.loads((host.plugin_path / "plugin.json").read_text())
     name = data.get("name", "").lower()
-    assert "chuzom" in name or "llm-routing" in name, (
-        f"{host.id}: plugin name should mention chuzom, got {name!r}"
+    # Accepts the downstream brand too. This file is SYNCED to llm-routing,
+    # where the plugin is named `llm-router` — and the sync rewrites `chuzom`
+    # to `llm_router` (the Python package), not to `llm-router` (the CLI and
+    # user-facing brand). One upstream name, two downstream ones, and only
+    # context distinguishes them; a rewrite rule cannot.
+    #
+    # So the accepted set is spelled out here rather than patched downstream:
+    # a downstream edit to a synced file is reverted by the next sync, which
+    # looks like nothing happened.
+    _ACCEPTED = ("chuzom", "llm-routing", "llm-router")
+    assert any(brand in name for brand in _ACCEPTED), (
+        f"{host.id}: plugin name should mention one of {_ACCEPTED}, got {name!r}"
     )
 
 

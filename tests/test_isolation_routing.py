@@ -423,18 +423,41 @@ def _parse_router_demo_output(output: str, run_id: str = "") -> dict[str, Any]:
     return result
 
 
-def _chuzom_binary() -> str:
-    """Return the path to the chuzom binary co-located with sys.executable.
+#: Console-script names this test may find, in preference order.
+#:
+#: More than one because this file is SYNCED to the downstream package, where
+#: the entry point is `llm-router` (hyphenated) — and the sync rewrites
+#: `chuzom` to `llm_router`, the PYTHON PACKAGE name, which is not a console
+#: script anywhere. The resolver then found nothing, fell back to the bare
+#: name, and every subprocess call returned None with "Failed to route".
+#:
+#: One upstream name maps to two downstream ones (`llm_router` the package,
+#: `llm-router` the command) and only context tells them apart, which is
+#: precisely what a text rewrite cannot do. Listing the candidates here is the
+#: fix that survives the sync; patching the generated file downstream would be
+#: reverted by the next one.
+_BINARY_CANDIDATES = ("chuzom", "llm-router", "llm-routing")
 
-    In a venv, sys.executable is /path/to/venv/bin/python and the chuzom
-    entry point is /path/to/venv/bin/chuzom. Falling back to the bare
-    'chuzom' name allows CI environments where the bin dir is on PATH.
+
+def _chuzom_binary() -> str:
+    """Return the path to the console script co-located with sys.executable.
+
+    In a venv, sys.executable is /path/to/venv/bin/python and the entry point
+    is /path/to/venv/bin/<name>. Falling back to a bare name allows CI
+    environments where the bin dir is on PATH.
     """
     import shutil
-    candidate = Path(sys.executable).parent / "chuzom"
-    if candidate.exists():
-        return str(candidate)
-    return shutil.which("chuzom") or "chuzom"
+
+    bindir = Path(sys.executable).parent
+    for name in _BINARY_CANDIDATES:
+        candidate = bindir / name
+        if candidate.exists():
+            return str(candidate)
+    for name in _BINARY_CANDIDATES:
+        found = shutil.which(name)
+        if found:
+            return found
+    return _BINARY_CANDIDATES[0]
 
 
 def _run_chuzom_cmd(args: list[str]) -> str:

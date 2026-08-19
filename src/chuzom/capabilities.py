@@ -221,6 +221,56 @@ def capability_routing_enabled() -> bool:
     return os.environ.get("CHUZOM_CAPABILITY_ROUTING", "").strip().lower() in ("1", "on", "true", "yes")
 
 
+def serialize_capability_decision(decision: CapabilityDecision) -> str:
+    """JSON-serialise a decision for ``routing_decisions.capabilities_json``.
+
+    Shadow mode exists to answer one question offline: *would* capability-aware
+    routing have chosen differently? Without persistence that question has no
+    data behind it — ``detect_capabilities`` runs, decides, and the decision is
+    discarded. This is the write half of the shadow.
+
+    Never read back by the live routing path. Purely for analysis of what the
+    richer capability vector would have picked, which is what keeps enabling
+    the flag from being able to change a routing outcome.
+
+    Fields are written out explicitly rather than via ``asdict``: the column is
+    read by offline analysis that has to survive the dataclass gaining a field,
+    and an implicit dump would silently change the stored shape the day someone
+    adds one.
+
+    FAIL-OPEN: returns ``"{}"`` on any error. Serialising a shadow observation
+    must never be able to break the decision logging it rides along with —
+    losing one shadow record is cheap, losing the routing decision is not.
+    """
+    import json
+
+    try:
+        req = decision.required
+        return json.dumps(
+            {
+                "required": {
+                    "read_files": req.read_files,
+                    "write_files": req.write_files,
+                    "run_commands": req.run_commands,
+                    "repo_search": req.repo_search,
+                    "git_operations": req.git_operations,
+                    "network_access": req.network_access,
+                    "objective_verification": req.objective_verification,
+                    "multi_step_execution": req.multi_step_execution,
+                    "needs_tools": req.needs_tools,
+                },
+                "evidence": [
+                    {"source": e.source, "reason": e.reason, "confidence": e.confidence}
+                    for e in decision.evidence
+                ],
+                "confidence": decision.confidence,
+                "legacy_match": decision.legacy_match,
+            }
+        )
+    except Exception:  # noqa: BLE001 - serialisation must never break logging
+        return "{}"
+
+
 # ── Relevant-context collection (bounded, safe) ───────────────────────────────
 
 EXCLUDED_PATTERNS = [
