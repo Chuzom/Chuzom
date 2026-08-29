@@ -217,7 +217,9 @@ def test_zero_routings_today_says_no_data(clean_env, fake_home):
     conn.commit()
     conn.close()
     body = "\n".join(_plain(_check_savings_posture()))
-    assert "No routing decisions today" in body
+    # The old sentence was printed for three different states — unreadable
+    # table, empty table on a busy machine, genuinely idle. This case is idle.
+    assert "no routing activity recorded today" in body.lower()
 
 
 def test_simple_share_ignores_sidecar_backfill(clean_env, fake_home):

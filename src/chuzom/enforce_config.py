@@ -27,6 +27,7 @@ and fast on the critical path.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 # Built-in default. "smart" = block Q&A/reasoning tools until the prompt is
@@ -65,6 +66,43 @@ def _repo_enforce(start: Path) -> str:
     return ""
 
 
+# A session id arrives from the environment; only plain tokens may become
+# a path component.
+_SAFE_SESSION_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
+
+def _session_enforce() -> str:
+    """Read this session's enforcement override, if it has one.
+
+    GH#49: set-enforce wrote only the machine-global routing.yaml, which
+    resolve_enforce_mode re-read on every hook call with no caching — so a
+    change in one Claude Code window took effect immediately in every other
+    window on the machine, while the command printed "Restart Claude Code for
+    the change to take effect". Behaviour and message disagreed, and the blast
+    radius was larger than either implied.
+
+    Resolved as session-scoped. The id comes from CLAUDE_SESSION_ID, the same
+    source session_spend and session_store already use.
+
+    The id is environment-supplied, so it is treated as untrusted: anything
+    that is not a plain safe token is ignored rather than being joined onto a
+    path. Any read failure falls through to the next tier — enforcement
+    resolution must never raise into a hook.
+    """
+    sid = os.environ.get("CLAUDE_SESSION_ID", "").strip()
+    if not sid or not _SAFE_SESSION_ID.fullmatch(sid):
+        return ""
+    try:
+        # CHZ-SR-01: chuzom.paths is the one resolver that honours CHUZOM_HOME.
+        # This runs on every hook invocation, so a direct resolution here would
+        # be among the hottest paths disagreeing about where state lives.
+        from chuzom.paths import state_path
+
+        raw = state_path("sessions", sid, "enforce").read_text()
+    except (OSError, ValueError, UnicodeDecodeError):
+        return ""
+    return raw.strip().lower()
+
+
 def resolve_enforce_mode(cwd: Path | None = None, home: Path | None = None) -> str:
     """Resolve the effective enforcement mode. See module docstring for priority.
 
@@ -75,11 +113,17 @@ def resolve_enforce_mode(cwd: Path | None = None, home: Path | None = None) -> s
     if env:
         return env
 
+    # Below an explicit export (the strongest signal a user can give), above a
+    # checked-in repo default (a deliberate in-session change should beat one).
+    home = home or Path.home()
+    session = _session_enforce()
+    if session:
+        return session
+
     repo = _repo_enforce(cwd or Path.cwd())
     if repo:
         return repo
 
-    home = home or Path.home()
     global_cfg = _yaml_enforce(home / ".chuzom" / "routing.yaml")
     if global_cfg:
         return global_cfg

@@ -170,7 +170,11 @@ def analyze_facts(
             "task_distribution": {},
             "model_distribution": {},
             "avg_confidence": 0.0,
-            "classification_accuracy": 1.0,
+            # A perfect score derived from ZERO samples is what made all-zero
+            # session snapshots look like real measurements. `measured`
+            # distinguishes "I could not see your activity" from "you had none".
+            "classification_accuracy": None,
+            "measured": False,
         }
 
     # Duration
@@ -209,6 +213,7 @@ def analyze_facts(
         "model_distribution": models,
         "avg_confidence": avg_conf,
         "classification_accuracy": accuracy,
+        "measured": True,
     }
 
 

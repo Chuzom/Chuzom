@@ -525,7 +525,17 @@ def main_sse(port: int | None = None) -> None:
         port = int(env_port) if env_port else (
             int(sys.argv[1]) if len(sys.argv) > 1 else 17891
         )
-    host = os.environ.get("HOST", "0.0.0.0")
+    # main_sse has NO authentication — that is main_sse_secured. It is not
+    # exposed as a console script (see pyproject), but anything importing and
+    # calling it directly would otherwise publish the whole MCP tool surface on
+    # every interface. Default to localhost and consult the shared gate.
+    host = os.environ.get("HOST", "127.0.0.1")
+    if host not in ("127.0.0.1", "localhost", "::1") and not _allow_public_bind():
+        raise SystemExit(
+            f"refusing to bind {host}: main_sse has no authentication.\n"
+            f"Set {_SSE_ALLOW_PUBLIC_ENV}=1 to override, or use main_sse_secured(), "
+            f"which requires a bearer token and defaults to localhost."
+        )
 
     starlette_app = mcp.sse_app()
     config = uvicorn.Config(starlette_app, host=host, port=port, log_level="info")

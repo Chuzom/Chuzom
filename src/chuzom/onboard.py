@@ -64,6 +64,17 @@ def main() -> None:
         5. Print a summary of configured vs. skipped providers and next
            steps.  Exit with code 1 if no providers were configured.
     """
+    from chuzom.cli_help import handle_help
+
+    # Before ANY other work - this used to run the interactive flow and
+    # crash with EOFError on a non-TTY stdin.
+    handle_help(
+        "chuzom-onboard",
+        "Interactive wizard that configures provider API keys in ~/.chuzom/.env.",
+        notes="""Requires an interactive terminal: it prompts for keys on stdin.
+For non-interactive setup, write ~/.chuzom/.env directly.""",
+    )
+
     env_path = Path.cwd() / ".env"
     print("\n╔══════════════════════════════════════════╗")
     print("║        Chuzom — Setup Wizard         ║")

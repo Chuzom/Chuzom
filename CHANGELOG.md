@@ -5,6 +5,66 @@
 _Nothing yet. Add a bullet here in your PR when you change routing behavior or a
 user-facing surface, then move it under the next version heading at release time._
 
+## v1.4.1 — 2026-08-29 — Ten defects found in the public port, fixed upstream
+
+The public port (llm-router) shipped 13.0.4 fixing eleven issues reported by an
+external tester against the redistributed package. Ten of them originate here.
+This release brings the fixes back upstream so the two trees do not diverge.
+
+**Not affected: the SSE console script.** llm-router 13.0.2/13.0.3 shipped
+`llm-router-sse`, exposing the unauthenticated MCP tool surface on every
+interface. Chuzom never regressed it — `pyproject.toml` carries an explicit
+"chuzom-sse intentionally NOT exposed" tombstone, and the port's script table
+was regenerated during the rebrand with hyphenated names while the ban was
+written against the underscore spelling. The regression test is added here
+anyway: it is the check that would have caught it, and it costs nothing while
+the code is already correct.
+
+### Security (defence in depth)
+
+- **`main_sse` bound `0.0.0.0` and never consulted `_allow_public_bind()`** — a
+  gate defined a few lines below it in the same module. It is not exposed as a
+  console script, so this was latent rather than live, but anything importing
+  and calling it directly published the full tool surface. Now defaults to
+  `127.0.0.1` and refuses a non-local bind without an explicit opt-in.
+  (`chuzom-route` was already correctly gated under RED6-04 — that is the
+  pattern `main_sse` should have followed.)
+
+### Fixed
+
+- **Statusline showed "✗ no provider" for every Ollama-only setup.**
+  `$SAVINGS_LOG` was read four times and never assigned, so `open("")` threw
+  into a swallowed except and the health check could never see local activity.
+- **The dashboard's access URL was redacted by its own scrubber.** The `token`
+  pattern matched both the `token=` and `url=` log fields, so the only
+  documented way to obtain a working URL printed `[REDACTED-TOKEN]`. The URL
+  now bypasses the log pipeline; redaction itself is unchanged.
+- **`doctor` reported three states as "no routing decisions"** — an unreadable
+  table, an empty table on a busy machine, and a genuinely idle machine printed
+  the same sentence. Root cause: four different functions named
+  `log_routing_decision` write to four destinations.
+- **Session snapshots asserted zeros they had not measured.** `accuracy: 1.0`
+  derived from zero samples is what made all-zero files look real.
+- **`--help` crashed on `chuzom-onboard` and `chuzom-quickstart`** — both ran
+  their interactive flows and died on `EOFError` under a non-TTY stdin. Now
+  handled before any other work, and verified to open no socket.
+- **The Textual install hint named a package that does not exist** — now
+  `pipx inject chuzom-router textual`.
+- **`set-enforce` changed every running session on the machine.** Now scoped to
+  the session that ran it (`--global` restores the old behaviour), and the
+  messages describe what actually happens — the change was always immediate.
+- **The enforcement block demanded an attribution the agent could not honestly
+  give.** The route-indicator line is now offered only when the routed answer is
+  what the user actually receives, and the "violations are logged and escalated"
+  language is gone — nothing was escalated.
+
+### Added
+
+- **DIRECT-execution timeouts are surfaced.** They previously failed silently to
+  a debug log while routing fell through to Claude, so a local path that never
+  succeeded looked fine. `doctor` now distinguishes "raise `CHUZOM_OLLAMA_TIMEOUT`
+  to N" from "this machine is too slow for local routing".
+
 ## v1.4.0 — 2026-08-19 — Four defects found by building the redistribution
 
 The work was "sync this core into the downstream package". The useful output was four

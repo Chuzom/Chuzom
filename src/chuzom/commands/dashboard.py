@@ -47,7 +47,7 @@ def _launch_tui_dashboard() -> int:
         try:
             from chuzom.tui import ChuzomDashboard
         except ImportError:
-            print("⚠️  Textual not installed. Install with: pip install chuzom[tui]")
+            print("⚠️  Textual not installed. Install with: pipx inject chuzom-router textual")
             return 1
 
         app = ChuzomDashboard()
