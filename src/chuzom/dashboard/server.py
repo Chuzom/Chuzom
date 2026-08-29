@@ -1291,12 +1291,14 @@ async def run(port: int = DEFAULT_PORT) -> None:
     await site.start()
 
     dashboard_url = f"http://localhost:{port}/?token={token}"
-    log.info(
-        "dashboard_started",
-        port=port,
-        token=token,
-        url=dashboard_url,
-    )
+    # The tokenized URL must NOT go through structlog: configure_logging()
+    # installs the scrubber as the first processor process-wide, and its "token"
+    # pattern matches both the token= field and the url= field (the URL carries
+    # ?token=<value> as a substring). Both arrived as [REDACTED-TOKEN], making
+    # the only documented way to obtain a working URL unusable — while the
+    # credential still travelled through the log pipeline for no benefit.
+    print(f"\n  Dashboard: {dashboard_url}\n", flush=True)
+    log.info("dashboard_started", port=port)
     log.info("dashboard_ready", stop_hint="Press Ctrl+C to stop")
 
     try:

@@ -23,13 +23,14 @@ class TestCmdSetEnforce:
         """cmd_set_enforce with mode should call _run_set_enforce."""
         with patch("chuzom.commands.set_enforce._run_set_enforce") as mock_run:
             cmd_set_enforce(["soft"])
-        mock_run.assert_called_once_with("soft")
+        # _run_set_enforce grew a _global flag; scope defaults to session.
+        mock_run.assert_called_once_with("soft", _global=False)
 
     def test_cmd_set_enforce_no_args(self):
         """cmd_set_enforce with no args should call _run_set_enforce with empty string."""
         with patch("chuzom.commands.set_enforce._run_set_enforce") as mock_run:
             cmd_set_enforce([])
-        mock_run.assert_called_once_with("")
+        mock_run.assert_called_once_with("", _global=False)
 
 
 class TestSetEnforceCommand:

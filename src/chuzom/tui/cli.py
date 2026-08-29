@@ -51,7 +51,7 @@ def maybe_launch_tui(
             err=True,
         )
         typer.echo(
-            "   Install with: pip install chuzom[tui]",
+            "   Install with: pipx inject chuzom-router textual",
             err=True,
         )
         return _run_classic_mode(task_type, prompt, **routing_kwargs)

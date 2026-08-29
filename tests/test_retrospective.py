@@ -166,7 +166,10 @@ def test_analyze_facts_empty_session():
     assert facts["total_calls"] == 0
     assert facts["total_cost"] == 0.0
     assert facts["total_saved"] == 0.0
-    assert facts["classification_accuracy"] == 1.0
+    # A perfect score from zero samples is what made all-zero snapshots look
+    # like real measurements; `measured` records which situation produced them.
+    assert facts["classification_accuracy"] is None
+    assert facts["measured"] is False
 
 
 def test_analyze_facts_accuracy():

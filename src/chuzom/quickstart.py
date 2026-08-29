@@ -96,6 +96,16 @@ def _ask_yes(prompt: str, default: bool = True) -> bool:
 
 def main() -> None:
     """Interactive quickstart wizard."""
+    from chuzom.cli_help import handle_help
+
+    # Before ANY other work - this used to run the interactive flow and
+    # crash with EOFError on a non-TTY stdin.
+    handle_help(
+        "chuzom-quickstart",
+        "Guided first routed call - verifies the install end to end in a few minutes.",
+        notes="""Requires an interactive terminal: it prompts on stdin.""",
+    )
+
     print("\n" + "═" * 54)
     print("  chuzom quickstart — first routed call in < 5min")
     print("═" * 54)

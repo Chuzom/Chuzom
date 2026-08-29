@@ -43,6 +43,11 @@ except Exception:
 STATE_DIR="$HOME/.chuzom"
 USAGE_JSON="$STATE_DIR/usage.json"
 USAGE_DB="$STATE_DIR/usage.db"
+# Read four times below (health check + last-route token suffix) and never
+# assigned, so every read expanded to "" and open("") threw into a swallowed
+# except — the health indicator reported 'no provider' forever on any setup
+# without a cloud key. Written by hooks/savings_logger.py.
+SAVINGS_LOG="$STATE_DIR/savings_log.jsonl"
 
 # ── Catppuccin Mocha palette (truecolor ANSI) ────────────────────────────────
 ESC=$'\033'
